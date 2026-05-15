@@ -4,9 +4,8 @@ import { TruePeakAccumulator } from "@e9g/buffered-audio-nodes-utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 // One-second-at-44.1kHz iteration size, matching the convention used by
-// `loudness-normalize/utils/measurement.ts` and the loudness-shaper
-// measurement helper. Balances per-iteration overhead against per-chunk
-// allocation pressure.
+// `loudness-normalize/utils/measurement.ts`. Balances per-iteration
+// overhead against per-chunk allocation pressure.
 const CHUNK_FRAMES = 44100;
 
 export const schema = z.object({

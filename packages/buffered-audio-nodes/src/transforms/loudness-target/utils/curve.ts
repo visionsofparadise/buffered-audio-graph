@@ -37,12 +37,12 @@
  * the time domain it is smoothed by the bidirectional IIR (see
  * envelope.ts and §"Smoothing — peak-respecting two-stage envelope").
  *
- * Direct anchor gains, not normalised. Differs deliberately from
- * loudnessShaper / loudnessExpander's `1 + B · shape(|x|)` formulation,
- * which assumes a single boost factor multiplied by a 0–1 shape. With
- * two independent anchors (body B and limit peakGainDb), normalisation
- * forces awkward arithmetic; direct interpolation between
- * (level, gainDb) pairs is shorter and segment-local.
+ * Direct anchor gains, not a normalised 0–1 shape scaled by a single
+ * boost factor. With two independent anchors (body `B` and limit
+ * `peakGainDb`), a normalised formulation would force awkward
+ * arithmetic to recover each anchor's absolute gain; direct
+ * interpolation between (level, gainDb) pairs is shorter and
+ * segment-local.
  */
 
 export interface Anchors {

@@ -167,8 +167,8 @@ import { buildBaseRateDetectionCache } from "./source-caches";
 /**
  * 4× oversampling factor for the detection max-pool inside
  * `buildBaseRateDetectionCache` and for the Pass-1 source
- * measurement's internal upsample inside `measurement.ts`. Mirrors
- * `loudnessShaper`'s `OVERSAMPLE_FACTOR`.
+ * measurement's internal upsample inside `measurement.ts`. 4× is the
+ * standard true-peak inter-sample-peak capture rate (BS.1770-4).
  *
  * Post the 2026-05-13 base-rate-downstream rewrite this constant is
  * NO LONGER used for envelope-buffer sizing, walk-loop offsets, or
@@ -187,10 +187,10 @@ import { buildBaseRateDetectionCache } from "./source-caches";
 export const OVERSAMPLE_FACTOR = 4;
 
 /**
- * Streaming chunk size — one second of frames at 44.1 kHz. Matches the
- * convention in `loudness-expander/utils/iterate.ts` and the rest of
- * the loudness sub-system. Each iterated chunk allocates
- * `chunkFrames × channelCount × 4 bytes` of transformed scratch.
+ * Streaming chunk size — one second of frames at 44.1 kHz, the chunk
+ * granularity used across the loudness sub-system. Each iterated chunk
+ * allocates `chunkFrames × channelCount × 4 bytes` of transformed
+ * scratch.
  */
 export const CHUNK_FRAMES = 44_100;
 

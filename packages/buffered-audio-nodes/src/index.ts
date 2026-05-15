@@ -30,8 +30,6 @@ export { pan, PanNode, PanStream, type PanProperties } from "./transforms/pan";
 export { ffmpeg, FfmpegNode, FfmpegStream, type FfmpegProperties } from "./transforms/ffmpeg";
 
 // Transforms - loudness
-export { loudnessShaper, LoudnessShaperNode, LoudnessShaperStream, type LoudnessShaperProperties } from "./transforms/loudness-shaper";
-export { loudnessExpander, LoudnessExpanderNode, LoudnessExpanderStream, type LoudnessExpanderProperties } from "./transforms/loudness-expander";
 export { loudnessTarget, LoudnessTargetNode, LoudnessTargetStream, type LoudnessTargetProperties } from "./transforms/loudness-target";
 export { loudnessNormalize, LoudnessNormalizeNode, LoudnessNormalizeStream, type LoudnessNormalizeProperties } from "./transforms/loudness-normalize";
 export { truePeakNormalize, TruePeakNormalizeNode, TruePeakNormalizeStream, type TruePeakNormalizeProperties } from "./transforms/true-peak-normalize";

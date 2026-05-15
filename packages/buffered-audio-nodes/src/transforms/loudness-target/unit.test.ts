@@ -25,8 +25,7 @@ function measureTruePeak(channels: ReadonlyArray<Float32Array>, sampleRate: numb
 }
 
 /**
- * Deterministic synthetic source — copied from the loudness-expander
- * `unit.test.ts`'s `makeSynthetic`. Low-frequency sine + small high-
+ * Deterministic synthetic source. Low-frequency sine + small high-
  * frequency sine + LCG-seeded white noise; broadband body lands in a
  * sane voice/podcast LUFS range at amplitude 0.1 (peak ≈ 0.12).
  *
@@ -106,8 +105,7 @@ interface RunStreamResult {
 }
 
 /**
- * Drive the LoudnessTargetStream end-to-end as a single chunk. Mirrors
- * the loudness-expander's `runStream`, adapted to the new schema. Also
+ * Drive the LoudnessTargetStream end-to-end as a single chunk. Also
  * exposes the iteration's winning `(B, limitDb)` for tests that need to
  * assert on iteration behaviour.
  */
@@ -335,9 +333,8 @@ describe("LoudnessTarget end-to-end", () => {
 		// directly; assert `winningLimitDb` equals the override (within
 		// the iterator's clamp). Replaces the prior "manual-config:
 		// explicit pivot + targetLra engages the limitDb axis (2D
-		// path)" test — the 2D path is gone, and the design's
-		// distinguishing feature relative to `loudnessExpander` is now
-		// the override-/percentile-derived fixed limit + brick-wall.
+		// path)" test — the 2D path is gone; the limit is now a fixed
+		// override-/percentile-derived value with a brick-wall above it.
 		//
 		// Fixture: ramp 0.001 → 0.5 (sourceLufs ≈ -14, sourcePeak ≈
 		// -5.5 dBTP). Geometry chosen so the upper segment is wide

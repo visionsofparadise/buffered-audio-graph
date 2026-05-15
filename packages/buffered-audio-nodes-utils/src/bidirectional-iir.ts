@@ -5,8 +5,8 @@ export interface BidirectionalIirOptions {
 
 /**
  * One-pole IIR smoothing helper. Single-source-of-truth for the
- * smoothing math used by the loudnessShaper offline node and any
- * future utility that needs the same shape.
+ * gain-envelope smoothing math used by `loudnessTarget` and any
+ * other node that needs the same zero-phase bidirectional shape.
  *
  * For a one-pole low-pass with time constant tau and sample period T:
  *   alpha = 1 - exp(-T / tau)

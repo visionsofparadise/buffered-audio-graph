@@ -16,8 +16,7 @@ const FRAME_COUNT = SAMPLE_RATE * DURATION_SECONDS;
 const buffersToClose: Array<ChunkBuffer> = [];
 
 /**
- * Wrap per-channel synthetic arrays in a `ChunkBuffer`. Mirrors
- * the helper from `loudness-expander/utils/iterate.unit.test.ts`.
+ * Wrap per-channel synthetic arrays in a `ChunkBuffer`.
  */
 async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Promise<ChunkBuffer> {
 	const buffer = new ChunkBuffer();

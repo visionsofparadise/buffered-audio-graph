@@ -52,7 +52,7 @@ interface StreamRunOptions {
  * Drive the TruePeakNormalizeStream end-to-end without file I/O. Writes
  * the source as one chunk per `chunkFrames` (defaults to a single
  * whole-source chunk), drains the readable concurrently, and reassembles
- * per-channel arrays. Modelled on the loudness-shaper test helper.
+ * per-channel arrays.
  */
 async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: number, options: StreamRunOptions): Promise<Array<Float32Array>> {
 	const channelCount = channels.length;

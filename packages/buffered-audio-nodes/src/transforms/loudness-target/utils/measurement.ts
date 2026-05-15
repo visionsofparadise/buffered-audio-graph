@@ -44,8 +44,8 @@ import { OVERSAMPLE_FACTOR } from "./iterate";
  */
 
 /**
- * Iteration chunk size — one second's worth of frames at 44.1 kHz.
- * Matches the convention in `loudness-expander/utils/measurement.ts`.
+ * Iteration chunk size — one second's worth of frames at 44.1 kHz,
+ * the chunk granularity used across the loudness sub-system.
  */
 const CHUNK_FRAMES = 44_100;
 

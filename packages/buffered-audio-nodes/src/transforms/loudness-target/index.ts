@@ -20,12 +20,12 @@ const FLOOR_PIVOT_EPSILON_DB = 0.01;
 /**
  * Schema for the loudnessTarget node.
  *
- * Peak-aware sibling of `loudnessExpander`: same iterate-to-LUFS frame
- * with a peak-respecting smoothed gain envelope, but extends the curve
- * with an upper-arm peak anchor that gives structural control over
- * `targetTp`. See design-loudness-target §"Parameters" for the
- * parameter rationale and §"Two-pass node structure" for the stream
- * structure.
+ * Fits a source to a `(LUFS, true-peak)` target pair via a single
+ * level-indexed gain curve with a peak-respecting smoothed gain
+ * envelope. The curve carries an upper-arm peak anchor that gives
+ * structural control over `targetTp` in the same envelope that lands
+ * LUFS. See design-loudness-target §"Parameters" for the parameter
+ * rationale and §"Two-pass node structure" for the stream structure.
  *
  * `pivot` is optional; when undefined the node derives it from
  * `median(considered LRA blocks)` (BS.1770 / EBU R128 two-stage gate)
@@ -467,7 +467,7 @@ export class LoudnessTargetNode extends TransformNode<LoudnessTargetProperties> 
 	static override readonly moduleName = "LoudnessTarget";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. Generalises `loudnessExpander` by adding an upper-arm peak anchor.";
+	static override readonly moduleDescription = "Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is LoudnessTargetNode {
 		return TransformNode.is(value) && value.type[2] === "loudness-target";

@@ -85,17 +85,18 @@ Remove a region of audio
 | `regions[].start` | number (min 0) | — | Start (seconds) |
 | `regions[].end` | number (min 0) | — | End (seconds) |
 
-### De-Bleed
+### De-Bleed Adaptive
 
-Reduce microphone bleed between channels using spectral-domain cross-talk cancellation
+Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reduction. Stages 1+2 are MEF Meyer-Elshamy-Fingscheidt 2020; Stage 3 is Lukin-Todd 2D NLM+DFTT post-filter.
 
 [Source](./src/transforms/de-bleed/index.ts)
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `references` | string[] | `[]` | References |
-| `reductionStrength` | number (0 to 8, step 0.1) | `3` | Reduction Strength |
-| `artifactSmoothing` | number (0 to 15, step 0.1) | `4` | Artifact Smoothing |
+| `reductionStrength` | number (0 to 10, step 0.1) | `5` | Reduction Strength |
+| `artifactSmoothing` | number (0 to 10, step 0.1) | `5` | Artifact Smoothing |
+| `adaptationSpeed` | number (0 to 10, step 0.1) | `3` | Adaptation Speed |
 | `fftSize` | number (512 to 16384, step 256) | `4096` | FFT Size |
 | `hopSize` | number (128 to 4096, step 64) | `1024` | Hop Size |
 | `vkfftAddonPath` | string | `""` | VkFFT native addon — GPU FFT acceleration Download: [vkfft-addon](https://github.com/visionsofparadise/vkfft-addon) |
@@ -111,8 +112,9 @@ Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `modelPath` | string | `""` | DeepFilterNet3 48 kHz denoiser model (.onnx) Download: [dfn3](https://github.com/yuyun2000/SpeechDenoiser) |
-| `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
+| `ffmpegPath` | string | `""` | FFmpeg — only used when sampleRate ≠ 48000 to chain up/down resamplers around the inference stream; can be left blank when sampleRate === 48000. Download: [ffmpeg](https://ffmpeg.org/download.html) |
 | `onnxAddonPath` | string | `""` | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
+| `sampleRate` | number (min 0) | — | Source audio sample rate in Hz. Required. When ≠ 48000, ffmpeg resampling is chained around the inference stream via _setup composition. |
 | `attenuation` | number (0 to 100) | `30` | Attenuation cap in dB. Maps to the ONNX `atten_lim_db` input; 0 = no cap |
 
 ### Dither
@@ -167,6 +169,7 @@ Process audio through FFmpeg filters
 | --- | --- | --- | --- |
 | `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
 | `args` | string[] | `[]` |  |
+| `outputSampleRate` | number (min 0), optional | — | Sample rate of emitted chunks. Required when args change the rate (e.g. -af aresample=24000). |
 
 ### Gain
 
@@ -206,7 +209,18 @@ Isolate dialogue from background using MDX-Net vocal separation
 | `highPass` | number (20 to 500, step 10) | `80` | High Pass |
 | `lowPass` | number (1000 to 22050, step 100) | `20000` | Low Pass |
 
-### Loudness Normalize
+### Loudness Stats
+
+Measure integrated loudness, true peak, and loudness range per EBU R128, plus an amplitude-distribution histogram
+
+[Source](./src/targets/loudness-stats/index.ts)
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `bucketCount` | number (min 0) | `1024` | Amplitude histogram bucket count |
+| `outputPath` | string | `""` | Output Path (JSON sidecar). Empty string disables file output. |
+
+### LoudnessNormalize
 
 Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics
 
@@ -216,11 +230,24 @@ Measure integrated loudness (BS.1770) and apply a single linear gain to hit a ta
 | --- | --- | --- | --- |
 | `target` | number (-50 to 0, step 0.1) | `-16` | Target integrated loudness (LUFS) |
 
-### Loudness Stats
+### LoudnessTarget
 
-Measure integrated loudness, true peak, loudness range, and short-term/momentary loudness per EBU R128
+Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.
 
-[Source](./src/targets/loudness-stats/index.ts)
+[Source](./src/transforms/loudness-target/index.ts)
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `targetLufs` | number (-50 to 0, step 0.1) | `-16` | Target integrated loudness (LUFS) |
+| `pivot` | number (max 0), optional | — | Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1. |
+| `floor` | number (max 0), optional | — | Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating. |
+| `limitPercentile` | number (0.5 to 1) | `0.995` | Top-1−p fraction of detection samples to brick-wall. Default 0.995 brick-walls the top 0.5%. |
+| `limitDb` | number (max 0), optional | — | Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor. |
+| `maxAttempts` | number (min 1) | `10` | Hard cap on iteration attempts. |
+| `targetTp` | number (max 0), optional | — | True-peak target (dBTP). Default: source true peak (peaks unchanged). |
+| `smoothing` | number (0.01 to 200) | `1` | Peak-respecting envelope time constant (ms). |
+| `tolerance` | number (min 0) | `0.5` | Iteration exit threshold (LUFS dB). |
+| `peakTolerance` | number (min 0) | `0.1` | One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored). |
 
 ### Normalize
 
@@ -341,19 +368,31 @@ Remove silence from start and end
 | `start` | boolean | `true` | Start |
 | `end` | boolean | `true` | End |
 
+### True Peak Normalize
+
+Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single linear gain to hit a target dBTP
+
+[Source](./src/transforms/true-peak-normalize/index.ts)
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `target` | number (max 0) | `-1` | Target true peak (dBTP). Must be < 0. |
+
 ### VST3
 
-Host a VST3 effect plugin via Pedalboard
+Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)
 
 [Source](./src/transforms/vst3/index.ts)
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `vstHostPath` | string | `""` | vst-host — Pedalboard-based VST3 host CLI Download: [vst-host](https://github.com/visionsofparadise/vst-host) |
-| `pluginPath` | string | — | VST3 plugin file or bundle |
-| `pluginName` | string, optional | — | Sub-plugin name when pluginPath is a multi-plugin shell (e.g. WaveShell) |
-| `presetPath` | string, optional | — | Optional .vstpreset state file |
-| `bypass` | boolean | `false` | Pass audio through unchanged |
+| `stages` | Object[] | — | Ordered chain of plugin/preset stages — processed end-to-end inside one Pedalboard offline call |
+| `stages[].pluginPath` | string | — | VST3 plugin file or bundle |
+| `stages[].pluginName` | string, optional | — | Sub-plugin name when pluginPath is a multi-plugin shell (e.g. WaveShell) |
+| `stages[].presetPath` | string, optional | — | Optional .vstpreset state file applied after the plugin loads |
+| `stages[].parameters` | record, optional | — | Optional parameter overrides applied after presetPath. Keys map to Pedalboard parameter names exposed by the plugin. |
+| `bypass` | boolean | `false` | Pass audio through unchanged (no subprocess spawn) |
 
 ### Waveform
 
@@ -377,6 +416,11 @@ Write audio to a file
 | `path` | string | `""` |  |
 | `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
 | `bitDepth` | "16" \| "24" \| "32" \| "32f" | `"16"` |  |
+| `encoding` | Object, optional | — | Encode through ffmpeg to a non-WAV format. Requires `ffmpegPath`. |
+| `encoding.format` | "wav" \| "flac" \| "mp3" \| "aac" | — |  |
+| `encoding.bitrate` | string, optional | — |  |
+| `encoding.vbr` | number, optional | — |  |
+| `encoding.sampleRate` | number (min 0), optional | — | Output sample rate (Hz). When set, ffmpeg resamples on encode. |
 
 ## Creating Nodes
 
