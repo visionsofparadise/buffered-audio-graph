@@ -564,10 +564,11 @@ export function searchBindingPeak(
 	// segments ⇒ SEARCH_GRID_POINTS+1 samples. The step
 	// λ/SEARCH_GRID_POINTS is well below the empirical multimodal basin
 	// spacing (episode-060 ≤15 minima over [0, λ≈0.92] ⇒ basin spacing
-	// ≈0.06), so the grid does not skip the global basin. Sample g=0 is
-	// c=0 (identity) — already measured as `identityPower`; skip it.
-	for (let g = 1; g <= SEARCH_GRID_POINTS; g++) {
-		const candidate = (lambda * g) / SEARCH_GRID_POINTS;
+	// ≈0.06), so the grid does not skip the global basin. Sample
+	// gridIndex=0 is c=0 (identity) — already measured as
+	// `identityPower`; skip it.
+	for (let gridIndex = 1; gridIndex <= SEARCH_GRID_POINTS; gridIndex++) {
+		const candidate = (lambda * gridIndex) / SEARCH_GRID_POINTS;
 		const power = evalAt(candidate);
 
 		if (power < bestPeak) {
@@ -592,7 +593,7 @@ export function searchBindingPeak(
 		let f1 = evalAt(x1);
 		let f2 = evalAt(x2);
 
-		for (let i = 0; i < SEARCH_REFINE_ITERS; i++) {
+		for (let iter = 0; iter < SEARCH_REFINE_ITERS; iter++) {
 			if (f1 <= f2) {
 				hi = x2;
 				x2 = x1;
