@@ -73,6 +73,19 @@ npx @e9g/buffered-audio-nodes render --bag pipeline.bag
 
 ## Nodes
 
+### CrestReduce
+
+Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor
+
+[Source](./src/transforms/crest-reduce/index.ts)
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `smoothing` | number (min 0) | `100` | Bidirectional (zero-phase) smoothing time constant in ms applied to the per-frame decorrelation envelope before it drives the lattice (default 100 ms). The envelope is 0 in segments with no active-band peak and the per-binding-peak optimal value at active-band peaks; smoothing eases it toward 0 across gaps so the bidirectional pass is predictable. Applied to the CONTROL trajectory only — never the audio path |
+| `frameSize` | number | `2048` | Analysis frame length in samples (default 2048 @ 48 kHz ≈ 43 ms; 75% overlap, Hann analysis window). Whole-file processing — output is produced after the full input is accumulated |
+| `vkfftAddonPath` | string | `""` | VkFFT native addon — GPU FFT acceleration Download: [vkfft-addon](https://github.com/visionsofparadise/vkfft-addon) |
+| `fftwAddonPath` | string | `""` | FFTW native addon — CPU FFT acceleration Download: [fftw-addon](https://github.com/visionsofparadise/fftw-addon) |
+
 ### Cut
 
 Remove a region of audio
