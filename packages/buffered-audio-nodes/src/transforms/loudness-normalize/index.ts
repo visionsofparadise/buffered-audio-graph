@@ -48,7 +48,7 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 }
 
 export class LoudnessNormalizeNode extends TransformNode<LoudnessNormalizeProperties> {
-	static override readonly moduleName = "LoudnessNormalize";
+	static override readonly moduleName = "Loudness Normalize";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly moduleDescription = "Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics";

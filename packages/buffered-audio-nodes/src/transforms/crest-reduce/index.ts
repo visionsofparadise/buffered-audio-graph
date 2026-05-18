@@ -392,7 +392,7 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 }
 
 export class CrestReduceNode extends TransformNode<CrestReduceProperties> {
-	static override readonly moduleName = "CrestReduce";
+	static override readonly moduleName = "Crest Reduce";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly moduleDescription = "Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor";

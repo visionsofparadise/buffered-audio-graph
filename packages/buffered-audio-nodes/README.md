@@ -73,7 +73,7 @@ npx @e9g/buffered-audio-nodes render --bag pipeline.bag
 
 ## Nodes
 
-### CrestReduce
+### Crest Reduce
 
 Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor
 
@@ -222,6 +222,16 @@ Isolate dialogue from background using MDX-Net vocal separation
 | `highPass` | number (20 to 500, step 10) | `80` | High Pass |
 | `lowPass` | number (1000 to 22050, step 100) | `20000` | Low Pass |
 
+### Loudness Normalize
+
+Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics
+
+[Source](./src/transforms/loudness-normalize/index.ts)
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `target` | number (-50 to 0, step 0.1) | `-16` | Target integrated loudness (LUFS) |
+
 ### Loudness Stats
 
 Measure integrated loudness, true peak, and loudness range per EBU R128, plus an amplitude-distribution histogram
@@ -233,17 +243,7 @@ Measure integrated loudness, true peak, and loudness range per EBU R128, plus an
 | `bucketCount` | number (min 0) | `1024` | Amplitude histogram bucket count |
 | `outputPath` | string | `""` | Output Path (JSON sidecar). Empty string disables file output. |
 
-### LoudnessNormalize
-
-Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics
-
-[Source](./src/transforms/loudness-normalize/index.ts)
-
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `target` | number (-50 to 0, step 0.1) | `-16` | Target integrated loudness (LUFS) |
-
-### LoudnessTarget
+### Loudness Target
 
 Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.
 
@@ -316,7 +316,7 @@ Read audio from a file
 | `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
 | `ffprobePath` | string | `""` | FFprobe — media file analyzer (included with FFmpeg) Download: [ffprobe](https://ffmpeg.org/download.html) |
 
-### ReadFfmpeg
+### Read FFmpeg
 
 Read audio from a file using FFmpeg
 
@@ -328,7 +328,7 @@ Read audio from a file using FFmpeg
 | `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
 | `ffprobePath` | string | `""` | FFprobe — media file analyzer (included with FFmpeg) Download: [ffprobe](https://ffmpeg.org/download.html) |
 
-### ReadWav
+### Read WAV
 
 Read audio from a WAV file
 

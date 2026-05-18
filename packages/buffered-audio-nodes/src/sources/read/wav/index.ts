@@ -234,7 +234,7 @@ export class ReadWavStream<P extends ReadWavProperties = ReadWavProperties> exte
 }
 
 export class ReadWavNode extends SourceNode<ReadWavProperties> {
-	static override readonly moduleName = "ReadWav";
+	static override readonly moduleName = "Read WAV";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly moduleDescription = "Read audio from a WAV file";

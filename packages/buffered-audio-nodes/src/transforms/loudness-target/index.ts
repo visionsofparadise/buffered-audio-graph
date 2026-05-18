@@ -464,7 +464,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 }
 
 export class LoudnessTargetNode extends TransformNode<LoudnessTargetProperties> {
-	static override readonly moduleName = "LoudnessTarget";
+	static override readonly moduleName = "Loudness Target";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly moduleDescription = "Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.";
