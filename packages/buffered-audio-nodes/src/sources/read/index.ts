@@ -1,6 +1,6 @@
 import { extname } from "node:path";
 import { z } from "zod";
-import { SourceNode, type SourceNodeProperties } from "@e9g/buffered-audio-nodes-core";
+import { SourceNode, type SourceNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { ReadFfmpegStream } from "./ffmpeg";
 import { ReadWavStream } from "./wav";

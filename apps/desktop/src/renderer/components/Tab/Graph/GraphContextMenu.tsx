@@ -7,7 +7,7 @@ import {
 	DropdownMenuSubContent,
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
-} from "@e9g/design-system";
+} from "@buffered-audio/design-system";
 import type { Snapshot } from "valtio/vanilla";
 import type { AppState } from "../../../models/State/App";
 import { PackageModuleList } from "./PackageModuleList";

@@ -1,18 +1,12 @@
-import type { GraphDefinition } from "@e9g/buffered-audio-nodes-core";
-import type { ComputeResult } from "@e9g/spectral-display";
+import type { GraphDefinition } from "@buffered-audio/core";
 import type { QueryClient } from "@tanstack/react-query";
 import type { Snapshot } from "valtio/vanilla";
 import type { Logger } from "../../shared/models/Logger";
 import type { Main } from "./Main";
 import type { MainEvents } from "./MainEvents";
-import type { PlaybackEngine } from "./PlaybackEngine";
 import type { ProxyStore } from "./ProxyStore/ProxyStore";
 import type { AppState } from "./State/App";
 import type { GraphState } from "./State/Graph";
-import type { PlaybackState } from "./State/Playback";
-import type { SelectionState } from "./State/Selection";
-import type { SnapshotState } from "./State/Snapshot";
-import type { WavFileHandle } from "../utilities/wavFileHandle";
 
 export interface HistoryEntry {
 	label: string;
@@ -60,15 +54,4 @@ export interface GraphContext extends AppContext {
 	readonly pushHistory: (entry: HistoryEntry) => void;
 	readonly undo: () => void;
 	readonly redo: () => void;
-}
-
-export interface SnapshotContext extends GraphContext {
-	readonly snapshot: Snapshot<SnapshotState>;
-	readonly snapshotStore: ProxyStore;
-	readonly playback: Snapshot<PlaybackState>;
-	readonly selection: Snapshot<SelectionState>;
-	readonly playbackEngine: PlaybackEngine;
-	readonly spectralResult: ComputeResult;
-	readonly wavFile: WavFileHandle;
-	readonly snapshotAudioPath: string;
 }

@@ -1,10 +1,21 @@
-import { IconButton } from "@e9g/design-system";
+import { IconButton } from "@buffered-audio/design-system";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { AlertTriangle } from "lucide-react";
+import type { Logger } from "../../../../../shared/models/Logger";
+import type { Main } from "../../../../models/Main";
 import { NodeMenu } from "./Menu";
+import { SnapshotPreview } from "./SnapshotPreview";
 import type { ParameterCallbacks } from "./ParameterRow/ParameterField";
 import { ParameterField } from "./ParameterRow/ParameterField";
 import type { Parameter } from "./utils/buildParameters";
+
+/** Stable inputs the per-node snapshot waveform preview needs to discover and read the latest snapshot. */
+export interface SnapshotPreviewData {
+	readonly main: Main;
+	readonly logger: Logger;
+	readonly userDataPath: string;
+	readonly bagId: string;
+}
 
 export type NodeState = "rendered" | "stale" | "processing" | "pending" | "error" | "bypassed";
 export type NodeCategory = "source" | "transform" | "target";
@@ -16,7 +27,9 @@ export interface NodeContainerData {
 	readonly bypassed: boolean;
 	readonly parameters: ReadonlyArray<Parameter>;
 	readonly inspected?: boolean;
-	readonly snapshot?: boolean;
+	/** Stable inputs for the per-node snapshot waveform preview. */
+	readonly snapshotPreview?: SnapshotPreviewData;
+	readonly nodeId?: string;
 	readonly description?: string;
 	readonly error?: string;
 	readonly progress?: number;
@@ -32,21 +45,20 @@ export interface NodeContainerData {
 	readonly onArrayRowReorder?: (paramName: string, fromIndex: number, toIndex: number) => void;
 	readonly onRender?: () => void;
 	readonly onAbort?: () => void;
-	readonly onView?: () => void;
 	[key: string]: unknown;
 }
 
-export function NodeContainer({ data, selected, children }: NodeProps & { readonly children?: React.ReactNode }) {
+export function NodeContainer({ data, selected }: NodeProps) {
 	const nodeData = data as unknown as NodeContainerData;
 	const isBypassed = nodeData.bypassed;
 	const isInspected = nodeData.inspected ?? false;
 	const hasInput = nodeData.category !== "source";
 	const hasOutput = nodeData.category !== "target";
 	const isSource = nodeData.category === "source";
-	const hasSnapshot = nodeData.snapshot ?? false;
+	const snapshotPreview = nodeData.snapshotPreview;
+	const previewNodeId = nodeData.nodeId;
 	const isProcessing = nodeData.state === "processing";
 	const isPending = nodeData.state === "pending";
-	const isRendered = nodeData.state === "rendered";
 	const hasError = nodeData.error !== undefined;
 	const progress = nodeData.progress;
 
@@ -99,10 +111,8 @@ export function NodeContainer({ data, selected, children }: NodeProps & { readon
 							isPending={isPending}
 							isBypassed={isBypassed}
 							isInspected={isInspected}
-							isRendered={isRendered}
 							onRender={nodeData.onRender}
 							onAbort={nodeData.onAbort}
-							onView={nodeData.onView}
 						/>
 					</div>
 				</div>
@@ -178,7 +188,15 @@ export function NodeContainer({ data, selected, children }: NodeProps & { readon
 				)}
 			</div>
 
-			{hasSnapshot && children}
+			{!isBypassed && snapshotPreview && previewNodeId !== undefined && (
+				<SnapshotPreview
+					main={snapshotPreview.main}
+					logger={snapshotPreview.logger}
+					userDataPath={snapshotPreview.userDataPath}
+					bagId={snapshotPreview.bagId}
+					nodeId={previewNodeId}
+				/>
+			)}
 
 			{hasError && (
 				<div className="mt-3 flex items-start gap-1.5 bg-state-error/20 px-3 py-2 ring-1 ring-state-error/40">

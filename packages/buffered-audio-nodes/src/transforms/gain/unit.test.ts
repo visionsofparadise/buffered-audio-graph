@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
+import { ChunkBuffer } from "@buffered-audio/core";
 import { gain, GainNode } from ".";
 
 function makeStereoChunk(leftValue: number, rightValue: number, frames = 512): { samples: [Float32Array, Float32Array]; offset: number; sampleRate: number; bitDepth: number } {

@@ -1,4 +1,4 @@
-import type { GraphEdge, GraphNode } from "@e9g/buffered-audio-nodes-core";
+import type { GraphEdge, GraphNode } from "@buffered-audio/core";
 
 /**
  * Topological sort using Kahn's algorithm.

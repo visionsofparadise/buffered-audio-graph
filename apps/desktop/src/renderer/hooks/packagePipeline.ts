@@ -1,4 +1,4 @@
-import type { GraphDefinition } from "@e9g/buffered-audio-nodes-core";
+import type { GraphDefinition } from "@buffered-audio/core";
 import type { Snapshot } from "valtio/vanilla";
 import { packageNameFromSpec, packageSpecFromNameAndVersion } from "../../shared/utilities/packageSpec";
 import type { Main } from "../models/Main";

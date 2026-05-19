@@ -1,4 +1,4 @@
-import type { GraphNode } from "@e9g/buffered-audio-nodes-core";
+import type { GraphNode } from "@buffered-audio/core";
 import { useCallback, useEffect, useState } from "react";
 import { topologicalSort } from "../../../../../shared/utilities/topologicalSort";
 import type { GraphContext } from "../../../../models/Context";

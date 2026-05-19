@@ -1,4 +1,4 @@
-import type { GraphEdge, GraphNode } from "@e9g/buffered-audio-nodes-core";
+import type { GraphEdge, GraphNode } from "@buffered-audio/core";
 import { useMemo, useRef } from "react";
 import type { GraphContext } from "../../../../models/Context";
 

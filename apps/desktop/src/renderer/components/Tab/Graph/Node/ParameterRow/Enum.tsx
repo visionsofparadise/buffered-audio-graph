@@ -1,4 +1,4 @@
-import { ButtonSelection, Select } from "@e9g/design-system";
+import { ButtonSelection, Select } from "@buffered-audio/design-system";
 export interface EnumParameter {
 	readonly kind: "enum";
 	readonly name: string;

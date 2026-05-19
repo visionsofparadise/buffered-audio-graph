@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import type { ExecutionProvider } from "@e9g/buffered-audio-nodes-core";
+import type { ExecutionProvider } from "@buffered-audio/core";
 
 export type FftBackend = "vkfft" | "fftw" | "js";
 

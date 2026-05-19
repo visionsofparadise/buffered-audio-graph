@@ -4,14 +4,11 @@ import { ApplyRendererIpc } from "./Audio/apply/Renderer";
 import { RenderGraphRendererIpc } from "./Audio/renderGraph/Renderer";
 import { ShowOpenDialogRendererIpc } from "./Dialog/showOpenDialog/Renderer";
 import { ShowSaveDialogRendererIpc } from "./Dialog/showSaveDialog/Renderer";
-import { CloseFileHandleRendererIpc } from "./FileSystem/closeFileHandle/Renderer";
 import { DeleteFileRendererIpc } from "./FileSystem/deleteFile/Renderer";
 import { EnsureDirectoryRendererIpc } from "./FileSystem/ensureDirectory/Renderer";
 import { ReadDirectoryRendererIpc } from "./FileSystem/readDirectory/Renderer";
-import { OpenFileHandleRendererIpc } from "./FileSystem/openFileHandle/Renderer";
 import { ReadFileRendererIpc } from "./FileSystem/readFile/Renderer";
 import { ReadFileChunkRendererIpc } from "./FileSystem/readFileChunk/Renderer";
-import { ReadFileHandleRendererIpc } from "./FileSystem/readFileHandle/Renderer";
 import { StatRendererIpc } from "./FileSystem/stat/Renderer";
 import { UnwatchFileRendererIpc } from "./FileSystem/unwatchFile/Renderer";
 import { WatchFileRendererIpc } from "./FileSystem/watchFile/Renderer";
@@ -25,6 +22,7 @@ import { GetUserDataPathRendererIpc } from "./System/getUserDataPath/Renderer";
 import { GetBundledBinaryDefaultsRendererIpc } from "./System/getBundledBinaryDefaults/Renderer";
 import { ListBundledBinariesRendererIpc } from "./System/listBundledBinaries/Renderer";
 import { GetWindowIdRendererIpc } from "./System/getWindowId/Renderer";
+import { OpenPathRendererIpc } from "./System/openPath/Renderer";
 import { QuitAppRendererIpc } from "./System/quitApp/Renderer";
 import { SetBoundsRendererIpc } from "./System/setBounds/Renderer";
 
@@ -32,14 +30,11 @@ export const ASYNC_RENDERER_IPCS = [
 	AbortJobRendererIpc,
 	ApplyRendererIpc,
 	RenderGraphRendererIpc,
-	CloseFileHandleRendererIpc,
 	DeleteFileRendererIpc,
 	EnsureDirectoryRendererIpc,
-	OpenFileHandleRendererIpc,
 	ReadDirectoryRendererIpc,
 	ReadFileRendererIpc,
 	ReadFileChunkRendererIpc,
-	ReadFileHandleRendererIpc,
 	StatRendererIpc,
 	UnwatchFileRendererIpc,
 	WatchFileRendererIpc,
@@ -55,6 +50,7 @@ export const ASYNC_RENDERER_IPCS = [
 	GetAppVersionRendererIpc,
 	GetBundledBinaryDefaultsRendererIpc,
 	ListBundledBinariesRendererIpc,
+	OpenPathRendererIpc,
 	QuitAppRendererIpc,
 	SetBoundsRendererIpc,
 ];

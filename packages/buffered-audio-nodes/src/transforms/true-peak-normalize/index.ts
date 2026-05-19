@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@e9g/buffered-audio-nodes-core";
-import { TruePeakAccumulator } from "@e9g/buffered-audio-nodes-utils";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import { TruePeakAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 // One-second-at-44.1kHz iteration size, matching the convention used by

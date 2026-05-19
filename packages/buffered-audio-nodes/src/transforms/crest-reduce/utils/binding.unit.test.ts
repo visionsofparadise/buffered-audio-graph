@@ -1,5 +1,5 @@
-import { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
-import { TruePeakAccumulator, linearToDb } from "@e9g/buffered-audio-nodes-utils";
+import { ChunkBuffer } from "@buffered-audio/core";
+import { TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
 import { BINDING_DELTA_DB, BINDING_HEADROOM_MIN, classifyWindow, isBindingPeak, measureWholeSignalTruePeakDb } from "./binding";
 

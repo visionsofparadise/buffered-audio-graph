@@ -1,4 +1,4 @@
-import type { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
+import type { ChunkBuffer } from "@buffered-audio/core";
 import {
 	AmplitudeHistogramAccumulator,
 	LoudnessAccumulator,
@@ -8,7 +8,7 @@ import {
 	dbToLinear,
 	getLraConsideredStats,
 	linearToDb,
-} from "@e9g/buffered-audio-nodes-utils";
+} from "@buffered-audio/utils";
 import { OVERSAMPLE_FACTOR } from "./iterate";
 
 /**

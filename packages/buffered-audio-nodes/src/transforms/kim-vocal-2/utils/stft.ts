@@ -1,4 +1,4 @@
-import { hanningWindow, type MixedRadixFft } from "@e9g/buffered-audio-nodes-utils";
+import { hanningWindow, type MixedRadixFft } from "@buffered-audio/utils";
 
 const N_FFT = 7680;
 const HOP_SIZE = 1024;

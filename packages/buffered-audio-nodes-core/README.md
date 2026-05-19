@@ -1,11 +1,11 @@
-# @e9g/buffered-audio-nodes-core
+# @buffered-audio/core
 
 Foundational protocol layer for the buffered-audio-nodes ecosystem: base classes, streaming architecture, graph format (BAG), and executor.
 
 ## Install
 
 ```sh
-npm install @e9g/buffered-audio-nodes-core
+npm install @buffered-audio/core
 ```
 
 ## Overview
@@ -15,7 +15,7 @@ This package defines the abstractions that all buffered-audio-nodes packages bui
 - **Node authors** extend `SourceNode`, `TransformNode`, or `TargetNode` to create concrete audio processing modules.
 - **Graph executors** use the BAG format (`pack`, `unpack`, `renderGraph`) to serialize, deserialize, and run audio processing pipelines.
 
-Concrete node implementations live in separate packages (e.g. `@e9g/buffered-audio-nodes`). This package provides only the protocol layer and has a single runtime dependency: `zod`.
+Concrete node implementations live in separate packages (e.g. `@buffered-audio/nodes`). This package provides only the protocol layer and has a single runtime dependency: `zod`.
 
 ## Node Types
 
@@ -190,7 +190,7 @@ A two-level `Map<packageName, Map<nodeName, Constructor>>` that maps serialized 
 
 ```ts
 const registry: NodeRegistry = new Map([
-	["@e9g/buffered-audio-nodes", new Map([
+	["@buffered-audio/nodes", new Map([
 		["wav-source", WavSourceNode],
 		["gain", GainNode],
 		["wav-target", WavTargetNode],
@@ -203,7 +203,7 @@ const registry: NodeRegistry = new Map([
 Serialize live nodes into a `GraphDefinition`:
 
 ```ts
-import { pack } from "@e9g/buffered-audio-nodes-core";
+import { pack } from "@buffered-audio/core";
 
 const definition = pack([source], "my-graph");
 ```
@@ -213,7 +213,7 @@ const definition = pack([source], "my-graph");
 Deserialize a `GraphDefinition` back into live node instances:
 
 ```ts
-import { unpack } from "@e9g/buffered-audio-nodes-core";
+import { unpack } from "@buffered-audio/core";
 
 const sources = unpack(definition, registry);
 await sources[0].render();
@@ -224,7 +224,7 @@ await sources[0].render();
 Shorthand to unpack and render in one step:
 
 ```ts
-import { renderGraph } from "@e9g/buffered-audio-nodes-core";
+import { renderGraph } from "@buffered-audio/core";
 
 await renderGraph(definition, registry, { memoryLimit: 512 * 1024 * 1024 });
 ```
@@ -234,7 +234,7 @@ await renderGraph(definition, registry, { memoryLimit: 512 * 1024 * 1024 });
 Validates raw JSON against the BAG schema using Zod:
 
 ```ts
-import { validateGraphDefinition } from "@e9g/buffered-audio-nodes-core";
+import { validateGraphDefinition } from "@buffered-audio/core";
 
 const definition = validateGraphDefinition(JSON.parse(raw));
 ```

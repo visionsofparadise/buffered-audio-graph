@@ -6,8 +6,8 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "paths": {
-      "@e9g/buffered-audio-nodes-core": ["packages/buffered-audio-nodes-core/src/index.ts"],
-      "@e9g/buffered-audio-nodes-core/*": ["packages/buffered-audio-nodes-core/src/*"]
+      "@buffered-audio/core": ["packages/buffered-audio-nodes-core/src/index.ts"],
+      "@buffered-audio/core/*": ["packages/buffered-audio-nodes-core/src/*"]
     },
     "types": ["@webgpu/types"]
   },

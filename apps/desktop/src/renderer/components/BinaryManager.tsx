@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@e9g/design-system";
+import { Button } from "@buffered-audio/design-system";
 import type { AppContext } from "../models/Context";
 import type { ModuleJsonSchema } from "../../shared/ipc/Package/loadModules/Renderer";
 

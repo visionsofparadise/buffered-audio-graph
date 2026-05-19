@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
+import { ChunkBuffer } from "@buffered-audio/core";
 import { duplicateChannels, DuplicateChannelsNode } from ".";
 
 function makeMonoChunk(value: number, frames = 256) {

@@ -1,4 +1,4 @@
-import type { MixedRadixFft } from "@e9g/buffered-audio-nodes-utils";
+import type { MixedRadixFft } from "@buffered-audio/utils";
 import type { OnnxSession } from "../../../utils/onnx-runtime";
 import { stft7680IntoTensor, istft7680FromTensor } from "./stft";
 

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { WaveFile } from "wavefile";
-import { IntegratedLufsAccumulator } from "@e9g/buffered-audio-nodes-utils";
+import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { read } from "../../sources/read";
 import { write } from "../../targets/write";
 import { loudnessNormalize, LoudnessNormalizeStream } from ".";

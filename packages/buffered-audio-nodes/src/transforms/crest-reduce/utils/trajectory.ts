@@ -129,7 +129,7 @@
 // envelope reference.
 //
 // Zero-phase mechanism reuse: the single-source-of-truth
-// `BidirectionalIir` from `@e9g/buffered-audio-nodes-utils` — the EXACT
+// `BidirectionalIir` from `@buffered-audio/utils` — the EXACT
 // primitive `loudnessTarget`'s peak-respecting gain envelope uses
 // (`loudness-target/utils/envelope.ts`). The √2·τ
 // bidirectional-vs-causal compensation (so the user-facing `smoothing` ms
@@ -143,7 +143,7 @@
 // + `sampleRate`/`hopSize`, NOT `smoothing`) — see
 // `exactHoldHalfWidthFrames`.
 
-import { BidirectionalIir } from "@e9g/buffered-audio-nodes-utils";
+import { BidirectionalIir } from "@buffered-audio/utils";
 import { GROUP_DELAY_CEILING_MS } from "./search";
 
 /**

@@ -1,4 +1,4 @@
-import { validateGraphDefinition, type GraphDefinition } from "@e9g/buffered-audio-nodes-core";
+import { validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import type { FileChangedPayload } from "../../shared/utilities/emitToRenderer";

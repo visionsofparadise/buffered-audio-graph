@@ -2,8 +2,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
-import { deinterleaveBuffer, interleave } from "@e9g/buffered-audio-nodes-utils";
+import type { ChunkBuffer } from "@buffered-audio/core";
+import { deinterleaveBuffer, interleave } from "@buffered-audio/utils";
 import { waitForDrain } from "../../../utils/ffmpeg";
 
 /**

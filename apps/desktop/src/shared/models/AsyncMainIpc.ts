@@ -1,5 +1,4 @@
 import type { BrowserWindow } from "electron";
-import type { FileHandleManager } from "../../main/FileHandleManager";
 import type { FileWatcherManager } from "../../main/FileWatcherManager";
 import type { JobManager } from "../ipc/Audio/apply/utils/jobManager";
 import { Logger } from "./Logger";
@@ -7,7 +6,6 @@ import type { ModuleRegistryMap } from "./ModuleRegistry";
 
 export interface IpcHandlerDependencies {
 	readonly browserWindow: BrowserWindow;
-	readonly fileHandleManager: FileHandleManager;
 	readonly fileWatcherManager: FileWatcherManager;
 	readonly jobManager: JobManager;
 	readonly logger: Logger;

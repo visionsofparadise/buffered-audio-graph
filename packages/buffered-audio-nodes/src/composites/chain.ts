@@ -4,7 +4,7 @@ import {
 	CompositeNode,
 	SourceNode,
 	TransformNode,
-} from "@e9g/buffered-audio-nodes-core";
+} from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../package-metadata";
 
 export class ChainNode extends CompositeNode {

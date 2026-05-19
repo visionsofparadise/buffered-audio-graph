@@ -1,8 +1,8 @@
 @import "tailwindcss";
-@import "@e9g/design-system/css/tokens.css";
-@import "@e9g/design-system/styles.css";
-@import "@e9g/design-system/css/base.css";
-@import "@e9g/design-system/css/utilities.css";
+@import "@buffered-audio/design-system/css/tokens.css";
+@import "@buffered-audio/design-system/styles.css";
+@import "@buffered-audio/design-system/css/base.css";
+@import "@buffered-audio/design-system/css/utilities.css";
 
 @layer base {
   *::-webkit-scrollbar { width: 6px; height: 6px; }

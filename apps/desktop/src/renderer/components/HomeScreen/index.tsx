@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { TerrainShader } from "@e9g/design-system";
+import { TerrainShader } from "@buffered-audio/design-system";
 import type { AppContext } from "../../models/Context";
 import type { RecentFile } from "../../models/State/App";
 

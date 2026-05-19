@@ -12,7 +12,6 @@ const ViewportSchema = z.object({
 export const GraphStateSchema = z.object({
 	positions: z.record(z.string(), z.object({ x: z.number(), y: z.number() })).default({}),
 	inspectedNodeId: z.string().nullable().default(null),
-	spectralNodeId: z.string().nullable().default(null),
 	viewport: ViewportSchema.default({ x: 0, y: 0, zoom: 1 }),
 });
 

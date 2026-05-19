@@ -1,5 +1,5 @@
 import dagre from "@dagrejs/dagre";
-import type { GraphEdge, GraphNode } from "@e9g/buffered-audio-nodes-core";
+import type { GraphEdge, GraphNode } from "@buffered-audio/core";
 
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 200;

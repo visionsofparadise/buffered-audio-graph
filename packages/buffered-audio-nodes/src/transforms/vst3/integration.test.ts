@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { ChunkBuffer, type StreamContext } from "@e9g/buffered-audio-nodes-core";
+import { ChunkBuffer, type StreamContext } from "@buffered-audio/core";
 import { Vst3Stream } from ".";
 
 // Stub binary mimics the real `vst-host` whole-file CLI shape: parses

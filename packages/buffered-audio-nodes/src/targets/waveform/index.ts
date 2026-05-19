@@ -1,6 +1,6 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TargetNodeProperties } from "@e9g/buffered-audio-nodes-core";
+import { BufferedTargetStream, TargetNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { updateMinMax, writeMinMaxPoint } from "./utils/minmax";
 

@@ -1,5 +1,5 @@
-import { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
-import { BidirectionalIir, slidingWindowMin } from "@e9g/buffered-audio-nodes-utils";
+import { ChunkBuffer } from "@buffered-audio/core";
+import { BidirectionalIir, slidingWindowMin } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
 import { type Anchors, gainDbAt } from "./curve";
 import { applyBackwardPassOverChunkBuffer, peakRespectingEnvelope, windowSamplesFromMs } from "./envelope";

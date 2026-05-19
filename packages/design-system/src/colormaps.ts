@@ -1,4 +1,14 @@
-import type { ColormapDefinition } from "@e9g/spectral-display";
+/**
+ * Colormap definition shape. Matches the `ColormapDefinition` exported by the
+ * published `spectral-display` package (kept as a local type so design-system
+ * carries no runtime/type dependency on spectral-display).
+ */
+export interface ColormapDefinition {
+	colors: ReadonlyArray<{
+		position: number;
+		color: readonly [number, number, number];
+	}>;
+}
 
 function fromPoints(points: ReadonlyArray<readonly [number, number, number]>): ColormapDefinition {
 	return {

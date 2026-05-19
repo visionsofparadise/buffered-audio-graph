@@ -1,4 +1,4 @@
-import { IconButton, DropdownButton, type MenuItem } from "@e9g/design-system";
+import { IconButton, DropdownButton, type MenuItem } from "@buffered-audio/design-system";
 
 interface Props {
 	readonly tabs: ReadonlyArray<{ id: string; label: string }>;

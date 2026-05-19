@@ -1,7 +1,7 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TargetNodeProperties } from "@e9g/buffered-audio-nodes-core";
-import { AmplitudeHistogramAccumulator, LoudnessAccumulator, TruePeakAccumulator } from "@e9g/buffered-audio-nodes-utils";
+import { BufferedTargetStream, TargetNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { AmplitudeHistogramAccumulator, LoudnessAccumulator, TruePeakAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({

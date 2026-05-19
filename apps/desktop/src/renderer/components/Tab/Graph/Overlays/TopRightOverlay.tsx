@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { Button, IconButton } from "@e9g/design-system";
+import { Button, IconButton } from "@buffered-audio/design-system";
 
 interface Props {
 	readonly onAutoOrganize: () => void;

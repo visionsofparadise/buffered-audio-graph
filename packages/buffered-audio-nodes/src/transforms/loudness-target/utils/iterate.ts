@@ -157,8 +157,8 @@
  * log line.
  */
 
-import { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
-import { BidirectionalIir, LoudnessAccumulator, SlidingWindowMinStream, TruePeakAccumulator, linearToDb } from "@e9g/buffered-audio-nodes-utils";
+import { ChunkBuffer } from "@buffered-audio/core";
+import { BidirectionalIir, LoudnessAccumulator, SlidingWindowMinStream, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { applyBaseRateChunk } from "./apply";
 import { type Anchors, gainDbAt } from "./curve";
 import { applyBackwardPassOverChunkBuffer, windowSamplesFromMs } from "./envelope";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type AudioChunk } from "@e9g/buffered-audio-nodes-core";
-import { TruePeakAccumulator, linearToDb } from "@e9g/buffered-audio-nodes-utils";
+import { type AudioChunk } from "@buffered-audio/core";
+import { TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { readWavSamples } from "../../utils/read-to-buffer";
 import { audio, hasAudioFixtures } from "../../utils/test-binaries";
 import { crestReduce, CrestReduceNode, CrestReduceStream, schema } from ".";

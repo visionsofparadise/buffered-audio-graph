@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type TransformNodeProperties } from "@e9g/buffered-audio-nodes-core";
+import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 const CHUNK_FRAMES = 44100;

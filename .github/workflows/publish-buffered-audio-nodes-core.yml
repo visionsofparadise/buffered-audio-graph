@@ -28,7 +28,7 @@ jobs:
         id: check
         run: |
           PACKAGE_VERSION=$(node -p "require('./packages/buffered-audio-nodes-core/package.json').version")
-          PUBLISHED=$(npm view @e9g/buffered-audio-nodes-core@$PACKAGE_VERSION version 2>/dev/null || echo "")
+          PUBLISHED=$(npm view @buffered-audio/core@$PACKAGE_VERSION version 2>/dev/null || echo "")
           if [ "$PUBLISHED" = "$PACKAGE_VERSION" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
@@ -42,15 +42,15 @@ jobs:
 
       - name: Type check and lint (topo-ordered)
         if: steps.check.outputs.skip == 'false'
-        run: npx turbo check --filter=@e9g/buffered-audio-nodes-core
+        run: npx turbo check --filter=@buffered-audio/core
 
       - name: Run unit tests
         if: steps.check.outputs.skip == 'false'
-        run: npx turbo unit --filter=@e9g/buffered-audio-nodes-core
+        run: npx turbo unit --filter=@buffered-audio/core
 
       - name: Build (topo-ordered)
         if: steps.check.outputs.skip == 'false'
-        run: npx turbo build --filter=@e9g/buffered-audio-nodes-core
+        run: npx turbo build --filter=@buffered-audio/core
 
       - name: Publish to npm
         if: steps.check.outputs.skip == 'false'

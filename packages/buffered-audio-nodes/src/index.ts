@@ -45,4 +45,4 @@ export { vst3, Vst3Node, Vst3Stream, type Vst3Properties } from "./transforms/vs
 
 // Composites
 export { chain, ChainNode } from "./composites/chain";
-export { CompositeNode } from "@e9g/buffered-audio-nodes-core";
+export { CompositeNode } from "@buffered-audio/core";

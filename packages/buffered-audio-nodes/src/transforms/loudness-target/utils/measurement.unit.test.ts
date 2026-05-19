@@ -1,4 +1,4 @@
-import { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
+import { ChunkBuffer } from "@buffered-audio/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { measureSource } from "./measurement";
 

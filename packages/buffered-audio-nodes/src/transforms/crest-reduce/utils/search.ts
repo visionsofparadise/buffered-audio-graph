@@ -132,7 +132,7 @@
  * `lattice.ts` `LATTICE_ORDER` (the section/lane count); the strength→λ
  * map's summed-cascade group-delay bound is over this many sections.
  */
-import { TruePeakUpsampler } from "@e9g/buffered-audio-nodes-utils";
+import { TruePeakUpsampler } from "@buffered-audio/utils";
 import { LATTICE_ORDER } from "./lattice";
 
 /**

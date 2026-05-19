@@ -5,19 +5,17 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 	IconButton,
-} from "@e9g/design-system";
+} from "@buffered-audio/design-system";
 import { Icon } from "@iconify/react";
 
-export function NodeMenu({ isSource, isProcessing, isPending, isBypassed, isInspected, isRendered, onRender, onAbort, onView }: {
+export function NodeMenu({ isSource, isProcessing, isPending, isBypassed, isInspected, onRender, onAbort }: {
 	readonly isSource: boolean;
 	readonly isProcessing: boolean;
 	readonly isPending: boolean;
 	readonly isBypassed: boolean;
 	readonly isInspected: boolean;
-	readonly isRendered: boolean;
 	readonly onRender?: () => void;
 	readonly onAbort?: () => void;
-	readonly onView?: () => void;
 }) {
 	let renderLabel = "Render";
 	let renderColor = "text-chrome-text";
@@ -31,11 +29,6 @@ export function NodeMenu({ isSource, isProcessing, isPending, isBypassed, isInsp
 				<IconButton icon="lucide:ellipsis-vertical" label="Node menu" dim />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				<DropdownMenuItem disabled={!isRendered} onSelect={() => onView?.()}>
-					<Icon icon="lucide:eye" width={12} height={12} className="shrink-0" />
-					<span>View</span>
-				</DropdownMenuItem>
-
 				{isSource && (
 					<DropdownMenuItem className={isInspected ? "text-primary" : undefined}>
 						<Icon icon="lucide:eye" width={12} height={12} className="shrink-0" />

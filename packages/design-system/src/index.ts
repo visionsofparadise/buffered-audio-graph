@@ -31,21 +31,6 @@ export { DropdownButton } from "./components/DropdownButton";
 export type { DropdownButtonProps, MenuItem } from "./components/DropdownButton";
 export { TerrainShader } from "./components/TerrainShader";
 
-// Spectral
-export { Spectrogram } from "./components/spectral/Spectrogram";
-export { Waveform } from "./components/spectral/Waveform";
-export { FrequencyAxis, DbAxis, ColormapGradient, TimeRuler } from "./components/spectral/Axes";
-export { FrequencyMinimap } from "./components/spectral/FrequencyMinimap";
-export { LoudnessOverlay } from "./components/spectral/LoudnessOverlay";
-export { LoudnessKey } from "./components/spectral/LoudnessKey";
-export { Minimap } from "./components/spectral/Minimap";
-export { NodeNav } from "./components/spectral/NodeNav";
-export { Selection } from "./components/spectral/Selection";
-export { StereoMeter } from "./components/spectral/StereoMeter";
-export { Transport } from "./components/spectral/Transport";
-export { ZoomSliders } from "./components/spectral/ZoomSliders";
-export type { AudioDisplayData, WaveformFrame, LoudnessData, AudioData } from "./components/spectral/types";
-
 // Colors & Theme
 export { THEME_COLORS, COLORMAP_POINTS, colormapGradient, getThemeColors } from "./colors";
 export type { ColormapTheme, ColormapThemeColors } from "./colors";

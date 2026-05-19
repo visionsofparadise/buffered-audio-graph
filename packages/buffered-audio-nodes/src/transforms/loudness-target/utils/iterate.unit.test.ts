@@ -1,5 +1,5 @@
-import { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
-import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@e9g/buffered-audio-nodes-utils";
+import { ChunkBuffer } from "@buffered-audio/core";
+import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { iterateForTargets } from "./iterate";
 
@@ -944,7 +944,7 @@ describe("iterateForTargets", () => {
  */
 describe("BidirectionalIir rate invariance (loudness-target smoothing contract)", () => {
 	it("step response settles in the same number of MILLISECONDS at base rate and at 4× rate (within ±1 base-sample)", async () => {
-		const { BidirectionalIir } = await import("@e9g/buffered-audio-nodes-utils");
+		const { BidirectionalIir } = await import("@buffered-audio/utils");
 		const smoothingMs = 3; // production-typical
 		const baseRate = SAMPLE_RATE; // 48 kHz
 		const upRate = baseRate * 4;

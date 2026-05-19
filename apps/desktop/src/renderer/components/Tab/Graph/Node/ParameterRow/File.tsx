@@ -1,4 +1,4 @@
-import { Button } from "@e9g/design-system";
+import { Button } from "@buffered-audio/design-system";
 export interface FileParameter {
 	readonly kind: "file";
 	readonly name: string;

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import type * as Wavefile from "wavefile";
-import { ChunkBuffer, type SourceMetadata } from "@e9g/buffered-audio-nodes-core";
+import { ChunkBuffer, type SourceMetadata } from "@buffered-audio/core";
 
 // wavefile interop: the package ships a CJS `main` (works under Node ESM, scratch
 // .mjs, tsx via Node resolver) and an ESM `module` with no default export (works

@@ -1,4 +1,4 @@
-import { linearToDb } from "@e9g/buffered-audio-nodes-utils";
+import { linearToDb } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
 import { measureFrameTruePeakDb } from "./objective";
 

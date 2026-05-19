@@ -39,15 +39,15 @@ jobs:
         run: npm ci
 
       - name: Check (topo-ordered across all three packages)
-        run: npx turbo check --filter=@e9g/buffered-audio-nodes
+        run: npx turbo check --filter=@buffered-audio/nodes
 
       - name: Unit (topo-ordered)
-        run: npx turbo unit --filter=@e9g/buffered-audio-nodes
+        run: npx turbo unit --filter=@buffered-audio/nodes
 
       - name: Build (topo-ordered)
-        run: npx turbo build --filter=@e9g/buffered-audio-nodes
+        run: npx turbo build --filter=@buffered-audio/nodes
 
       - name: Docs (drift check)
         run: |
-          npx turbo docs --filter=@e9g/buffered-audio-nodes
+          npx turbo docs --filter=@buffered-audio/nodes
           git diff --exit-code packages/buffered-audio-nodes/README.md

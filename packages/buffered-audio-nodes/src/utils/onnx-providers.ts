@@ -1,4 +1,4 @@
-import type { ExecutionProvider } from "@e9g/buffered-audio-nodes-core";
+import type { ExecutionProvider } from "@buffered-audio/core";
 
 /**
  * Translate the abstract `ExecutionProvider` preference list into a concrete

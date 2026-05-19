@@ -4,7 +4,7 @@ import { audio, binaries } from "./test-binaries";
 import { dtln } from "../transforms/dtln";
 import { kimVocal2 } from "../transforms/kim-vocal-2";
 import { htdemucs } from "../transforms/htdemucs";
-import { ExecutionProvider } from "@e9g/buffered-audio-nodes-core";
+import { ExecutionProvider } from "@buffered-audio/core";
 
 const testVoice = audio.testVoice;
 

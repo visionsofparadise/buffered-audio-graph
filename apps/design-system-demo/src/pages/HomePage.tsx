@@ -1,6 +1,6 @@
 import { Icon } from "@iconify/react";
-import { TerrainShader } from "@e9g/design-system";
-import type { MenuItem } from "@e9g/design-system";
+import { TerrainShader } from "@buffered-audio/design-system";
+import type { MenuItem } from "@buffered-audio/design-system";
 import { DemoTabBar } from "../DemoTabBar";
 import { useColormapTheme } from "../ThemeContext";
 

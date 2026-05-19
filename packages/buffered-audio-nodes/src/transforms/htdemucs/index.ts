@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@e9g/buffered-audio-nodes-core";
-import { bandpass, ResampleStream } from "@e9g/buffered-audio-nodes-utils";
+import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { bandpass, ResampleStream } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { computeStftScaled, reflectPad } from "./utils/dsp";

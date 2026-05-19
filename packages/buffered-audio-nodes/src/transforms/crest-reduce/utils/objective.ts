@@ -1,4 +1,4 @@
-import { TruePeakAccumulator, linearToDb } from "@e9g/buffered-audio-nodes-utils";
+import { TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 
 /**
  * Per-frame 4× true-peak measure for the crestReduce TP-driven binding

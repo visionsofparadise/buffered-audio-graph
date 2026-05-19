@@ -3,7 +3,7 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type BufferedAudioNodeProperties, type ChunkBuffer, type StreamContext } from "@e9g/buffered-audio-nodes-core";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type BufferedAudioNodeProperties, type ChunkBuffer, type StreamContext } from "@buffered-audio/core";
 import { read } from "../sources/read";
 import { write } from "../targets/write";
 import { readWavSamples } from "../utils/read-to-buffer";

@@ -1,7 +1,7 @@
 /* eslint-disable no-console -- the node logs a measurement summary by design; tests run with vitest, console output is fine in CI. */
 import { describe, expect, it } from "vitest";
-import { TruePeakAccumulator } from "@e9g/buffered-audio-nodes-utils";
-import { type AudioChunk } from "@e9g/buffered-audio-nodes-core";
+import { TruePeakAccumulator } from "@buffered-audio/utils";
+import { type AudioChunk } from "@buffered-audio/core";
 import { schema, truePeakNormalize, TruePeakNormalizeStream } from ".";
 
 const TEST_SAMPLE_RATE = 48_000;

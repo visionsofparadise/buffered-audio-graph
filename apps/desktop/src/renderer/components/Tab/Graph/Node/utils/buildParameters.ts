@@ -1,4 +1,4 @@
-import type { GraphNode } from "@e9g/buffered-audio-nodes-core";
+import type { GraphNode } from "@buffered-audio/core";
 import type { ModuleJsonSchema, ModuleJsonSchemaProperty } from "../../../../../../shared/ipc/Package/loadModules/Renderer";
 import type { BooleanParameter } from "../ParameterRow/Boolean";
 import type { EnumParameter } from "../ParameterRow/Enum";

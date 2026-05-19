@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Icon } from "@iconify/react";
-import { Knob, Toggle, ButtonSelection, Select, Button, IconButton, DropdownButton } from "@e9g/design-system";
-import type { MenuItem } from "@e9g/design-system";
+import { Knob, Toggle, ButtonSelection, Select, Button, IconButton, DropdownButton } from "@buffered-audio/design-system";
+import type { MenuItem } from "@buffered-audio/design-system";
 import type { AudioNodeData, NumberParameter } from "./types";
 
 function snapToStep(value: number, step: number): number {

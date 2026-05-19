@@ -1,9 +1,9 @@
 import { stat, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { BrowserWindow } from "electron";
-import type { GraphNode } from "@e9g/buffered-audio-nodes-core";
-import type { SourceNode, TransformNode } from "@e9g/buffered-audio-nodes-core";
-import { ReadNode, WriteNode } from "@e9g/buffered-audio-nodes";
+import type { GraphNode } from "@buffered-audio/core";
+import type { SourceNode, TransformNode } from "@buffered-audio/core";
+import { ReadNode, WriteNode } from "@buffered-audio/nodes";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
 import { resolvePackageModules, type ModuleClass, type ModuleRegistryMap } from "../../../models/ModuleRegistry";
 import type { Logger } from "../../../models/Logger";

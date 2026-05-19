@@ -5,7 +5,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 	IconButton,
-} from "@e9g/design-system";
+} from "@buffered-audio/design-system";
 import { Icon } from "@iconify/react";
 import type { AppContext } from "../models/Context";
 

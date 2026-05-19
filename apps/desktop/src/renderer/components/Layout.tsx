@@ -114,7 +114,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 		if (!result) return;
 
 		const readyBufferedAudioNodes = app.packages.filter(
-			(entry) => entry.name === "@e9g/buffered-audio-nodes" && entry.status === "ready" && entry.version !== null,
+			(entry) => entry.name === "@buffered-audio/nodes" && entry.status === "ready" && entry.version !== null,
 		);
 
 		if (readyBufferedAudioNodes.length > 0) {
@@ -126,7 +126,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 
 			result.definition.nodes.push({
 				id: crypto.randomUUID(),
-				packageName: "@e9g/buffered-audio-nodes",
+				packageName: "@buffered-audio/nodes",
 				packageVersion: latest.version ?? "",
 				nodeName: "Read",
 			});

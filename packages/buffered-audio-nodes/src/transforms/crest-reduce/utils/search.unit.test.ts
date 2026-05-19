@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TruePeakUpsampler } from "@e9g/buffered-audio-nodes-utils";
+import { TruePeakUpsampler } from "@buffered-audio/utils";
 import { LATTICE_ORDER, stepDownToReflection } from "./lattice";
 import { designDispersionAllpass, schroederTargetToDelay } from "./dispersion";
 import { GROUP_DELAY_CEILING_MS, SEARCH_GRID_POINTS, SEARCH_REFINE_ITERS, applyWindowAtScale, groupDelayLambda, searchBindingPeak, truePeakPower4x } from "./search";

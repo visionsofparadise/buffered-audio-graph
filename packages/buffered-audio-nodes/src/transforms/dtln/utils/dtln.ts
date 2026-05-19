@@ -1,4 +1,4 @@
-import { istft, stft, type FftBackend } from "@e9g/buffered-audio-nodes-utils";
+import { istft, stft, type FftBackend } from "@buffered-audio/utils";
 import type { OnnxSession } from "../../../utils/onnx-runtime";
 
 const BLOCK_LEN = 512;

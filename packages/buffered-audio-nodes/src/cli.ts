@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { renderGraph, validateGraphDefinition, SourceNode, type NodeRegistry, type BufferedAudioNode } from "@e9g/buffered-audio-nodes-core";
+import { renderGraph, validateGraphDefinition, SourceNode, type NodeRegistry, type BufferedAudioNode } from "@buffered-audio/core";
 
 const program = new Command();
 

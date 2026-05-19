@@ -64,8 +64,8 @@
 // `read(n)` / `reset()` only, NO offset access, NO single `read(total)`.
 // `bufferSize = WHOLE_FILE` topology is normal and stays.
 
-import type { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
-import { TruePeakUpsampler, linearToDb, stft, type FftBackend } from "@e9g/buffered-audio-nodes-utils";
+import type { ChunkBuffer } from "@buffered-audio/core";
+import { TruePeakUpsampler, linearToDb, stft, type FftBackend } from "@buffered-audio/utils";
 import { isBindingPeak } from "./binding";
 import { designDispersionAllpass, schroederTargetToDelay } from "./dispersion";
 import { LATTICE_ORDER, peakPriorityAmount, stepDownToReflection } from "./lattice";

@@ -80,9 +80,8 @@ const LegacyModulePackageStateSchema = z.object({
 	isBuiltIn: z.boolean().optional(),
 });
 
-const BUILT_IN_PACKAGE_NAME = "@e9g/buffered-audio-nodes";
-const BUILT_IN_PACKAGE_SPEC = "@e9g/buffered-audio-nodes@latest";
-const BUILT_IN_PACKAGE_URL = "https://github.com/visionsofparadise/buffered-audio-nodes";
+const BUILT_IN_PACKAGE_NAME = "@buffered-audio/nodes";
+const BUILT_IN_PACKAGE_SPEC = "@buffered-audio/nodes@latest";
 
 function resetPackageLifecycle(entry: ModulePackageState): ModulePackageState {
 	return entry.status === "ready"
@@ -110,7 +109,7 @@ function migrateLegacyPackageState(value: unknown): ModulePackageState | null {
 	}
 
 	const entry = legacy.data;
-	const isBuiltIn = entry.isBuiltIn === true || entry.url === BUILT_IN_PACKAGE_URL || entry.name === BUILT_IN_PACKAGE_NAME;
+	const isBuiltIn = entry.isBuiltIn === true || entry.name === BUILT_IN_PACKAGE_NAME;
 	let requestedSpec: string | null = null;
 
 	if (isBuiltIn) {

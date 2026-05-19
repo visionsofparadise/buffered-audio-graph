@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ChunkBuffer, type StreamContext } from "@e9g/buffered-audio-nodes-core";
+import { ChunkBuffer, type StreamContext } from "@buffered-audio/core";
 import { schema, vst3, Vst3Node, Vst3PassthroughStream, Vst3Stream } from ".";
 
 const buildContext = (): StreamContext => ({

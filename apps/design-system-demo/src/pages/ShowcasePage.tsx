@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Knob, Fader, Meter, ButtonSelection, Button, Input, COLORMAP_POINTS, colormapGradient } from "@e9g/design-system";
+import { Knob, Fader, Meter, ButtonSelection, Button, Input, COLORMAP_POINTS, colormapGradient } from "@buffered-audio/design-system";
 
 const CHROME = [
   { token: "void", hex: "#020204" },

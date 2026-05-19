@@ -14,7 +14,7 @@ export type Platform = "all" | "win32" | "linux" | "darwin";
 export type Arch = "all" | "x64" | "arm64";
 
 export interface ManifestAsset {
-	// Schema binary key in @e9g/buffered-audio-nodes Zod schemas, or null
+	// Schema binary key in @buffered-audio/nodes Zod schemas, or null
 	// for assets that are installed to disk but not exposed as a schema
 	// binary (e.g. ONNX Runtime shared libs loaded dynamically by the
 	// addon; HTDemucs external-data sidecar loaded automatically by ORT).

@@ -7,7 +7,7 @@ export class BinariesStack extends Stack {
 		super(scope, id, props)
 
 		const bucket = new Bucket(this, "Bucket", {
-			bucketName: "engineering-binaries-345340320424",
+			bucketName: "buffered-audio-binaries-345340320424",
 			publicReadAccess: true,
 			blockPublicAccess: new BlockPublicAccess({
 				blockPublicAcls: false,

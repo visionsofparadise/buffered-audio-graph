@@ -52,8 +52,8 @@
  * runs the backward half and the per-sample clamp.
  */
 
-import { ChunkBuffer, reverseBuffer } from "@e9g/buffered-audio-nodes-core";
-import { BidirectionalIir, linearToDb, slidingWindowMax } from "@e9g/buffered-audio-nodes-utils";
+import { ChunkBuffer, reverseBuffer } from "@buffered-audio/core";
+import { BidirectionalIir, linearToDb, slidingWindowMax } from "@buffered-audio/utils";
 import { type Anchors, gainDbAt } from "./curve";
 
 /**

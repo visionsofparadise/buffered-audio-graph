@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@e9g/buffered-audio-nodes-core";
-import { initFftBackend, type FftBackend } from "@e9g/buffered-audio-nodes-utils";
+import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { initFftBackend, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { LATTICE_ORDER } from "./utils/lattice";
 import { groupDelayLambda } from "./utils/search";

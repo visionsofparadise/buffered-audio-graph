@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol } from "electron";
+import { app, BrowserWindow } from "electron";
 import { logger } from "./logger";
 import { createWindow } from "./window";
 
@@ -6,10 +6,6 @@ import { createWindow } from "./window";
 if (require("electron-squirrel-startup")) {
 	app.quit();
 }
-
-protocol.registerSchemesAsPrivileged([
-	{ scheme: "media", privileges: { stream: true, supportFetchAPI: true, secure: true } },
-]);
 
 app.whenReady()
 	.then(() => createWindow(logger))

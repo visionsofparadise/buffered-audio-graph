@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
+import { ChunkBuffer } from "@buffered-audio/core";
 import { downmixMono, DownmixMonoNode } from ".";
 
 function makeChunk(channelValues: Array<number>, frames = 256) {

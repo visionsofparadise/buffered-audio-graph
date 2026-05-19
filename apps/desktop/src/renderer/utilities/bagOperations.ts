@@ -1,5 +1,5 @@
-import type { GraphDefinition } from "@e9g/buffered-audio-nodes-core";
-import { validateGraphDefinition } from "@e9g/buffered-audio-nodes-core";
+import type { GraphDefinition } from "@buffered-audio/core";
+import { validateGraphDefinition } from "@buffered-audio/core";
 import type { Main } from "../models/Main";
 
 async function selectBag(main: Main, title: string): Promise<string | undefined> {

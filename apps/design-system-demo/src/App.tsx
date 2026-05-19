@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { TopBar } from "./TopBar";
 import { ThemeContext } from "./ThemeContext";
-import type { ColormapTheme } from "@e9g/design-system";
+import type { ColormapTheme } from "@buffered-audio/design-system";
 import { ShowcasePage } from "./pages/ShowcasePage";
 import { HomePage } from "./pages/HomePage";
 import { GraphPage } from "./pages/GraphPage";
-import { SpectralPage } from "./pages/SpectralPage";
 
-const PAGES = ["Showcase", "Home", "Graph", "Spectral Display"] as const;
+const PAGES = ["Showcase", "Home", "Graph"] as const;
 
 type Page = (typeof PAGES)[number];
 
@@ -15,7 +14,6 @@ const PAGE_COMPONENTS: Record<Page, React.FC> = {
   "Showcase": ShowcasePage,
   "Home": HomePage,
   "Graph": GraphPage,
-  "Spectral Display": SpectralPage,
 };
 
 export function App() {

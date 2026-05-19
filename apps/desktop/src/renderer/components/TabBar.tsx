@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconButton } from "@e9g/design-system";
+import { IconButton } from "@buffered-audio/design-system";
 import type { AppContext } from "../models/Context";
 
 interface Props {

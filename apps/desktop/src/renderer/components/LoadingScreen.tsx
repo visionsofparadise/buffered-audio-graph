@@ -1,5 +1,5 @@
 import type { Snapshot } from "valtio/vanilla";
-import { Button } from "@e9g/design-system";
+import { Button } from "@buffered-audio/design-system";
 import type { ModulePackageState } from "../models/State/App";
 import { EngineeringIcon } from "./EngineeringIcon";
 

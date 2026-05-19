@@ -1,5 +1,5 @@
 {
-  "name": "@e9g/buffered-audio-nodes-utils",
+  "name": "@buffered-audio/utils",
   "version": "0.5.0",
   "type": "module",
   "exports": {
@@ -19,7 +19,7 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/visionsofparadise/engineering",
+    "url": "https://github.com/visionsofparadise/buffered-audio-graph",
     "directory": "packages/buffered-audio-nodes-utils"
   },
   "scripts": {
@@ -40,6 +40,6 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "@e9g/buffered-audio-nodes-core": "0.5.0"
+    "@buffered-audio/core": "0.5.0"
   }
 }

@@ -1,4 +1,4 @@
-import type { BufferedAudioNode } from "@e9g/buffered-audio-nodes-core";
+import type { BufferedAudioNode } from "@buffered-audio/core";
 import type { z } from "zod";
 
 export interface ModuleClass {

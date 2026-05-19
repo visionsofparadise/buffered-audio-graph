@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { appendFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import type { RenderOptions, SourceNode, TransformNode } from "@e9g/buffered-audio-nodes-core";
+import type { RenderOptions, SourceNode, TransformNode } from "@buffered-audio/core";
 import { read } from "../sources/read";
 import { write } from "../targets/write";
 

@@ -57,7 +57,7 @@
 // per-window commit-only-if-better inside the deterministic Item-7
 // minimiser).
 
-import { stft, type FftBackend, type StftResult } from "@e9g/buffered-audio-nodes-utils";
+import { stft, type FftBackend, type StftResult } from "@buffered-audio/utils";
 import { designDispersionAllpass, schroederTargetToDelay } from "./dispersion";
 import type { ControlTrajectory } from "./trajectory";
 

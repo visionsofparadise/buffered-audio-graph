@@ -1,21 +1,21 @@
-# @e9g/buffered-audio-nodes-utils
+# @buffered-audio/utils
 
 Shared DSP utilities for the buffered-audio-nodes ecosystem.
 
 ## Install
 
 ```bash
-npm install @e9g/buffered-audio-nodes-utils
+npm install @buffered-audio/utils
 ```
 
-Peer dependency: `@e9g/buffered-audio-nodes-core`
+Peer dependency: `@buffered-audio/core`
 
 ## API
 
 ### STFT / FFT
 
 ```ts
-import { stft, istft, fft, ifft, hanningWindow, MixedRadixFft } from "@e9g/buffered-audio-nodes-utils";
+import { stft, istft, fft, ifft, hanningWindow, MixedRadixFft } from "@buffered-audio/utils";
 ```
 
 | Function | Description |
@@ -42,8 +42,8 @@ const reconstructed = istft(frames, 2048, 512, window);
 ### FFT Backend
 
 ```ts
-import { initFftBackend, detectFftBackend, getFftAddon } from "@e9g/buffered-audio-nodes-utils";
-import type { FftBackend, FftBackendConfig } from "@e9g/buffered-audio-nodes-utils";
+import { initFftBackend, detectFftBackend, getFftAddon } from "@buffered-audio/utils";
+import type { FftBackend, FftBackendConfig } from "@buffered-audio/utils";
 ```
 
 | Function | Description |
@@ -79,7 +79,7 @@ import {
 	preFilterCoefficients,
 	rlbFilterCoefficients,
 	bandpass,
-} from "@e9g/buffered-audio-nodes-utils";
+} from "@buffered-audio/utils";
 ```
 
 | Function | Description |
@@ -101,7 +101,7 @@ const filtered = biquadFilter(samples, coeffs, state);
 ### Channel Operations
 
 ```ts
-import { interleave, deinterleaveBuffer, replaceChannel } from "@e9g/buffered-audio-nodes-utils";
+import { interleave, deinterleaveBuffer, replaceChannel } from "@buffered-audio/utils";
 ```
 
 | Function | Description |
@@ -113,7 +113,7 @@ import { interleave, deinterleaveBuffer, replaceChannel } from "@e9g/buffered-au
 ### Resampling
 
 ```ts
-import { resampleDirect } from "@e9g/buffered-audio-nodes-utils";
+import { resampleDirect } from "@buffered-audio/utils";
 ```
 
 | Function | Description |

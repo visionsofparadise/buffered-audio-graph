@@ -1,4 +1,4 @@
-import type { GraphDefinition } from "@e9g/buffered-audio-nodes-core";
+import type { GraphDefinition } from "@buffered-audio/core";
 import { useEffect, useMemo } from "react";
 import { useGraphState } from "../../../hooks/useGraphState";
 import { useHistory } from "../../../hooks/useHistory";
@@ -11,7 +11,6 @@ import { computeAutoLayout } from "../../../utilities/autoLayout";
 import { importBag } from "../../../utilities/bagOperations";
 import { mergeImportedBag } from "../../../utilities/importBag";
 import { GraphCanvas } from "./Canvas";
-import { SnapshotSession } from "../Spectral/Session";
 
 interface Props {
 	readonly initialGraphState: Omit<GraphState, "_key">;
@@ -126,12 +125,6 @@ export function GraphSession({ initialGraphState, context, tab, graphDefinition,
 		}),
 		[context, graph, graphStore, graphDefinition, mutateDefinition, tab.bagPath, tab.id, history, pushHistory, undo, redo],
 	);
-
-	const { spectralNodeId } = graph;
-
-	if (spectralNodeId !== null) {
-		return <SnapshotSession context={graphContext} spectralNodeId={spectralNodeId} />;
-	}
 
 	return (
 		<ReactFlowProvider>

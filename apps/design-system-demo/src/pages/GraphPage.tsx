@@ -14,16 +14,12 @@ import {
   BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { IconButton, Button } from "@e9g/design-system";
-import type { MenuItem } from "@e9g/design-system";
+import { IconButton, Button } from "@buffered-audio/design-system";
+import type { MenuItem } from "@buffered-audio/design-system";
 import { DemoNode } from "../components/graph/DemoNode";
 import { DemoEdge } from "../components/graph/DemoEdge";
 import { DemoContextMenu } from "../components/graph/DemoContextMenu";
-import { DemoSnapshot } from "../components/graph/DemoSnapshot";
-import type { AudioNodeData } from "../components/graph/types";
 import { DemoTabBar } from "../DemoTabBar";
-import { useColormapTheme } from "../ThemeContext";
-import { AudioDataProvider, useAudioData } from "../AudioDataContext";
 import { demoNodes, demoEdges } from "../data/demoGraph";
 
 const GRAPH_TABS = [
@@ -46,19 +42,7 @@ const MENU_ITEMS: ReadonlyArray<MenuItem> = [
   { kind: "action", icon: "lucide:settings", label: "Settings", shortcut: "Ctrl+," },
 ];
 
-function DemoAudioNode(props: React.ComponentProps<typeof DemoNode>) {
-  const audioData = useAudioData();
-  const { colormap } = useColormapTheme();
-  const nodeData = props.data as unknown as AudioNodeData;
-
-  return (
-    <DemoNode {...props}>
-      {nodeData.snapshot && <DemoSnapshot audioData={audioData} colormap={colormap} />}
-    </DemoNode>
-  );
-}
-
-const NODE_TYPES: NodeTypes = { audioNode: DemoAudioNode };
+const NODE_TYPES: NodeTypes = { audioNode: DemoNode };
 const EDGE_TYPES: EdgeTypes = { audioEdge: DemoEdge };
 
 interface ContextMenuState {
@@ -270,9 +254,5 @@ function GraphPageInner() {
 }
 
 export function GraphPage() {
-  return (
-    <AudioDataProvider>
-      <GraphPageInner />
-    </AudioDataProvider>
-  );
+  return <GraphPageInner />;
 }

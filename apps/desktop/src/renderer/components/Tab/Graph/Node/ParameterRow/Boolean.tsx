@@ -1,4 +1,4 @@
-import { Toggle } from "@e9g/design-system";
+import { Toggle } from "@buffered-audio/design-system";
 export interface BooleanParameter {
 	readonly kind: "boolean";
 	readonly name: string;

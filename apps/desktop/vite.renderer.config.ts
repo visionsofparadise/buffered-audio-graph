@@ -8,11 +8,12 @@ export default defineConfig({
     'process.arch': JSON.stringify(process.arch),
   },
   optimizeDeps: {
-    // @e9g/design-system is a workspace package actively edited during
-    // development; excluding it from pre-bundling means fresh builds are
-    // picked up without restarting the dev server. Other @e9g/* packages
-    // ship code that relies on Node builtins (e.g. `crypto`) and need
-    // Vite's pre-bundled browser shims, so they stay pre-bundled.
-    exclude: ["@e9g/design-system"],
+    // @buffered-audio/design-system is a workspace package actively edited
+    // during development; excluding it from pre-bundling means fresh builds
+    // are picked up without restarting the dev server. Other
+    // @buffered-audio/* packages ship code that relies on Node builtins
+    // (e.g. `crypto`) and need Vite's pre-bundled browser shims, so they
+    // stay pre-bundled.
+    exclude: ["@buffered-audio/design-system"],
   },
 });

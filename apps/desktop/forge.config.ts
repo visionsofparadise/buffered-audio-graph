@@ -18,7 +18,7 @@ const config: ForgeConfig = {
     new MakerSquirrel({
       setupIcon: './assets/icon.ico',
       iconUrl:
-        'https://raw.githubusercontent.com/visionsofparadise/engineering/main/apps/desktop/assets/icon.ico',
+        'https://raw.githubusercontent.com/visionsofparadise/buffered-audio-graph/main/apps/desktop/assets/icon.ico',
     }),
     new MakerZIP({}, ['darwin']),
     new MakerRpm({}),

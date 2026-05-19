@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Input } from "@e9g/design-system";
+import { Button, Input } from "@buffered-audio/design-system";
 import type { AppContext } from "../models/Context";
 import { usePackageManager } from "../hooks/usePackageManager";
 
@@ -195,7 +195,7 @@ export function ModuleManager({ context, isOpen, onClose }: Props) {
 						<Input
 							label="Package Spec"
 							value={packageSpec}
-							placeholder="@e9g/buffered-audio-nodes@latest"
+							placeholder="@buffered-audio/nodes@latest"
 							onChange={setPackageSpec}
 							className="flex-1"
 						/>

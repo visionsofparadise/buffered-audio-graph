@@ -1,7 +1,7 @@
 /* eslint-disable no-console -- the node logs an iteration summary by design; tests run with vitest, console output is fine in CI. */
 import { describe, expect, it } from "vitest";
-import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@e9g/buffered-audio-nodes-utils";
-import { type AudioChunk, ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
+import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
+import { type AudioChunk, ChunkBuffer } from "@buffered-audio/core";
 import { loudnessTarget, LoudnessTargetStream } from ".";
 
 const TEST_SAMPLE_RATE = 48_000;

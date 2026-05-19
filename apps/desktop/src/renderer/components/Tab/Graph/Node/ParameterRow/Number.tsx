@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Knob } from "@e9g/design-system";
+import { Knob } from "@buffered-audio/design-system";
 export interface NumberParameter {
 	readonly kind: "number";
 	readonly name: string;

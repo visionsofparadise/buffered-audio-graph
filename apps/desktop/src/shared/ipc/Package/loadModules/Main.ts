@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { SourceNode, TargetNode, TransformNode } from "@e9g/buffered-audio-nodes-core";
+import { SourceNode, TargetNode, TransformNode } from "@buffered-audio/core";
 import { toJSONSchema } from "zod";
 import { registerPackage, type ModuleClass } from "../../../models/ModuleRegistry";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";

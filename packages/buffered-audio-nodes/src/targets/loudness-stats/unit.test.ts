@@ -2,7 +2,7 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { type AudioChunk, type StreamContext } from "@e9g/buffered-audio-nodes-core";
+import { type AudioChunk, type StreamContext } from "@buffered-audio/core";
 import { loudnessStats, LoudnessStatsStream } from ".";
 import { read } from "../../sources/read";
 import { audio } from "../../utils/test-binaries";

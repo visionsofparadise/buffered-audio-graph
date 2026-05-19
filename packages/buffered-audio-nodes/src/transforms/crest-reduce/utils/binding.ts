@@ -71,7 +71,7 @@
 // calibration (Phase-6 calibration inputs — see their JSDocs), NOT
 // sourced, NOT exposed in the schema.
 
-import type { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
+import type { ChunkBuffer } from "@buffered-audio/core";
 import { peakPriorityAmount } from "./lattice";
 import { measureFrameTruePeakDb } from "./objective";
 import { measureBufferTruePeakDb } from "./windowed";

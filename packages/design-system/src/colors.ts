@@ -1,4 +1,4 @@
-import type { ColormapDefinition } from "@e9g/spectral-display";
+import type { ColormapDefinition } from "./colormaps";
 import { lavaColormap, viridisColormap } from "./colormaps";
 
 export type ColormapTheme = "lava" | "viridis";

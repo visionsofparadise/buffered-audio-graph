@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TruePeakAccumulator, linearToDb } from "@e9g/buffered-audio-nodes-utils";
+import { TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { extractLatticeTrajectory, LATTICE_ORDER, processLatticeChannel, stepDownToReflection } from "./lattice";
 import type { ControlTrajectory } from "./trajectory";
 

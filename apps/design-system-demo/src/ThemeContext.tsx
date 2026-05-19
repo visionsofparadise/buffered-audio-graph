@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { ColormapTheme } from "@e9g/design-system";
+import type { ColormapTheme } from "@buffered-audio/design-system";
 
 export interface ThemeContextValue {
 	readonly colormap: ColormapTheme;

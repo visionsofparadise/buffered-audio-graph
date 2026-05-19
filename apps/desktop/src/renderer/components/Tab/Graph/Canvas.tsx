@@ -23,7 +23,7 @@ import { lookupModule, schemaPropertyAtPath } from "./Node/utils/moduleLookup";
 import { EdgeContainer } from "./EdgeContainer";
 import { GraphContextMenu, type ContextMenuAction, type ContextMenuPosition } from "./GraphContextMenu";
 import { useGraphMutations } from "./hooks/useGraphMutations";
-import type { NodeContainerData, NodeState } from "./Node/Container";
+import type { NodeContainerData, NodeState, SnapshotPreviewData } from "./Node/Container";
 import { NodeContainer } from "./Node/Container";
 import { useNodeStates } from "./hooks/useNodeStates";
 import { useRenderJob } from "./hooks/useRenderJob";
@@ -44,6 +44,7 @@ function buildReactFlowNodes(
 	nodeStates: Map<string, { readonly state: NodeState; readonly hash: string }>,
 	processingNodes: Map<string, number>,
 	errorNodes: Set<string>,
+	snapshotPreview: SnapshotPreviewData,
 ): Array<Node<NodeContainerData>> {
 	const binaryDefaults = context.app.binaries as Record<string, string>;
 
@@ -78,6 +79,8 @@ function buildReactFlowNodes(
 				bypassed: graphNode.options?.bypass ?? false,
 				parameters,
 				inspected: graphNode.id === context.graph.inspectedNodeId,
+				snapshotPreview,
+				nodeId: graphNode.id,
 				description: moduleDescription,
 				progress,
 			},
@@ -124,8 +127,13 @@ export function GraphCanvas({ context }: Props) {
 	const { nodeStates, refresh } = useNodeStates(context);
 	const { startRender, abortRender, processingNodes, errorNodes } = useRenderJob(context, refresh);
 
+	const snapshotPreview = useMemo<SnapshotPreviewData>(
+		() => ({ main: context.main, logger: context.logger, userDataPath: context.userDataPath, bagId: context.bagId }),
+		[context.main, context.logger, context.userDataPath, context.bagId],
+	);
+
 	const initialNodes = useMemo(
-		() => buildReactFlowNodes(context, nodeStates, processingNodes, errorNodes),
+		() => buildReactFlowNodes(context, nodeStates, processingNodes, errorNodes, snapshotPreview),
 
 		[],
 	);
@@ -209,11 +217,6 @@ export function GraphCanvas({ context }: Props) {
 					},
 					onRender: () => void startRender(),
 					onAbort: () => void abortRender(),
-					onView: () => {
-						context.graphStore.mutate(context.graph, (proxy) => {
-							proxy.spectralNodeId = node.id;
-						});
-					},
 				},
 			})),
 		[mutations, handleParameterBrowseAtPath, startRender, abortRender, context],
@@ -221,9 +224,9 @@ export function GraphCanvas({ context }: Props) {
 
 	// Sync from graph definition (source of truth) into React Flow state
 	useEffect(() => {
-		setNodes(attachCallbacks(buildReactFlowNodes(context, nodeStates, processingNodes, errorNodes)));
+		setNodes(attachCallbacks(buildReactFlowNodes(context, nodeStates, processingNodes, errorNodes, snapshotPreview)));
 		setEdges(buildReactFlowEdges(context, nodeStates, processingNodes));
-	}, [context, nodeStates, processingNodes, errorNodes, setNodes, setEdges, attachCallbacks]);
+	}, [context, nodeStates, processingNodes, errorNodes, setNodes, setEdges, attachCallbacks, snapshotPreview]);
 
 	const handleNodesChange = useCallback(
 		(changes: Array<NodeChange<Node<NodeContainerData>>>) => {

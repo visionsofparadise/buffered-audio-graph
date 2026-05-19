@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dbToLinear, linearToDb } from "@e9g/buffered-audio-nodes-utils";
+import { dbToLinear, linearToDb } from "@buffered-audio/utils";
 import { type Anchors, gainDbAt } from "./curve";
 import type { DetectionHistogram } from "./measurement";
 import { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND, predictInitialB, predictOutputLufs } from "./solve";

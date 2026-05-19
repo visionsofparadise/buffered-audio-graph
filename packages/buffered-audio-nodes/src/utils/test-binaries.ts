@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const repoRoot = resolve(packageRoot, "../..");
 const fixturesDir = resolve(repoRoot, "../fixtures");
-const demoAudioDir = resolve(repoRoot, "apps/spectral-display-demo/public");
 const binariesDir = resolve(fixturesDir, "binaries");
 
 export const binaries = {
@@ -23,9 +22,9 @@ export const binaries = {
 } as const;
 
 export const audio = {
-	testVoice: resolve(demoAudioDir, "test-voice.wav"),
-	testVoice48k: resolve(demoAudioDir, "test-voice-48k.wav"),
-	testMusic: resolve(demoAudioDir, "test-music.wav"),
+	testVoice: resolve(fixturesDir, "audio/test-voice.wav"),
+	testVoice48k: resolve(fixturesDir, "audio/test-voice-48k.wav"),
+	testMusic: resolve(fixturesDir, "audio/test-music.wav"),
 } as const;
 
 export function hasAudioFixtures(...names: Array<keyof typeof audio>): boolean {

@@ -1,5 +1,5 @@
-import type { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
-import { IntegratedLufsAccumulator } from "@e9g/buffered-audio-nodes-utils";
+import type { ChunkBuffer } from "@buffered-audio/core";
+import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 
 // One second's worth of frames at 44.1 kHz — a sane balance between
 // per-iteration overhead and per-chunk allocation pressure when streaming

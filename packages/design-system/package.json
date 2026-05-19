@@ -1,5 +1,5 @@
 {
-  "name": "@e9g/design-system",
+  "name": "@buffered-audio/design-system",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -19,7 +19,6 @@
     "check": "concurrently \"eslint . --fix --cache --format ../../agent-eslint.js\" \"tsc --noEmit --pretty false 2>&1 | node ../../agent-tsc.js\""
   },
   "dependencies": {
-    "@e9g/spectral-display": "*",
     "@iconify/react": "^6.0.2",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@xyflow/react": "*",

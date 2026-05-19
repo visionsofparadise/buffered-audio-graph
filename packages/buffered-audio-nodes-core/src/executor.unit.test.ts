@@ -188,8 +188,8 @@ describe("Graph executor", () => {
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
 			nodes: [
-				{ id: "a", packageName: "@e9g/buffered-audio-nodes", packageVersion: "1.0.0", nodeName: "read" },
-				{ id: "b", packageName: "@e9g/buffered-audio-nodes", packageVersion: "1.0.0", nodeName: "write" },
+				{ id: "a", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "read" },
+				{ id: "b", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "write" },
 			],
 			edges: [{ from: "a", to: "b" }],
 		});
@@ -202,7 +202,7 @@ describe("Graph executor", () => {
 	it("validates graph definition with default name", () => {
 		const valid = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-			nodes: [{ id: "a", packageName: "@e9g/buffered-audio-nodes", packageVersion: "1.0.0", nodeName: "read" }],
+			nodes: [{ id: "a", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "read" }],
 			edges: [],
 		});
 

@@ -5,7 +5,7 @@ A streaming audio processing framework. Chainable nodes that read, transform, an
 ## Install
 
 ```bash
-npm install @e9g/buffered-audio-nodes
+npm install @buffered-audio/nodes
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @e9g/buffered-audio-nodes
 Three node types — sources produce audio, transforms process it, targets consume it. The `chain()` function wires them into a pipeline.
 
 ```ts
-import { chain, read, normalize, write } from "@e9g/buffered-audio-nodes";
+import { chain, read, normalize, write } from "@buffered-audio/nodes";
 
 const pipeline = chain(read("input.wav"), normalize({ ceiling: 0.95 }), write("output.wav", { bitDepth: "24" }));
 
@@ -27,7 +27,7 @@ await pipeline.render();
 Split a stream into parallel branches by calling `.to()` multiple times from the same node:
 
 ```ts
-import { chain, read, normalize, trim, write } from "@e9g/buffered-audio-nodes";
+import { chain, read, normalize, trim, write } from "@buffered-audio/nodes";
 
 const source = read("input.wav");
 const normalizeNode = normalize();
@@ -48,12 +48,12 @@ await source.render();
 Run pipelines from TypeScript files. The file's default export must be a `SourceNode`.
 
 ```bash
-npx @e9g/buffered-audio-nodes process --pipeline pipeline.ts
+npx @buffered-audio/nodes process --pipeline pipeline.ts
 ```
 
 ```ts
 // pipeline.ts
-import { chain, read, normalize, trim, write } from "@e9g/buffered-audio-nodes";
+import { chain, read, normalize, trim, write } from "@buffered-audio/nodes";
 
 export default chain(read("input.wav"), normalize(), trim({ threshold: -60 }), write("output.wav"));
 ```
@@ -63,7 +63,7 @@ export default chain(read("input.wav"), normalize(), trim({ threshold: -60 }), w
 Render a `.bag` (Buffered Audio Graph) file. BAG files are JSON-serialized graph definitions.
 
 ```bash
-npx @e9g/buffered-audio-nodes render --bag pipeline.bag
+npx @buffered-audio/nodes render --bag pipeline.bag
 ```
 
 | Flag                        | Description                         |
@@ -439,7 +439,7 @@ Write audio to a file
 
 Each node has two parts: a **Node** (inert descriptor) and a **Stream** (stateful runtime instance). Nodes are defined once and describe the transform. Streams are created fresh per render and hold the mutable processing state.
 
-Extend `TransformNode` from `@e9g/buffered-audio-nodes-core` and create a companion `BufferedTransformStream`. The node's `createStream()` method produces a new stream instance for each render.
+Extend `TransformNode` from `@buffered-audio/core` and create a companion `BufferedTransformStream`. The node's `createStream()` method produces a new stream instance for each render.
 
 ### Stream Hooks
 
@@ -458,7 +458,7 @@ Extend `TransformNode` from `@e9g/buffered-audio-nodes-core` and create a compan
 
 ```ts
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@e9g/buffered-audio-nodes-core";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@buffered-audio/core";
 
 const schema = z.object({
 	ceiling: z.number().min(0).max(1).multipleOf(0.01).default(1.0).describe("Ceiling"),

@@ -65,8 +65,8 @@
  * expected per the plan's Phase 1 verification wording.
  */
 
-import { ChunkBuffer } from "@e9g/buffered-audio-nodes-core";
-import { SlidingWindowMaxStream, TruePeakUpsampler } from "@e9g/buffered-audio-nodes-utils";
+import { ChunkBuffer } from "@buffered-audio/core";
+import { SlidingWindowMaxStream, TruePeakUpsampler } from "@buffered-audio/utils";
 import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./iterate";
 
 export interface BuildBaseRateDetectionCacheArgs {
