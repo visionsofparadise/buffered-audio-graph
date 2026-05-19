@@ -14,7 +14,8 @@
     "unit": "turbo unit",
     "build": "turbo build",
     "binaries:fetch": "tsx scripts/binaries/fetch.ts",
-    "binaries:install": "tsx scripts/binaries/install.ts"
+    "binaries:install": "tsx scripts/binaries/install.ts",
+    "fixtures:audio": "tsx scripts/fixtures/fetch-audio.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

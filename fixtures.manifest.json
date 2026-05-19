@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "bucket": "buffered-audio-test-fixtures-345340320424",
+  "region": "us-east-1",
+  "assets": [
+    {
+      "filename": "test-voice.wav",
+      "sha256": "22d4ce470467557039c1213220539edcdd7c37019adc7a983ff9e0c4fb8435b7",
+      "size": 5387308
+    },
+    {
+      "filename": "test-voice-48k.wav",
+      "sha256": "117376e428821acfdb4836d2c28c14ded71392cb9f2f824ce242c26b23fdb993",
+      "size": 5863780
+    },
+    {
+      "filename": "test-music.wav",
+      "sha256": "a87acec08d93e2787faa10d5d3a47dc2393d99128af9fe5b72a4a147ece295b6",
+      "size": 8306968
+    }
+  ]
+}

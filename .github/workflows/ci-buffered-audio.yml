@@ -41,6 +41,9 @@ jobs:
       - name: Check (topo-ordered across all three packages)
         run: npx turbo check --filter=@buffered-audio/nodes
 
+      - name: Fetch audio test fixtures
+        run: npm run fixtures:audio
+
       - name: Unit (topo-ordered)
         run: npx turbo unit --filter=@buffered-audio/nodes
 
