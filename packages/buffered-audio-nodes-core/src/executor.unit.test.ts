@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ChunkBuffer } from "./chunk-buffer";
-import { pack, validateGraphDefinition } from "./graph-format";
-import type { AudioChunk } from "./node";
+import { pack, unpack, validateGraphDefinition, type NodeRegistry } from "./graph-format";
+import type { AudioChunk, BufferedAudioNode } from "./node";
 import type { SourceMetadata } from "./source";
 import { BufferedSourceStream, SourceNode } from "./source";
 import { BufferedTargetStream, TargetNode } from "./target";
@@ -268,5 +268,61 @@ describe("Graph executor", () => {
 		const definition = pack([source], { name: "Test" });
 
 		expect(definition.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+	});
+
+	it("unpack applies node schema defaults to bag parameters omitting a defaulted field", () => {
+		// Regression: a bag node that sets only some parameters (e.g.
+		// crestReduce with just `smoothing`) must instantiate with the
+		// schema's `.default()`s applied — symmetric with `pack()` /
+		// the convenience constructors. Before the fix `unpack` did
+		// `new NodeClass(nodeDef.parameters)` raw, so an omitted defaulted
+		// param stayed `undefined` (crestReduce: frameSize→hopSize→
+		// frameCount NaN → `new Array(NaN)` RangeError on whole-file flush).
+		class DefaultingTransformNode extends TransformNode {
+			static readonly packageName = "test";
+			static readonly moduleName = "defaulting-transform";
+			static override readonly schema = z.object({
+				frameSize: z.number().default(2048),
+				smoothing: z.number().default(100),
+			});
+
+			readonly type = ["buffered-audio-node", "transform", "mock"] as const;
+			get bufferSize(): number { return 0; }
+			get latency(): number { return 0; }
+
+			override createStream(): never {
+				throw new Error("not exercised — unpack instantiation only");
+			}
+
+			clone(): DefaultingTransformNode {
+				return new DefaultingTransformNode();
+			}
+		}
+
+		const registry: NodeRegistry = new Map([
+			[
+				"test",
+				new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
+					["mock-source", MockSource as never],
+					["defaulting-transform", DefaultingTransformNode as never],
+				]),
+			],
+		]);
+
+		const definition = validateGraphDefinition({
+			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			name: "Test",
+			nodes: [
+				{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "mock-source" },
+				{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "defaulting-transform", parameters: { smoothing: 30 } },
+			],
+			edges: [{ from: "s", to: "t" }],
+		});
+
+		const sources = unpack(definition, registry);
+		const transform = sources[0]?.properties.children?.[0] as DefaultingTransformNode | undefined;
+
+		expect(transform?.properties.frameSize).toBe(2048); // schema default applied
+		expect(transform?.properties.smoothing).toBe(30); // explicit value preserved
 	});
 });
