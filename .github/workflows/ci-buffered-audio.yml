@@ -52,5 +52,5 @@ jobs:
 
       - name: Docs (drift check)
         run: |
-          npx turbo docs --filter=@buffered-audio/nodes
+          npx turbo run docs --filter=@buffered-audio/nodes
           git diff --exit-code packages/buffered-audio-nodes/README.md
