@@ -1,71 +1,48 @@
 @theme {
-  --color-chrome-base: #0D0D0F;
-  --color-chrome-surface: #1E1E23;
-  --color-chrome-raised: #28282E;
-  --color-chrome-border: #2A2A30;
-  --color-chrome-border-subtle: #1F1F24;
-  --color-chrome-text: #B8B8C0;
-  --color-chrome-text-secondary: #6E6E78;
-  --color-chrome-text-dim: #44444C;
+  /* Monochrome scale — the "Deep" profile (warm, high-contrast: near-black
+     surface, bright warm-cream text), chosen 2026-05-21 after auditioning
+     several proposals via the demo's shade switcher. */
+  --color-surface: #100F0D;
+  --color-elevated: #1D1A16;
+  --color-border: #3E3833;
+  --color-dimmed: #685F54;
+  --color-text-secondary: #918979;
+  --color-text-primary: #F5F0E6;
 
-  --color-primary: #D76405;
-  --color-secondary: #0F1446;
-  --color-void: #020204;
+  --color-accent-primary: #E05A47;
+  --color-accent-secondary: #47A5A5;
 
-  --color-state-rendered: #34D399;
-  --color-state-stale: #FBBF24;
-  --color-state-processing: #60A5FA;
-  --color-state-error: #F87171;
-  --color-state-bypassed: #44444C;
+  --color-category-source: #45A8A0;
+  --color-category-transform: #7B85C4;
+  --color-category-target: #C98A6C;
 
-  --color-data-waveform: #C8C8D0;
-  --color-data-waveform-selected: #5A9ECF;
-  --color-data-cursor: #E0E0E8;
-  --color-data-selection: #5A9ECF20;
-  --color-data-selection-border: #5A9ECF;
+  --color-meter-green: #4A7A5A;
+  --color-meter-yellow: #A59A4A;
 
-  --color-edge-idle: #2A2A30;
-  --color-edge-active: #60A5FA;
-  --color-edge-complete: #34D399;
+  --font-mono: "Azeret Mono", ui-monospace, monospace;
 
-  --color-interactive-hover: #1F1F24;
-  --color-interactive-active: #252528;
-  --color-interactive-focus: #D76405;
+  /* Base spacing unit. Tailwind v4 derives every `p-N` / `m-N` / `gap-N` /
+     `h-N` / `w-N` utility from this via `calc(var(--spacing) * N)`, which is
+     what enables fractional values like `p-1.5`, `p-2.5`, `p-3.5`. Without
+     this base, only utilities whose `--spacing-N` is explicitly defined work,
+     and `p-1.5` etc. silently no-op. */
+  --spacing: 0.25rem;
 
-  --color-lava-waveform: #5EC4B6;
-  --color-lava-lufs: #34D399;
-  --color-lava-rms: #1A7A6C;
-  --color-lava-peak: #FB7185;
-
-  --color-viridis-waveform: #E91E90;
-  --color-viridis-rms: #8B1A5C;
-  --color-viridis-lufs: #38BDF8;
-  --color-viridis-peak: #FF1744;
-
-  --font-display: "Bricolage Grotesque Variable", "Bricolage Grotesque", system-ui, sans-serif;
-  --font-body: "Outfit Variable", "Outfit", system-ui, sans-serif;
-  --font-technical: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
-
-  --spacing-1: 0.25rem;
-  --spacing-2: 0.5rem;
-  --spacing-3: 0.75rem;
-  --spacing-4: 1rem;
-  --spacing-6: 1.5rem;
-
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.875rem;
-  --text-md: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.5rem;
-  --text-2xl: 2rem;
-  --text-3xl: 3rem;
+  --text-display: 2rem;       /* 32px */
+  --text-display-lg: 3.5rem;  /* 56px */
+  --text-label: 0.625rem;     /* 10px */
+  --text-body: 0.8125rem;     /* 13px */
 
   --breakpoint-wide: 1920px;
 }
 
-[data-theme="viridis"] {
-  --color-primary: #A3E635;
-  --color-secondary: #440154;
-  --color-interactive-focus: #A3E635;
+@layer base {
+  .theme-light {
+    --color-surface: #F5F0E8;
+    --color-elevated: #EDE8E0;
+    --color-border: #D5D0C8;
+    --color-dimmed: #B0A898;
+    --color-text-secondary: #8A8070;
+    --color-text-primary: #2A2520;
+  }
 }

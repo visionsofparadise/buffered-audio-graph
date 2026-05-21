@@ -1,16 +1,40 @@
-.showcase-scrollbar::-webkit-scrollbar {
+@utility type-display {
+  font-family: var(--font-mono);
+  font-size: var(--text-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+@utility type-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+}
+
+@utility type-value {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.scrollbar-ruler::-webkit-scrollbar {
   width: 6px;
 }
 
-.showcase-scrollbar::-webkit-scrollbar-track {
-  background: var(--color-chrome-border);
+.scrollbar-ruler::-webkit-scrollbar-track {
+  background: var(--color-border);
 }
 
-.showcase-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--color-chrome-text-dim);
+.scrollbar-ruler::-webkit-scrollbar-thumb {
+  background: var(--color-dimmed);
 }
 
-.showcase-scrollbar {
+.scrollbar-ruler {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-chrome-text-dim) var(--color-chrome-border);
+  scrollbar-color: var(--color-dimmed) var(--color-border);
 }

@@ -1,358 +1,623 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Icon } from "@iconify/react";
-import { Knob, Toggle, ButtonSelection, Select, Button, IconButton, DropdownButton } from "@buffered-audio/design-system";
-import type { MenuItem } from "@buffered-audio/design-system";
-import type { AudioNodeData, NumberParameter } from "./types";
+import { Plus, Power, RotateCcw, X } from "lucide-react";
+import {
+	Knob,
+	Fader,
+	Toggle,
+	ButtonSelection,
+	Select,
+	Input,
+	FileInput,
+	Button,
+	IconButton,
+	cn,
+} from "@buffered-audio/design-system";
+import type {
+	DemoNodeData,
+	Param,
+	NumberParam,
+	ToggleParam,
+	SelectParam,
+	InputParam,
+	FileParam,
+	RecordParam,
+	ObjectArrayParam,
+	PortDef,
+} from "./types";
+
+const CATEGORY_HEADER_BG: Record<DemoNodeData["category"], string> = {
+	source: "bg-category-source",
+	transform: "bg-category-transform",
+	target: "bg-category-target",
+};
 
 function snapToStep(value: number, step: number): number {
-  if (step <= 0) return value;
+	if (step <= 0) return value;
 
-  return Math.round(value / step) * step;
+	return Math.round(value / step) * step;
 }
 
-function EditableKnob({
-  param,
-  dimmed,
-  onParameterChange,
+/** Format a number param for its on-node readout — step decides precision. */
+function formatParamValue(value: number, step: number): string {
+	const decimals = (step.toString().split(".")[1] ?? "").length;
+
+	return value.toFixed(decimals);
+}
+
+function NumberControl({
+	name,
+	param,
+	onChange,
 }: {
-  readonly param: NumberParameter;
-  readonly dimmed?: boolean;
-  readonly onParameterChange?: (name: string, value: unknown) => void;
+	readonly name: string;
+	readonly param: NumberParam;
+	readonly onChange?: (name: string, value: number) => void;
 }) {
-  const range = param.max - param.min;
-  const normalize = (raw: number) => (raw - param.min) / range;
-  const denormalize = (normalized: number) => param.min + normalized * range;
+	const range = param.max - param.min;
+	const normalize = (raw: number) => (range === 0 ? 0 : (raw - param.min) / range);
+	const denormalize = (norm: number) => param.min + norm * range;
 
-  const [localValue, setLocalValue] = useState(param.value);
-  const draggingRef = useRef(false);
+	const [localValue, setLocalValue] = useState(param.value);
+	const draggingRef = useRef(false);
 
-  useEffect(() => {
-    if (!draggingRef.current) setLocalValue(param.value);
-  }, [param.value]);
+	useEffect(() => {
+		if (!draggingRef.current) setLocalValue(param.value);
+	}, [param.value]);
 
-  const normalized = normalize(localValue);
-  const displayValue = draggingRef.current ? localValue : param.value;
+	const handleChange = onChange
+		? (norm: number) => {
+				draggingRef.current = true;
+				setLocalValue(snapToStep(denormalize(norm), param.step));
+			}
+		: undefined;
+	const handleEnd = onChange
+		? (norm: number) => {
+				draggingRef.current = false;
+				const committed = snapToStep(denormalize(norm), param.step);
 
-  return (
-    <div className={`flex items-center justify-between gap-3 ${dimmed ? "opacity-40" : ""}`}>
-      <span className="font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] text-chrome-text-secondary">
-        {param.name}
-      </span>
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="font-technical text-[length:var(--text-xs)] tabular-nums text-chrome-text">
-          {displayValue}{param.unit ? ` ${param.unit}` : ""}
-        </span>
-        <Knob
-          value={normalized}
-          label=""
-          size={32}
-          hideValue
-          onChange={onParameterChange ? (norm: number) => {
-            draggingRef.current = true;
-            setLocalValue(snapToStep(denormalize(norm), param.step));
-          } : undefined}
-          onChangeEnd={onParameterChange ? (norm: number) => {
-            draggingRef.current = false;
-            const committed = snapToStep(denormalize(norm), param.step);
+				setLocalValue(committed);
+				onChange(name, committed);
+			}
+		: undefined;
 
-            setLocalValue(committed);
-            onParameterChange(param.name, committed);
-          } : undefined}
-        />
-      </div>
-    </div>
-  );
+	const normalized = normalize(localValue);
+
+	if (param.type === "fader") {
+		// Fader has no onChangeEnd hook — commit on every change for now.
+		const faderOnChange = onChange
+			? (norm: number) => {
+					const committed = snapToStep(denormalize(norm), param.step);
+
+					setLocalValue(committed);
+					onChange(name, committed);
+				}
+			: undefined;
+
+		return <Fader value={normalized} onChange={faderOnChange} />;
+	}
+
+	return (
+		<div className="flex flex-col items-center gap-1">
+			{/* Value readout above the dial. Fixed width + centered so the digits
+			    don't jitter the layout as the value changes mid-drag. */}
+			<span className="type-value w-12 text-center text-label text-text-secondary">
+				{formatParamValue(localValue, param.step)}
+			</span>
+			<Knob
+				value={normalized}
+				size={32}
+				hideValue
+				onChange={handleChange}
+				onChangeEnd={handleEnd}
+			/>
+			{/* Unit as the label below the dial. */}
+			{param.unit !== undefined && (
+				<span className="type-label text-text-secondary">{param.unit}</span>
+			)}
+		</div>
+	);
 }
 
-function ReadOnlyKnob({ param, dimmed }: { readonly param: NumberParameter; readonly dimmed?: boolean }) {
-  const normalized = (param.value - param.min) / (param.max - param.min);
-
-  return (
-    <div className={`flex items-center justify-between gap-3 ${dimmed ? "opacity-40" : ""}`}>
-      <span className="font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] text-chrome-text-secondary">
-        {param.name}
-      </span>
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="font-technical text-[length:var(--text-xs)] tabular-nums text-chrome-text">
-          {param.value}{param.unit ? ` ${param.unit}` : ""}
-        </span>
-        <Knob value={normalized} label="" size={32} hideValue />
-      </div>
-    </div>
-  );
-}
-
-function NodeMenu({ isSource, isProcessing, isPending, isBypassed, isInspected }: {
-  readonly isSource: boolean;
-  readonly isProcessing: boolean;
-  readonly isPending: boolean;
-  readonly isBypassed: boolean;
-  readonly isInspected: boolean;
-  readonly isRendered: boolean;
+function ToggleControl({
+	name,
+	param,
+	onChange,
+}: {
+	readonly name: string;
+	readonly param: ToggleParam;
+	readonly onChange?: (name: string, value: boolean) => void;
 }) {
-  let renderLabel = "Render";
-  let renderColor = "text-chrome-text";
-
-  if (isProcessing) { renderLabel = "Abort"; renderColor = "text-state-error"; }
-  else if (isPending) { renderLabel = "Pending"; renderColor = "text-chrome-text-dim"; }
-
-  const items: Array<MenuItem> = [];
-
-  if (isSource) {
-    items.push({
-      kind: "action",
-      label: "Inspect",
-      icon: "lucide:eye",
-      color: isInspected ? "text-primary" : undefined,
-    });
-  }
-
-  if (!isSource) {
-    items.push({
-      kind: "action",
-      label: renderLabel,
-      icon: isProcessing ? "lucide:square" : "lucide:play",
-      color: renderColor,
-    });
-  }
-
-  items.push({
-    kind: "action",
-    label: isBypassed ? "Enable" : "Bypass",
-    icon: "lucide:power",
-    color: isBypassed ? "text-secondary" : undefined,
-  });
-
-  items.push({ kind: "separator" });
-
-  items.push({
-    kind: "action",
-    label: "Delete",
-    icon: "lucide:trash-2",
-    color: "text-state-error",
-  });
-
-  return (
-    <DropdownButton
-      trigger={<IconButton icon="lucide:ellipsis-vertical" label="Node menu" dim />}
-      items={items}
-      align="right"
-    />
-  );
+	return (
+		<Toggle
+			value={param.value}
+			label={param.value ? "ON" : "OFF"}
+			onChange={onChange ? (next) => onChange(name, next) : undefined}
+		/>
+	);
 }
 
-export function DemoNode({ data, selected, children }: NodeProps & { readonly children?: React.ReactNode }) {
-  const nodeData = data as unknown as AudioNodeData;
-  const isBypassed = nodeData.bypassed;
-  const isInspected = nodeData.inspected ?? false;
-  const hasInput = nodeData.category !== "source";
-  const hasOutput = nodeData.category !== "target";
-  const isSource = nodeData.category === "source";
-  const hasSnapshot = nodeData.snapshot ?? false;
-  const isProcessing = nodeData.state === "processing";
-  const isPending = nodeData.state === "pending";
-  const hasError = nodeData.error !== undefined;
-  const progress = nodeData.progress;
+function SelectControl({
+	name,
+	param,
+	onChange,
+}: {
+	readonly name: string;
+	readonly param: SelectParam;
+	readonly onChange?: (name: string, value: string) => void;
+}) {
+	if (param.type === "buttonSelection") {
+		return (
+			<ButtonSelection
+				active={param.value}
+				options={param.options}
+				onSelect={onChange ? (option) => onChange(name, option) : undefined}
+			/>
+		);
+	}
 
-  const onParameterChange = nodeData.onParameterChange;
-  const onParameterBrowse = nodeData.onParameterBrowse;
-  const numberParams = nodeData.parameters.filter((param): param is NumberParameter => param.kind === "number");
-  const otherParams = nodeData.parameters.filter((param) => param.kind !== "number");
+	return (
+		<Select
+			value={param.value}
+			options={param.options}
+			onChange={onChange ? (next) => onChange(name, next) : undefined}
+		/>
+	);
+}
 
-  // Render footer label
-  let renderLabel: string | null = null;
+function InputControl({
+	name,
+	param,
+	onChange,
+}: {
+	readonly name: string;
+	readonly param: InputParam;
+	readonly onChange?: (name: string, value: string) => void;
+}) {
+	return (
+		<Input
+			type="text"
+			defaultValue={param.value}
+			onChange={onChange ? (next) => onChange(name, next) : undefined}
+		/>
+	);
+}
 
-  if (!isSource && !isBypassed) {
-    if (isProcessing) renderLabel = "Abort";
-    else if (isPending) renderLabel = "Pending";
-    else renderLabel = "Render";
-  }
+function FileControl({
+	name,
+	param,
+	onChange,
+}: {
+	readonly name: string;
+	readonly param: FileParam;
+	readonly onChange?: (name: string, value: string) => void;
+}) {
+	return (
+		<FileInput
+			defaultValue={param.value}
+			// Surface the schema's file-extension filter as an empty-field hint.
+			placeholder={param.accept === undefined ? undefined : `${param.accept} file`}
+			onChange={onChange ? (next) => onChange(name, next) : undefined}
+		/>
+	);
+}
 
-  return (
-    <div className="relative" style={{ width: 260 }}>
-      <div
-        className={`flex flex-col gap-1 ${isBypassed ? "bg-chrome-base" : "bg-chrome-surface"} ${selected ? "ring-1 ring-interactive-focus" : ""} ${isInspected ? "ring-1 ring-primary" : ""}`}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 pt-2 pb-1">
-          <span
-            className={`font-body text-[length:var(--text-base)] font-medium ${isBypassed ? "text-chrome-text-dim" : "text-chrome-text"}`}
-          >
-            {nodeData.label}
-          </span>
-          <div className="flex items-center">
-            {isSource && (
-              <IconButton icon="lucide:eye" label="Inspect" active={isInspected} activeVariant="primary" />
-            )}
-            <IconButton icon="lucide:power" label="Bypass" active={isBypassed} activeVariant="secondary" />
-            <NodeMenu isSource={isSource} isProcessing={isProcessing} isPending={isPending} isBypassed={isBypassed} isInspected={isInspected} isRendered={false} />
-          </div>
-        </div>
+// Stable id source for the editable list controls — keying rows by id (not
+// array index) keeps React reconciliation correct as rows are added / removed.
+let listRowCounter = 0;
 
-        {/* Description */}
-        {nodeData.description && (
-          <div className="px-3 pb-2">
-            <span className="font-body text-[length:var(--text-xs)] text-chrome-text-secondary">
-              {nodeData.description}
-            </span>
-          </div>
-        )}
+function freshListRowId(): string {
+	listRowCounter += 1;
 
-        {/* Parameters — non-number */}
-        {otherParams.length > 0 && (
-          <div className={`flex flex-col gap-3 px-3 pb-3 ${isBypassed ? "opacity-40" : ""}`}>
-            {otherParams.map((param) => (
-              <div key={param.name} className="flex flex-col gap-0.5">
-                {param.kind === "boolean" ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <span className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${isBypassed ? "text-chrome-text-dim" : "text-chrome-text-secondary"}`}>
-                      {param.name}
-                    </span>
-                    <Toggle
-                      value={param.value}
-                      onChange={onParameterChange ? (toggled) => onParameterChange(param.name, toggled) : undefined}
-                    />
-                  </div>
-                ) : param.kind === "enum" ? (
-                  <div className="flex flex-col gap-1">
-                    <span className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${isBypassed ? "text-chrome-text-dim" : "text-chrome-text-secondary"}`}>
-                      {param.name}
-                    </span>
-                    {param.options.every((opt) => opt.length <= 10) ? (
-                      <ButtonSelection
-                        active={param.value}
-                        options={param.options}
-                        onSelect={onParameterChange ? (option) => onParameterChange(param.name, option) : undefined}
-                      />
-                    ) : (
-                      <Select
-                        value={param.value}
-                        options={param.options}
-                        onSelect={onParameterChange ? (option) => onParameterChange(param.name, option) : undefined}
-                      />
-                    )}
-                  </div>
-                ) : param.kind === "file" ? (
-                  <div className="flex flex-col gap-1">
-                    <span className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${isBypassed ? "text-chrome-text-dim" : "text-chrome-text-secondary"}`}>
-                      {param.name}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate font-body text-[length:var(--text-xs)] text-chrome-text">
-                        {param.value ? param.value.split(/[/\\]/).pop() : "No file selected"}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => onParameterBrowse?.(param.name)}
-                        disabled={!onParameterBrowse}
-                      >
-                        Browse
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    <span className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${isBypassed ? "text-chrome-text-dim" : "text-chrome-text-secondary"}`}>
-                      {param.name}
-                    </span>
-                    <input
-                      key={param.value}
-                      type="text"
-                      defaultValue={param.value}
-                      onBlur={onParameterChange ? (ev) => onParameterChange(param.name, ev.target.value) : undefined}
-                      onKeyDown={(ev) => { if (ev.key === "Enter") ev.currentTarget.blur(); }}
-                      className="w-full bg-chrome-base px-2 py-1.5 font-technical text-[length:var(--text-sm)] text-chrome-text outline-none"
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+	return `list-row-${listRowCounter}`;
+}
 
-        {/* Number parameters as knobs — label left, value+knob right */}
-        {numberParams.length > 0 && (
-          <div className="flex flex-col gap-3 px-3 pb-3">
-            {numberParams.map((param) => (
-              onParameterChange
-                ? <EditableKnob key={param.name} param={param} dimmed={isBypassed} onParameterChange={onParameterChange} />
-                : <ReadOnlyKnob key={param.name} param={param} dimmed={isBypassed} />
-            ))}
-          </div>
-        )}
+/**
+ * Small "add a row" affordance shared by the record and object-array editors.
+ * A thin wrapper over the `Button` `ghost` variant with a leading `Plus` icon —
+ * left-aligned to its row via `self-start`.
+ */
+function AddRowButton({
+	label,
+	onClick,
+}: {
+	readonly label: string;
+	readonly onClick: () => void;
+}) {
+	return (
+		<Button
+			variant="ghost"
+			size="sm"
+			icon={Plus}
+			onClick={onClick}
+			className="self-start px-1"
+		>
+			{label}
+		</Button>
+	);
+}
 
-        {/* Render / Abort / Pending footer */}
-        {renderLabel && (
-          <div className="flex items-center justify-end px-3 pb-2">
-            {isProcessing && progress !== undefined && (
-              <div className="mr-auto flex items-center gap-2">
-                <div className="h-1 w-20 bg-chrome-raised">
-                  <div className="h-full bg-state-processing" style={{ width: `${progress * 100}%` }} />
-                </div>
-                <span className="font-technical text-[length:var(--text-xs)] tabular-nums text-state-processing">
-                  {Math.round(progress * 100)}%
-                </span>
-              </div>
-            )}
-            <span
-              className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${
-                isProcessing
-                  ? "bg-state-error text-void"
-                  : isPending
-                    ? "bg-chrome-raised text-chrome-text-dim"
-                    : "bg-chrome-raised text-chrome-text-dim hover:text-chrome-text-secondary cursor-pointer"
-              }`}
-            >
-              {renderLabel}
-            </span>
-          </div>
-        )}
+/**
+ * RecordControl — editor for a `record` param (a string-keyed scalar map, e.g.
+ * a VST3 stage's `parameters`). Each entry is a `[key] [value] [remove]` row.
+ */
+function RecordControl({ param }: { readonly param: RecordParam }) {
+	const [entries, setEntries] = useState(() =>
+		param.value.map((entry) => ({
+			id: freshListRowId(),
+			key: entry.key,
+			value: entry.value,
+		})),
+	);
 
-        {/* Ports — triangles pointing in flow direction */}
-        {hasInput && (
-          <Handle
-            type="target"
-            position={Position.Left}
-            id="target"
-            className="!bg-chrome-text-dim !border-0 !rounded-none"
-            style={{
-              left: -5,
-              width: 8,
-              height: 10,
-              clipPath: "polygon(0% 0%, 100% 50%, 0% 100%)",
-            }}
-          />
-        )}
-        {hasOutput && (
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="source"
-            className="!bg-chrome-text-dim !border-0 !rounded-none"
-            style={{
-              right: -5,
-              width: 8,
-              height: 10,
-              clipPath: "polygon(0% 0%, 0% 100%, 100% 50%)",
-            }}
-          />
-        )}
-      </div>
+	return (
+		<div className="flex flex-col gap-1.5">
+			{entries.map((entry) => (
+				<div key={entry.id} className="flex items-center gap-1">
+					<Input
+						type="text"
+						value={entry.key}
+						placeholder={param.keyPlaceholder}
+						onChange={(next) => {
+							setEntries(
+								entries.map((row) =>
+									row.id === entry.id ? { ...row, key: next } : row,
+								),
+							);
+						}}
+						className="min-w-0 flex-1"
+					/>
+					<Input
+						type="text"
+						value={entry.value}
+						placeholder={param.valuePlaceholder}
+						onChange={(next) => {
+							setEntries(
+								entries.map((row) =>
+									row.id === entry.id ? { ...row, value: next } : row,
+								),
+							);
+						}}
+						className="min-w-0 flex-1"
+					/>
+					<IconButton
+						icon={X}
+						label="Remove entry"
+						variant="ghost"
+						size="sm"
+						onClick={() => {
+							setEntries(entries.filter((row) => row.id !== entry.id));
+						}}
+					/>
+				</div>
+			))}
+			<AddRowButton
+				label="Add"
+				onClick={() => {
+					setEntries([
+						...entries,
+						{ id: freshListRowId(), key: "", value: "" },
+					]);
+				}}
+			/>
+		</div>
+	);
+}
 
-      {/* Snapshot — rendered by consumer via children */}
-      {hasSnapshot && children}
+/**
+ * ObjectArrayControl — editor for an `objectArray` param (an array of
+ * sub-forms, e.g. the VST3 node's `stages`). Each element renders its own
+ * params as a stack of `ParamRow`s; elements are separated by a divider and
+ * the array is edited by adding / removing them.
+ */
+function ObjectArrayControl({ param }: { readonly param: ObjectArrayParam }) {
+	const [items, setItems] = useState(() =>
+		param.value.map((fields) => ({ id: freshListRowId(), fields })),
+	);
 
-      {/* Error toast — floating below everything with margin */}
-      {hasError && (
-        <div className="mt-3 flex items-start gap-1.5 bg-state-error/20 px-3 py-2 ring-1 ring-state-error/40">
-          <Icon icon="lucide:alert-triangle" width={12} height={12} className="mt-0.5 shrink-0 text-state-error" />
-          <span className="font-body text-[length:var(--text-xs)] text-state-error">
-            {nodeData.error}
-          </span>
-        </div>
-      )}
-    </div>
-  );
+	return (
+		<div className="flex flex-col gap-3">
+			{items.map((item, index) => (
+				<div
+					key={item.id}
+					className={cn(
+						"flex flex-col gap-3",
+						// Single-edge divider between elements — no wrapping border.
+						index > 0 && "border-t border-border pt-3",
+					)}
+				>
+					<div className="flex items-center justify-between">
+						<span className="type-label text-text-secondary">
+							{`${param.itemNoun} ${index + 1}`}
+						</span>
+						<IconButton
+							icon={X}
+							label={`Remove ${param.itemNoun} ${index + 1}`}
+							variant="ghost"
+							size="sm"
+							onClick={() => {
+								setItems(items.filter((entry) => entry.id !== item.id));
+							}}
+						/>
+					</div>
+					{Object.entries(item.fields).map(([fieldName, fieldParam]) => (
+						<ParamRow key={fieldName} name={fieldName} param={fieldParam} />
+					))}
+				</div>
+			))}
+			<AddRowButton
+				label={`Add ${param.itemNoun}`}
+				onClick={() => {
+					setItems([
+						...items,
+						{ id: freshListRowId(), fields: param.itemTemplate },
+					]);
+				}}
+			/>
+		</div>
+	);
+}
+
+/** Render a camelCase schema field name as spaced words (`type-label` uppercases). */
+function humanizeFieldName(name: string): string {
+	return name.replace(/([A-Z])/g, " $1").trim();
+}
+
+function ParamRow({
+	name,
+	param,
+	onChange,
+}: {
+	readonly name: string;
+	readonly param: Param;
+	readonly onChange?: (name: string, value: Param["value"]) => void;
+}) {
+	// `text-xs` (12px) matches the node's other functional labels — param names
+	// read at the same scale as the rest of the node's functional text, not
+	// smaller.
+	const labelClass = cn(
+		"type-label text-xs",
+		param.complete ? "text-text-secondary" : "text-accent-primary",
+	);
+
+	let control: React.ReactNode;
+
+	switch (param.type) {
+		case "knob":
+		case "fader":
+			control = (
+				<NumberControl
+					name={name}
+					param={param}
+					onChange={onChange as ((name: string, value: number) => void) | undefined}
+				/>
+			);
+			break;
+		case "toggle":
+			control = (
+				<ToggleControl
+					name={name}
+					param={param}
+					onChange={onChange as ((name: string, value: boolean) => void) | undefined}
+				/>
+			);
+			break;
+		case "buttonSelection":
+		case "select":
+			control = (
+				<SelectControl
+					name={name}
+					param={param}
+					onChange={onChange as ((name: string, value: string) => void) | undefined}
+				/>
+			);
+			break;
+		case "input":
+			control = (
+				<InputControl
+					name={name}
+					param={param}
+					onChange={onChange as ((name: string, value: string) => void) | undefined}
+				/>
+			);
+			break;
+		case "file":
+			control = (
+				<FileControl
+					name={name}
+					param={param}
+					onChange={onChange as ((name: string, value: string) => void) | undefined}
+				/>
+			);
+			break;
+		case "record":
+			control = <RecordControl param={param} />;
+			break;
+		case "objectArray":
+			control = <ObjectArrayControl param={param} />;
+			break;
+	}
+
+	// Knobs and Toggles render compact and align well in a single horizontal row.
+	// Faders, Selects, ButtonSelections, Inputs, file fields, record editors, and
+	// object-array editors need a stacked layout so the control can take the
+	// full row width.
+	const stacked =
+		param.type === "fader" ||
+		param.type === "select" ||
+		param.type === "buttonSelection" ||
+		param.type === "input" ||
+		param.type === "file" ||
+		param.type === "record" ||
+		param.type === "objectArray";
+
+	if (stacked) {
+		return (
+			<div className="flex flex-col">
+				<span className={cn(labelClass, "mb-1")}>{humanizeFieldName(name)}</span>
+				{control}
+			</div>
+		);
+	}
+
+	return (
+		<div className="flex items-center justify-between gap-3">
+			<span className={labelClass}>{humanizeFieldName(name)}</span>
+			<div className="shrink-0">{control}</div>
+		</div>
+	);
+}
+
+function PortHandle({
+	port,
+	side,
+	required,
+	connected,
+}: {
+	readonly port: PortDef;
+	readonly side: "left" | "right";
+	readonly required: boolean;
+	readonly connected: boolean;
+}) {
+	const bgClass = connected
+		? "!bg-text-primary"
+		: required
+			? "!bg-accent-primary"
+			: "!bg-text-secondary";
+
+	return (
+		<Handle
+			type={side === "left" ? "target" : "source"}
+			position={side === "left" ? Position.Left : Position.Right}
+			id={port.id}
+			className={cn(
+				"!h-2.5 !w-2.5 !rounded-none !border-0",
+				bgClass,
+			)}
+			style={{
+				[side]: -5,
+				// Rightward-facing filled triangle — points along the L→R signal flow,
+				// so an input reads as feeding in and an output as feeding out.
+				clipPath: "polygon(0 0, 100% 50%, 0 100%)",
+			}}
+		/>
+	);
+}
+
+/**
+ * The component reads its node data — including the `onParamChange` / `onBypass`
+ * / `onReset` handlers — off the React Flow `data` payload (see `DemoNodeData`),
+ * not off dedicated component props. `NodeProps` is the only declared shape.
+ */
+type DemoNodeProps = NodeProps;
+
+export function DemoNode({ data, selected }: DemoNodeProps) {
+	const nodeData = data as unknown as DemoNodeData;
+	const isBypassed = nodeData.bypassed === true;
+
+	const connectedInputs = new Set(nodeData.connectedInputs ?? []);
+	const connectedOutputs = new Set(nodeData.connectedOutputs ?? []);
+
+	const onParamChange = (nodeData.onParamChange as ((name: string, value: Param["value"]) => void) | undefined);
+	const onBypass = nodeData.onBypass as (() => void) | undefined;
+	const onReset = nodeData.onReset as (() => void) | undefined;
+
+	const panelClass = cn(
+		// The panel itself owns layout, background, and the ≤2px outer radius. The
+		// header bar inside clips to the same radius via `overflow-hidden`. A
+		// subtle `border-border` frames the unit against the canvas (Resequence
+		// graph-unit treatment).
+		"flex flex-col bg-elevated rounded-xs border border-border overflow-hidden",
+		isBypassed && "opacity-60",
+		selected && "ring-1 ring-text-primary",
+	);
+
+	const paramEntries = Object.entries(nodeData.parameters);
+
+	const handleBypass = useCallback(() => {
+		onBypass?.();
+	}, [onBypass]);
+	const handleReset = useCallback(() => {
+		onReset?.();
+	}, [onReset]);
+
+	return (
+		<div className="relative" style={{ width: nodeData.width ?? 240 }}>
+			<div className={panelClass}>
+				{/* Header — full-panel-width colored bar carrying category + title.
+				    Uses `min-h` + vertical padding (not a fixed `h-`) so multi-line
+				    titles like `DeepFilterNet3 (Denoiser)` expand the bar to fit. */}
+				<div
+					className={cn(
+						"flex min-h-9 items-center justify-between gap-2 px-4 py-2",
+						CATEGORY_HEADER_BG[nodeData.category],
+					)}
+				>
+					<span className="text-body font-medium uppercase tracking-[0.06em] leading-tight text-surface">
+						{nodeData.name}
+					</span>
+					{/* Bypass / reset — small icon controls at the right of the header.
+					    They sit on the colored category bar, so they keep `text-surface`
+					    to stay legible; tailwind-merge lets the className override the
+					    ghost variant's text color. */}
+					<div className="flex shrink-0 items-center gap-1.5">
+						<IconButton
+							icon={Power}
+							label="Bypass"
+							variant="ghost"
+							size="sm"
+							onClick={handleBypass}
+							className={cn(
+								"text-surface hover:text-surface hover:bg-surface/20",
+								!isBypassed && "bg-surface/25",
+							)}
+						/>
+						<IconButton
+							icon={RotateCcw}
+							label="Reset"
+							variant="ghost"
+							size="sm"
+							onClick={handleReset}
+							className="text-surface hover:text-surface hover:bg-surface/20"
+						/>
+					</div>
+				</div>
+
+				{/* Body */}
+				{paramEntries.length > 0 && (
+					<div className="flex flex-col gap-4 px-4 py-4">
+						{paramEntries.map(([name, param]) => (
+							<ParamRow
+								key={name}
+								name={name}
+								param={param}
+								onChange={onParamChange}
+							/>
+						))}
+					</div>
+				)}
+
+			</div>
+
+			{/* Ports — rightward-facing triangle handles, vertically centered via React Flow defaults */}
+			{nodeData.ports.inputs.map((port) => (
+				<PortHandle
+					key={port.id}
+					port={port}
+					side="left"
+					required={port.required === true && !connectedInputs.has(port.id)}
+					connected={connectedInputs.has(port.id)}
+				/>
+			))}
+			{nodeData.ports.outputs.map((port) => (
+				<PortHandle
+					key={port.id}
+					port={port}
+					side="right"
+					required={false}
+					connected={connectedOutputs.has(port.id)}
+				/>
+			))}
+		</div>
+	);
 }

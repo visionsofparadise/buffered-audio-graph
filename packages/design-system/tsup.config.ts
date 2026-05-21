@@ -5,5 +5,5 @@ export default defineConfig({
   format: ["esm"],
   dts: true,
   treeshake: true,
-  external: ["react", "react-dom", "@xyflow/react", "@iconify/react", "lucide-react", "clsx", "tailwind-merge"],
+  external: ["react", "react-dom", "@xyflow/react", "lucide-react", "clsx", "tailwind-merge"],
 });

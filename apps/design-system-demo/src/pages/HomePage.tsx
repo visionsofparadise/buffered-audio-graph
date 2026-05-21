@@ -1,131 +1,139 @@
-import { Icon } from "@iconify/react";
-import { TerrainShader } from "@buffered-audio/design-system";
-import type { MenuItem } from "@buffered-audio/design-system";
-import { DemoTabBar } from "../DemoTabBar";
-import { useColormapTheme } from "../ThemeContext";
+import { FolderOpen, Plus } from "lucide-react";
+import { HomeGraph } from "../components/HomeGraph";
+import { Barcode } from "../components/Barcode";
 
-const HOME_TABS = [
-  { id: "podcast", label: "podcast-raw.wav" },
-  { id: "interview", label: "interview-backup.wav" },
-] as const;
+/**
+ * Home screen for the design-system demo.
+ *
+ * BAGMAN wordmark top-left, a decorative graph centerpiece in the middle (see
+ * `HomeGraph`), and the New / Open actions anchored bottom-right. Recent
+ * graphs are no longer rendered as a list — each one is an annotation
+ * pointing to one of the graph's nodes, with hover highlighting the
+ * connection between label and anchor.
+ *
+ * The home screen IS the new-tab entry point. The `+` button in the App tab
+ * bar takes you here; from here, "New graph" creates a new tab, "Open graph"
+ * opens one (no-op in the demo), and clicking a recent annotation opens that
+ * file.
+ */
 
-const MENU_ITEMS: ReadonlyArray<MenuItem> = [
-  { kind: "action", icon: "lucide:file-plus", label: "New Session", shortcut: "Ctrl+N" },
-  { kind: "action", icon: "lucide:folder-open", label: "Open Session", shortcut: "Ctrl+O" },
-  { kind: "action", icon: "lucide:save", label: "Save", shortcut: "Ctrl+S" },
-  { kind: "action", icon: "lucide:save-all", label: "Save As\u2026", shortcut: "Ctrl+Shift+S" },
-  { kind: "separator" },
-  { kind: "action", icon: "lucide:app-window", label: "New Window", shortcut: "Ctrl+Shift+N" },
-  { kind: "action", icon: "lucide:x", label: "Close Window", shortcut: "Ctrl+W" },
-  { kind: "separator" },
-  { kind: "action", icon: "lucide:undo-2", label: "Undo", shortcut: "Ctrl+Z" },
-  { kind: "action", icon: "lucide:redo-2", label: "Redo", shortcut: "Ctrl+Shift+Z" },
-  { kind: "separator" },
-  { kind: "action", icon: "lucide:settings", label: "Settings", shortcut: "Ctrl+," },
+interface RecentGraph {
+	readonly id: string;
+	readonly name: string;
+	readonly path: string;
+	readonly relativeTime: string;
+}
+
+const RECENT_GRAPHS: ReadonlyArray<RecentGraph> = [
+	{
+		id: "recent-1",
+		name: "Podcast Episode 042 — Master",
+		path: "~/Audio/Podcast/episode-042.bag",
+		relativeTime: "Just now",
+	},
+	{
+		id: "recent-2",
+		name: "Interview Cleanup",
+		path: "~/Audio/Interviews/cleanup-take-3.bag",
+		relativeTime: "2 hours ago",
+	},
+	{
+		id: "recent-3",
+		name: "Album Pre-Master Chain",
+		path: "~/Music/Project A/premaster.bag",
+		relativeTime: "Yesterday",
+	},
+	{
+		id: "recent-4",
+		name: "Field Recording Denoise",
+		path: "~/Field/2026-05-12-park.bag",
+		relativeTime: "3 days ago",
+	},
+	{
+		id: "recent-5",
+		name: "Voiceover Stem Split",
+		path: "~/Voice/stem-split.bag",
+		relativeTime: "2 weeks ago",
+	},
 ];
 
-const RECENT_SESSIONS = [
-	{
-		name: "Podcast Episode 47",
-		path: "/recordings/ep47",
-		duration: "01:23:45",
-		lastOpened: "2 hours ago",
-	},
-	{
-		name: "Interview \u2014 Sarah Chen",
-		path: "/recordings/interviews",
-		duration: "00:45:12",
-		lastOpened: "Yesterday",
-	},
-	{
-		name: "Audiobook Ch 12",
-		path: "/recordings/audiobook",
-		duration: "02:10:30",
-		lastOpened: "3 days ago",
-	},
-	{
-		name: "Sound Design \u2014 Intro",
-		path: "/recordings/sfx",
-		duration: "00:02:15",
-		lastOpened: "Last week",
-	},
-	{
-		name: "Voiceover \u2014 Ad Read",
-		path: "/recordings/vo",
-		duration: "00:01:42",
-		lastOpened: "Last week",
-	},
-	{
-		name: "Lecture Recording",
-		path: "/recordings/edu",
-		duration: "01:15:08",
-		lastOpened: "2 weeks ago",
-	},
-] as const;
+// Bar widths for the decorative home-screen barcode — randomized once at
+// module load so the pattern reads as a real, irregular barcode. The count is
+// sized so the rotated barcode runs roughly the length of the vertical
+// wordmark beside it.
+const HOME_BARCODE_WIDTHS = Array.from(
+	{ length: 56 },
+	() => 1 + Math.floor(Math.random() * 4),
+);
+const HOME_BARCODE_LENGTH =
+	HOME_BARCODE_WIDTHS.reduce((total, barWidth) => total + barWidth, 0) +
+	(HOME_BARCODE_WIDTHS.length - 1);
 
-export function HomePage() {
-	const { colormap } = useColormapTheme();
+interface Props {
+	readonly onNewGraph: () => void;
+	readonly onOpenGraph: () => void;
+	readonly onOpenRecent: (name: string) => void;
+}
 
+export function HomePage({ onNewGraph, onOpenGraph, onOpenRecent }: Props) {
 	return (
-		<div className="flex h-full flex-col overflow-hidden bg-void">
-		<DemoTabBar tabs={HOME_TABS} activeTabId="" menuItems={MENU_ITEMS} />
-		<div className="relative min-h-0 flex-1 overflow-hidden">
-			<TerrainShader className="absolute inset-0" colormap={colormap} />
-
-			<div className="relative flex h-full flex-col p-4">
-				<h1 className="font-display text-[length:6rem] font-bold leading-none tracking-tight text-chrome-text">ENGINEERING</h1>
-
-				<div className="flex-1" />
-
-				<div className="flex flex-col gap-6">
-					<div className="flex flex-col gap-4">
-						<span className="font-technical text-[length:var(--text-xs)] uppercase tracking-widest text-chrome-text-dim">Recent Sessions</span>
-
-						<div className="flex flex-col gap-2">
-							{RECENT_SESSIONS.map((session) => (
-								<button
-									key={session.path}
-									type="button"
-									className="flex w-fit items-baseline gap-5 text-left transition-colors duration-100 hover:bg-secondary"
-								>
-									<span className="font-body text-[length:var(--text-base)] text-chrome-text">{session.name}</span>
-									<span className="font-technical text-[length:var(--text-xs)] text-chrome-text-dim">{session.path}</span>
-									<span className="font-technical text-[length:var(--text-xs)] tabular-nums text-chrome-text-dim">{session.duration}</span>
-									<span className="font-technical text-[length:var(--text-xs)] text-chrome-text-dim">{session.lastOpened}</span>
-								</button>
-							))}
-						</div>
-					</div>
-
-					<div className="flex flex-col gap-2">
-						<button
-							type="button"
-							className="flex w-fit items-center gap-2 px-2 py-1 font-technical text-[length:var(--text-sm)] uppercase tracking-[0.06em] text-void transition-colors hover:brightness-110"
-						>
-							<span className="flex items-center gap-2 bg-primary">
-								<Icon
-									icon="lucide:plus"
-									width={16}
-								/>
-								New Session
-							</span>
-						</button>
-						<button
-							type="button"
-							className="flex w-fit items-center gap-2 px-2 py-1 font-technical text-[length:var(--text-sm)] uppercase tracking-[0.06em] text-chrome-text transition-colors hover:brightness-125"
-						>
-							<span className="flex items-center gap-2 bg-secondary">
-								<Icon
-									icon="lucide:folder-open"
-									width={16}
-								/>
-								Open Session
-							</span>
-						</button>
+		<div className="relative flex h-full flex-col overflow-hidden bg-surface p-6">
+			{/* Decorative top-right watermark — the product wordmark and a
+			    vertical barcode (the horizontal Barcode rotated a quarter turn),
+			    sitting behind the centerpiece graph. */}
+			<div className="pointer-events-none absolute right-4 top-6 z-0 flex items-start gap-4">
+				<span
+					className="type-label text-dimmed"
+					style={{ writingMode: "vertical-rl" }}
+				>
+					Buffered Audio Graph Manager
+				</span>
+				<div
+					className="relative w-8"
+					style={{ height: HOME_BARCODE_LENGTH }}
+				>
+					<div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90">
+						<Barcode
+							widths={HOME_BARCODE_WIDTHS}
+							height={28}
+							color="var(--color-border)"
+						/>
 					</div>
 				</div>
 			</div>
-		</div>
+
+			<h1 className="type-display text-display-lg leading-none text-text-primary">
+				BAGMAN
+			</h1>
+
+			<div className="relative z-10 min-h-0 flex-1">
+				<HomeGraph recents={RECENT_GRAPHS} onOpenRecent={onOpenRecent} />
+			</div>
+
+			{/* Studio mark — balances the action buttons in the opposite corner.
+			    pointer-events-none so it never intercepts a graph-anchor click. */}
+			<span className="type-label pointer-events-none absolute bottom-6 left-6 z-20 text-dimmed">
+				&copy; ZCROSS
+			</span>
+
+			<div className="absolute right-6 bottom-6 z-20 flex flex-col items-end gap-3">
+				<button
+					type="button"
+					onClick={onNewGraph}
+					className="flex w-fit items-center gap-2 px-4 py-2 text-body text-text-primary hover:bg-text-primary hover:text-surface"
+				>
+					<Plus size={16} strokeWidth={1.5} />
+					<span>New graph</span>
+				</button>
+				<button
+					type="button"
+					onClick={onOpenGraph}
+					className="flex w-fit items-center gap-2 px-4 py-2 text-body text-text-primary hover:bg-text-primary hover:text-surface"
+				>
+					<FolderOpen size={16} strokeWidth={1.5} />
+					<span>Open graph</span>
+				</button>
+			</div>
 		</div>
 	);
 }

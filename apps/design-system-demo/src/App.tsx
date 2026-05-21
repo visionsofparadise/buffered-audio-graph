@@ -1,45 +1,105 @@
-import { useEffect, useState } from "react";
-import { TopBar } from "./TopBar";
-import { ThemeContext } from "./ThemeContext";
-import type { ColormapTheme } from "@buffered-audio/design-system";
-import { ShowcasePage } from "./pages/ShowcasePage";
+import { useState } from "react";
+import { AppTabBar, type AppTab } from "./AppTabBar";
+import { DemoViewSwitch, type DemoView } from "./DemoViewSwitch";
 import { HomePage } from "./pages/HomePage";
+import { ShowcasePage } from "./pages/ShowcasePage";
 import { GraphPage } from "./pages/GraphPage";
 
-const PAGES = ["Showcase", "Home", "Graph"] as const;
-
-type Page = (typeof PAGES)[number];
-
-const PAGE_COMPONENTS: Record<Page, React.FC> = {
-  "Showcase": ShowcasePage,
-  "Home": HomePage,
-  "Graph": GraphPage,
-};
+const INITIAL_TABS: ReadonlyArray<AppTab> = [
+	{ id: "tab-1", name: "Podcast Episode 042" },
+	{ id: "tab-2", name: "Album Pre-Master" },
+];
 
 export function App() {
-  const [activePage, setActivePage] = useState<Page>("Showcase");
-  const [colormap, setColormap] = useState<ColormapTheme>("lava");
+	const [view, setView] = useState<DemoView>("app");
+	const [activeTabId, setActiveTabId] = useState<string | null>("home");
+	const [tabs, setTabs] = useState<ReadonlyArray<AppTab>>(INITIAL_TABS);
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", colormap);
-  }, [colormap]);
+	const handleSelectTab = (id: string) => {
+		setActiveTabId(id);
+	};
 
-  const ActiveComponent = PAGE_COMPONENTS[activePage];
+	const handleCloseTab = (id: string) => {
+		setTabs((current) => {
+			const index = current.findIndex((tab) => tab.id === id);
 
-  return (
-    <ThemeContext value={{ colormap, setColormap }}>
-      <div className="flex h-screen w-screen flex-col bg-chrome-base text-chrome-text">
-        <TopBar
-          pages={PAGES}
-          activePage={activePage}
-          onPageChange={setActivePage}
-        />
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-            <ActiveComponent />
-          </div>
-        </main>
-      </div>
-    </ThemeContext>
-  );
+			if (index === -1) return current;
+
+			const next = current.filter((tab) => tab.id !== id);
+
+			if (activeTabId === id) {
+				// Fall back to the tab that was before the closed one, or the next
+				// remaining tab, or the home tab if no graph tabs remain.
+				const fallback = next[index - 1]?.id ?? next[index]?.id ?? "home";
+
+				setActiveTabId(fallback);
+			}
+
+			return next;
+		});
+	};
+
+	const handleGoHome = () => {
+		setActiveTabId("home");
+	};
+
+	const handleNewGraph = () => {
+		const freshId = `tab-${Date.now()}`;
+
+		setTabs((current) => [...current, { id: freshId, name: "Untitled" }]);
+		setActiveTabId(freshId);
+	};
+
+	const handleOpenGraph = () => {
+		// In the desktop app this opens an OS file picker; the demo creates a
+		// placeholder tab so the home → graph flow can still be exercised.
+		const freshId = `tab-${Date.now()}`;
+
+		setTabs((current) => [...current, { id: freshId, name: "Opened graph" }]);
+		setActiveTabId(freshId);
+	};
+
+	const handleOpenRecent = (name: string) => {
+		const freshId = `tab-${Date.now()}`;
+
+		setTabs((current) => [...current, { id: freshId, name }]);
+		setActiveTabId(freshId);
+	};
+
+	const handleRenameTab = (id: string, name: string) => {
+		setTabs((current) =>
+			current.map((tab) => (tab.id === id ? { ...tab, name } : tab)),
+		);
+	};
+
+	return (
+		<div className="flex h-screen w-screen flex-col bg-surface text-text-primary">
+			<DemoViewSwitch view={view} onChange={setView} />
+			{view === "app" && (
+				<AppTabBar
+					activeTabId={activeTabId}
+					tabs={tabs}
+					onSelectTab={handleSelectTab}
+					onCloseTab={handleCloseTab}
+					onGoHome={handleGoHome}
+					onRenameTab={handleRenameTab}
+				/>
+			)}
+			<main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+				{view === "app" ? (
+					activeTabId === "home" ? (
+						<HomePage
+							onNewGraph={handleNewGraph}
+							onOpenGraph={handleOpenGraph}
+							onOpenRecent={handleOpenRecent}
+						/>
+					) : (
+						<GraphPage />
+					)
+				) : (
+					<ShowcasePage />
+				)}
+			</main>
+		</div>
+	);
 }

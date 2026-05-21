@@ -10,10 +10,7 @@
   },
   "dependencies": {
     "@buffered-audio/design-system": "*",
-    "@fontsource-variable/bricolage-grotesque": "^5.2.10",
-    "@fontsource-variable/jetbrains-mono": "^5.2.8",
-    "@fontsource-variable/outfit": "^5.2.8",
-    "@iconify/react": "^6.0.2",
+    "@fontsource/azeret-mono": "^5.2.0",
     "@xyflow/react": "*",
     "lucide-react": "*",
     "react": "^19.0.0",

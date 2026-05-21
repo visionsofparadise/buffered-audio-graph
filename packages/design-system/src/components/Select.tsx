@@ -1,66 +1,71 @@
-import { useState, useRef, useEffect } from "react";
-import { Icon } from "@iconify/react";
+import * as SelectPrimitive from "@radix-ui/react-select";
+import { ChevronDown } from "lucide-react";
+import { cn } from "../cn";
 
 export interface SelectProps {
-  readonly value: string;
-  readonly options: ReadonlyArray<string>;
-  readonly onSelect?: (value: string) => void;
-  readonly className?: string;
+	readonly value: string;
+	readonly options: ReadonlyArray<string>;
+	readonly onChange?: (value: string) => void;
+	readonly label?: string;
+	readonly className?: string;
+	readonly placeholder?: string;
 }
 
-export function Select({ value, options, onSelect, className }: SelectProps) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as globalThis.Node)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("mousedown", handleClickOutside);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className={`relative${className ? ` ${className}` : ""}`}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 bg-chrome-raised font-technical uppercase text-xs text-chrome-text px-2 py-1"
-      >
-        <span>{value}</span>
-        <Icon icon="lucide:chevron-down" width={12} height={12} />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 z-50 mt-1 flex flex-col bg-chrome-raised py-1">
-          {options.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => {
-                onSelect?.(option);
-                setOpen(false);
-              }}
-              className="px-3 py-1.5 text-left font-technical uppercase text-xs text-chrome-text hover:bg-interactive-hover"
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+export function Select({
+	value,
+	options,
+	onChange,
+	label,
+	className,
+	placeholder,
+}: SelectProps) {
+	return (
+		<div className={cn("flex flex-col gap-1", className)}>
+			{label && (
+				<span className="type-label text-text-secondary">{label}</span>
+			)}
+			<SelectPrimitive.Root value={value} onValueChange={onChange}>
+				<SelectPrimitive.Trigger
+					className={cn(
+						"type-label inline-flex items-center justify-between gap-2 rounded-xs",
+						"bg-elevated text-text-primary px-2 py-1 outline-none",
+						"focus:ring-1 focus:ring-accent-primary",
+					)}
+				>
+					<SelectPrimitive.Value placeholder={placeholder} />
+					<SelectPrimitive.Icon asChild>
+						<ChevronDown size={12} strokeWidth={1.5} />
+					</SelectPrimitive.Icon>
+				</SelectPrimitive.Trigger>
+				<SelectPrimitive.Portal>
+					<SelectPrimitive.Content
+						position="popper"
+						sideOffset={4}
+						collisionPadding={8}
+						className={cn(
+							"z-50 overflow-hidden rounded-xs bg-elevated outline-none",
+							"min-w-(--radix-select-trigger-width)",
+						)}
+					>
+						<SelectPrimitive.Viewport className="py-1">
+							{options.map((option) => (
+								<SelectPrimitive.Item
+									key={option}
+									value={option}
+									className={cn(
+										"type-label flex cursor-pointer items-center px-2 py-1 outline-none",
+										"text-text-primary",
+										"data-[highlighted]:bg-text-primary data-[highlighted]:text-surface",
+										"data-[disabled]:cursor-default data-[disabled]:text-dimmed",
+									)}
+								>
+									<SelectPrimitive.ItemText>{option}</SelectPrimitive.ItemText>
+								</SelectPrimitive.Item>
+							))}
+						</SelectPrimitive.Viewport>
+					</SelectPrimitive.Content>
+				</SelectPrimitive.Portal>
+			</SelectPrimitive.Root>
+		</div>
+	);
 }

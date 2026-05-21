@@ -20,7 +20,7 @@ export function DropdownMenuContent({
 				sideOffset={sideOffset}
 				collisionPadding={collisionPadding}
 				className={cn(
-					"z-50 flex flex-col gap-2 bg-chrome-raised py-2 shadow-lg outline-none",
+					"z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-1 outline-none",
 					className,
 				)}
 				{...props}
@@ -36,7 +36,9 @@ export function DropdownMenuItem({
 	return (
 		<DropdownMenuPrimitive.Item
 			className={cn(
-				"mx-2 flex cursor-pointer items-center gap-2 py-1 text-left font-technical text-[length:var(--text-sm)] uppercase tracking-[0.06em] text-chrome-text outline-none data-[highlighted]:bg-interactive-hover data-[disabled]:cursor-default data-[disabled]:opacity-30",
+				"type-label flex cursor-pointer items-center gap-2 px-3 py-2 text-body text-left text-text-primary outline-none",
+				"data-[highlighted]:bg-text-primary data-[highlighted]:text-surface",
+				"data-[disabled]:cursor-default data-[disabled]:text-dimmed",
 				className,
 			)}
 			{...props}
@@ -51,7 +53,7 @@ export function DropdownMenuLabel({
 	return (
 		<DropdownMenuPrimitive.Label
 			className={cn(
-				"mx-2 px-1 py-1 font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] text-chrome-text-muted",
+				"type-label px-3 py-1.5 text-xs text-text-secondary",
 				className,
 			)}
 			{...props}
@@ -65,7 +67,7 @@ export function DropdownMenuSeparator({
 }: ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>) {
 	return (
 		<DropdownMenuPrimitive.Separator
-			className={cn("mx-2 my-1 h-px bg-chrome-border-subtle", className)}
+			className={cn("mx-2 my-1 h-px bg-border", className)}
 			{...props}
 		/>
 	);
@@ -78,7 +80,10 @@ export function DropdownMenuSubTrigger({
 	return (
 		<DropdownMenuPrimitive.SubTrigger
 			className={cn(
-				"mx-2 flex cursor-pointer items-center gap-2 py-1 text-left font-technical text-[length:var(--text-sm)] uppercase tracking-[0.06em] text-chrome-text outline-none data-[highlighted]:bg-interactive-hover data-[state=open]:bg-interactive-hover data-[disabled]:cursor-default data-[disabled]:opacity-30",
+				"type-label flex cursor-pointer items-center gap-2 px-3 py-2 text-body text-left text-text-primary outline-none",
+				"data-[highlighted]:bg-text-primary data-[highlighted]:text-surface",
+				"data-[state=open]:bg-text-primary data-[state=open]:text-surface",
+				"data-[disabled]:cursor-default data-[disabled]:text-dimmed",
 				className,
 			)}
 			{...props}
@@ -94,7 +99,7 @@ export function DropdownMenuSubContent({
 		<DropdownMenuPrimitive.Portal>
 			<DropdownMenuPrimitive.SubContent
 				className={cn(
-					"z-50 flex flex-col gap-2 bg-chrome-raised py-2 shadow-lg outline-none",
+					"z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-1 outline-none",
 					className,
 				)}
 				{...props}

@@ -1,6 +1,5 @@
-@import "@fontsource-variable/bricolage-grotesque";
-@import "@fontsource-variable/outfit";
-@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource/azeret-mono/400.css";
+@import "@fontsource/azeret-mono/500.css";
 
 @layer base {
   :root {
@@ -10,12 +9,16 @@
     font-feature-settings: "kern" 1, "liga" 1;
   }
 
+  .theme-light {
+    color-scheme: light;
+  }
+
   body {
-    font-family: var(--font-body);
-    font-size: var(--text-base);
+    font-family: var(--font-mono);
+    font-size: var(--text-body);
     line-height: 1.5;
-    color: var(--color-chrome-text);
-    background-color: var(--color-chrome-base);
+    color: var(--color-text-primary);
+    background-color: var(--color-surface);
   }
 
   button:not(:disabled) {

@@ -1,192 +1,451 @@
 import type { Node, Edge } from "@xyflow/react";
-import type { AudioNodeData, Parameter, NumberParameter, NodeState, NodeCategory } from "../components/graph/types";
+import type { DemoNodeData } from "../components/graph/types";
 
-interface AudioEdgeData {
-  readonly state: "idle" | "active" | "complete";
-  [key: string]: unknown;
-}
+/**
+ * Sample graph that exercises every visual condition of the new node spec, using
+ * the real node names and param shapes from `packages/buffered-audio-nodes/`.
+ *
+ * Conditions covered:
+ *  - ≥2 sources: `Read` × 2 (one with a populated path, one with a blank path
+ *    whose `path` param is flagged `complete: false`, surfacing the incomplete
+ *    state as a coral param label)
+ *  - ≥3 transforms: `Gain`, `DeepFilterNet3 (Denoiser)`, `Loudness Normalize`,
+ *    `Normalize`
+ *  - Terminal `Write` target
+ *  - Mid-pipeline `Write` target (snapshot tap)
+ *  - Bypassed node: `Normalize` (`bypassed: true`, `opacity-60`)
+ *  - Incomplete-param node: the second `Read` (its `path` is blank and the
+ *    param is flagged `complete: false`, so its label renders coral)
+ *  - `file`, `record`, and `objectArray` param shapes: the `VST3` transform
+ *    node — its `stages` array, where each stage is a sub-form with `.vst3` /
+ *    `.vstpreset` file paths and a `parameters` key/value map
+ *
+ * Schema-derived param mappings (from `packages/buffered-audio-nodes/src/.../index.ts`):
+ *  - `Read.path`   → `file`  (string, `meta.input: "file"`)
+ *  - `Gain.gain`   → `knob`  (number, -60..24 dB, step 0.1, default 0)
+ *  - `DeepFilterNet3.attenuation` → `knob` (number, 0..100 dB, default 30)
+ *  - `Loudness Normalize.target`  → `knob` (number, -50..0 LUFS, step 0.1, default -16)
+ *  - `Normalize.ceiling`          → `knob` (number, 0..1, step 0.01, default 1.0)
+ *  - `Write.path`     → `file` (string, `meta.input: "file"`)
+ *  - `Write.bitDepth` → `buttonSelection` (enum: "16" | "24" | "32" | "32f")
+ *  - `VST3.stages`             → `objectArray` (`z.array` of stage objects, min 1)
+ *  - `VST3` stage `pluginPath` → `file`   (`.vst3` plugin path)
+ *  - `VST3` stage `pluginName` → `input`  (optional sub-plugin name, for shells)
+ *  - `VST3` stage `presetPath` → `file`   (optional `.vstpreset` state file)
+ *  - `VST3` stage `parameters` → `record` (Pedalboard parameter-name → value map)
+ *
+ * Managed-binary path fields (`modelPath`, `ffmpegPath`, `onnxAddonPath`, VST3's
+ * `vstHostPath`, etc.) and other non-graph-editor schema fields are intentionally
+ * omitted — they are wired in the desktop app's environment-settings panel and
+ * aren't editable on the node itself. The demo focuses on the graph-editor-
+ * relevant params.
+ */
 
-const COL_0 = 0;
-const COL_1 = 400;
-const COL_2 = 800;
-const COL_3 = 1200;
-const COL_4 = 1600;
-const COL_5 = 2000;
-const COL_6 = 2400;
-const ROW_GAP = 200;
+const COL_GAP = 280;
+const ROW_GAP = 220;
 
-const demoNodes: Array<Node<AudioNodeData>> = [
-  // Sources
-  {
-    id: "read-podcast",
-    type: "audioNode",
-    position: { x: COL_0, y: 0 },
-    data: {
-      label: "Read",
-      description: "Read audio from a file",
-      category: "source",
-      state: "rendered",
-      bypassed: false,
-      inspected: true,
-      snapshot: true,
-      parameters: [
-        { kind: "string", name: "path", value: "podcast-raw.wav" },
-      ],
-    },
-  },
-  {
-    id: "read-interview",
-    type: "audioNode",
-    position: { x: COL_0, y: ROW_GAP },
-    data: {
-      label: "Read",
-      description: "Read audio from a file",
-      category: "source",
-      state: "rendered",
-      bypassed: false,
-      snapshot: true,
-      parameters: [
-        { kind: "string", name: "path", value: "interview-backup.wav" },
-      ],
-    },
-  },
-  {
-    id: "read-voiceover",
-    type: "audioNode",
-    position: { x: COL_0, y: ROW_GAP * 2 },
-    data: {
-      label: "Read",
-      description: "Read audio from a file",
-      category: "source",
-      state: "stale",
-      bypassed: false,
-      snapshot: true,
-      parameters: [
-        { kind: "string", name: "path", value: "voiceover-take3.wav" },
-      ],
-    },
-  },
-  // Chain: Loudness Control
-  {
-    id: "loudness",
-    type: "audioNode",
-    position: { x: COL_1, y: 0 },
-    data: {
-      label: "Loudness Control",
-      description: "Measure integrated loudness, true peak, and amplitude distribution",
-      category: "transform",
-      state: "rendered",
-      bypassed: false,
-      snapshot: true,
-      parameters: [
-        { kind: "number", name: "Target", value: -14, min: -50, max: 0, step: 0.1, unit: "dB" },
-        { kind: "number", name: "True Peak", value: -1, min: -10, max: 0, step: 0.1, unit: "dB" },
-        { kind: "number", name: "LRA", value: 0, min: 0, max: 20, step: 0.1, unit: "dB" },
-      ],
-    },
-  },
-  // Chain: Mouth De-Click
-  {
-    id: "declick",
-    type: "audioNode",
-    position: { x: COL_2, y: 0 },
-    data: {
-      label: "Mouth De-Click",
-      description: "Remove clicks, pops, and impulse artifacts",
-      category: "transform",
-      state: "error",
-      bypassed: false,
-      snapshot: true,
-      error: "Click detection failed: insufficient silence frames for noise profile",
-      parameters: [
-        { kind: "number", name: "Sensitivity", value: 0.7, min: 0, max: 1, step: 0.01, unit: "" },
-        { kind: "number", name: "Max Click Duration", value: 50, min: 1, max: 1000, step: 1, unit: "smp" },
-      ],
-    },
-  },
-  // Chain: Breath Control
-  {
-    id: "breath",
-    type: "audioNode",
-    position: { x: COL_3, y: 0 },
-    data: {
-      label: "Breath Control",
-      description: "Attenuate or remove breath sounds between phrases",
-      category: "transform",
-      state: "processing",
-      bypassed: false,
-      snapshot: true,
-      progress: 0.64,
-      parameters: [
-        { kind: "number", name: "Sensitivity", value: 0.5, min: 0, max: 1, step: 0.01, unit: "" },
-        { kind: "number", name: "Reduction", value: -12, min: -60, max: 0, step: 1, unit: "dB" },
-        { kind: "enum", name: "Mode", value: "attenuate", options: ["remove", "attenuate"] },
-      ],
-    },
-  },
-  // Chain: Dialogue De-Reverb
-  {
-    id: "dereverb",
-    type: "audioNode",
-    position: { x: COL_4, y: 0 },
-    data: {
-      label: "Dialogue De-Reverb",
-      description: "Reduce room reverb using Weighted Prediction Error",
-      category: "transform",
-      state: "bypassed",
-      bypassed: true,
-      parameters: [
-        { kind: "number", name: "Prediction Delay", value: 4, min: 1, max: 10, step: 1, unit: "" },
-        { kind: "number", name: "Filter Length", value: 12, min: 5, max: 30, step: 1, unit: "" },
-        { kind: "number", name: "Iterations", value: 4, min: 1, max: 10, step: 1, unit: "" },
-      ],
-    },
-  },
-  // Chain: Voice Denoise
-  {
-    id: "denoise",
-    type: "audioNode",
-    position: { x: COL_5, y: 0 },
-    data: {
-      label: "Voice Denoise",
-      description: "Remove background noise using DTLN neural network",
-      category: "transform",
-      state: "pending",
-      bypassed: false,
-      parameters: [],
-    },
-  },
-  // Target
-  {
-    id: "write",
-    type: "audioNode",
-    position: { x: COL_6, y: 0 },
-    data: {
-      label: "Write",
-      description: "Write audio to a file",
-      category: "target",
-      state: "pending",
-      bypassed: false,
-      parameters: [
-        { kind: "string", name: "path", value: "podcast-clean.wav" },
-        { kind: "enum", name: "Bit Depth", value: "24", options: ["16", "24", "32", "32f"] },
-      ],
-    },
-  },
+const col = (index: number) => index * COL_GAP;
+
+const demoNodes: Array<Node<DemoNodeData>> = [
+	// Sources
+	{
+		id: "read-1",
+		type: "demoNode",
+		position: { x: col(0), y: 0 },
+		data: {
+			name: "Read",
+			category: "source",
+			parameters: {
+				path: {
+					type: "file",
+					value: "podcast-raw.wav",
+					complete: true,
+					mode: "open",
+				},
+			},
+			ports: {
+				inputs: [],
+				outputs: [{ id: "out" }],
+			},
+			connectedOutputs: ["out"],
+		},
+	},
+	{
+		id: "read-2",
+		type: "demoNode",
+		position: { x: col(0), y: ROW_GAP },
+		data: {
+			// Incomplete-param state — `path` is blank and the param is flagged
+			// incomplete, so its label renders coral.
+			name: "Read",
+			category: "source",
+			parameters: {
+				path: { type: "file", value: "", complete: false, mode: "open" },
+			},
+			ports: {
+				inputs: [],
+				outputs: [{ id: "out" }],
+			},
+			connectedOutputs: ["out"],
+		},
+	},
+
+	// Transforms
+	{
+		id: "gain",
+		type: "demoNode",
+		position: { x: col(1), y: ROW_GAP / 2 },
+		data: {
+			name: "Gain",
+			category: "transform",
+			parameters: {
+				gain: {
+					type: "knob",
+					value: -3,
+					complete: true,
+					min: -60,
+					max: 24,
+					step: 0.1,
+					unit: "dB",
+				},
+			},
+			ports: {
+				inputs: [{ id: "in", required: true }],
+				outputs: [{ id: "out" }],
+			},
+			connectedInputs: ["in"],
+			connectedOutputs: ["out"],
+		},
+	},
+	{
+		id: "deepfilter",
+		type: "demoNode",
+		position: { x: col(2), y: ROW_GAP / 2 },
+		data: {
+			// Real moduleName is "DeepFilterNet3 (Denoiser)"; the header bar shows
+			// exactly that string.
+			name: "DeepFilterNet3 (Denoiser)",
+			category: "transform",
+			parameters: {
+				attenuation: {
+					type: "knob",
+					value: 30,
+					complete: true,
+					min: 0,
+					max: 100,
+					step: 1,
+					unit: "dB",
+				},
+			},
+			ports: {
+				inputs: [{ id: "in", required: true }],
+				outputs: [{ id: "out" }],
+			},
+			connectedInputs: ["in"],
+			connectedOutputs: ["out"],
+		},
+	},
+	{
+		id: "loudness-normalize",
+		type: "demoNode",
+		position: { x: col(3), y: 0 },
+		data: {
+			name: "Loudness Normalize",
+			category: "transform",
+			parameters: {
+				target: {
+					type: "knob",
+					value: -16,
+					complete: true,
+					min: -50,
+					max: 0,
+					step: 0.1,
+					unit: "LUFS",
+				},
+			},
+			ports: {
+				inputs: [{ id: "in", required: true }],
+				outputs: [{ id: "out" }],
+			},
+			connectedInputs: ["in"],
+			connectedOutputs: ["out"],
+		},
+	},
+	{
+		id: "normalize",
+		type: "demoNode",
+		position: { x: col(4), y: 0 },
+		data: {
+			// Bypassed state — opacity-60.
+			name: "Normalize",
+			category: "transform",
+			bypassed: true,
+			parameters: {
+				ceiling: {
+					type: "knob",
+					value: 1,
+					complete: true,
+					min: 0,
+					max: 1,
+					step: 0.01,
+				},
+			},
+			ports: {
+				inputs: [{ id: "in", required: true }],
+				outputs: [{ id: "out" }],
+			},
+			connectedInputs: ["in"],
+			connectedOutputs: ["out"],
+		},
+	},
+
+	// Mid-pipeline target (snapshot tap) — visually identical to a regular target,
+	// just placed mid-pipeline.
+	{
+		id: "snapshot-tap",
+		type: "demoNode",
+		position: { x: col(3), y: ROW_GAP * 1.2 },
+		data: {
+			name: "Write",
+			category: "target",
+			parameters: {
+				path: {
+					type: "file",
+					value: "after-denoise.wav",
+					complete: true,
+					mode: "save",
+				},
+				bitDepth: {
+					type: "buttonSelection",
+					value: "24",
+					complete: true,
+					options: ["16", "24", "32", "32f"],
+				},
+			},
+			ports: {
+				inputs: [{ id: "in", required: true }],
+				outputs: [],
+			},
+			connectedInputs: ["in"],
+		},
+	},
+
+	// VST3 — the real `transforms/vst3/` node (moduleName "VST3"). Included to
+	// exercise three schema param shapes the other demo nodes don't: nested
+	// `file` fields (`.vst3` / `.vstpreset` paths), a `record` map (Pedalboard
+	// parameter overrides), and an `objectArray` (`stages` — an ordered chain of
+	// plugin stages, each a sub-form). Per the schema: `stages` is a
+	// `z.array(stageSchema).min(1)`; each stage has `pluginPath`, optional
+	// `pluginName` (sub-plugin name for multi-plugin shells like WaveShell),
+	// optional `presetPath`, and an optional `parameters` record. The node's
+	// `vstHostPath` is a managed binary, so — like the Read/Write ffmpeg paths —
+	// it is omitted from the node body. A wider panel fits the nested editor.
+	{
+		id: "vst3",
+		type: "demoNode",
+		position: { x: col(5), y: 0 },
+		data: {
+			name: "VST3",
+			category: "transform",
+			width: 340,
+			parameters: {
+				stages: {
+					type: "objectArray",
+					complete: true,
+					itemNoun: "Stage",
+					// Shape of a freshly-added stage — a stage needs a plugin, so a new
+					// one's `pluginPath` starts incomplete (coral label).
+					itemTemplate: {
+						pluginPath: {
+							type: "file",
+							value: "",
+							complete: false,
+							accept: ".vst3",
+							mode: "open",
+						},
+						pluginName: { type: "input", value: "", complete: true },
+						presetPath: {
+							type: "file",
+							value: "",
+							complete: true,
+							accept: ".vstpreset",
+							mode: "open",
+						},
+						parameters: {
+							type: "record",
+							value: [],
+							complete: true,
+							keyPlaceholder: "parameter",
+							valuePlaceholder: "value",
+						},
+					},
+					value: [
+						{
+							pluginPath: {
+								type: "file",
+								value:
+									"C:/Program Files/Common Files/VST3/FabFilter Pro-Q 3.vst3",
+								complete: true,
+								accept: ".vst3",
+								mode: "open",
+							},
+							pluginName: { type: "input", value: "", complete: true },
+							presetPath: {
+								type: "file",
+								value: "presets/vocal-eq.vstpreset",
+								complete: true,
+								accept: ".vstpreset",
+								mode: "open",
+							},
+							parameters: {
+								type: "record",
+								complete: true,
+								keyPlaceholder: "parameter",
+								valuePlaceholder: "value",
+								value: [
+									{ key: "Output Gain", value: "-1.5" },
+									{ key: "Quality", value: "High" },
+								],
+							},
+						},
+						{
+							pluginPath: {
+								type: "file",
+								value:
+									"C:/Program Files/Common Files/VST3/WaveShell1-VST3 14.0.vst3",
+								complete: true,
+								accept: ".vst3",
+								mode: "open",
+							},
+							pluginName: {
+								type: "input",
+								value: "Renaissance Compressor",
+								complete: true,
+							},
+							presetPath: {
+								type: "file",
+								value: "",
+								complete: true,
+								accept: ".vstpreset",
+								mode: "open",
+							},
+							parameters: {
+								type: "record",
+								complete: true,
+								keyPlaceholder: "parameter",
+								valuePlaceholder: "value",
+								value: [{ key: "Threshold", value: "-18" }],
+							},
+						},
+					],
+				},
+			},
+			ports: {
+				inputs: [{ id: "in", required: true }],
+				outputs: [{ id: "out" }],
+			},
+			connectedInputs: ["in"],
+			connectedOutputs: ["out"],
+		},
+	},
+
+	// Final target
+	{
+		id: "write-final",
+		type: "demoNode",
+		position: { x: col(7), y: 0 },
+		data: {
+			name: "Write",
+			category: "target",
+			parameters: {
+				path: {
+					type: "file",
+					value: "podcast-clean.wav",
+					complete: true,
+					mode: "save",
+				},
+				bitDepth: {
+					type: "buttonSelection",
+					value: "24",
+					complete: true,
+					options: ["16", "24", "32", "32f"],
+				},
+			},
+			ports: {
+				inputs: [{ id: "in", required: true }],
+				outputs: [],
+			},
+			connectedInputs: ["in"],
+		},
+	},
 ];
 
-const demoEdges: Array<Edge<AudioEdgeData>> = [
-  // Source connections
-  { id: "e-podcast-loudness", source: "read-podcast", target: "loudness", sourceHandle: "source", targetHandle: "target", type: "audioEdge", data: { state: "complete" } },
-  { id: "e-interview-loudness", source: "read-interview", target: "loudness", sourceHandle: "source", targetHandle: "target", type: "audioEdge", data: { state: "complete" } },
-  { id: "e-voiceover-loudness", source: "read-voiceover", target: "loudness", sourceHandle: "source", targetHandle: "target", type: "audioEdge", data: { state: "idle" } },
-  // Chain
-  { id: "e-loudness-declick", source: "loudness", target: "declick", sourceHandle: "source", targetHandle: "target", type: "audioEdge", data: { state: "complete" } },
-  { id: "e-declick-breath", source: "declick", target: "breath", sourceHandle: "source", targetHandle: "target", type: "audioEdge", data: { state: "active" } },
-  { id: "e-breath-dereverb", source: "breath", target: "dereverb", sourceHandle: "source", targetHandle: "target", type: "audioEdge", data: { state: "idle" } },
-  { id: "e-dereverb-denoise", source: "dereverb", target: "denoise", sourceHandle: "source", targetHandle: "target", type: "audioEdge", data: { state: "idle" } },
-  { id: "e-denoise-write", source: "denoise", target: "write", sourceHandle: "source", targetHandle: "target", type: "audioEdge", data: { state: "idle" } },
+const demoEdges: Array<Edge> = [
+	{
+		id: "e-read1-gain",
+		source: "read-1",
+		target: "gain",
+		sourceHandle: "out",
+		targetHandle: "in",
+		type: "demoEdge",
+	},
+	{
+		id: "e-read2-gain",
+		source: "read-2",
+		target: "gain",
+		sourceHandle: "out",
+		targetHandle: "in",
+		type: "demoEdge",
+	},
+	{
+		id: "e-gain-deepfilter",
+		source: "gain",
+		target: "deepfilter",
+		sourceHandle: "out",
+		targetHandle: "in",
+		type: "demoEdge",
+	},
+	{
+		id: "e-deepfilter-loudness",
+		source: "deepfilter",
+		target: "loudness-normalize",
+		sourceHandle: "out",
+		targetHandle: "in",
+		type: "demoEdge",
+	},
+	{
+		id: "e-deepfilter-snapshot",
+		source: "deepfilter",
+		target: "snapshot-tap",
+		sourceHandle: "out",
+		targetHandle: "in",
+		type: "demoEdge",
+	},
+	{
+		id: "e-loudness-normalize",
+		source: "loudness-normalize",
+		target: "normalize",
+		sourceHandle: "out",
+		targetHandle: "in",
+		type: "demoEdge",
+	},
+	{
+		id: "e-normalize-vst3",
+		source: "normalize",
+		target: "vst3",
+		sourceHandle: "out",
+		targetHandle: "in",
+		type: "demoEdge",
+	},
+	{
+		id: "e-vst3-write",
+		source: "vst3",
+		target: "write-final",
+		sourceHandle: "out",
+		targetHandle: "in",
+		type: "demoEdge",
+	},
 ];
 
 export { demoNodes, demoEdges };
-export type { AudioNodeData, AudioEdgeData, Parameter, NumberParameter, NodeState, NodeCategory };
+export type { DemoNodeData };

@@ -1,4 +1,13 @@
 @import "tailwindcss";
+
+/* Tailwind v4 only scans files in the current project root by default. The
+   design-system package's component sources (Button.tsx, IconButton.tsx, etc.)
+   live in a sibling workspace and contain utilities — `p-2.5`, `p-3`, `px-5`
+   etc. — that the demo never references directly. Without this @source line
+   those utilities silently fail to generate (the class is set on the element
+   but no CSS rule exists), which produces buttons with `padding: 0`. */
+@source "../../../packages/design-system/src/**/*.{ts,tsx}";
+
 @import "@buffered-audio/design-system/css/tokens.css";
 @import "@buffered-audio/design-system/css/base.css";
 @import "@buffered-audio/design-system/css/utilities.css";

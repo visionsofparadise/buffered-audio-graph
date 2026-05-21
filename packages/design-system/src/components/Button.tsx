@@ -1,55 +1,55 @@
+import type { LucideIcon } from "lucide-react";
 import { cn } from "../cn";
 
-export interface ButtonProps extends React.ComponentProps<"button"> {
-  readonly variant?: "primary" | "secondary" | "ghost";
-  readonly size?: "sm" | "default" | "lg" | "xl";
+export interface ButtonProps extends React.ComponentPropsWithRef<"button"> {
+	readonly variant?: "default" | "outline" | "ghost";
+	readonly size?: "sm" | "md" | "lg";
+	/** Optional leading Lucide icon, rendered before the label. */
+	readonly icon?: LucideIcon;
 }
 
 const sizeStyles = {
-  sm: "px-1.5 py-0.5 text-[length:var(--text-xs)]",
-  default: "px-2 py-1 text-[length:var(--text-sm)]",
-  lg: "px-3 py-1.5 text-[length:var(--text-base)]",
-  xl: "px-4 py-2 text-[length:var(--text-md)]",
+	sm: "px-2.5 py-1 text-label",
+	md: "px-4 py-2 text-xs",
+	lg: "px-5 py-2.5 text-body",
 };
 
-export function Button({ variant = "primary", size = "default", className, children, ...props }: ButtonProps) {
-  if (variant === "ghost") {
-    return (
-      <button
-        type="button"
-        {...props}
-        className={cn(
-          "font-technical uppercase tracking-[0.06em] text-chrome-text-secondary hover:text-chrome-text",
-          sizeStyles[size],
-          props.disabled && "text-chrome-text-dim cursor-not-allowed",
-          className,
-        )}
-      >
-        {children}
-      </button>
-    );
-  }
+const iconSizes = {
+	sm: 14,
+	md: 16,
+	lg: 18,
+};
 
-  return (
-    <button
-      type="button"
-      {...props}
-      className={cn(
-        "flex items-center font-technical uppercase tracking-[0.06em]",
-        sizeStyles[size],
-        variant === "primary" && "text-void",
-        variant === "secondary" && "text-chrome-text",
-        props.disabled && "text-chrome-text-dim cursor-not-allowed",
-        className,
-      )}
-    >
-      <span className={cn(
-        "flex items-center",
-        variant === "primary" && "bg-primary",
-        variant === "secondary" && "bg-secondary",
-      )}>
-        {children}
-      </span>
-    </button>
-  );
+const variantStyles = {
+	default: "bg-text-primary text-surface",
+	outline: "bg-elevated text-text-primary",
+	ghost: "text-text-secondary hover:text-text-primary",
+};
+
+export function Button({
+	variant = "default",
+	size = "md",
+	icon: Icon,
+	className,
+	children,
+	type = "button",
+	...props
+}: ButtonProps) {
+	return (
+		<button
+			type={type}
+			{...props}
+			className={cn(
+				"type-label inline-flex items-center justify-center rounded-none",
+				Icon && "gap-2",
+				sizeStyles[size],
+				variantStyles[variant],
+				props.disabled && "text-dimmed cursor-not-allowed",
+				className,
+			)}
+		>
+			{Icon && <Icon size={iconSizes[size]} strokeWidth={1.5} aria-hidden="true" />}
+			{children}
+		</button>
+	);
 }
