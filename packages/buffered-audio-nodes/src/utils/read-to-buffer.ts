@@ -1,14 +1,17 @@
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import type * as Wavefile from "wavefile";
+import wavefileExports from "wavefile/dist/wavefile";
 import { ChunkBuffer, type SourceMetadata } from "@buffered-audio/core";
 
-// wavefile interop: the package ships a CJS `main` (works under Node ESM, scratch
-// .mjs, tsx via Node resolver) and an ESM `module` with no default export (works
-// for esbuild/Vite bundling). No single ESM import statement satisfies both.
-// `createRequire` resolves to the CJS entry consistently across all runtimes
-// (esbuild bundle, tsup-noExternal bundle, tsx, Node ESM, vitest/Vite).
-const { WaveFile } = createRequire(import.meta.url)("wavefile") as typeof Wavefile;
+// wavefile@11 ships a CJS `main` (./dist/wavefile.js) and an ESM `module`
+// (./index.js) whose export shapes differ — a bare "wavefile" import resolves
+// to different entries per tool (esbuild/tsx/Node pick `main`, Vite/vitest pick
+// `module`), so no single bare import works everywhere. Importing the CJS entry
+// by explicit path resolves identically across every runtime AND lets tsup's
+// `noExternal` bundle it into dist/. A `createRequire` runtime require cannot be
+// bundled by esbuild — that is what left `wavefile` unresolved at load time
+// when the package is consumed as a dependency-less `pacote` extract.
+const { WaveFile } = wavefileExports as typeof Wavefile;
 
 export interface WavSamples {
 	readonly samples: Array<Float32Array>;
