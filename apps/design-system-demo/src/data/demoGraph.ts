@@ -16,9 +16,9 @@ import type { DemoNodeData } from "../components/graph/types";
  *  - Bypassed node: `Normalize` (`bypassed: true`, `opacity-60`)
  *  - Incomplete-param node: the second `Read` (its `path` is blank and the
  *    param is flagged `complete: false`, so its label renders coral)
- *  - `file`, `record`, and `objectArray` param shapes: the `VST3` transform
- *    node — its `stages` array, where each stage is a sub-form with `.vst3` /
- *    `.vstpreset` file paths and a `parameters` key/value map
+ *  - `file` and `objectArray` param shapes: the `VST3` transform node — its
+ *    `stages` array, where each stage is a sub-form with `.vst3` / `.vstpreset`
+ *    file paths
  *
  * Schema-derived param mappings (from `packages/buffered-audio-nodes/src/.../index.ts`):
  *  - `Read.path`   → `file`  (string, `meta.input: "file"`)
@@ -32,7 +32,6 @@ import type { DemoNodeData } from "../components/graph/types";
  *  - `VST3` stage `pluginPath` → `file`   (`.vst3` plugin path)
  *  - `VST3` stage `pluginName` → `input`  (optional sub-plugin name, for shells)
  *  - `VST3` stage `presetPath` → `file`   (optional `.vstpreset` state file)
- *  - `VST3` stage `parameters` → `record` (Pedalboard parameter-name → value map)
  *
  * Managed-binary path fields (`modelPath`, `ffmpegPath`, `onnxAddonPath`, VST3's
  * `vstHostPath`, etc.) and other non-graph-editor schema fields are intentionally
@@ -231,15 +230,13 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 	},
 
 	// VST3 — the real `transforms/vst3/` node (moduleName "VST3"). Included to
-	// exercise three schema param shapes the other demo nodes don't: nested
-	// `file` fields (`.vst3` / `.vstpreset` paths), a `record` map (Pedalboard
-	// parameter overrides), and an `objectArray` (`stages` — an ordered chain of
-	// plugin stages, each a sub-form). Per the schema: `stages` is a
-	// `z.array(stageSchema).min(1)`; each stage has `pluginPath`, optional
-	// `pluginName` (sub-plugin name for multi-plugin shells like WaveShell),
-	// optional `presetPath`, and an optional `parameters` record. The node's
-	// `vstHostPath` is a managed binary, so — like the Read/Write ffmpeg paths —
-	// it is omitted from the node body. A wider panel fits the nested editor.
+	// exercise two schema param shapes the other demo nodes don't: nested `file`
+	// fields (`.vst3` / `.vstpreset` paths) and an `objectArray` (`stages` — an
+	// ordered chain of plugin stages, each a sub-form). Per the schema: `stages`
+	// is a `z.array(stageSchema).min(1)`; each stage has `pluginPath`, optional
+	// `pluginName` (sub-plugin name for multi-plugin shells like WaveShell), and
+	// optional `presetPath`. The node's `vstHostPath` is a managed binary, so —
+	// like the Read/Write ffmpeg paths — it is omitted from the node body.
 	{
 		id: "vst3",
 		type: "demoNode",
@@ -247,7 +244,7 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 		data: {
 			name: "VST3",
 			category: "transform",
-			width: 340,
+			width: 300,
 			parameters: {
 				stages: {
 					type: "objectArray",
@@ -271,13 +268,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 							accept: ".vstpreset",
 							mode: "open",
 						},
-						parameters: {
-							type: "record",
-							value: [],
-							complete: true,
-							keyPlaceholder: "parameter",
-							valuePlaceholder: "value",
-						},
 					},
 					value: [
 						{
@@ -296,16 +286,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 								complete: true,
 								accept: ".vstpreset",
 								mode: "open",
-							},
-							parameters: {
-								type: "record",
-								complete: true,
-								keyPlaceholder: "parameter",
-								valuePlaceholder: "value",
-								value: [
-									{ key: "Output Gain", value: "-1.5" },
-									{ key: "Quality", value: "High" },
-								],
 							},
 						},
 						{
@@ -328,13 +308,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 								complete: true,
 								accept: ".vstpreset",
 								mode: "open",
-							},
-							parameters: {
-								type: "record",
-								complete: true,
-								keyPlaceholder: "parameter",
-								valuePlaceholder: "value",
-								value: [{ key: "Threshold", value: "-18" }],
 							},
 						},
 					],

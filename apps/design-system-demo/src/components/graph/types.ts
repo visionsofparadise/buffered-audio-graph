@@ -20,7 +20,6 @@ export type ParamType =
 	| "select"
 	| "input"
 	| "file"
-	| "record"
 	| "objectArray";
 
 export interface NumberParam {
@@ -67,25 +66,6 @@ export interface FileParam {
 	readonly mode?: "open" | "save";
 }
 
-/** One key/value entry of a `RecordParam`. */
-export interface RecordEntry {
-	readonly key: string;
-	readonly value: string;
-}
-
-/**
- * A param that is a string-keyed map of scalar values — a schema `z.record()`
- * field (e.g. a VST3 stage's `parameters` overrides). Rendered as an editable
- * list of key/value rows.
- */
-export interface RecordParam {
-	readonly type: "record";
-	readonly value: ReadonlyArray<RecordEntry>;
-	readonly complete: boolean;
-	readonly keyPlaceholder?: string;
-	readonly valuePlaceholder?: string;
-}
-
 /**
  * A param that is an array of sub-forms — a schema `z.array(z.object(...))`
  * field (e.g. the VST3 node's `stages`). Each element is itself a set of
@@ -107,7 +87,6 @@ export type Param =
 	| SelectParam
 	| InputParam
 	| FileParam
-	| RecordParam
 	| ObjectArrayParam;
 
 export interface PortDef {

@@ -21,7 +21,6 @@ import type {
 	SelectParam,
 	InputParam,
 	FileParam,
-	RecordParam,
 	ObjectArrayParam,
 	PortDef,
 } from "./types";
@@ -213,9 +212,9 @@ function freshListRowId(): string {
 }
 
 /**
- * Small "add a row" affordance shared by the record and object-array editors.
- * A thin wrapper over the `Button` `ghost` variant with a leading `Plus` icon —
- * left-aligned to its row via `self-start`.
+ * Small "add a row" affordance for the object-array editor. A thin wrapper over
+ * the `Button` `ghost` variant with a leading `Plus` icon — left-aligned to its
+ * row via `self-start`.
  */
 function AddRowButton({
 	label,
@@ -234,73 +233,6 @@ function AddRowButton({
 		>
 			{label}
 		</Button>
-	);
-}
-
-/**
- * RecordControl — editor for a `record` param (a string-keyed scalar map, e.g.
- * a VST3 stage's `parameters`). Each entry is a `[key] [value] [remove]` row.
- */
-function RecordControl({ param }: { readonly param: RecordParam }) {
-	const [entries, setEntries] = useState(() =>
-		param.value.map((entry) => ({
-			id: freshListRowId(),
-			key: entry.key,
-			value: entry.value,
-		})),
-	);
-
-	return (
-		<div className="flex flex-col gap-1.5">
-			{entries.map((entry) => (
-				<div key={entry.id} className="flex items-center gap-1">
-					<Input
-						type="text"
-						value={entry.key}
-						placeholder={param.keyPlaceholder}
-						onChange={(next) => {
-							setEntries(
-								entries.map((row) =>
-									row.id === entry.id ? { ...row, key: next } : row,
-								),
-							);
-						}}
-						className="min-w-0 flex-1"
-					/>
-					<Input
-						type="text"
-						value={entry.value}
-						placeholder={param.valuePlaceholder}
-						onChange={(next) => {
-							setEntries(
-								entries.map((row) =>
-									row.id === entry.id ? { ...row, value: next } : row,
-								),
-							);
-						}}
-						className="min-w-0 flex-1"
-					/>
-					<IconButton
-						icon={X}
-						label="Remove entry"
-						variant="ghost"
-						size="sm"
-						onClick={() => {
-							setEntries(entries.filter((row) => row.id !== entry.id));
-						}}
-					/>
-				</div>
-			))}
-			<AddRowButton
-				label="Add"
-				onClick={() => {
-					setEntries([
-						...entries,
-						{ id: freshListRowId(), key: "", value: "" },
-					]);
-				}}
-			/>
-		</div>
 	);
 }
 
@@ -430,25 +362,20 @@ function ParamRow({
 				/>
 			);
 			break;
-		case "record":
-			control = <RecordControl param={param} />;
-			break;
 		case "objectArray":
 			control = <ObjectArrayControl param={param} />;
 			break;
 	}
 
 	// Knobs and Toggles render compact and align well in a single horizontal row.
-	// Faders, Selects, ButtonSelections, Inputs, file fields, record editors, and
-	// object-array editors need a stacked layout so the control can take the
-	// full row width.
+	// Faders, Selects, ButtonSelections, Inputs, file fields, and object-array
+	// editors need a stacked layout so the control can take the full row width.
 	const stacked =
 		param.type === "fader" ||
 		param.type === "select" ||
 		param.type === "buttonSelection" ||
 		param.type === "input" ||
 		param.type === "file" ||
-		param.type === "record" ||
 		param.type === "objectArray";
 
 	if (stacked) {
