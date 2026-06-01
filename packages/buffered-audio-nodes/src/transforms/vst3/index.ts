@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
-import { processStreamingThroughVstHost, spawnVstHost, writeStagesJson, type VstHostHandle, type VstStage } from "./utils/process";
+import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
 
 export const stageSchema = z.object({
 	pluginPath: z
@@ -113,15 +113,16 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 			String(channels),
 		];
 
-		const handle: VstHostHandle = spawnVstHost(this.properties.vstHostPath, args);
-
-		try {
-			await handle.ready;
-		} catch (error) {
-			handle.proc.kill();
-
-			throw error;
-		}
+		// iZotope plugins (Neutron especially) intermittently crash vst-host
+		// during plugin init (Windows 0xC0000005, exit 3221225477) before any
+		// audio is written — non-deterministic. `spawnVstHostReady` re-spawns on
+		// that crash (safe: pre-stdin, so idempotent) and fails fast on the
+		// wrapper's deterministic errors. See design-vst3.md (2026-06-01).
+		const handle = await spawnVstHostReady(this.properties.vstHostPath, args, {
+			onRetry: (failedAttempt, error) => {
+				console.error(`[vst3] vst-host init crash on attempt ${failedAttempt}, retrying: ${error.message}`);
+			},
+		});
 
 		// vst-host's Pedalboard-offline protocol needs the full interleaved
 		// input on stdin before any output is produced (whole-chain plugin

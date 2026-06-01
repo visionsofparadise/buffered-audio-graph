@@ -1,7 +1,11 @@
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { ChunkBuffer, type StreamContext } from "@buffered-audio/core";
 import { Vst3Stream } from ".";
+import { spawnVstHostReady, VstHostExitedBeforeReadyError } from "./utils/process";
 
 // Stub binary mimics the real `vst-host` whole-file CLI shape: parses
 // --stages-json/--sample-rate/--channels, prints READY, echoes stdin → stdout.
@@ -10,6 +14,26 @@ import { Vst3Stream } from ".";
 // teardown lifecycle without needing the PyInstaller bundle, but DOES spawn a
 // real subprocess — hence "integration", not "unit".
 const stubBinary = fileURLToPath(new URL("./__fixtures__/stub-binary.mjs", import.meta.url));
+
+// Crash-then-ready stub: crashes (exits before READY) for the first N spawns,
+// then behaves like stubBinary. Spawn count tracked in a per-test counter file.
+const crashBinary = fileURLToPath(new URL("./__fixtures__/crash-then-ready.mjs", import.meta.url));
+
+const newCounterFile = async (): Promise<string> => join(await mkdtemp(join(tmpdir(), "vst3-retry-")), "count");
+const readCount = async (path: string): Promise<number> => {
+	try {
+		return Number.parseInt(await readFile(path, "utf-8"), 10) || 0;
+	} catch {
+		return 0;
+	}
+};
+const writeStagesFile = async (): Promise<string> => {
+	const path = join(await mkdtemp(join(tmpdir(), "vst3-stages-")), "stages.json");
+
+	await writeFile(path, JSON.stringify([{ pluginPath: "x" }]));
+
+	return path;
+};
 
 const buildContext = (): StreamContext => ({
 	executionProviders: ["cpu"],
@@ -106,5 +130,63 @@ describe("Vst3Stream subprocess lifecycle", () => {
 
 		await stream._teardown();
 		await buffer.close();
+	}, 30_000);
+});
+
+describe("Vst3Stream init-crash retry", () => {
+	it("re-spawns past a non-deterministic init crash and processes cleanly", async () => {
+		// vst-host crashes (exits 3221225477 before READY) on the first 2 spawns,
+		// succeeds on the 3rd. The buffer must still round-trip through the echo
+		// stub — the retry is transparent to processing.
+		const counter = await newCounterFile();
+		const stream = new Vst3Stream({
+			vstHostPath: process.execPath,
+			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
+			extraArgs: [crashBinary, "--crash-file", counter, "--crash-count", "2", "--crash-code", "3221225477"],
+			bufferSize: Infinity,
+			overlap: 0,
+		});
+
+		await stream.setup(dummyInput(), buildContext());
+
+		const frames = 2048;
+		const samples: Array<Float32Array> = [Float32Array.from({ length: frames }, (_, i) => i / frames)];
+		const buffer = await populate(samples);
+		const before = Float32Array.from(samples[0]!);
+
+		await stream._process(buffer);
+
+		const after = await buffer.read(buffer.frames);
+
+		expect(after.samples[0]!.length).toBe(frames);
+
+		for (let i = 0; i < frames; i++) {
+			expect(after.samples[0]![i]).toBeCloseTo(before[i]!, 6);
+		}
+
+		expect(await readCount(counter)).toBe(3); // 2 crashed spawns + 1 success
+
+		await stream._teardown();
+		await buffer.close();
+	}, 30_000);
+
+	it("exhausts maxAttempts on a persistent crash and rejects with the typed error", async () => {
+		const counter = await newCounterFile();
+		const stagesPath = await writeStagesFile();
+		const args = [crashBinary, "--crash-file", counter, "--crash-count", "10", "--crash-code", "3221225477", "--stages-json", stagesPath, "--sample-rate", "48000", "--channels", "1"];
+
+		await expect(spawnVstHostReady(process.execPath, args, { maxAttempts: 3, backoffMs: 0 })).rejects.toBeInstanceOf(VstHostExitedBeforeReadyError);
+
+		expect(await readCount(counter)).toBe(3); // exactly maxAttempts spawns, no more
+	}, 30_000);
+
+	it("does not retry a deterministic wrapper error (exit code 2)", async () => {
+		const counter = await newCounterFile();
+		const stagesPath = await writeStagesFile();
+		const args = [crashBinary, "--crash-file", counter, "--crash-count", "10", "--crash-code", "2", "--stages-json", stagesPath, "--sample-rate", "48000", "--channels", "1"];
+
+		await expect(spawnVstHostReady(process.execPath, args, { maxAttempts: 5, backoffMs: 0 })).rejects.toBeInstanceOf(VstHostExitedBeforeReadyError);
+
+		expect(await readCount(counter)).toBe(1); // failed fast — single spawn, no retries
 	}, 30_000);
 });
