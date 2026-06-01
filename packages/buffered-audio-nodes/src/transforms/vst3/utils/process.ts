@@ -51,6 +51,26 @@ const READY_LINE = "READY\n";
 const READY_TIMEOUT_MS = 300_000;
 
 /**
+ * Rejection of {@link VstHostHandle.ready} when the subprocess exits before
+ * printing `READY` — it died during plugin load/init, before any audio was
+ * written. Carries the structured exit `code` so callers can distinguish a
+ * hard native crash (e.g. an iZotope `0xC0000005` access violation, exit code
+ * `3221225477`) from the wrapper's own clean error exits (1 = plugin/preset
+ * load failure, 2 = bad CLI args).
+ */
+export class VstHostExitedBeforeReadyError extends Error {
+	readonly code: number | null;
+	readonly stderr: string;
+
+	constructor(code: number | null, stderr: string) {
+		super(`vst-host exited before READY (code ${code ?? "null"}): ${stderr}`);
+		this.name = "VstHostExitedBeforeReadyError";
+		this.code = code;
+		this.stderr = stderr;
+	}
+}
+
+/**
  * Spawn the vst-host subprocess and resolve `ready` once the wrapper prints
  * `READY\n` on stdout. Stderr is captured into `stderrChunks` for diagnostics.
  *
@@ -121,7 +141,7 @@ export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): V
 		const onClose = (code: number | null): void => {
 			const stderrOutput = Buffer.concat(stderrChunks).toString();
 
-			fail(new Error(`vst-host exited before READY (code ${code ?? "null"}): ${stderrOutput}`));
+			fail(new VstHostExitedBeforeReadyError(code, stderrOutput));
 		};
 
 		const timer = setTimeout(() => {
@@ -138,6 +158,71 @@ export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): V
 	});
 
 	return { proc, stdin, stdout, stderr, ready, stderrChunks };
+}
+
+/**
+ * Exit codes `vst-host` uses for its own *deterministic* errors: 0 = clean,
+ * 1 = plugin/preset load failure, 2 = bad CLI args. A before-READY exit with
+ * any other code (including `null` from a signal, or a native crash code like
+ * `3221225477` = `0xC0000005`) is a non-deterministic init crash, safe to
+ * retry — the crash always precedes any stdin write, so re-spawning is
+ * idempotent.
+ */
+const CLEAN_WRAPPER_EXIT_CODES: ReadonlySet<number> = new Set([0, 1, 2]);
+
+function isRetryableInitCrash(error: unknown): error is VstHostExitedBeforeReadyError {
+	return error instanceof VstHostExitedBeforeReadyError && !CLEAN_WRAPPER_EXIT_CODES.has(error.code ?? -1);
+}
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+export interface SpawnVstHostReadyOptions {
+	/** Total spawn attempts before giving up (default 5). */
+	readonly maxAttempts?: number;
+	/** Delay between a crash and the next spawn, in ms (default 750). */
+	readonly backoffMs?: number;
+	/** Invoked before each retry with the 1-based attempt that just failed. */
+	readonly onRetry?: (failedAttempt: number, error: VstHostExitedBeforeReadyError) => void;
+}
+
+/**
+ * Spawn `vst-host` and resolve once it prints `READY`, retrying the spawn on a
+ * non-deterministic init crash (see {@link isRetryableInitCrash}).
+ *
+ * iZotope plugins (Neutron especially) intermittently crash the subprocess
+ * during plugin init with a Windows access violation (`0xC0000005`, exit code
+ * `3221225477`) — non-deterministic, and always before `READY`, so no audio
+ * has been written and re-spawning is safe. Deterministic failures (bad
+ * plugin path / preset = exit 1, bad args = exit 2) and the `READY` timeout
+ * are NOT retried — they would fail identically on every attempt.
+ *
+ * Returns a live handle whose `ready` has already resolved; the caller then
+ * drives stdin/stdout as usual.
+ */
+export async function spawnVstHostReady(binaryPath: string, args: ReadonlyArray<string>, options: SpawnVstHostReadyOptions = {}): Promise<VstHostHandle> {
+	const maxAttempts = options.maxAttempts ?? 5;
+	const backoffMs = options.backoffMs ?? 750;
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		const handle = spawnVstHost(binaryPath, args);
+
+		try {
+			await handle.ready;
+
+			return handle;
+		} catch (error) {
+			handle.proc.kill();
+
+			if (attempt >= maxAttempts || !isRetryableInitCrash(error)) throw error;
+
+			options.onRetry?.(attempt, error);
+			await delay(backoffMs);
+		}
+	}
+
+	// Unreachable for maxAttempts >= 1: the loop returns a ready handle or
+	// throws above. Guards the degenerate maxAttempts < 1 case explicitly.
+	throw new Error(`spawnVstHostReady: exhausted ${maxAttempts} attempts without a result`);
 }
 
 /**
