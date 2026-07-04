@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ChunkBuffer } from "./chunk-buffer";
-import { pack, unpack, validateGraphDefinition, type NodeRegistry } from "./graph-format";
+import { pack, renderGraph, substituteParameters, unpack, validateGraphDefinition, type GraphDefinition, type NodeRegistry } from "./graph-format";
 import type { AudioChunk, BufferedAudioNode } from "./node";
 import type { SourceMetadata } from "./source";
 import { BufferedSourceStream, SourceNode } from "./source";
@@ -271,13 +271,6 @@ describe("Graph executor", () => {
 	});
 
 	it("unpack applies node schema defaults to bag parameters omitting a defaulted field", () => {
-		// Regression: a bag node that sets only some parameters (e.g.
-		// crestReduce with just `smoothing`) must instantiate with the
-		// schema's `.default()`s applied — symmetric with `pack()` /
-		// the convenience constructors. Before the fix `unpack` did
-		// `new NodeClass(nodeDef.parameters)` raw, so an omitted defaulted
-		// param stayed `undefined` (crestReduce: frameSize→hopSize→
-		// frameCount NaN → `new Array(NaN)` RangeError on whole-file flush).
 		class DefaultingTransformNode extends TransformNode {
 			static readonly packageName = "test";
 			static readonly moduleName = "defaulting-transform";
@@ -324,5 +317,244 @@ describe("Graph executor", () => {
 
 		expect(transform?.properties.frameSize).toBe(2048); // schema default applied
 		expect(transform?.properties.smoothing).toBe(30); // explicit value preserved
+	});
+});
+
+function templatedDefinition(nodes: GraphDefinition["nodes"]): GraphDefinition {
+	return { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", name: "Test", nodes, edges: [] };
+}
+
+describe("substituteParameters", () => {
+	it("substitutes embedded, multi-placeholder, and deeply nested string values", () => {
+		const definition = templatedDefinition([
+			{
+				id: "a",
+				packageName: "test",
+				packageVersion: "1.0.0",
+				nodeName: "read",
+				parameters: {
+					path: "{{episode}}/{{inputFile}}.wav",
+					chain: [{ plugin: { preset: "{{preset}}" } }, "{{tail}}"],
+					literal: "no-placeholders",
+					count: 5,
+				},
+			},
+		]);
+
+		const result = substituteParameters(definition, { episode: "e260", inputFile: "raw", preset: "warm", tail: "end" });
+		const parameters = result.nodes[0]?.parameters as Record<string, unknown>;
+
+		expect(parameters.path).toBe("e260/raw.wav");
+		expect(parameters.chain).toEqual([{ plugin: { preset: "warm" } }, "end"]);
+		expect(parameters.literal).toBe("no-placeholders");
+		expect(parameters.count).toBe(5);
+	});
+
+	it("does not mutate the input definition", () => {
+		const definition = templatedDefinition([
+			{
+				id: "a",
+				packageName: "test",
+				packageVersion: "1.0.0",
+				nodeName: "read",
+				parameters: { path: "{{episode}}/in.wav", nested: { key: "{{episode}}" }, list: ["{{episode}}"] },
+			},
+		]);
+		const snapshot = structuredClone(definition);
+
+		substituteParameters(definition, { episode: "e260" });
+
+		expect(definition).toEqual(snapshot);
+	});
+
+	it("throws naming every unbound placeholder at once", () => {
+		const definition = templatedDefinition([
+			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{one}}/{{two}}/{{three}}.wav" } },
+		]);
+
+		expect(() => substituteParameters(definition, { two: "x" })).toThrow(/unbound placeholders: one, three/);
+	});
+
+	it("throws naming an unknown provided parameter", () => {
+		const definition = templatedDefinition([
+			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{used}}.wav" } },
+		]);
+
+		expect(() => substituteParameters(definition, { used: "x", extra: "y" })).toThrow(/unknown parameters: extra/);
+	});
+
+	it("reports both unbound and unknown classes when both occur", () => {
+		const definition = templatedDefinition([
+			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{missing}}.wav" } },
+		]);
+
+		expect(() => substituteParameters(definition, { extra: "y" })).toThrow(/unbound placeholders: missing.*unknown parameters: extra/);
+	});
+
+	it("no placeholders and no parameters is equivalent to the input", () => {
+		const definition = templatedDefinition([
+			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "literal.wav" } },
+		]);
+
+		expect(substituteParameters(definition, {})).toEqual(definition);
+	});
+
+	it("validateGraphDefinition accepts a templated bag", () => {
+		const definition = validateGraphDefinition({
+			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			name: "Test",
+			nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{episode}}/in.wav" } }],
+			edges: [],
+		});
+
+		expect((definition.nodes[0]?.parameters as Record<string, unknown>).path).toBe("{{episode}}/in.wav");
+	});
+
+	it("treats a placeholder colliding with an Object.prototype name as ordinary", () => {
+		const definition = templatedDefinition([
+			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{toString}}.wav" } },
+		]);
+
+		expect((substituteParameters(definition, { toString: "master" }).nodes[0]?.parameters as Record<string, unknown>).path).toBe("master.wav");
+		expect(() => substituteParameters(definition, {})).toThrow(/unbound placeholders: toString/);
+	});
+});
+
+class PathSourceStream extends BufferedSourceStream {
+	override async getMetadata(): Promise<SourceMetadata> {
+		return { sampleRate: 44100, channels: 1 };
+	}
+
+	override async _read(): Promise<AudioChunk | undefined> {
+		if (this.properties.done) return undefined;
+		(this.properties as Record<string, unknown>).done = true;
+		return createChunk(1.0, 0, 10);
+	}
+
+	override async _flush(): Promise<void> {}
+}
+
+class PathSource extends SourceNode {
+	static readonly packageName = "test";
+	static readonly moduleName = "path-source";
+	static override readonly schema = z.object({ path: z.string() });
+
+	readonly type = ["buffered-audio-node", "source", "mock"] as const;
+	get bufferSize(): number { return 0; }
+	get latency(): number { return 0; }
+
+	protected override createStream(): PathSourceStream {
+		return new PathSourceStream(this.properties);
+	}
+
+	clone(): PathSource {
+		return new PathSource(this.properties);
+	}
+}
+
+const capturedPaths: Array<string> = [];
+
+class PathTargetStream extends BufferedTargetStream {
+	override async _write(): Promise<void> {}
+	override async _close(): Promise<void> {
+		capturedPaths.push(this.properties.path as string);
+	}
+}
+
+class PathTarget extends TargetNode {
+	static readonly packageName = "test";
+	static readonly moduleName = "path-target";
+	static override readonly schema = z.object({ path: z.string() });
+
+	readonly type = ["buffered-audio-node", "target", "mock"] as const;
+	get bufferSize(): number { return 0; }
+	get latency(): number { return 0; }
+
+	override createStream(): PathTargetStream {
+		return new PathTargetStream(this.properties as unknown as Record<string, unknown>);
+	}
+
+	clone(): PathTarget {
+		return new PathTarget(this.properties);
+	}
+}
+
+describe("renderGraph parameter substitution", () => {
+	const registry: NodeRegistry = new Map([
+		[
+			"test",
+			new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
+				["path-source", PathSource as never],
+				["path-target", PathTarget as never],
+			]),
+		],
+	]);
+
+	const definition: GraphDefinition = {
+		id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		name: "Test",
+		nodes: [
+			{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "path-source", parameters: { path: "{{dir}}/in.wav" } },
+			{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "path-target", parameters: { path: "{{dir}}/out.wav" } },
+		],
+		edges: [{ from: "s", to: "t" }],
+	};
+
+	it("renders the same definition twice with different parameters, each seeing its own values", async () => {
+		capturedPaths.length = 0;
+
+		await renderGraph(definition, registry, { parameters: { dir: "e260" } });
+		await renderGraph(definition, registry, { parameters: { dir: "e261" } });
+
+		expect(capturedPaths).toEqual(["e260/out.wav", "e261/out.wav"]);
+	});
+
+	it("throws before any stream is created when a required parameter is missing", async () => {
+		capturedPaths.length = 0;
+
+		await expect(renderGraph(definition, registry, { parameters: {} })).rejects.toThrow(/unbound placeholders: dir/);
+		expect(capturedPaths).toHaveLength(0);
+	});
+
+	it("throws the node Zod error when a placeholder resolves into a numeric field", async () => {
+		class CeilingTarget extends TargetNode {
+			static readonly packageName = "test";
+			static readonly moduleName = "ceiling-target";
+			static override readonly schema = z.object({ ceiling: z.number() });
+
+			readonly type = ["buffered-audio-node", "target", "mock"] as const;
+			get bufferSize(): number { return 0; }
+			get latency(): number { return 0; }
+
+			override createStream(): never {
+				throw new Error("not exercised — unpack parse rejects first");
+			}
+
+			clone(): CeilingTarget {
+				return new CeilingTarget(this.properties);
+			}
+		}
+
+		const numericRegistry: NodeRegistry = new Map([
+			[
+				"test",
+				new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
+					["path-source", PathSource as never],
+					["ceiling-target", CeilingTarget as never],
+				]),
+			],
+		]);
+
+		const numericDefinition: GraphDefinition = {
+			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			name: "Test",
+			nodes: [
+				{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "path-source", parameters: { path: "d/in.wav" } },
+				{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "ceiling-target", parameters: { ceiling: "{{c}}" } },
+			],
+			edges: [{ from: "s", to: "t" }],
+		};
+
+		await expect(renderGraph(numericDefinition, numericRegistry, { parameters: { c: "-1" } })).rejects.toThrow();
 	});
 });

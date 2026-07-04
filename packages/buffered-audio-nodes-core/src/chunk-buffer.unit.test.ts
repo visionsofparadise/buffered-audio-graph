@@ -82,7 +82,6 @@ describe("ChunkBuffer", () => {
 
 		const chunk = await buffer.read(4);
 
-		// First two frames overwritten; trailing bytes from the original write preserved.
 		expect(Array.from(chunk.samples[0]!)).toEqual([10, 20, 3, 4]);
 		expect(buffer.frames).toBe(4);
 

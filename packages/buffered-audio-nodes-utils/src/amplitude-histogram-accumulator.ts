@@ -53,8 +53,6 @@ export class AmplitudeHistogramAccumulator {
 
 		if (frames <= 0) return;
 
-		// Validate channel buffer sizes up front so we never partially
-		// consume a malformed chunk.
 		for (let channelIndex = 0; channelIndex < channels.length; channelIndex++) {
 			const channel = channels[channelIndex];
 
@@ -63,9 +61,6 @@ export class AmplitudeHistogramAccumulator {
 			}
 		}
 
-		// First pass: chunk-local max of |x|. Rebucket existing counts if
-		// this chunk widens the range. Rebucketing once per chunk (not per
-		// sample) keeps the cost bounded.
 		let chunkMax = 0;
 
 		for (const channel of channels) {
@@ -80,10 +75,6 @@ export class AmplitudeHistogramAccumulator {
 			this.rebucket(chunkMax);
 		}
 
-		// All-silence so far (no chunk has had a nonzero sample). Defer
-		// bucketing until we have a real range to bin into. Tracking the
-		// count keeps `totalSamples` accurate; on the first nonzero chunk
-		// these samples flush into bucket 0.
 		if (this.bucketMax === 0) {
 			const chunkSamples = channels.length * frames;
 
@@ -128,9 +119,6 @@ export class AmplitudeHistogramAccumulator {
 			return this.cachedResult;
 		}
 
-		// Linear-interpolated median: walk the cumulative count until we
-		// cross totalSamples / 2, then interpolate within that bucket.
-		// Same algorithm as `amplitudeHistogram` in histogram.ts.
 		const target = this.totalSamples / 2;
 		const bucketWidth = this.bucketMax / this.bucketCount;
 		let cumulative = 0;
@@ -167,9 +155,6 @@ export class AmplitudeHistogramAccumulator {
 	 * one new bucket.
 	 */
 	private rebucket(newMax: number): void {
-		// First-time path: no prior buckets to remap. Flush any silent
-		// samples observed before this chunk into bucket 0 — they have
-		// |x| = 0 which falls in [0, newMax / bucketCount).
 		if (this.bucketMax === 0) {
 			if (this.pendingZeros > 0) {
 				this.buckets[0] = (this.buckets[0] ?? 0) + this.pendingZeros;

@@ -217,9 +217,6 @@ export class ChunkBuffer {
 		if (this.writeStream) return this.writeStream;
 
 		const path = this.ensureTempPath();
-		// `r+` opens an existing file without truncating so writes overwrite at
-		// `start` and old bytes past the write region are preserved. `w` is the
-		// only option for the very first write since the file doesn't exist yet.
 		const flags = this.tempFileExists ? "r+" : "w";
 		const ws = createWriteStream(path, { flags, start: this.writePositionByte, highWaterMark: HIGH_WATER_MARK });
 		const finished = new Promise<void>((resolve, reject) => {
@@ -227,8 +224,6 @@ export class ChunkBuffer {
 			ws.once("error", (error) => reject(error));
 		});
 
-		// Suppress unhandled-rejection warning if the error fires before any
-		// caller awaits `flushWrites()` / `clear()` / `close()`.
 		finished.catch(() => undefined);
 
 		this.writeStream = ws;
@@ -297,11 +292,6 @@ export class ChunkBuffer {
 		let collected = 0;
 
 		while (collected < bytesNeeded) {
-			// Drain whatever is buffered. `rs.read(N)` returns null when N
-			// exceeds the buffered length even if the stream is about to end —
-			// using `rs.read()` (no size) returns everything available, which
-			// avoids the busy loop in the "asked for more bytes than the file
-			// contains" case.
 			const chunk = rs.read() as Buffer | null;
 
 			if (chunk !== null) {
@@ -313,7 +303,6 @@ export class ChunkBuffer {
 				} else {
 					chunks.push(chunk.subarray(0, remaining));
 					collected += remaining;
-					// Put the leftover back into the stream's buffer for the next read.
 					rs.unshift(chunk.subarray(remaining));
 				}
 

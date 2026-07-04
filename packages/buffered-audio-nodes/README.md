@@ -63,13 +63,27 @@ export default chain(read("input.wav"), normalize(), trim({ threshold: -60 }), w
 Render a `.bag` (Buffered Audio Graph) file. BAG files are JSON-serialized graph definitions.
 
 ```bash
-npx @buffered-audio/nodes render --bag pipeline.bag
+npx @buffered-audio/nodes render pipeline.bag
 ```
 
-| Flag                        | Description                         |
-| --------------------------- | ----------------------------------- |
-| `--chunk-size <samples>`    | Chunk size in samples               |
-| `--high-water-mark <count>` | Stream backpressure high water mark |
+| Flag                        | Description                                                  |
+| --------------------------- | ----------------------------------------------------------- |
+| `--chunk-size <samples>`    | Chunk size in samples                                       |
+| `--high-water-mark <count>` | Stream backpressure high water mark                         |
+| `--param <name=value>`      | Bind a `{{name}}` template placeholder (repeatable)         |
+
+#### Template parameters
+
+String values in a bag's node `parameters` may contain `{{name}}` placeholders. Each `--param name=value` binds one for that render; the same bag renders different inputs and outputs without editing the file. Every placeholder must be bound, and every `--param` must match a placeholder, or the render fails before any audio work.
+
+```json
+{ "id": "a", "packageName": "@buffered-audio/nodes", "packageVersion": "0.16.0", "nodeName": "Read",  "parameters": { "path": "{{episode}}/raw.wav" } }
+{ "id": "z", "packageName": "@buffered-audio/nodes", "packageVersion": "0.16.0", "nodeName": "Write", "parameters": { "path": "{{episode}}/master.wav" } }
+```
+
+```bash
+npx @buffered-audio/nodes render master.bag --param episode=./e260
+```
 
 ## Nodes
 

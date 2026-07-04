@@ -46,29 +46,18 @@ describe("BidirectionalIir", () => {
 
 			const output = iir.applyBidirectional(input);
 
-			// Far past the step the output should have settled near 1.
 			const tail = output[length - 1] ?? 0;
 			expect(tail).toBeGreaterThan(0.99);
 			expect(tail).toBeLessThan(1.0001);
 
-			// Far before the step the output should be small. Note the
-			// backward pass smears the post-step value into the pre-step
-			// region symmetrically, so this isn't strictly zero — but
-			// well above the step start it should be a small fraction.
 			const head = output[0] ?? 0;
 			expect(Math.abs(head)).toBeLessThan(0.05);
 
-			// Sanity-check the magnitude at the expected -3 dB cutoff.
-			// For the bidirectional pass the user-facing smoothingMs maps
-			// to the cutoff f_c = 1 / (2*pi*tau), tau = smoothingMs/1000.
 			const cutoffHz = 1 / (2 * Math.PI * (smoothingMs / 1000));
 
-			// Reference RMS of an unfiltered sine is sqrt(1/2) ~= 0.7071.
 			const referenceRms = Math.SQRT1_2;
 
 			const magnitudeAt = (frequencyHz: number): number => {
-				// Pick a length that fits at least 8 full cycles so the
-				// central-half RMS is well-defined for low frequencies.
 				const cyclesNeeded = 8;
 				const periodSamples = sampleRate / frequencyHz;
 				const sineLength = Math.max(8192, Math.ceil(periodSamples * cyclesNeeded * 2));
@@ -80,7 +69,6 @@ describe("BidirectionalIir", () => {
 
 				const filtered = iir.applyBidirectional(sine);
 
-				// RMS of the central half — avoid edge transients.
 				const startIdx = Math.floor(sineLength / 4);
 				const endIdx = Math.floor((3 * sineLength) / 4);
 				let sumSq = 0;
@@ -95,21 +83,12 @@ describe("BidirectionalIir", () => {
 
 			const cutoffMagnitude = magnitudeAt(cutoffHz) / referenceRms;
 
-			// At the nominal cutoff f = 1/(2*pi*tau), each individual
-			// pass at tau_pass = sqrt(2)*tau has magnitude
-			// 1/sqrt(1 + (2*pi*f*tau_pass)^2) = 1/sqrt(3). Cascading
-			// two passes squares the magnitude to 1/3 ~= 0.333 — the
-			// continuous-time analytic answer for the bidirectional
-			// pass at this frequency. Tolerance covers discretization
-			// and edge effects from a finite signal.
 			expect(cutoffMagnitude).toBeGreaterThan(0.25);
 			expect(cutoffMagnitude).toBeLessThan(0.45);
 
-			// Far below cutoff should pass essentially unchanged.
 			const lowMagnitude = magnitudeAt(cutoffHz / 8) / referenceRms;
 			expect(lowMagnitude).toBeGreaterThan(0.95);
 
-			// Far above cutoff should be strongly attenuated.
 			const highMagnitude = magnitudeAt(cutoffHz * 50) / referenceRms;
 			expect(highMagnitude).toBeLessThan(0.1);
 		});
@@ -132,10 +111,6 @@ describe("BidirectionalIir", () => {
 
 			const output = iir.applyBidirectional(input);
 
-			// Find the input peak near the middle of the signal (skipping
-			// the IIR settling region) and the nearest output peak. They
-			// should coincide within a small fraction of a period for a
-			// zero-phase filter.
 			const searchCenter = Math.floor(length / 2);
 			const searchHalfWidth = Math.floor(periodSamples / 2);
 
@@ -163,9 +138,6 @@ describe("BidirectionalIir", () => {
 				}
 			}
 
-			// Peaks should align within 1% of a period for a zero-phase
-			// filter (the discretization granularity of peak-finding on
-			// a pure sine alone bounds this to a few samples).
 			const peakOffset = Math.abs(outputPeakIdx - inputPeakIdx);
 			const tolerance = Math.ceil(periodSamples * 0.01);
 			expect(peakOffset).toBeLessThanOrEqual(tolerance);
@@ -267,7 +239,6 @@ describe("BidirectionalIir", () => {
 		const sampleRate = 48000;
 		const smoothingMs = 5;
 
-		// Build a deterministic test fixture.
 		function makeFixture(length: number): Float32Array {
 			const fixture = new Float32Array(length);
 
@@ -295,7 +266,6 @@ describe("BidirectionalIir", () => {
 				expect(forward[frameIdx]).toBe(input[frameIdx]);
 			}
 
-			// In-place backward at smoothingMs = 0 is a no-op.
 			const buffer = Float32Array.from(input);
 
 			iir.applyBackwardPassInPlace(buffer);
@@ -342,8 +312,6 @@ describe("BidirectionalIir", () => {
 
 			iir.applyBackwardPassInPlace(buffer);
 
-			// Buffer mutated (at smoothingMs > 0 the backward pass changes
-			// the contents) — assert at least one sample differs.
 			let anyDelta = false;
 
 			for (let frameIdx = 0; frameIdx < buffer.length; frameIdx++) {
@@ -360,14 +328,9 @@ describe("BidirectionalIir", () => {
 			const iir = new BidirectionalIir({ smoothingMs, sampleRate });
 			const fixture = makeFixture(4096);
 
-			// Reference: whole-array forward pass. Seed state from the first
-			// sample so the result matches `applyBidirectional`'s forward
-			// HALF (which initialises `y` from `output[0]` before the loop).
 			const wholeState = { value: fixture[0] ?? 0 };
 			const wholeOutput = iir.applyForwardPass(fixture, wholeState);
 
-			// Chunked: split at multiple boundaries; concat outputs; assert
-			// equality to whole-array within tight tolerance.
 			for (const splitPoints of [[1024, 2048, 3072], [333, 1000, 2500], [1, 4095], [2048]]) {
 				const chunkedOut = new Float32Array(fixture.length);
 				const chunkedState = { value: fixture[0] ?? 0 };
@@ -398,12 +361,8 @@ describe("BidirectionalIir", () => {
 			const iir = new BidirectionalIir({ smoothingMs, sampleRate });
 			const fixture = makeFixture(4096);
 
-			// Reference: full applyBidirectional output.
 			const reference = iir.applyBidirectional(fixture);
 
-			// Streamed compose: forward pass over the whole fixture, then
-			// in-place backward pass — should produce the same bytes as
-			// applyBidirectional.
 			const forwardState = { value: fixture[0] ?? 0 };
 			const buffer = iir.applyForwardPass(fixture, forwardState);
 

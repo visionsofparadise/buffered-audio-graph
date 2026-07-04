@@ -53,13 +53,10 @@ export class BidirectionalIir {
 
 		const samplePeriod = 1 / this.sampleRate;
 
-		// Bidirectional: each of the two passes uses tau_pass = sqrt(2) * tau
-		// so the cascaded magnitude matches a single causal pass at tau.
 		const tauBidirectional = (this.smoothingMs / 1000) * Math.SQRT2;
 
 		this.alphaBidirectional = tauBidirectional > 0 ? 1 - Math.exp(-samplePeriod / tauBidirectional) : 1;
 
-		// Causal: tau directly from smoothingMs (single-pass form).
 		const tauCausal = this.smoothingMs / 1000;
 
 		this.alphaCausal = tauCausal > 0 ? 1 - Math.exp(-samplePeriod / tauCausal) : 1;
@@ -78,8 +75,6 @@ export class BidirectionalIir {
 		const alpha = this.alphaBidirectional;
 		const oneMinusAlpha = 1 - alpha;
 
-		// Forward pass — initialize from the first sample so a non-zero
-		// constant input doesn't decay from zero at the leading edge.
 		let y = output[0] ?? 0;
 
 		for (let index = 0; index < output.length; index++) {
@@ -89,8 +84,6 @@ export class BidirectionalIir {
 			output[index] = y;
 		}
 
-		// Backward pass — initialize from the last sample for the same
-		// reason at the trailing edge.
 		y = output[output.length - 1] ?? 0;
 
 		for (let index = output.length - 1; index >= 0; index--) {

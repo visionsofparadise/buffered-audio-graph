@@ -39,6 +39,56 @@ export function validateGraphDefinition(json: unknown): GraphDefinition {
 	return graphDefinitionSchema.parse(json);
 }
 
+const placeholderPattern = /\{\{([A-Za-z][A-Za-z0-9_-]*)\}\}/g;
+
+export function substituteParameters(definition: GraphDefinition, parameters: Record<string, string>): GraphDefinition {
+	const usedNames = new Set<string>();
+	const unboundNames = new Set<string>();
+
+	const substituteValue = (value: unknown): unknown => {
+		if (typeof value === "string") {
+			return value.replace(placeholderPattern, (match, name: string) => {
+				usedNames.add(name);
+
+				const provided = Object.prototype.hasOwnProperty.call(parameters, name) ? parameters[name] : undefined;
+
+				if (provided !== undefined) return provided;
+
+				unboundNames.add(name);
+
+				return match;
+			});
+		}
+
+		if (Array.isArray(value)) return value.map(substituteValue);
+
+		if (value !== null && typeof value === "object") {
+			return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, substituteValue(entry)]));
+		}
+
+		return value;
+	};
+
+	const nodes = definition.nodes.map((node) => {
+		if (node.parameters === undefined) return node;
+
+		return { ...node, parameters: substituteValue(node.parameters) as Record<string, unknown> };
+	});
+
+	const unknownNames = Object.keys(parameters).filter((name) => !usedNames.has(name));
+
+	if (unboundNames.size > 0 || unknownNames.length > 0) {
+		const messages: Array<string> = [];
+
+		if (unboundNames.size > 0) messages.push(`unbound placeholders: ${[...unboundNames].join(", ")}`);
+		if (unknownNames.length > 0) messages.push(`unknown parameters: ${unknownNames.join(", ")}`);
+
+		throw new Error(`Parameter substitution failed — ${messages.join("; ")}`);
+	}
+
+	return { ...definition, nodes };
+}
+
 export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: string; id?: string }): GraphDefinition {
 	const visited = new Set<BufferedAudioNode>();
 	const nodes: Array<GraphNode> = [];
@@ -150,10 +200,17 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 	return sources;
 }
 
-export async function renderGraph(definition: GraphDefinition, registry: NodeRegistry, options?: RenderOptions): Promise<Array<SourceNode>> {
-	const sources = unpack(definition, registry);
+export interface RenderGraphOptions extends RenderOptions {
+	parameters?: Record<string, string>;
+}
 
-	await Promise.all(sources.map((source) => source.render(options)));
+export async function renderGraph(definition: GraphDefinition, registry: NodeRegistry, options?: RenderGraphOptions): Promise<Array<SourceNode>> {
+	const substituted = substituteParameters(definition, options?.parameters ?? {});
+	const sources = unpack(substituted, registry);
+
+	const { parameters: _parameters, ...renderOptions } = options ?? {};
+
+	await Promise.all(sources.map((source) => source.render(renderOptions)));
 
 	return sources;
 }

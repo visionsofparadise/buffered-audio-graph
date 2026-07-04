@@ -5,6 +5,38 @@ import { renderGraph, validateGraphDefinition, SourceNode, type NodeIdentity, ty
 
 const labelOf = (node: { moduleName: string; id?: string }): string => (node.id ? `${node.moduleName}#${node.id}` : node.moduleName);
 
+const collect = (value: string, previous: Array<string>): Array<string> => [...previous, value];
+
+function parseParams(entries: ReadonlyArray<string>): Record<string, string> {
+	const parameters = new Map<string, string>();
+
+	for (const entry of entries) {
+		const separatorIndex = entry.indexOf("=");
+
+		if (separatorIndex === -1) {
+			process.stderr.write(`Error: --param must be in name=value form, got "${entry}"\n`);
+			process.exit(1);
+		}
+
+		const name = entry.slice(0, separatorIndex);
+		const value = entry.slice(separatorIndex + 1);
+
+		if (name === "") {
+			process.stderr.write(`Error: --param name must not be empty, got "${entry}"\n`);
+			process.exit(1);
+		}
+
+		if (parameters.has(name)) {
+			process.stderr.write(`Error: --param ${name} given more than once\n`);
+			process.exit(1);
+		}
+
+		parameters.set(name, value);
+	}
+
+	return Object.fromEntries(parameters);
+}
+
 interface EventSink {
 	onEvent: (node: NodeIdentity, event: StreamEvent) => void;
 	printSummary: (sources: ReadonlyArray<SourceNode>) => void;
@@ -138,7 +170,8 @@ program
 	.argument("<file>", "Path to .bag file (JSON)")
 	.option("--chunk-size <samples>", "Chunk size in samples")
 	.option("--high-water-mark <count>", "Stream backpressure high water mark")
-	.action(async (file: string, options: { chunkSize?: string; highWaterMark?: string }) => {
+	.option("--param <name=value>", "Bind a {{name}} template placeholder in the bag (repeatable)", collect, [])
+	.action(async (file: string, options: { chunkSize?: string; highWaterMark?: string; param: Array<string> }) => {
 		const bagPath = resolve(file);
 
 		if (!existsSync(bagPath)) {
@@ -179,14 +212,21 @@ program
 
 			const chunkSize = options.chunkSize ? parseInt(options.chunkSize, 10) : undefined;
 			const highWaterMark = options.highWaterMark ? parseInt(options.highWaterMark, 10) : undefined;
+			const parameters = parseParams(options.param);
 
 			const sink = createEventSink();
 
 			process.stdout.write(`Rendering graph: ${definition.name}\n`);
-			const sources = await renderGraph(definition, registry, { chunkSize, highWaterMark, onEvent: sink.onEvent });
 
-			sink.printSummary(sources);
-			process.stdout.write("Done.\n");
+			try {
+				const sources = await renderGraph(definition, registry, { chunkSize, highWaterMark, parameters, onEvent: sink.onEvent });
+
+				sink.printSummary(sources);
+				process.stdout.write("Done.\n");
+			} catch (error) {
+				process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+				process.exitCode = 1;
+			}
 		} finally {
 			await unregister();
 		}
