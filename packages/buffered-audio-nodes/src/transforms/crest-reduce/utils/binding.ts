@@ -14,7 +14,8 @@
 //      resident whole-signal array (the design-streaming.md
 //      materialization anti-pattern Phase 2 removed must NOT creep back).
 //      The 2026-05-17 keystone also threads the input-sample index of
-//      that global 4× true peak (`measureBufferTruePeakWithArgmax`).
+//      that global 4× true peak (the `TruePeakArgmaxAccumulator` argmax,
+//      accumulated per-chunk in `CrestReduceStream._buffer`).
 //   2. Per analysis window, classify: a window is *binding* iff BOTH
 //      (a) it has phase-only-recoverable crest headroom, measured by the
 //      VERBATIM `peakPriorityAmount`, above BINDING_HEADROOM_MIN (the
@@ -236,7 +237,7 @@ export interface WindowBinding {
  * measurement.
  *
  * Composes the VERBATIM Phase-2 streaming-measure precedent
- * {@link measureBufferTruePeakDb} (a single fresh `TruePeakAccumulator`
+ * {@link measureBufferTruePeakDb} (a single fresh `TruePeakArgmaxAccumulator`
  * driven over `read(n)`/`reset()` chunked reads — its per-channel
  * polyphase upsampler carries a 12-tap input history across `push`, so
  * chunk boundaries are invisible and this is FP-identical to a

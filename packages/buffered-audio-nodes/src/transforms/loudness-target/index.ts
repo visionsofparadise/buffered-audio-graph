@@ -4,69 +4,11 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { applyBaseRateChunk } from "./utils/apply";
 import { windowSamplesFromMs } from "./utils/envelope";
 import { clampLimit, iterateForTargets } from "./utils/iterate";
-import { measureSource } from "./utils/measurement";
+import { measureSource, SourceMeasurementAccumulator } from "./utils/measurement";
 import { predictInitialB } from "./utils/solve";
 
-/**
- * Minimum separation enforced internally between `floor` and `pivot`
- * when auto-derivation (or user combination with auto on the other axis)
- * would land floor at or above pivot. The lower segment of the curve is
- * a linear ramp normalised by `(pivot - floor)` (see `curve.ts`); equal
- * values would divide by zero. 0.01 dB is below the audible JND for
- * level and well under any measurement uncertainty.
- */
 const FLOOR_PIVOT_EPSILON_DB = 0.01;
 
-/**
- * Schema for the loudnessTarget node.
- *
- * Fits a source to a `(LUFS, true-peak)` target pair via a single
- * level-indexed gain curve with a peak-respecting smoothed gain
- * envelope. The curve carries an upper-arm peak anchor that gives
- * structural control over `targetTp` in the same envelope that lands
- * LUFS. See design-loudness-target §"Parameters" for the parameter
- * rationale and §"Two-pass node structure" for the stream structure.
- *
- * `pivot` is optional; when undefined the node derives it from
- * `median(considered LRA blocks)` (BS.1770 / EBU R128 two-stage gate)
- * on the pass-1 measurement — see design-loudness-target §"Pivot
- * semantic — lower bound of the gain-riding zone". `floor` is
- * optional; when undefined the curve has no pass-through region and
- * applies uniform body gain B below pivot. The `.refine()` enforces
- * `floor < pivot` only when both are set; per-field `.lt(0)` still
- * constrains each to dB < 0 when supplied.
- *
- * Iteration is 2D joint on `(B, peakGainDb)`. `limitDb` is set ONCE
- * from the measurement (or an explicit override) and is constant across
- * attempts. Initial `B` is seeded by a histogram-based LUFS predictor
- * (per `plan-loudness-target-deterministic` 2026-05-13 revert) so
- * attempt 1 lands close to target and the secant converges in fewer
- * attempts. Initial `peakGainDb` is the closed-form `effectiveTargetTp
- * − limitDb`; per-attempt proportional feedback on TP overshoot moves
- * it from there. LRA falls out as a consequence of the resulting
- * geometry — there is no LRA target axis.
- *
- * `targetTp` is the do-no-harm-default peak axis:
- *   - `targetTp` undefined → `effectiveTargetTp = sourcePeakDb` and
- *     `peakGainDb` collapses to 0; peaks track body lift unchanged.
- *
- * `limitDb` is the limit-anchor override. Default behaviour:
- *   - unset → top-down percentile walk over the source's 4×-rate
- *     detection-envelope histogram (`measureSource`'s `limitAutoDb`),
- *     parameterised by `limitPercentile`.
- *   - set → fix the limit anchor at this value (clamped to the per-
- *     source feasible window inside the iterator).
- *
- * `limitPercentile` selects the brick-wall threshold's statistical
- * quantile on the detection histogram: with default `0.995` the top
- * 0.5 % of detection samples sit above `limitAutoDb` and brick-wall at
- * the target ceiling. Higher values → less limiting (tighter quantile);
- * lower values → more aggressive limiting.
- *
- * `smoothing` is the peak-respecting envelope time constant in ms;
- * collapses `K = W` window-half-width and bidirectional IIR time
- * constant into one user parameter.
- */
 export const schema = z.object({
 	targetLufs:    z.number().min(-50).max(0).multipleOf(0.1).default(-16).describe("Target integrated loudness (LUFS)"),
 	pivot:         z.number().lt(0).optional().describe("Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1."),
@@ -86,76 +28,50 @@ export const schema = z.object({
 export interface LoudnessTargetProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTargetProperties> {
-	/**
-	 * BASE-rate peak-respecting smoothed gain envelope produced by the
-	 * winning iteration attempt, held as a disk-backed single-channel
-	 * `ChunkBuffer` of size `frames` (post the 2026-05-13 base-rate-
-	 * downstream rewrite; no `× OVERSAMPLE_FACTOR` factor). The
-	 * envelope is read chunk-by-chunk in `_unbuffer` rather than held
-	 * as a flat `Float32Array` — keeps RAM at ~10 MB regardless of
-	 * source length. `null` when the stream passes through (silent /
-	 * sub-block-length source).
-	 */
 	private winningSmoothedEnvelopeBuffer: ChunkBuffer | null = null;
-
-	/**
-	 * Body gain `B` from the winning iteration attempt. `null` when the
-	 * stream passes through (no curve was learned). Diagnostic only —
-	 * the apply pass uses the materialised envelope, not `B` directly.
-	 */
 	private winningB: number | null = null;
-
-	/**
-	 * Limit anchor `limitDb` used for this source — constant across
-	 * iteration attempts. Sourced from `limitDbOverride` when explicit,
-	 * else from the percentile-derived `limitAutoDb` on the source's
-	 * detection-envelope histogram, else `sourcePeakDb` (no limiting).
-	 * `null` when the stream passes through. Diagnostic only.
-	 */
 	private winningLimitDb: number | null = null;
-
-	/**
-	 * `peakGainDb` from the winning attempt — the upper-segment right-
-	 * endpoint anchor gain. Starts at the closed-form
-	 * `effectiveTargetTp − limitDb` and adjusts via proportional
-	 * feedback on observed signed TP error. `null` when the stream
-	 * passes through.
-	 */
 	private winningPeakGainDb: number | null = null;
-
-	/**
-	 * Set to `true` by the first `_unbuffer` call so the
-	 * `winningSmoothedEnvelopeBuffer`'s read cursor is rewound exactly
-	 * once. The envelope is read-only in `_unbuffer` and consumed
-	 * forward in chunk-cadence lockstep with upstream chunks; this
-	 * lazy-reset pattern keeps the cursor management out of `_setup`.
-	 * Post the 2026-05-13 base-rate-downstream rewrite the
-	 * upsampled-source cache no longer exists — `_unbuffer` reads
-	 * source samples directly from the framework-provided chunk.
-	 */
 	private unbufferCursorsReady = false;
 
 	/**
-	 * Per-chunk wall-clock time spent in `_unbuffer`. Post the
-	 * 2026-05-13 base-rate-downstream rewrite, `_unbuffer` is a pure
-	 * base-rate multiply per chunk (no upsample, no downsample, no
-	 * AA filter — the smoothed envelope is bandlimited far below
-	 * base-rate Nyquist, so the multiply introduces no high-frequency
-	 * content). Accumulated across all `_unbuffer` calls.
+	 * Source-measurement accumulator fed per-chunk on the way in
+	 * (`_buffer`). Lazy-init from the first chunk's rate / channel
+	 * count so `halfWidth` matches `buildBaseRateDetectionCache`'s pool.
+	 * `undefined` when `_process` is driven without any `_buffer` call
+	 * (e.g. the direct-`_process` memory regression path) — `_process`
+	 * then falls back to `measureSource(buffer, …)`.
 	 */
+	private measurementAccumulator?: SourceMeasurementAccumulator;
+
 	public unbufferElapsedMs = 0;
 
-	/**
-	 * Wall-clock breakdown of the learn pass. `iteration` is the wall
-	 * time spent inside `iterateForTargets`. `detection` stays at 0 for
-	 * QA-driver log parity — detection-envelope build cost is folded
-	 * into `iteration`.
-	 */
 	public learnTimingMs: { sourceMeasurement: number; detection: number; iteration: number } = {
 		sourceMeasurement: 0,
 		detection: 0,
 		iteration: 0,
 	};
+
+	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+		await super._buffer(chunk, buffer);
+
+		const frames = chunk.samples[0]?.length ?? 0;
+		const channelCount = chunk.samples.length;
+
+		if (frames === 0 || channelCount === 0) return;
+
+		const tPush0 = Date.now();
+
+		this.measurementAccumulator ??= new SourceMeasurementAccumulator(
+			chunk.sampleRate,
+			channelCount,
+			this.properties.limitPercentile,
+			windowSamplesFromMs(this.properties.smoothing, chunk.sampleRate),
+		);
+		this.measurementAccumulator.push(chunk.samples, frames);
+
+		this.learnTimingMs.sourceMeasurement += Date.now() - tPush0;
+	}
 
 	override async _process(buffer: ChunkBuffer): Promise<void> {
 		const frames = buffer.frames;
@@ -166,34 +82,21 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		const { targetLufs, targetTp, limitDb: limitDbOverride, limitPercentile, smoothing, tolerance, peakTolerance, maxAttempts } = this.properties;
 
-		// --- Learn pass ---
-		// 1. Source measurement — single chunked walk producing
-		//    integrated LUFS, LRA, 4× true peak, the percentile-derived
-		//    `limitAutoDb`, and the POOLED base-rate detection-
-		//    amplitude histogram (used to seed iteration's initial `B`).
-		//    `halfWidth` matches `buildBaseRateDetectionCache`'s pool —
-		//    `windowSamplesFromMs(smoothingMs, baseRate)` — so the
-		//    histogram lands on the exact axis the curve evaluates on
-		//    (per the 2026-05-13 histogram-axis fix).
-		const measurementHalfWidth = windowSamplesFromMs(smoothing, sampleRate);
 		const tMeasure0 = Date.now();
-		const measurement = await measureSource(buffer, sampleRate, limitPercentile, measurementHalfWidth);
+		const measurement = this.measurementAccumulator !== undefined
+			? this.measurementAccumulator.finalize()
+			: await measureSource(buffer, sampleRate, limitPercentile, windowSamplesFromMs(smoothing, sampleRate));
 
-		this.learnTimingMs.sourceMeasurement = Date.now() - tMeasure0;
+		this.learnTimingMs.sourceMeasurement += Date.now() - tMeasure0;
 
 		const { integratedLufs: sourceLufs, lra: sourceLra, truePeakDb: sourcePeakDb } = measurement;
 
 		if (!Number.isFinite(sourceLufs)) {
-			// Silent / sub-block-length signal: nothing measurable, no
-			// curve to apply. Pass-through.
 			console.log(`[loudness-target] source has no measurable loudness (LUFS=${String(sourceLufs)}); pass-through.`);
 
 			return;
 		}
 
-		// 1a. Effective pivot — user-supplied if present, else
-		//     auto-derived from `median(considered LRA blocks)` carried
-		//     on the measurement.
 		const userPivot = this.properties.pivot;
 		let effectivePivotDb: number;
 
@@ -211,8 +114,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			);
 		}
 
-		// 1b. Effective floor — user-supplied if present, else
-		//     auto-derived from `min(considered LRA blocks)`.
 		const userFloor = this.properties.floor;
 		let effectiveFloorDb: number | null;
 
@@ -236,12 +137,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			effectiveFloorDb = clampedFloorDb;
 		}
 
-		// 1c. Derive the limit anchor that iteration will see, mirroring
-		//     `iterateForTargets`'s internal auto-derivation table. We
-		//     compute it here too so the histogram-predictor seed
-		//     evaluates the predictor at the same `limitDb` iteration
-		//     will use — otherwise the seed targets a slightly different
-		//     curve geometry.
 		const effectiveTargetTp = targetTp ?? sourcePeakDb;
 		let solvedLimitDb: number;
 
@@ -253,11 +148,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			solvedLimitDb = sourcePeakDb;
 		}
 
-		// 1d. Initial `B` seed via the histogram-based predictor (per
-		//     `plan-loudness-target-deterministic` 2026-05-13 revert).
-		//     Pure histogram math — microseconds, no apply pass, no
-		//     measurement. The seed is approximate (~0.5-2 LUFS error on
-		//     hard material); iteration's secant takes it from there.
 		const brickWallDormant = sourcePeakDb <= solvedLimitDb;
 		const closedFormPeakGainDb = effectiveTargetTp - solvedLimitDb;
 		const seedB = predictInitialB({
@@ -270,14 +160,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			tolerance,
 		});
 
-		// 2. Iteration — 2D joint on `(B, peakGainDb)` over the source
-		//    via the restored `iterateForTargets`. The histogram-based
-		//    seed (`seedB`) shortens attempt 1's distance to the LUFS
-		//    target; iteration's secant + proportional feedback close
-		//    the rest. `iterateForTargets` manages its own buffer
-		//    lifecycle: detection cache built once, forward/min-held/
-		//    activeA/activeB swapped per attempt, winning envelope held
-		//    on return.
 		const tIterate0 = Date.now();
 		const result = await iterateForTargets({
 			buffer,
@@ -374,10 +256,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 	}
 
 	override async _teardown(): Promise<void> {
-		// Print the wall-clock breakdown before the stream is destroyed
-		// so the QA driver can read it from stdout. `iteration` is the
-		// wall time spent inside `iterateForTargets` (detection cache
-		// build + per-attempt envelope walk + measurement × attempts).
 		if (this.winningSmoothedEnvelopeBuffer !== null) {
 			const total = this.learnTimingMs.sourceMeasurement + this.learnTimingMs.detection + this.learnTimingMs.iteration + this.unbufferElapsedMs;
 			const bRepr = this.winningB === null ? "n/a" : this.winningB.toFixed(4);
@@ -393,12 +271,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			);
 		}
 
-		// Post the 2026-05-13 base-rate-downstream rewrite there is no
-		// upsampled-source cache to release — `_unbuffer` reads source
-		// samples from the framework-provided chunk parameter directly.
-		// Only the winning-envelope buffer survives iteration and needs
-		// an explicit close here so the backing temp file is released
-		// after `_unbuffer` finishes draining.
 		if (this.winningSmoothedEnvelopeBuffer !== null) {
 			await this.winningSmoothedEnvelopeBuffer.close();
 			this.winningSmoothedEnvelopeBuffer = null;
@@ -408,12 +280,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 	override async _unbuffer(chunk: AudioChunk): Promise<AudioChunk> {
 		const envelopeBuffer = this.winningSmoothedEnvelopeBuffer;
 
-		// Pass-through when no envelope was learned (silent /
-		// sub-block-length source). The pass-through bail at the top of
-		// `_process` leaves `winningSmoothedEnvelopeBuffer` at `null`,
-		// mirrored here for safety. A zero-frame envelope buffer (the
-		// iterator's pass-through return shape) also routes to
-		// pass-through.
 		if (envelopeBuffer === null || envelopeBuffer.frames === 0) {
 			return chunk;
 		}
@@ -427,22 +293,11 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			return chunk;
 		}
 
-		// Rewind the envelope's read cursor on the first `_unbuffer`
-		// call. After iteration's `measureAttemptOutput` walks it is
-		// positioned at the end of the buffer; `_unbuffer` reads it
-		// forward in chunk-cadence lockstep with upstream chunks. Done
-		// lazily here rather than eagerly in `_setup` so the reset
-		// happens after `_process` (and its iteration) has finished
-		// and a stable cursor state exists.
 		if (!this.unbufferCursorsReady) {
 			await envelopeBuffer.reset();
 			this.unbufferCursorsReady = true;
 		}
 
-		// Post the 2026-05-13 base-rate-downstream rewrite: the envelope
-		// is at base rate, the source samples arrive at base rate via
-		// the framework-provided `chunk` parameter, and the apply step
-		// is a pure base-rate multiply per sample.
 		const envelopeChunk = await envelopeBuffer.read(chunkFrames);
 		const envelopeSlice = envelopeChunk.samples[0];
 

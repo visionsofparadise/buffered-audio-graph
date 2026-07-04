@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
-import { measureIntegratedLufs } from "./utils/measurement";
 
 export const schema = z.object({
 	target: z.number().min(-50).max(0).multipleOf(0.1).default(-16).describe("Target integrated loudness (LUFS)"),
@@ -11,14 +11,23 @@ export interface LoudnessNormalizeProperties extends z.infer<typeof schema>, Tra
 
 export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNormalizeProperties> {
 	private gain = 1;
+	private accumulator?: IntegratedLufsAccumulator;
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
-		const sampleRate = buffer.sampleRate ?? this.sampleRate ?? 44100;
-		const integrated = await measureIntegratedLufs(buffer, sampleRate);
+	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+		await super._buffer(chunk, buffer);
 
-		// Silent / sub-block-length signal: no measurable loudness; pass
-		// through unchanged. Linear shift to a target is undefined when
-		// there's nothing to shift.
+		const frames = chunk.samples[0]?.length ?? 0;
+		const channelCount = chunk.samples.length;
+
+		if (frames === 0 || channelCount === 0) return;
+
+		this.accumulator ??= new IntegratedLufsAccumulator(chunk.sampleRate, channelCount);
+		this.accumulator.push(chunk.samples, frames);
+	}
+
+	override _process(_buffer: ChunkBuffer): void {
+		const integrated = this.accumulator === undefined ? -Infinity : this.accumulator.finalize();
+
 		if (!Number.isFinite(integrated)) {
 			this.gain = 1;
 

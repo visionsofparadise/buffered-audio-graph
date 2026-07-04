@@ -80,25 +80,12 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		const samplesIn = chunkFrames;
 		const start = performance.now();
 
-		// Modes that don't pre-slice the incoming chunk:
-		//   - bufferSize === 0 (per-sample): append whole chunk, emit immediately.
-		//   - bufferSize === WHOLE_FILE: accumulate everything; processing at flush.
-		//   - bufferSize === 0 with lazy init: some transforms flip `this.bufferSize`
-		//     to a sampleRate-derived value inside `_buffer` on the first chunk
-		//     (de-plosive, de-clip, leveler). We can't slice before `_buffer` runs
-		//     because the target bufferSize doesn't exist yet. After `_buffer`
-		//     returns, we re-check and drain any overflow blocks. This is a
-		//     one-time exception per stream — subsequent chunks take the sliced
-		//     path below since `bufferSize` is no longer 0.
 		if (this.bufferSize === 0 || this.bufferSize === WHOLE_FILE) {
 			await this._buffer(chunk, this.chunkBuffer);
 
 			if (this.bufferSize === 0) {
-				// True per-sample mode.
 				await this.emitBuffer(controller);
 			} else if (this.bufferSize !== WHOLE_FILE) {
-				// Lazy init bumped bufferSize to a finite N. The buffer may
-				// hold > N frames after the unsliced append; drain blocks.
 				while (this.chunkBuffer.frames >= this.bufferSize) {
 					await this.processAndEmit(controller);
 				}
@@ -112,13 +99,6 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 			return;
 		}
 
-		// Block-aligned mode: feed `_buffer` in slices that keep `chunkBuffer`
-		// from ever exceeding `bufferSize`. When the buffer fills, fire
-		// `processAndEmit` (which calls `_process` with exactly `bufferSize`
-		// frames and resets the buffer for the next round). `chunkBuffer`
-		// semantically represents a single chunk's worth of working frames —
-		// it never overflows, so subclasses don't have to defend against
-		// arbitrary upstream chunk sizes.
 		let offset = 0;
 
 		while (offset < chunkFrames) {
@@ -148,6 +128,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 	private async handleFlush(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
 		if (!this.chunkBuffer || this.chunkBuffer.frames === 0) {
+			await this.emitFlushChunks(controller);
 			this.events.emit("finished");
 
 			return;
@@ -155,6 +136,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 		if (this.bufferSize === 0) {
 			await this.chunkBuffer.close();
+			await this.emitFlushChunks(controller);
 			this.events.emit("finished");
 
 			return;
@@ -168,7 +150,18 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 			this.chunkBuffer = undefined;
 		}
 
+		await this.emitFlushChunks(controller);
 		this.events.emit("finished");
+	}
+
+	private async emitFlushChunks(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
+		const chunks = await this._flush();
+
+		if (!chunks) return;
+
+		for (const chunk of chunks) {
+			controller.enqueue(chunk);
+		}
 	}
 
 	private async processAndEmit(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
@@ -177,10 +170,6 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		const samplesBeforeProcess = this.chunkBuffer.frames;
 		const start = performance.now();
 
-		// Flush so reads inside `_process` see all the data the framework just
-		// wrote via `_buffer`. ChunkBuffer reads pull from the temp file; bytes
-		// sitting in the writer's `highWaterMark` cache aren't visible until
-		// the writer is ended.
 		await this.chunkBuffer.flushWrites();
 		await this._process(this.chunkBuffer);
 		await this.emitBuffer(controller);
@@ -200,9 +189,6 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		const overlap = this.overlap;
 		const canPreserveOverlap = wantsOverlap && totalFrames > overlap;
 
-		// Sequential read API has no positional re-read. To preserve the
-		// trailing `overlap` frames as the next cycle's seed, track them in
-		// per-channel scratch as we walk past them during the emit loop.
 		const overlapScratch: Array<Float32Array> | undefined = canPreserveOverlap
 			? Array.from({ length: channels }, () => new Float32Array(overlap))
 			: undefined;
@@ -289,6 +275,10 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 	_unbuffer(chunk: AudioChunk): Promise<AudioChunk | undefined> | AudioChunk | undefined {
 		return chunk;
+	}
+
+	_flush(): Promise<Array<AudioChunk> | undefined> | Array<AudioChunk> | undefined {
+		return undefined;
 	}
 }
 

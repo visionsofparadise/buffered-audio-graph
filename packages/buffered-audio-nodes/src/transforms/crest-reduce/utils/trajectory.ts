@@ -68,7 +68,7 @@
 //      (`amountEnv[f] > 0`) the committed Item-7 optimal is held FLAT
 //      across the trajectory frames `[round(n_i/hop) − Wexact,
 //      round(n_i/hop) + Wexact]` — centered on `round(n_i / hopSize)`,
-//      the trajectory frame `streamLatticeApply`'s `framePos = sample /
+//      the trajectory frame `LatticeApplyState`'s `framePos = sample /
 //      hopSize` map interpolates the PEAK SAMPLE from (NOT the analysis
 //      frame `f0`; NOT the STFT-overlap span). Where two peaks' holds
 //      overlap take the `max`. Half-width
@@ -117,7 +117,7 @@
 // hold ⇒ the EXACT Item-7 optimal × that frame's dispersive design, in
 // the gaps ⇒ the `smoothing`-eased spill × the design row. The
 // reconstructed `ControlTrajectory.rows` is the SAME shape
-// `streamLatticeApply` consumes (unchanged contract).
+// `LatticeApplyState` consumes (unchanged contract).
 //
 // HARD RULE (design-crest-reduce.md §Rejected Approaches "Bidirectional /
 // zero-phase pass on the audio all-pass"): every envelope op here (the
@@ -125,7 +125,7 @@
 // the FRAME-indexed scalar / row arrays ONLY — NEVER the audio path.
 // Forward-backward filtering an all-pass yields |H|² = 1 / zero net phase
 // = identity, cancelling exactly the phase manipulation that is the
-// entire mechanism. `streamLatticeApply` has ZERO `BidirectionalIir` /
+// entire mechanism. `LatticeApplyState` has ZERO `BidirectionalIir` /
 // envelope reference.
 //
 // Zero-phase mechanism reuse: the single-source-of-truth
@@ -164,7 +164,7 @@ import { GROUP_DELAY_CEILING_MS } from "./search";
  *  - POST-SMOOTHING (returned by `smoothControlTrajectory`): `rows[frame]`
  *    is the reconstructed control vector `finalAmount[frame] ·
  *    baseRow[frame]` (length `laneCount`) — the normalized-lattice
- *    section reflection coefficients `streamLatticeApply` consumes. A
+ *    section reflection coefficients `LatticeApplyState` consumes. A
  *    non-active region's row is ≈`identity` (all-zero — a crest-invariant
  *    M-sample delay; see `processLatticeChannel`'s identity contract);
  *    within a peak's ±Wexact hold the row is the EXACT Item-7 optimal ×
@@ -173,13 +173,13 @@ import { GROUP_DELAY_CEILING_MS } from "./search";
  * `baseRows` / `amountEnv` / `peakSampleIndex` are carried through
  * `smoothControlTrajectory` unchanged (the smoother reads them to
  * reconstruct `rows`); they are node-local and never reach
- * `streamLatticeApply` (which only reads `rows` / `identity`).
+ * `LatticeApplyState` (which only reads `rows` / `identity`).
  */
 export interface ControlTrajectory {
 	/**
 	 * POST-SMOOTHING: the reconstructed per-frame control vector
 	 * (`finalAmount · baseRow`, length `laneCount`) that
-	 * `streamLatticeApply` / `processLatticeChannel` consume. The as-built
+	 * `LatticeApplyState` / `processLatticeChannel` consume. The as-built
 	 * no-search analysis path (`lattice.ts` `extractLatticeTrajectory`,
 	 * byte-frozen) also populates `rows` directly (the topology tests).
 	 * PRE-SMOOTHING from `streamLatticeTrajectory`: an empty array (the
@@ -262,7 +262,7 @@ export interface ControlTrajectory {
 	 *
 	 * `smoothControlTrajectory` centers each binding peak's EXACT-OPTIMAL
 	 * flat hold on `round(n_i / hopSize)` (the trajectory frame the peak
-	 * SAMPLE interpolates from in `streamLatticeApply`'s `framePos =
+	 * SAMPLE interpolates from in `LatticeApplyState`'s `framePos =
 	 * sample / hopSize` map) — NOT on the analysis frame `f0` and NOT the
 	 * STFT-overlap span (which mis-centers ~10× too wide; the rejected
 	 * "holding a value over audio that doesn't need it"). The hold is
@@ -342,7 +342,7 @@ export function trajectoryFrameRate(sampleRate: number, hopSize: number): number
  * redeclared, so it tracks the frozen ceiling automatically). The `+1`
  * guarantees the peak sample's frame→sample interpolation bracket
  * `⌊n_i/hop⌋…⌈n_i/hop⌉` is fully inside the flat hold (both
- * `streamLatticeApply` interpolation endpoints sit on the plateau, so the
+ * `LatticeApplyState` interpolation endpoints sit on the plateau, so the
  * interpolated row AT the peak equals the exact optimal). The window each
  * peak's hold spans is `[round(n_i/hop) − Wexact, round(n_i/hop) +
  * Wexact]` (total `2·Wexact + 1` frames), centered on the PEAK SAMPLE,
@@ -384,7 +384,7 @@ export function exactHoldHalfWidthFrames(sampleRate: number, hopSize: number): n
  *      (`amountEnv[f] > 0`) the committed Item-7 optimal `amountEnv[f]`
  *      is held FLAT across the trajectory frames `[c − Wexact, c +
  *      Wexact]` where `c = round(peakSampleIndex[f] / hopSize)` — the
- *      trajectory frame `streamLatticeApply`'s `framePos = sample /
+ *      trajectory frame `LatticeApplyState`'s `framePos = sample /
  *      hopSize` map interpolates the PEAK SAMPLE `n_i` from. Where two
  *      peaks' holds overlap take the `max` (this, combined with the IIR,
  *      yields the gradient-between-ungapped-peaks behaviour). The plateau
@@ -437,7 +437,7 @@ export function exactHoldHalfWidthFrames(sampleRate: number, hopSize: number): n
  * spill × that frame's dispersive design.
  *
  * Returns a NEW `ControlTrajectory` with the reconstructed `rows` (the
- * shape `streamLatticeApply` consumes); the input is not mutated.
+ * shape `LatticeApplyState` consumes); the input is not mutated.
  * `baseRows` / `amountEnv` / `peakSampleIndex` / `identity` /
  * `laneCount` / `transientMask` are carried through unchanged.
  *
@@ -465,7 +465,7 @@ export function exactHoldHalfWidthFrames(sampleRate: number, hopSize: number): n
  *   geometry; it must NOT depend on `smoothingMs`.
  * @param hopSize Analysis hop in samples — maps each binding peak's
  *   absolute sample `n_i` to its trajectory frame `round(n_i / hopSize)`
- *   (the frame `streamLatticeApply` interpolates the peak sample from).
+ *   (the frame `LatticeApplyState` interpolates the peak sample from).
  */
 export function smoothControlTrajectory(
 	trajectory: ControlTrajectory,
@@ -512,7 +512,7 @@ export function smoothControlTrajectory(
 	// For every binding frame (`amountEnv[f] > 0`) hold its committed
 	// Item-7 optimal FLAT across `[c − Wexact, c + Wexact]` where
 	// `c = round(n_i / hop)` — the trajectory frame the PEAK SAMPLE
-	// interpolates from in `streamLatticeApply`. Where holds overlap take
+	// interpolates from in `LatticeApplyState`. Where holds overlap take
 	// the `max`. This is NOT a `slidingWindowMax` over the analysis-frame
 	// index (which mis-centers on `f0` and uses the wrong ~10×-too-wide
 	// STFT-overlap span); it is an explicit spread centered on each peak

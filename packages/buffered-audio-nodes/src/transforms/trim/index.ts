@@ -1,9 +1,7 @@
 import { z } from "zod";
-import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, type ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { findFirstAbove, findLastAbove } from "./utils/silence";
-
-const CHUNK_FRAMES = 44100;
 
 export const schema = z.object({
 	threshold: z.number().min(0).max(1).multipleOf(0.001).default(0.001).describe("Threshold"),
@@ -15,61 +13,52 @@ export const schema = z.object({
 export interface TrimProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class TrimStream extends BufferedTransformStream<TrimProperties> {
+	private firstAbove = Infinity;
+	private lastAbove = -1;
+	private scanOffset = 0;
+	private startFrame = 0;
+	private endFrame = 0;
+
+	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+		await super._buffer(chunk, buffer);
+
+		const chunkFrames = chunk.samples[0]?.length ?? 0;
+
+		if (chunkFrames === 0) return;
+
+		const threshold = this.properties.threshold;
+		const localFirst = findFirstAbove(chunk.samples, chunkFrames, threshold);
+
+		if (localFirst < chunkFrames) {
+			const abs = this.scanOffset + localFirst;
+
+			if (abs < this.firstAbove) this.firstAbove = abs;
+			this.lastAbove = Math.max(this.lastAbove, this.scanOffset + findLastAbove(chunk.samples, chunkFrames, threshold));
+		}
+
+		this.scanOffset += chunkFrames;
+	}
+
 	override async _process(buffer: ChunkBuffer): Promise<void> {
 		const frames = buffer.frames;
 		const channels = buffer.channels;
 
 		if (channels === 0 || frames === 0) return;
 
-		const threshold = this.properties.threshold;
-		const sr = buffer.sampleRate ?? 44100;
-		const bd = buffer.bitDepth;
-		const marginFrames = Math.round(this.properties.margin * sr);
-		const trimStart = this.properties.start;
-		const trimEnd = this.properties.end;
-
-		// Pass 1 — scan forward, tracking first/last absolute frame indices above threshold.
-		await buffer.reset();
-		let firstAbove = frames;
-		let lastAbove = -1;
-		let scanOffset = 0;
-
-		for (;;) {
-			const chunk = await buffer.read(CHUNK_FRAMES);
-			const chunkFrames = chunk.samples[0]?.length ?? 0;
-
-			if (chunkFrames === 0) break;
-
-			const localFirst = findFirstAbove(chunk.samples, chunkFrames, threshold);
-
-			if (localFirst < chunkFrames) {
-				const abs = scanOffset + localFirst;
-
-				if (abs < firstAbove) firstAbove = abs;
-				lastAbove = Math.max(lastAbove, scanOffset + findLastAbove(chunk.samples, chunkFrames, threshold));
-			}
-
-			scanOffset += chunkFrames;
-			if (chunkFrames < CHUNK_FRAMES) break;
-		}
-
-		if (firstAbove >= frames) {
-			// Nothing above threshold — drop everything.
+		if (this.firstAbove >= frames) {
 			await buffer.clear();
 
 			return;
 		}
 
+		const sr = buffer.sampleRate ?? 44100;
+		const marginFrames = Math.round(this.properties.margin * sr);
+
 		let startFrame = 0;
 		let endFrame = frames;
 
-		if (trimStart) {
-			startFrame = Math.max(0, firstAbove - marginFrames);
-		}
-
-		if (trimEnd) {
-			endFrame = Math.min(frames, lastAbove + 1 + marginFrames);
-		}
+		if (this.properties.start) startFrame = Math.max(0, this.firstAbove - marginFrames);
+		if (this.properties.end) endFrame = Math.min(frames, this.lastAbove + 1 + marginFrames);
 
 		if (startFrame >= endFrame) {
 			await buffer.clear();
@@ -77,65 +66,32 @@ export class TrimStream extends BufferedTransformStream<TrimProperties> {
 			return;
 		}
 
-		if (startFrame === 0 && endFrame === frames) return;
+		this.startFrame = startFrame;
+		this.endFrame = endFrame;
+	}
 
-		// Pass 2 — copy the keep region into a output buffer, then swap.
-		const output = new ChunkBuffer();
+	override _unbuffer(chunk: AudioChunk): AudioChunk | undefined {
+		const frames = chunk.samples[0]?.length ?? 0;
+		const chunkStart = chunk.offset;
+		const chunkEnd = chunkStart + frames;
+		const overlapStart = Math.max(chunkStart, this.startFrame);
+		const overlapEnd = Math.min(chunkEnd, this.endFrame);
 
-		try {
-			await buffer.reset();
-			let copyOffset = 0;
+		if (overlapEnd <= overlapStart) return undefined;
 
-			for (;;) {
-				const chunk = await buffer.read(CHUNK_FRAMES);
-				const chunkFrames = chunk.samples[0]?.length ?? 0;
-
-				if (chunkFrames === 0) break;
-
-				const chunkStart = copyOffset;
-				const chunkEnd = copyOffset + chunkFrames;
-				const overlapStart = Math.max(chunkStart, startFrame);
-				const overlapEnd = Math.min(chunkEnd, endFrame);
-
-				if (overlapEnd > overlapStart) {
-					const sliceStart = overlapStart - chunkStart;
-					const sliceEnd = overlapEnd - chunkStart;
-
-					if (sliceStart === 0 && sliceEnd === chunkFrames) {
-						await output.write(chunk.samples, sr, bd);
-					} else {
-						const sliced: Array<Float32Array> = [];
-
-						for (let ch = 0; ch < channels; ch++) {
-							const source = chunk.samples[ch];
-
-							if (source) sliced.push(source.subarray(sliceStart, sliceEnd));
-							else sliced.push(new Float32Array(sliceEnd - sliceStart));
-						}
-
-						await output.write(sliced, sr, bd);
-					}
-				}
-
-				copyOffset = chunkEnd;
-				if (copyOffset >= endFrame) break;
-				if (chunkFrames < CHUNK_FRAMES) break;
-			}
-
-			await buffer.clear();
-			await output.reset();
-
-			for (;;) {
-				const chunk = await output.read(CHUNK_FRAMES);
-				const chunkFrames = chunk.samples[0]?.length ?? 0;
-
-				if (chunkFrames === 0) break;
-				await buffer.write(chunk.samples, sr, bd);
-				if (chunkFrames < CHUNK_FRAMES) break;
-			}
-		} finally {
-			await output.close();
+		if (overlapStart === chunkStart && overlapEnd === chunkEnd) {
+			return { samples: chunk.samples, offset: chunkStart - this.startFrame, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 		}
+
+		const sliceStart = overlapStart - chunkStart;
+		const sliceEnd = overlapEnd - chunkStart;
+
+		return {
+			samples: chunk.samples.map((channel) => channel.subarray(sliceStart, sliceEnd)),
+			offset: overlapStart - this.startFrame,
+			sampleRate: chunk.sampleRate,
+			bitDepth: chunk.bitDepth,
+		};
 	}
 }
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 const CHUNK_FRAMES = 44100;
@@ -12,62 +12,67 @@ export const schema = z.object({
 export interface PadProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class PadStream extends BufferedTransformStream<PadProperties> {
-	override async _process(buffer: ChunkBuffer): Promise<void> {
-		const { before, after } = this.properties;
-		const channels = buffer.channels;
+	private seenChunk = false;
+	private capturedSampleRate = 44100;
+	private capturedBitDepth = 32;
+	private capturedChannels = 0;
+	private outputOffset = 0;
 
-		if (channels === 0) return;
+	override _unbuffer(chunk: AudioChunk): AudioChunk {
+		const frames = chunk.samples[0]?.length ?? 0;
 
-		const sr = buffer.sampleRate ?? 44100;
-		const bd = buffer.bitDepth;
-		const leading = Math.round(before * sr);
-		const trailing = Math.round(after * sr);
+		if (!this.seenChunk) {
+			this.seenChunk = true;
+			this.capturedSampleRate = chunk.sampleRate;
+			this.capturedBitDepth = chunk.bitDepth;
+			this.capturedChannels = chunk.samples.length;
 
-		if (leading === 0 && trailing === 0) return;
+			const leading = Math.round(this.properties.before * chunk.sampleRate);
 
-		const output = new ChunkBuffer();
+			if (leading > 0) {
+				const samples = chunk.samples.map((channel) => {
+					const padded = new Float32Array(leading + frames);
 
-		try {
-			await writeSilence(output, leading, channels, CHUNK_FRAMES, sr, bd);
+					padded.set(channel, leading);
 
-			for (;;) {
-				const chunk = await buffer.read(CHUNK_FRAMES);
-				const chunkFrames = chunk.samples[0]?.length ?? 0;
+					return padded;
+				});
+				const offset = this.outputOffset;
 
-				if (chunkFrames === 0) break;
-				await output.write(chunk.samples, sr, bd);
-				if (chunkFrames < CHUNK_FRAMES) break;
+				this.outputOffset += leading + frames;
+
+				return { samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 			}
-
-			await writeSilence(output, trailing, channels, CHUNK_FRAMES, sr, bd);
-
-			await buffer.clear();
-			await output.reset();
-
-			for (;;) {
-				const chunk = await output.read(CHUNK_FRAMES);
-				const chunkFrames = chunk.samples[0]?.length ?? 0;
-
-				if (chunkFrames === 0) break;
-				await buffer.write(chunk.samples, sr, bd);
-				if (chunkFrames < CHUNK_FRAMES) break;
-			}
-		} finally {
-			await output.close();
 		}
+
+		const offset = this.outputOffset;
+
+		this.outputOffset += frames;
+
+		return { samples: chunk.samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
-}
 
-async function writeSilence(target: ChunkBuffer, frames: number, channels: number, chunkSize: number, sampleRate: number, bitDepth: number | undefined): Promise<void> {
-	let remaining = frames;
+	override _flush(): Array<AudioChunk> | undefined {
+		if (!this.seenChunk) return undefined;
 
-	while (remaining > 0) {
-		const take = Math.min(chunkSize, remaining);
-		const silence: Array<Float32Array> = [];
+		const trailing = Math.round(this.properties.after * this.capturedSampleRate);
 
-		for (let ch = 0; ch < channels; ch++) silence.push(new Float32Array(take));
-		await target.write(silence, sampleRate, bitDepth);
-		remaining -= take;
+		if (trailing === 0) return undefined;
+
+		const chunks: Array<AudioChunk> = [];
+		let remaining = trailing;
+
+		while (remaining > 0) {
+			const take = Math.min(CHUNK_FRAMES, remaining);
+			const samples = Array.from({ length: this.capturedChannels }, () => new Float32Array(take));
+			const offset = this.outputOffset;
+
+			this.outputOffset += take;
+			chunks.push({ samples, offset, sampleRate: this.capturedSampleRate, bitDepth: this.capturedBitDepth });
+			remaining -= take;
+		}
+
+		return chunks;
 	}
 }
 
@@ -84,7 +89,7 @@ export class PadNode extends TransformNode<PadProperties> {
 	override readonly type = ["buffered-audio-node", "transform", "pad"] as const;
 
 	constructor(properties: PadProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
+		super({ bufferSize: 0, latency: 0, ...properties });
 	}
 
 	override createStream(): PadStream {

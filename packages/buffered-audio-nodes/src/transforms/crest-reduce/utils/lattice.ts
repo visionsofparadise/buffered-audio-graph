@@ -41,9 +41,11 @@
 // This module is the BYTE-FROZEN verbatim Gray–Markel/RMV reference. The
 // live production path no longer calls it: the 2026-05-17 keystone
 // streams the equivalent math through the bit-faithful transcriptions in
-// `utils/windowed.ts` (`streamLatticeTrajectory` / `streamLatticeApply`,
+// `utils/windowed.ts` (`streamLatticeTrajectory` / `LatticeApplyState`,
 // FP-identical to `extractLatticeTrajectory` / `processLatticeChannel`
-// over one contiguous array). `extractLatticeTrajectory` (whole-file
+// over one contiguous array; `LatticeApplyState` applies the recurrence
+// per emitted chunk in `_unbuffer`, carrying state + the absolute sample
+// index across chunks). `extractLatticeTrajectory` (whole-file
 // framed analysis → per-frame reflection-coefficient CONTROL TRAJECTORY +
 // transient mask) and `processLatticeChannel` (the time-varying
 // normalized-lattice per-sample recurrence) remain here as the protected
@@ -371,7 +373,7 @@ export function extractLatticeTrajectory(
  *
  * The `strength` parameter is the verbatim post-fit scalar `kₘ ←
  * strength · smoothedₘ`. It is an INTERNAL argument of this byte-frozen
- * reference (and of its bit-faithful transcription `streamLatticeApply`),
+ * reference (and of its bit-faithful transcription `LatticeApplyState`),
  * NOT a public surface: the 2026-05-17 keystone removed the `strength`
  * user parameter entirely (the per-peak optimal decorrelation amount is
  * folded into the committed trajectory rows by the Item-7 minimiser);

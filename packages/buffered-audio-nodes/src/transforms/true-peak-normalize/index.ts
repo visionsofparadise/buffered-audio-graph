@@ -3,11 +3,6 @@ import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, ty
 import { TruePeakAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
-// One-second-at-44.1kHz iteration size, matching the convention used by
-// `loudness-normalize/utils/measurement.ts`. Balances per-iteration
-// overhead against per-chunk allocation pressure.
-const CHUNK_FRAMES = 44100;
-
 export const schema = z.object({
 	target: z.number().lt(0).default(-1).describe("Target true peak (dBTP). Must be < 0."),
 });
@@ -16,38 +11,29 @@ export interface TruePeakNormalizeProperties extends z.infer<typeof schema>, Tra
 
 export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNormalizeProperties> {
 	private gain = 1;
+	private accumulator?: TruePeakAccumulator;
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
-		const sampleRate = buffer.sampleRate ?? this.sampleRate ?? 44100;
-		const channelCount = buffer.channels;
-		const frames = buffer.frames;
+	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+		await super._buffer(chunk, buffer);
 
-		if (frames === 0 || channelCount === 0) {
+		const frames = chunk.samples[0]?.length ?? 0;
+		const channelCount = chunk.samples.length;
+
+		if (frames === 0 || channelCount === 0) return;
+
+		this.accumulator ??= new TruePeakAccumulator(chunk.sampleRate, channelCount);
+		this.accumulator.push(chunk.samples, frames);
+	}
+
+	override _process(_buffer: ChunkBuffer): void {
+		if (this.accumulator === undefined) {
 			this.gain = 1;
 
 			return;
 		}
 
-		const accumulator = new TruePeakAccumulator(sampleRate, channelCount);
+		const sourcePeakLinear = this.accumulator.finalize();
 
-		await buffer.reset();
-
-		for (;;) {
-			const chunk = await buffer.read(CHUNK_FRAMES);
-			const chunkFrames = chunk.samples[0]?.length ?? 0;
-
-			if (chunkFrames === 0) break;
-
-			accumulator.push(chunk.samples, chunkFrames);
-
-			if (chunkFrames < CHUNK_FRAMES) break;
-		}
-
-		const sourcePeakLinear = accumulator.finalize();
-
-		// Silent / sub-sample-length signal: linear shift to a target is
-		// undefined when there's nothing to shift. Pass through unchanged.
-		// Mirrors the silent-source handling in `loudness-normalize`.
 		if (sourcePeakLinear <= 0) {
 			this.gain = 1;
 			console.log(`[true-peak-normalize] sourceTP=-Infinity target=${this.properties.target} gain=1`);

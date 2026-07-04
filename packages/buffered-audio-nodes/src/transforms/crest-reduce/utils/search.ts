@@ -94,8 +94,8 @@
 //   * The element evaluated at scalar `c` is the time-varying normalized
 //     lattice over the window (the verbatim per-sample recurrence of
 //     `processLatticeChannel`, composed — its BODY is byte-unchanged and
-//     reused; the streaming applicator is the Phase-2 bit-faithful
-//     transcription `windowed.ts` `streamLatticeApply`). `φ'` is the
+//     reused; the emission-time applicator is the bit-faithful
+//     transcription `windowed.ts` `LatticeApplyState`). `φ'` is the
 //     sensitivity of |p_c(n_i)|² to the real scalar `c` computed by the
 //     verbatim Eq. 7–9 `d_i`/`g_i` recurrences specialised to the real
 //     lattice section (the project's declared real analogue of Hong's
@@ -291,8 +291,8 @@ export function groupDelayLambda(sampleRate: number, order: number = LATTICE_ORD
  * verbatim normalized-lattice per-sample recurrence of
  * `processLatticeChannel`, composed — same Givens section, same
  * `MAX_REFLECTION` clamp; the protected kernel BODY is byte-unchanged
- * and is the live applicator via the Phase-2 bit-faithful streaming
- * transcription `windowed.ts` `streamLatticeApply`). Here it is run over
+ * and is the live applicator via the bit-faithful emission-time
+ * transcription `windowed.ts` `LatticeApplyState`). Here it is run over
  * a single bounded window for the search's cost evaluation only —
  * coefficients are `c · row` (the search adapts the scalar feeding the
  * Abel & Smith fit; it does NOT replace the fit or the step-down).
@@ -459,7 +459,7 @@ export interface SearchResult {
  *    per-window, Item 10). SCOPE CAVEAT (known-issue B, measured — NOT a
  *    hard production guarantee): this evaluation is the ISOLATED window
  *    with ZERO initial lattice state and a CONSTANT `c`; production
- *    (`streamLatticeApply`) is a CONTINUOUS recursive lattice carrying
+ *    (`LatticeApplyState`) is a CONTINUOUS recursive lattice carrying
  *    section state across the whole signal with the row frame-
  *    interpolated, so the REALISED per-window 4× TP can marginally exceed
  *    identity (episode-060: ≈5% of binding windows, mean ≈+0.22 dB, p90
