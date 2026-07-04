@@ -36,10 +36,7 @@ function generateSine(frequency: number, amplitude: number, sampleRate: number, 
 
 describe("KWeightedSquaredSum", () => {
 	it("matches a manual K-weight cascade on a small signal", () => {
-		// Drive a single channel with a short noise-like signal and
-		// compare the per-frame output to a manual two-stage biquad
-		// applied to the same input. Validates the cascade structure
-		// (pre-filter → RLB → square) and channel weighting (default 1).
+		// Cross-check the per-frame output against a manual two-stage biquad, validating the cascade (pre-filter → RLB → square) and default channel weighting.
 		const sampleRate = 48000;
 		const frames = 256;
 		const input = new Float32Array(frames);
@@ -51,8 +48,7 @@ describe("KWeightedSquaredSum", () => {
 		const preFilter = preFilterCoefficients(sampleRate);
 		const rlbFilter = rlbFilterCoefficients(sampleRate);
 
-		// Reproduce the cascade in Float64 (input read as Float32 then
-		// promoted) to match the implementation's numerical path.
+		// Reproduce the cascade in Float64 (Float32 input promoted) to match the implementation's numerical path.
 		const inputAsArray = Array.from(input, (v) => v as number);
 		const preFiltered = applyBiquadFloat64(inputAsArray, preFilter.fb, preFilter.fa);
 		const filtered = applyBiquadFloat64(preFiltered, rlbFilter.fb, rlbFilter.fa);
@@ -84,7 +80,7 @@ describe("KWeightedSquaredSum", () => {
 		mono.push([sine], frames, monoOut);
 		stereo.push([sine, sineCopy], frames, stereoOut);
 
-		// Skip the very first samples to allow biquad transient to settle.
+		// Skip the first samples to let the biquad transient settle.
 		for (let i = 100; i < frames; i++) {
 			expect(stereoOut[i]).toBeCloseTo(2 * (monoOut[i] ?? 0), 12);
 		}
@@ -174,11 +170,7 @@ describe("KWeightedSquaredSum", () => {
 	});
 
 	it("output preserves Float64 precision (round-trip through Float32 would lose bits)", () => {
-		// Signals at 1e-20 produce squared contributions around 1e-40,
-		// which is below Float32's smallest normal (~1.175e-38) and would
-		// be flushed to subnormal or zero if the computation were carried
-		// out in Float32. With Float64 internals we expect them to
-		// survive as distinguishable nonzero values.
+		// 1e-20 signals produce ~1e-40 squared contributions, below Float32's smallest normal (~1.175e-38); they survive only with Float64 internals.
 		const sampleRate = 48000;
 		const frames = 256;
 		const input = new Float32Array(frames);
@@ -192,8 +184,6 @@ describe("KWeightedSquaredSum", () => {
 
 		accumulator.push([input], frames, output);
 
-		// At least one mid-signal value must be a positive double well
-		// below Float32 normal range. Confirms internal Float64 math.
 		let foundSubFloat32 = false;
 
 		for (let i = 100; i < frames; i++) {

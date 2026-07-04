@@ -46,7 +46,6 @@ describe("DownmixMonoNode", () => {
 		const chunk = makeChunk([0.4, 0.8, 0.2, 0.6]);
 		const output = await applyDownmix(chunk);
 		expect(output.samples.length).toBe(1);
-		// (0.4 + 0.8 + 0.2 + 0.6) / 4 = 0.5
 		expect(output.samples[0]![0]).toBeCloseTo(0.5, 5);
 	});
 

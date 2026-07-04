@@ -1,18 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- typed-array indexing in test scaffolding */
 /**
- * Integration tests for `deBleed` (Phase 4 actions 4.1 + 4.2 of
- * `plan-debleed-v2-mef.md`).
- *
- * 4.1 — End-to-end on a 60-s synthetic fixture (output finite, no DC offset,
- * no clipping).
- *
- * 4.2 — 5-mic synthetic configuration (1 target + 4 interferers); MSAD
- * activity flags correct per channel via a direct unit-style probe of
- * `computeMsadDecision` (the per-stream MSAD state is internal to `_process`
- * and not exposed); compute-cost scaling check at refCount = 2 / 3 / 4.
- *
- * Phase 4.3 (manual A/B) is the user gate and is intentionally NOT covered
- * here — it requires a human listener.
+ * Integration tests for `deBleed`: end-to-end on a synthetic fixture (finite, no DC offset, no clipping); MSAD per-channel activity flags on a 5-mic config; compute-cost scaling across refCount. Manual A/B is intentionally not covered here.
  */
 import { describe, it, expect } from "vitest";
 import { randomBytes } from "node:crypto";
@@ -26,9 +14,7 @@ import { computeMsadDecision, createMsadChannelState } from "./utils/mef-msad";
 
 // ----- Helpers --------------------------------------------------------------
 
-// Minimal WAV (32-bit float PCM, mono) writer matching the format emitted by
-// the test pipeline's read path. Cribbed from
-// `transforms/deep-filter-net-3/integration.test.ts`.
+// Minimal WAV (32-bit float PCM, mono) writer matching the test pipeline's read path; cribbed from deep-filter-net-3/integration.test.ts.
 function encodeWavFloat32(samples: Float32Array, sampleRate: number): Buffer {
 	const numChannels = 1;
 	const bitsPerSample = 32;
@@ -95,8 +81,7 @@ function maxAbs(signal: Float32Array): number {
 function isFloat32Denormal(value: number): boolean {
 	const abs = Math.abs(value);
 
-	// Float32 minimum-normal magnitude. Anything below this (excluding zero)
-	// is denormal.
+	// Float32 minimum-normal magnitude; anything below this (excluding zero) is denormal.
 	return abs > 0 && abs < 1.175494e-38;
 }
 
@@ -134,12 +119,6 @@ function inspectQuality(signal: Float32Array): FrameQualityReport {
 	};
 }
 
-/**
- * Frame-by-frame peak amplitude (max |x|) for catastrophic-gain detection.
- * Frame size is the FFT block (default fftSize = 4096); we slide non-overlapping
- * for cheapness — the regression check is "no output frame more than 6 dB
- * louder than the loudest input frame," so non-overlapping bins are fine.
- */
 function frameMaxAbs(signal: Float32Array, frameSize: number): Array<number> {
 	const out: Array<number> = [];
 
@@ -159,12 +138,6 @@ function frameMaxAbs(signal: Float32Array, frameSize: number): Array<number> {
 	return out;
 }
 
-/**
- * Naive single-pass spectral centroid (Hz) of a real signal. Computes the FFT
- * by direct DFT for simplicity (test path; not perf-critical). Operates on
- * a downmixed 16384-sample window from the centre of the signal — coarse but
- * sufficient for a "within an octave" sanity check.
- */
 function spectralCentroidHz(signal: Float32Array, sampleRate: number): number {
 	const windowSize = Math.min(8192, signal.length);
 
@@ -174,13 +147,11 @@ function spectralCentroidHz(signal: Float32Array, sampleRate: number): number {
 	const window = new Float32Array(windowSize);
 
 	for (let n = 0; n < windowSize; n++) {
-		// Hann window
 		const w = 0.5 * (1 - Math.cos((2 * Math.PI * n) / (windowSize - 1)));
 
 		window[n] = (signal[start + n] ?? 0) * w;
 	}
 
-	// Direct DFT magnitude spectrum (real input → first half of bins suffices).
 	const numBins = windowSize / 2;
 	let weightedSum = 0;
 	let magnitudeSum = 0;
@@ -218,17 +189,6 @@ interface SyntheticMix {
 	readonly references: Array<Float32Array>;
 }
 
-/**
- * Build a synthetic target / multi-reference set. The target carries its own
- * fundamental sinusoid plus a scaled+delayed copy of each reference's
- * fundamental — this is what the de-bleed pipeline is supposed to suppress.
- * Each reference carries its own distinct fundamental.
- *
- * Identifiability: each reference's fundamental is a distinct frequency so
- * we can verify the per-reference behaviour downstream by spectrum analysis
- * if needed. For these tests we mostly just need the bleed pipeline to have
- * something to do.
- */
 function synthesiseMix(options: SyntheticMixOptions): SyntheticMix {
 	const { sampleRate, durationSeconds, targetFrequencyHz, bleedSpec } = options;
 	const numSamples = Math.floor(sampleRate * durationSeconds);
@@ -236,11 +196,9 @@ function synthesiseMix(options: SyntheticMixOptions): SyntheticMix {
 	const references = bleedSpec.map(() => new Float32Array(numSamples));
 
 	for (let n = 0; n < numSamples; n++) {
-		// Target: own fundamental at moderate amplitude.
 		target[n] = 0.3 * Math.sin((2 * Math.PI * targetFrequencyHz * n) / sampleRate);
 	}
 
-	// Each reference: own fundamental + add scaled+delayed copy into the target.
 	for (let r = 0; r < bleedSpec.length; r++) {
 		const spec = bleedSpec[r]!;
 		const refSignal = references[r]!;
@@ -249,7 +207,6 @@ function synthesiseMix(options: SyntheticMixOptions): SyntheticMix {
 			refSignal[n] = 0.5 * Math.sin((2 * Math.PI * spec.frequencyHz * n) / sampleRate);
 		}
 
-		// Add bleed into target (scaled, delayed). Floor on delay for safety.
 		const delay = Math.max(0, spec.bleedDelaySamples);
 
 		for (let n = delay; n < numSamples; n++) {
@@ -293,10 +250,7 @@ async function writeFixtures(mix: SyntheticMix, sampleRate: number): Promise<Wri
 // ----- Phase 4.1 ------------------------------------------------------------
 
 describe("deBleed integration", () => {
-	// 4.1 — End-to-end on a 60-s synthetic fixture. Default knobs.
-	// Sample rate 44.1 kHz mirrors `audio.testVoice`; default warmupSeconds = 30
-	// covers the first half of the clip. Bleed is a single reference at a
-	// distinct fundamental, scaled 0.4 with a 11-sample delay.
+	// 44.1 kHz mirrors testVoice; warmupSeconds=30 covers the first half; single reference scaled 0.4, delay 11.
 	it.sequential("processes a 60-s synthetic fixture without NaN, denormals, DC offset, or clipping", async () => {
 		const sampleRate = 44100;
 		const durationSeconds = 60;
@@ -318,16 +272,12 @@ describe("deBleed integration", () => {
 			expect(report.finite).toBe(true);
 			expect(report.nonNan).toBe(true);
 			expect(report.noDenormals).toBe(true);
-			// "No DC offset" per Phase 4.1 brief: |mean(x)| should be small —
-			// the absolute value of the signed mean is the DC component. 1e-3
-			// is the brief's threshold for float32 audio.
+			// DC offset = |signed mean|; 1e-3 is the threshold for float32 audio.
 			let signedSum = 0;
 			for (let index = 0; index < channel.length; index++) signedSum += channel[index] ?? 0;
 			const dcOffset = Math.abs(signedSum / channel.length);
 			expect(dcOffset).toBeLessThan(1e-3);
-			// "No clipping": no samples at ±1.0 (32f output dtype).
 			expect(report.clippedSamples).toBe(0);
-			// Sanity: output length is non-zero.
 			expect(channel.length).toBeGreaterThan(0);
 		} finally {
 			await fixtures.cleanup();
@@ -339,12 +289,7 @@ describe("deBleed integration", () => {
 // ----- Phase 4.2 ------------------------------------------------------------
 
 describe("deBleed multi-reference scaling (Phase 4.2)", () => {
-	// 4.2 — MSAD activity flags correct per channel on a 5-mic synthetic
-	// configuration (1 target + 4 interferers). Probes `computeMsadDecision`
-	// directly — the per-stream MSAD state inside `_process` is internal and
-	// not surfaced through the framework, so this state-level test is the
-	// equivalent verification at the unit boundary that the production code
-	// crosses each frame.
+	// Probes `computeMsadDecision` directly because the per-stream MSAD state inside `_process` is internal and not surfaced.
 	it("MSAD reports each speaker active during its own speech and inactive during silence (5-mic config)", () => {
 		const numBins = 64;
 		const channelCount = 5; // [target, ref0, ref1, ref2, ref3]
@@ -360,8 +305,6 @@ describe("deBleed multi-reference scaling (Phase 4.2)", () => {
 			return pseudoSeed / 0xffffffff - 0.5;
 		};
 
-		// Warmup: 100 frames of quiet noise so the Minimum Statistics tracker
-		// learns a low noise floor across all 5 channels.
 		const noiseLevel = 0.001;
 
 		for (let frame = 0; frame < 100; frame++) {
@@ -375,9 +318,6 @@ describe("deBleed multi-reference scaling (Phase 4.2)", () => {
 			computeMsadDecision(reals, imags, states);
 		}
 
-		// Drive each channel as the sole loud speaker for one phase, then
-		// confirm MSAD picks the right one. After each phase, run a few quiet
-		// frames so the activity detector returns to baseline.
 		for (let activeChannel = 0; activeChannel < channelCount; activeChannel++) {
 			let lastDecision = computeMsadDecision(reals, imags, states);
 
@@ -402,7 +342,6 @@ describe("deBleed multi-reference scaling (Phase 4.2)", () => {
 				expect(lastDecision.referenceActive[activeChannel - 1]!).toBe(true);
 			}
 
-			// Other channels should NOT report active.
 			for (let m = 0; m < channelCount; m++) {
 				if (m === activeChannel) continue;
 
@@ -413,8 +352,6 @@ describe("deBleed multi-reference scaling (Phase 4.2)", () => {
 				}
 			}
 
-			// Quiet recovery period — 20 frames of all-noise so subsequent
-			// active phases start from a settled state.
 			for (let frame = 0; frame < 20; frame++) {
 				for (let m = 0; m < channelCount; m++) {
 					for (let bin = 0; bin < numBins; bin++) {
@@ -428,13 +365,7 @@ describe("deBleed multi-reference scaling (Phase 4.2)", () => {
 		}
 	});
 
-	// 4.2 — Compute scaling: time the same target through refCount = 2, 3, 4
-	// and assert wall-clock(refCount=4) < 3 × wall-clock(refCount=2). 50 %
-	// slack on perfect linear scaling per the plan brief. Uses a short (8-s)
-	// synthetic fixture so the test completes in a few minutes; warmup
-	// behaviour (cap = 30 s) is unaffected by clip length below 30 s.
-	//
-	// Sequential to avoid contention skewing wall-time measurements.
+	// Invariant: wall-clock(refCount=4) < 3 × wall-clock(refCount=2) (50% slack on linear). 8-s fixture keeps warmup (30-s cap) unaffected; sequential to avoid contention skewing timings.
 	it.sequential("compute cost scales roughly linearly with reference count", async () => {
 		const sampleRate = 44100;
 		const durationSeconds = 8;
@@ -463,7 +394,6 @@ describe("deBleed multi-reference scaling (Phase 4.2)", () => {
 
 				wallTimes[refCount] = elapsed;
 
-				// Sanity: output is finite + non-NaN at every refCount.
 				const report = inspectQuality(output[0]!);
 
 				expect(report.finite).toBe(true);
@@ -474,13 +404,11 @@ describe("deBleed multi-reference scaling (Phase 4.2)", () => {
 			const t3 = wallTimes[3]!;
 			const t4 = wallTimes[4]!;
 
-			// Profile data is logged for the plan record.
 			console.warn(
 				`[Phase 4.2 profile] refCount=2 → ${t2.toFixed(0)} ms, refCount=3 → ${t3.toFixed(0)} ms, refCount=4 → ${t4.toFixed(0)} ms ` +
 					`(t4/t2 = ${(t4 / t2).toFixed(2)}, target < 3.0)`,
 			);
 
-			// Plan brief: wall-clock(refCount=4) < 3 × wall-clock(refCount=2).
 			expect(t4).toBeLessThan(3 * t2);
 		} finally {
 			await fixtures.cleanup();

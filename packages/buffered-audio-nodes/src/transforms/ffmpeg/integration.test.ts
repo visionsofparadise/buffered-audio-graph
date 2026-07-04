@@ -48,8 +48,7 @@ describeIfFfmpegFixture("FFmpeg", () => {
 				if (diff > maxAbsDiff) maxAbsDiff = diff;
 			}
 
-			// `anull` is a documented no-op filter on f32le passthrough; samples must
-			// be exact (or below 1e-7 to allow for any internal float promotion).
+			// `anull` is a documented no-op filter on f32le passthrough; samples must be exact (<1e-7 for float promotion).
 			expect(maxAbsDiff).toBeLessThanOrEqual(1e-7);
 		}
 	}, 240_000);
@@ -92,21 +91,16 @@ describeIfFfmpegFixture("FFmpeg", () => {
 		const bufferCount = progressByPhase.get("buffer") ?? 0;
 		const emitCount = progressByPhase.get("emit") ?? 0;
 
-		// A 4096-frame chunk size over a multi-second fixture produces hundreds of
-		// stdin writes / stdout drains; the pre-contract code emitted one progress
-		// event per stdin write. The quantum schedule caps each phase far below that.
+		// Hundreds of stdin writes over the fixture; the quantum schedule caps each phase far below that.
 		const sourceChunks = Math.ceil(inputFrames / 4096);
 
 		expect(sourceChunks).toBeGreaterThan(20);
 
-		// `buffer` has a known total (durationFrames) → default quantum 0.1 gives at
-		// most ~11 boundary crossings plus the forced final.
+		// `buffer` has a known total → default quantum 0.1 gives ≤~11 crossings + the forced final.
 		expect(bufferCount).toBeGreaterThan(0);
 		expect(bufferCount).toBeLessThanOrEqual(13);
 
-		// `emit` is unknown-total (rate-changing filters make output length differ) →
-		// UNKNOWN_TOTAL_QUANTUM_FRAMES (480k) boundaries plus the forced final. For a
-		// short fixture that is just the forced final (1) or a couple of events.
+		// `emit` is unknown-total → UNKNOWN_TOTAL_QUANTUM_FRAMES (480k) boundaries + the forced final.
 		expect(emitCount).toBeGreaterThan(0);
 		expect(emitCount).toBeLessThanOrEqual(Math.ceil(inputFrames / 480_000) + 2);
 

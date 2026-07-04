@@ -161,9 +161,7 @@ describe("chain()", () => {
 		expect(outer.head).toBe(source);
 		expect(outer.tail).toBe(target);
 
-		// source → t1 (via source.children)
 		expect(source.children).toContain(t1);
-		// t2 → target (via t2.children)
 		expect(t2.children).toContain(target);
 	});
 

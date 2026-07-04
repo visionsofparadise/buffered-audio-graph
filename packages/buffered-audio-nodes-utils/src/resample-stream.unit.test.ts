@@ -29,11 +29,6 @@ describeIfFfmpeg("ResampleStream", () => {
 
 		const oneShot = await resampleDirect(ffmpegPath, [left, right], sourceRate, targetRate);
 
-		// Feed the streaming resampler in 1024-frame chunks (typical inner-loop size)
-		// while concurrently consuming stdout via a background read loop. This
-		// exercises the realistic htdemucs flow: writer + reader cooperate against
-		// the same subprocess, and ffmpeg's internal buffering causes input/output
-		// to be misaligned in frame count and arrival time.
 		const stream = new ResampleStream(ffmpegPath, { sourceSampleRate: sourceRate, targetSampleRate: targetRate, channels });
 		const writeChunk = 1024;
 		const readChunk = 4096;
@@ -87,11 +82,9 @@ describeIfFfmpeg("ResampleStream", () => {
 		expect(oneShotRight).toBeDefined();
 		if (!oneShotLeft || !oneShotRight) return;
 
-		// Length: both runs should produce within a couple of frames of each other.
-		// Allow a tiny mismatch for filter-tail boundary differences.
+		// Tolerance allows a tiny length mismatch for filter-tail boundary differences.
 		expect(Math.abs(streamedLeft.length - oneShotLeft.length)).toBeLessThanOrEqual(8);
 
-		// Sample-by-sample: take min length, compare with a small tolerance.
 		const cmpLen = Math.min(streamedLeft.length, oneShotLeft.length);
 		let maxDiff = 0;
 
@@ -103,9 +96,7 @@ describeIfFfmpeg("ResampleStream", () => {
 			if (dr > maxDiff) maxDiff = dr;
 		}
 
-		// SoXR + triangular dither is deterministic given identical inputs, so the
-		// difference between one-shot and streaming should be essentially zero.
-		// Allow 1e-3 tolerance for any internal ffmpeg framing differences.
+		// SoXR + triangular dither is deterministic, so one-shot vs streaming differ only by ffmpeg framing (1e-3 tolerance).
 		expect(maxDiff).toBeLessThan(1e-3);
 	}, 30_000);
 
@@ -134,7 +125,6 @@ describeIfFfmpeg("ResampleStream", () => {
 			const totalFrames = collected.reduce((acc, c) => acc + c.length, 0);
 			const expected = Math.floor(mono.length * targetRate / sourceRate);
 
-			// Allow a few frames of slack for resampler boundary handling.
 			expect(Math.abs(totalFrames - expected)).toBeLessThanOrEqual(8);
 		} finally {
 			await stream.close();

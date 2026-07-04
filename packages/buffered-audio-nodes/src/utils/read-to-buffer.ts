@@ -3,14 +3,7 @@ import type * as Wavefile from "wavefile";
 import wavefileExports from "wavefile/dist/wavefile";
 import { ChunkBuffer, type SourceMetadata } from "@buffered-audio/core";
 
-// wavefile@11 ships a CJS `main` (./dist/wavefile.js) and an ESM `module`
-// (./index.js) whose export shapes differ — a bare "wavefile" import resolves
-// to different entries per tool (esbuild/tsx/Node pick `main`, Vite/vitest pick
-// `module`), so no single bare import works everywhere. Importing the CJS entry
-// by explicit path resolves identically across every runtime AND lets tsup's
-// `noExternal` bundle it into dist/. A `createRequire` runtime require cannot be
-// bundled by esbuild — that is what left `wavefile` unresolved at load time
-// when the package is consumed as a dependency-less `pacote` extract.
+// Import wavefile's CJS entry by explicit path so every runtime resolves it identically and tsup `noExternal` bundles it into dist/; do NOT switch to a bare import or `createRequire` (unbundlable → leaves `wavefile` unresolved in dependency-less pacote extracts).
 const { WaveFile } = wavefileExports as typeof Wavefile;
 
 export interface WavSamples {

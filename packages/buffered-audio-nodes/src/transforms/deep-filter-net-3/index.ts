@@ -35,31 +35,18 @@ export interface DeepFilterNet3Properties extends z.infer<typeof schema>, Transf
 
 export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3Properties> {
 	private session?: OnnxSession;
-	// One DfnState per channel — DFN3's recurrent state is per-source, so stereo input
-	// needs two independent states (matches DTLN's per-channel handling).
-	// Allocated lazily on the first `_process` call so we can size to the actual chunk
-	// channel count rather than guessing.
 	private dfnStates: Array<DfnState> = [];
 
 	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
-		// DML rejects ops in DFN3's graph and silently routes them to CPU per frame, ~5x slower than CPU EP. See plan-dfn-streaming.md.
+		// CPU-only: DML rejects DFN3 ops; see design-onnx-providers.
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
 
 		const sourceRate = this.properties.sampleRate;
 
-		// Source already at 48 kHz — no resampling composition needed; the inference
-		// stream consumes the input directly.
 		if (sourceRate === DFN3_SAMPLE_RATE) {
 			return super._setup(input, context);
 		}
 
-		// Source rate ≠ 48 kHz — chain `upResample` (sourceRate → 48 kHz) before the
-		// inference stream and `downResample` (48 kHz → sourceRate) after it. Per the
-		// _setup() composition pattern in design-streaming.md §The `_setup()` Hook,
-		// inner streams are constructed with properties only, then their `_setup()`
-		// is called in order with `context` flowing through unchanged.
-		// `outputSampleRate` MUST be set explicitly on each FfmpegStream — without it
-		// the wrapper would tag emitted chunks with the input rate (Phase 2 design).
 		const upResample = new FfmpegStream({
 			ffmpegPath: this.properties.ffmpegPath,
 			args: ["-af", `aresample=${DFN3_SAMPLE_RATE}`],
@@ -84,11 +71,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 	override async _process(buffer: ChunkBuffer): Promise<void> {
 		if (!this.session) throw new Error("deep-filter-net-3: stream not set up");
 
-		// Defensive belt-and-braces: the inference stream MUST receive 48 kHz audio.
-		// Composition in `_setup` chains up/down resamplers when source rate ≠ 48 kHz,
-		// so by the time `_process` runs the upstream chunk rate is always 48 kHz.
-		// This guard catches misconfiguration (e.g. caller declared the wrong source
-		// rate) before silently producing garbage.
+		// Guard: caller-declared sampleRate mismatch → throw before garbage; see design-transforms DFN3 failure mode.
 		if (this.sampleRate !== undefined && this.sampleRate !== DFN3_SAMPLE_RATE) {
 			throw new Error(`deep-filter-net-3: inference stream received ${this.sampleRate} Hz audio; expected ${DFN3_SAMPLE_RATE} Hz (composition in _setup should have resampled — check sampleRate property and pipeline setup)`);
 		}
@@ -101,15 +84,10 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 
 		if (frames === 0 || channels === 0) return;
 
-		// dfn3's bufferSize is DFN3_BUFFER_SIZE (~1 s blocks), so the buffer is
-		// small enough to pull in one read. The single-call `read(buffer.frames)`
-		// here is safe because of that bounded `bufferSize`, not because of any
-		// streaming property of `processDfnBlock`.
+		// Single-call read(frames) is safe only because bufferSize bounds the block, not because processDfnBlock streams.
 		await buffer.reset();
 		const chunk = await buffer.read(frames);
 
-		// Lazy per-channel state allocation: framework hands us channel count via
-		// `buffer.channels`, derived from the first chunk in the chunkBuffer.
 		while (this.dfnStates.length < channels) {
 			this.dfnStates.push(createDfnState());
 		}
@@ -130,8 +108,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 			outputChannels.push(denoised);
 		}
 
-		// `reset()` only rewinds read cursors — to replace the buffer's contents
-		// we drop the existing data and write fresh.
+		// reset() only rewinds read cursors, so clear + rewrite to replace contents.
 		await buffer.clear();
 		await buffer.write(outputChannels, sr, bd);
 	}
@@ -157,11 +134,7 @@ export class DeepFilterNet3Node extends TransformNode<DeepFilterNet3Properties> 
 	override readonly type = ["buffered-audio-node", "transform", "deep-filter-net-3"] as const;
 
 	constructor(properties: DeepFilterNet3Properties) {
-		// bufferSize: 100 hops = 48 000 frames = 1 s blocks at 48 kHz. Block-aligned to
-		// `DFN3_HOP_SIZE` so the framework's slicing always feeds `_process` an exact
-		// hop multiple (the trailing partial only happens once via `handleFlush`, and
-		// `processDfnBlock` zero-pads/trims internally for that case).
-		// latency: STFT-iSTFT inherent latency = `DFN3_FFT_SIZE` (960 samples = 20 ms).
+		// bufferSize: 100 hops, DFN3_HOP_SIZE-aligned so slicing feeds exact hop multiples. latency: DFN3_FFT_SIZE = 960 = 20 ms STFT-iSTFT latency.
 		super({ bufferSize: DFN3_BUFFER_SIZE, latency: DFN3_FFT_SIZE, ...properties });
 	}
 

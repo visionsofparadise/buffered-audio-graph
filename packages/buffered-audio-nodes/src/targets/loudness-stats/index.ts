@@ -41,9 +41,6 @@ export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsPrope
 	}
 
 	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<void> {
-		// Eagerly open the sidecar file (matching the waveform target convention)
-		// so an unwritable path fails fast rather than at close time. Empty string
-		// disables the sidecar — programmatic API still works.
 		if (this.properties.outputPath !== "") {
 			this.fileHandle = await open(this.properties.outputPath, "w");
 		}

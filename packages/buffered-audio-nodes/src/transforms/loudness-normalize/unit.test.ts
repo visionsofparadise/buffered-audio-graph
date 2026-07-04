@@ -93,10 +93,6 @@ describe("LoudnessNormalize", () => {
 	const TEST_TIMEOUT_MS = 60_000;
 
 	it("applies output[n] = input[n] × G to floating-point precision", async () => {
-		// Pick a small synthetic input. Compute the expected gain by running
-		// the same BS.1770 measurement against the input directly, then
-		// assert each output sample matches input × G exactly (within float
-		// rounding noise).
 		const target = -16;
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
 		const measured = measureLufs([input], TEST_SAMPLE_RATE);
@@ -106,8 +102,6 @@ describe("LoudnessNormalize", () => {
 
 		expect(output.length).toBe(input.length);
 
-		// Spot-check a handful of points across the buffer; every output
-		// sample should equal input × G to within Float32 rounding.
 		const probes = [0, 100, 1000, 12345, TEST_FRAMES - 1];
 
 		for (const index of probes) {
@@ -130,9 +124,6 @@ describe("LoudnessNormalize", () => {
 	}, TEST_TIMEOUT_MS);
 
 	it("produces a 32-bit-float-safe signal with peaks > 1.0 — no NaN/Inf, peak = inputPeak × G", async () => {
-		// High-peak input + aggressive (loud) target → output peak is forced
-		// above unity. Verify nothing saturates to ±1.0 and the peak matches
-		// the algebraic expectation.
 		const target = -3;
 		const inputPeak = 0.9;
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, inputPeak);
@@ -164,26 +155,16 @@ describe("LoudnessNormalize", () => {
 	}, TEST_TIMEOUT_MS);
 
 	it("renders end-to-end with no ffmpeg involvement", async () => {
-		// The whole point of the migration: no ffmpeg subprocess. ESM
-		// module-namespace exports can't be patched at runtime in vitest
-		// (`Cannot redefine property: spawn`), so spying on
-		// `child_process.spawn` from this test isn't viable. Instead, drive
-		// the stream directly via its `TransformStream` surface — no source
-		// or target nodes are involved, no `ffmpegPath` is supplied
-		// anywhere in the schema, and the node has no code path that would
-		// reach `child_process`. If a future change adds one it has to add
-		// an `ffmpegPath` field to the schema (the only place the package
-		// resolves an ffmpeg binary), which would be visible in review.
+		// ESM namespace exports can't be patched in vitest (`Cannot redefine property: spawn`), so drive
+		// the stream directly. The schema has no `ffmpegPath`, so adding a subprocess would be visible in review.
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
 		const stream = new LoudnessNormalizeStream({ target: -16, bufferSize: Infinity, overlap: 0 });
 		const transformStream = stream.createTransformStream();
 		const writer = transformStream.writable.getWriter();
 		const reader = transformStream.readable.getReader();
 
-		// Drain the readable concurrently with the writer. Awaiting
-		// `writer.close()` before reading deadlocks: closing triggers the
-		// flush handler which back-pressures on `controller.enqueue` until
-		// the reader consumes.
+		// Drain the readable concurrently with the writer: awaiting `writer.close()` first
+		// deadlocks, since the flush handler back-pressures on `enqueue` until the reader consumes.
 		const drain = (async () => {
 			const collected: Array<Float32Array> = [];
 
@@ -207,8 +188,6 @@ describe("LoudnessNormalize", () => {
 
 		expect(totalLength).toBe(input.length);
 
-		// Reassemble and verify it actually applied gain (sanity that the
-		// stream did its work without any subprocess).
 		const output = new Float32Array(totalLength);
 		let writeIndex = 0;
 

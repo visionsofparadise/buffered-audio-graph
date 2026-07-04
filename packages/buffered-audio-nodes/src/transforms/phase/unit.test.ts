@@ -16,7 +16,6 @@ describe("Phase", () => {
     expect(notAnomalous(output).pass).toBe(true);
 
     // Phase inversion negates samples — sum of squares is identical, so somethingChanged won't detect it.
-    // Instead verify samples are actually negated.
     for (let i = 0; i < Math.min(100, input[0]?.length ?? 0); i++) {
       expect(output[0]?.[i]).toBeCloseTo(-(input[0]?.[i] ?? 0), 4);
     }

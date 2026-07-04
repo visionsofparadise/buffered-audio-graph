@@ -1,8 +1,4 @@
-/**
- * Mixed-radix FFT for non-power-of-2 sizes.
- * Uses Cooley-Tukey decimation-in-time with radix-2, radix-3, and radix-5 butterflies.
- * All state is per-instance (safe for concurrent use).
- */
+// All state is per-instance — instances are safe for concurrent use.
 export class MixedRadixFft {
 	private readonly size: number;
 	private readonly radices: Array<number>;
@@ -230,7 +226,6 @@ function factorize(size: number): Array<number> {
 		throw new Error(`MixedRadixFft: size ${size} has unsupported prime factor ${remaining} (only 2, 3, 5 supported)`);
 	}
 
-	// Sort: smallest radices first (innermost to outermost)
 	factors.sort((lhs, rhs) => lhs - rhs);
 
 	return factors;

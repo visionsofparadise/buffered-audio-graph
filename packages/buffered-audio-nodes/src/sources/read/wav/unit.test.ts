@@ -84,19 +84,13 @@ describe("ReadWavStream", () => {
 	}, 240_000);
 
 	it("reads stereo WAV with channel selection to produce mono output", async () => {
-		// First, read the test file to understand its channel count
 		const info = await readWavSamples(testVoice);
 
-		// Skip if the test file is already mono — channel selection needs stereo
 		if (info.channels < 2) {
-			// Create a stereo temp file from the mono source by duplicating the channel
 			const stereoPath = join(tmpdir(), `ban-read-stereo-${randomBytes(8).toString("hex")}.wav`);
 			const monoOutPath = join(tmpdir(), `ban-read-mono-${randomBytes(8).toString("hex")}.wav`);
 
 			try {
-				// Write a stereo version: read mono, write as-is (it will remain mono)
-				// Instead, we need to create stereo input. Use the source as channel 0.
-				// We'll just test that channels=[0] on a mono file produces mono output.
 				const source = read(testVoice, { channels: [0] });
 				const target = write(monoOutPath, { bitDepth: "32f" });
 				source.to(target);
@@ -110,7 +104,6 @@ describe("ReadWavStream", () => {
 				await unlink(monoOutPath).catch(() => undefined);
 			}
 		} else {
-			// File is stereo — select only channel 0
 			const monoOutPath = join(tmpdir(), `ban-read-mono-${randomBytes(8).toString("hex")}.wav`);
 
 			try {
@@ -123,7 +116,6 @@ describe("ReadWavStream", () => {
 				expect(result.channels).toBe(1);
 				expect(result.durationFrames).toBe(info.durationFrames);
 
-				// Verify the selected channel matches the original channel 0
 				const original = await readToBuffer(testVoice);
 				const originalChunk = await original.buffer.read(original.buffer.frames);
 				const originalCh0 = originalChunk.samples[0]!;
@@ -134,7 +126,6 @@ describe("ReadWavStream", () => {
 				const monoCh = monoChunk.samples[0]!;
 				await monoResult.buffer.close();
 
-				// Compare a segment — samples should be very close (32f round-trip)
 				const compareLength = Math.min(1000, originalCh0.length, monoCh.length);
 				for (let i = 0; i < compareLength; i++) {
 					expect(monoCh[i]).toBeCloseTo(originalCh0[i]!, 4);
@@ -153,7 +144,6 @@ describe("ReadWavStream", () => {
 		expect(meta.channels).toBeGreaterThan(0);
 		expect(meta.durationFrames).toBeGreaterThan(0);
 
-		// Calling getMetadata again should work (creates a new stream each time)
 		const meta2 = await source.getMetadata();
 		expect(meta2.sampleRate).toBe(meta.sampleRate);
 		expect(meta2.channels).toBe(meta.channels);

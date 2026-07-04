@@ -78,7 +78,7 @@ async function parseWavFormat(fh: FileHandle, path: string): Promise<WavFormat> 
 			await fh.read(ds64Data, 0, ds64Data.length, offset + 8);
 			ds64DataSize = Number(ds64Data.readBigUInt64LE(8));
 		} else if (chunkId === "JUNK") {
-			// Skip JUNK chunks (placeholder for ds64 in pre-allocated headers)
+			// JUNK chunk: reserved placeholder for a ds64 chunk in pre-allocated headers — skip.
 		} else if (chunkId === "fmt ") {
 			if (chunkSize < 16) throw new Error("WAV fmt chunk too small");
 			const fmtData = Buffer.alloc(chunkSize);

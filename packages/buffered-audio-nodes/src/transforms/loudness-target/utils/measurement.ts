@@ -47,15 +47,6 @@ function emptyMeasurement(): SourceMeasurement {
 	};
 }
 
-/**
- * Streaming source-measurement accumulator for the loudnessTarget node.
- * Fed per-chunk on the way in (`_buffer`); `finalize()` runs the
- * trailing-edge slider flush, gating stats, percentile walk, and
- * assembly at the barrier. See design-loudness-target for the pooled
- * base-rate detection axis, the accumulator field roles, and the
- * `isFinal` trailing-edge invariant (2026-07-04 comment-migration and
- * barrier-reshape entries).
- */
 export class SourceMeasurementAccumulator {
 	private readonly limitPercentile: number;
 	private readonly loudness: LoudnessAccumulator;
@@ -154,11 +145,7 @@ export class SourceMeasurementAccumulator {
 	finalize(): SourceMeasurement {
 		if (this.pushedFrames === 0) return emptyMeasurement();
 
-		// Trailing-edge flush relocated here from the per-chunk walk: the
-		// last chunk is unknowable from a streaming push, so the final
-		// `isFinal=true` push drains the slider's deferred trailing
-		// outputs before assembly. Empty input, `isFinal=true` — no new
-		// frames, only left-edge advances. Histogram totals depend on it.
+		// Final isFinal=true push drains the slider's deferred trailing outputs before assembly; histogram totals depend on it.
 		const trailing = this.slidingWindow.push(new Float32Array(0), true);
 
 		if (trailing.length > 0) {
@@ -195,15 +182,7 @@ export class SourceMeasurementAccumulator {
 	}
 }
 
-/**
- * Walk a `ChunkBuffer` once through a {@link SourceMeasurementAccumulator}
- * and return the assembled {@link SourceMeasurement}. The `LoudnessTargetStream`
- * feeds the accumulator directly from `_buffer` (barrier reshape); this
- * buffer-walking form is retained for the measurement unit tests and as
- * the `_process` fallback when the accumulator was not populated on the
- * way in (e.g. `_process` driven directly). See design-loudness-target
- * for the pooled base-rate detection axis and percentile-walk rationale.
- */
+// Retained: measurement.unit.test.ts caller + _process fallback when the accumulator was not populated on the way in.
 export async function measureSource(buffer: ChunkBuffer, sampleRate: number, limitPercentile: number, halfWidth: number): Promise<SourceMeasurement> {
 	const frames = buffer.frames;
 	const channelCount = buffer.channels;

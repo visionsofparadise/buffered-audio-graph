@@ -44,7 +44,6 @@ describe("PanNode", () => {
 			const leftRms = output.samples[0]![0]!;
 			const rightRms = output.samples[1]![0]!;
 			expect(leftRms).toBeCloseTo(rightRms, 5);
-			// cos(π/4) ≈ 0.7071
 			expect(leftRms).toBeCloseTo(Math.SQRT2 / 2, 4);
 		});
 
@@ -85,27 +84,21 @@ describe("PanNode", () => {
 		it("at full left (pan=-1) left channel at unity, right channel silenced", async () => {
 			const node = pan({ pan: -1 });
 			const output = await applyPan(node, makeStereoChunk(0.8, 0.8));
-			// leftScale = min(1, 1 - (-1)) = 1
 			expect(output.samples[0]![0]).toBeCloseTo(0.8, 4);
-			// rightScale = min(1, 1 + (-1)) = 0
 			expect(output.samples[1]![0]).toBeCloseTo(0.0, 4);
 		});
 
 		it("at full right (pan=1) right channel at unity, left channel silenced", async () => {
 			const node = pan({ pan: 1 });
 			const output = await applyPan(node, makeStereoChunk(0.8, 0.8));
-			// leftScale = min(1, 1 - 1) = 0
 			expect(output.samples[0]![0]).toBeCloseTo(0.0, 4);
-			// rightScale = min(1, 1 + 1) = 1
 			expect(output.samples[1]![0]).toBeCloseTo(0.8, 4);
 		});
 
 		it("at partial right (pan=0.5) reduces left by half, right stays at unity", async () => {
 			const node = pan({ pan: 0.5 });
 			const output = await applyPan(node, makeStereoChunk(1.0, 1.0));
-			// leftScale = min(1, 1 - 0.5) = 0.5
 			expect(output.samples[0]![0]).toBeCloseTo(0.5, 4);
-			// rightScale = min(1, 1 + 0.5) = 1 (clamped)
 			expect(output.samples[1]![0]).toBeCloseTo(1.0, 4);
 		});
 	});

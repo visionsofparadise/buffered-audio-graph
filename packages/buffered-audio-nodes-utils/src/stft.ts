@@ -51,9 +51,6 @@ export function stft(signal: Float32Array, fftSize: number, hopSize: number, out
 
 	const addon = backend ? getFftAddon(backend, fftAddonOptions) : null;
 
-	// Allocate (or borrow) the contiguous destination. When the caller passes
-	// `output`, its `real` / `imag` are assumed sized for at least
-	// `halfSize * numFrames` elements — we write directly into them.
 	const real = output?.real ?? (numFrames > 0 ? new Float32Array(halfSize * numFrames) : new Float32Array(0));
 	const imag = output?.imag ?? (numFrames > 0 ? new Float32Array(halfSize * numFrames) : new Float32Array(0));
 
@@ -62,7 +59,6 @@ export function stft(signal: Float32Array, fftSize: number, hopSize: number, out
 	}
 
 	if (addon) {
-		// Native path: window all frames, then batch FFT.
 		const batchInput = getBatchInput(fftSize, numFrames);
 
 		for (let frame = 0; frame < numFrames; frame++) {
@@ -74,7 +70,6 @@ export function stft(signal: Float32Array, fftSize: number, hopSize: number, out
 		}
 
 		if (typeof addon.batchFftInto === "function") {
-			// Fast path: addon writes directly into caller-owned contiguous buffers.
 			addon.batchFftInto(batchInput.subarray(0, fftSize * numFrames), real.subarray(0, halfSize * numFrames), imag.subarray(0, halfSize * numFrames), fftSize, numFrames);
 		} else {
 			// Backwards-compat path for addon v1.1.x: addon allocates, we copy once.
@@ -87,7 +82,6 @@ export function stft(signal: Float32Array, fftSize: number, hopSize: number, out
 		return { real, imag, frames: numFrames, fftSize };
 	}
 
-	// JS fallback path — per-frame FFT, write directly into the contiguous buffer.
 	const windowed = new Float32Array(fftSize);
 	const workspace = createFftWorkspace(fftSize);
 
@@ -125,7 +119,6 @@ export function istft(result: StftResult, hopSize: number, outputLength: number,
 		let timeDomainBatch: Float32Array;
 
 		if (typeof addon.batchIfftInto === "function") {
-			// Fast path: addon writes directly into caller-owned time-domain buffer.
 			const batchTime = getBatchTime(fftSize, frames);
 
 			addon.batchIfftInto(reView, imView, batchTime.subarray(0, fftSize * frames), fftSize, frames);
@@ -148,7 +141,6 @@ export function istft(result: StftResult, hopSize: number, outputLength: number,
 			}
 		}
 	} else {
-		// JS fallback path
 		const fullRe = new Float32Array(fftSize);
 		const fullIm = new Float32Array(fftSize);
 		const workspace = createFftWorkspace(fftSize);
@@ -300,8 +292,6 @@ function getTwiddleFactors(size: number): { re: Float32Array; im: Float32Array }
 
 	if (cached) return cached;
 
-	// Total twiddle factors needed: sum of halfStep for each stage = size/2 * log2(size)
-	// Layout: for step=2,4,8,...,size, store halfStep entries contiguously
 	const totalFactors = (size / 2) * Math.log2(size);
 	const twRe = new Float32Array(totalFactors);
 	const twIm = new Float32Array(totalFactors);

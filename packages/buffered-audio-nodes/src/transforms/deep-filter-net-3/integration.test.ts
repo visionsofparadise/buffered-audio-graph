@@ -10,7 +10,7 @@ import { deepFilterNet3 } from ".";
 
 const describeIfFixtureSet = hasBinaryFixtures("dfn3", "ffmpeg", "onnxAddon") && hasAudioFixtures("testVoice") ? describe : describe.skip;
 
-// Minimal WAV (32-bit float PCM) writer — just enough for the test pipeline's read path.
+// Minimal 32-bit float WAV writer, sufficient for the read path.
 function encodeWavFloat32(samples: Float32Array, sampleRate: number): Buffer {
 	const numChannels = 1;
 	const bitsPerSample = 32;
@@ -54,7 +54,7 @@ function computeRms(signal: Float32Array): number {
 
 describeIfFixtureSet("deep-filter-net-3", () => {
 	it("processes voice audio", async () => {
-		// test-voice.wav is 44100 Hz — DFN3 chains internal up/down resamplers around the 48 kHz inference stream.
+		// test-voice.wav is 44100 Hz, so DFN3 exercises its internal up/down resamplers around the 48 kHz stream.
 		const transform = deepFilterNet3({
 			modelPath: binaries.dfn3,
 			ffmpegPath: binaries.ffmpeg,
@@ -70,10 +70,7 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 	}, 240_000);
 
 	it("improves SNR on a noisy sine signal", async () => {
-		// Synthetic test: 3-second 440 Hz sine + white noise at 48 kHz. After DFN3
-		// the non-speech broadband noise should be suppressed substantially.
-		// DFN3 is a speech-enhancement model, so a pure tone is a weak proxy for
-		// speech — we only assert a modest noise-reduction floor, not a large one.
+		// DFN3 is a speech model; a pure tone is a weak proxy, so only a modest noise-reduction floor is asserted.
 		const sampleRate = 48000;
 		const durationSeconds = 3;
 		const numSamples = sampleRate * durationSeconds;
@@ -103,10 +100,6 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 			const inputRms = computeRms(input[0] ?? new Float32Array());
 			const outputRms = computeRms(output[0] ?? new Float32Array());
 
-			// Since the input signal is dominated by noise that DFN3 cannot map to
-			// speech, we expect total energy to drop (noise removal). Floor: output
-			// RMS must be at least 1 dB lower than input RMS (a soft floor — the
-			// model is not tuned for pure tones).
 			const reductionDb = 20 * Math.log10((inputRms + 1e-12) / (outputRms + 1e-12));
 
 			expect(reductionDb).toBeGreaterThanOrEqual(1);
@@ -114,16 +107,12 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 		} finally {
 			try {
 				await unlink(tempPath);
-			} catch {
-				// best-effort cleanup
-			}
+			} catch {}
 		}
 	}, 240_000);
 
 	it("processes a 44.1 kHz fixture via internal up/down resample composition", async () => {
-		// Verifies Phase 3.3: when sampleRate ≠ 48000, _setup chains FfmpegStream
-		// instances around the inference stream so the source rate round-trips
-		// correctly. Synthetic 44.1 kHz fixture: 2-second 220 Hz sine + white noise.
+		// Verifies the sampleRate ≠ 48000 composition round-trips the source rate.
 		const sampleRate = 44100;
 		const durationSeconds = 2;
 		const numSamples = sampleRate * durationSeconds;
@@ -153,12 +142,9 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 			const inputChannel = input[0] ?? new Float32Array();
 			const outputChannel = output[0] ?? new Float32Array();
 
-			// Output length matches input length within ±2 frames (resample roundtrip
-			// can drift by a small fractional amount; same tolerance as the ffmpeg
-			// resample-roundtrip test).
+			// ±2 frame tolerance: resample round-trip can drift fractionally.
 			expect(Math.abs(outputChannel.length - inputChannel.length)).toBeLessThanOrEqual(2);
 
-			// Output is non-silent: at least one sample exceeds a small floor.
 			let maxAbs = 0;
 
 			for (let index = 0; index < outputChannel.length; index++) {
@@ -169,14 +155,11 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 
 			expect(maxAbs).toBeGreaterThan(1e-3);
 
-			// Output is well-behaved (no NaN, denorm, DC, clip anomalies).
 			expect(notAnomalous(output).pass).toBe(true);
 		} finally {
 			try {
 				await unlink(tempPath);
-			} catch {
-				// best-effort cleanup
-			}
+			} catch {}
 		}
 	}, 240_000);
 });

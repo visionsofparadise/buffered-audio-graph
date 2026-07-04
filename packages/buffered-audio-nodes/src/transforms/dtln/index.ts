@@ -38,9 +38,9 @@ export const schema = z.object({
 export interface DtlnProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 const DTLN_SAMPLE_RATE = 16000;
-const CHUNK_FRAMES = 16000;            // input-side streaming chunk for buffer reads (1 s at 16 kHz)
-const RESAMPLE_DRAIN_CHUNK = 16384;    // ffmpeg stdout drain block per inner-loop pass
-const STEP_BATCH_SIZE = 16000;         // 16 kHz step outputs accumulated before flushing to resampleOut/output (~125 BLOCK_SHIFTs)
+const CHUNK_FRAMES = 16000; // 1 s at 16 kHz
+const RESAMPLE_DRAIN_CHUNK = 16384;
+const STEP_BATCH_SIZE = 16000; // ~125 BLOCK_SHIFTs
 const WARMUP_SAMPLES = WARMUP_SHIFTS * BLOCK_SHIFT; // 384
 
 interface StreamPair {
@@ -81,11 +81,6 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 
 		await buffer.reset();
 
-		// === Set up streaming resampler subprocesses (if needed). ===
-		// One multi-channel resampler each way; ffmpeg's aresample handles
-		// per-channel independence natively, so a single subprocess per direction
-		// is enough regardless of channel count. DTLN's LSTM state IS per-channel
-		// — those live as one `DtlnBlockStream` instance per channel below.
 		let pair: StreamPair | undefined;
 
 		if (needsResample) {
@@ -103,14 +98,6 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 			};
 		}
 
-		// Accumulate the inferred output into a temp ChunkBuffer (at sourceRate /
-		// 16 kHz as appropriate). The new ChunkBuffer API is append-only on writes,
-		// so we cannot overwrite the original buffer in-place mid-loop — any write
-		// would land *past* the input region and the framework's emit step (which
-		// reads the whole buffer from frame 0) would then emit both the original
-		// input AND the new output. Using a temp output buffer + `clear()` +
-		// copy-back keeps the algorithm correct. Mirrors the Phase 7 htdemucs and
-		// Phase 8 kim-vocal-2 patterns.
 		const output = new ChunkBuffer();
 
 		try {
@@ -124,7 +111,6 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 				pair,
 			});
 
-			// Drop original input; stream-copy output → buffer.
 			await buffer.clear();
 			await output.reset();
 
@@ -166,55 +152,25 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 			streams.push(new DtlnBlockStream({ session1: this.session1, session2: this.session2, fftBackend: this.fftBackend, fftAddonOptions: this.fftAddonOptions }));
 		}
 
-		// Per-channel pre-step accumulator (16 kHz samples not yet enough for a step).
 		const stepAccum: Array<Float32Array> = [];
 
 		for (let ch = 0; ch < channels; ch++) stepAccum.push(new Float32Array(BLOCK_SHIFT));
 		let stepAccumLen = 0;
 
-		// Per-channel batch of step outputs awaiting commit to resampleOut / output.
 		const stepBatch: Array<Float32Array> = [];
 
 		for (let ch = 0; ch < channels; ch++) stepBatch.push(new Float32Array(STEP_BATCH_SIZE));
 		let stepBatchLen = 0;
 
-		// Tracks how many 16 kHz samples we've fed to step() so far. Drives the
-		// "zero-pad to BLOCK_LEN if source ran out short" decision at the tail.
 		let samplesFed = 0;
 
-		// Remaining warm-up samples to drop from step outputs. Once zero, all
-		// subsequent step outputs go into the step batch.
 		let warmupRemaining = WARMUP_SAMPLES;
 
-		// Tracks how many source-rate frames have been written to the temp output
-		// buffer. Used to truncate over-run + zero-pad short-fall at the tail.
 		const writerState = { written: 0 };
 
-		// === Source pump and output drainer (parallel tasks) ===
-		// When resampling, run the source-rate → 16 kHz feeder and the 16 kHz
-		// → source-rate drainer as background tasks. ffmpeg's resampler needs
-		// hundreds of KB of stdin buffered before it produces its first stdout
-		// output (internal SoX-rate FIR delay). A sequential "write-then-read"
-		// in the main loop deadlocks waiting for output that won't materialise
-		// until enough input has accumulated.
-		//
-		// Concurrency contract:
-		// - Source pump drains `buffer` (source rate) into `resampleIn.stdin`;
-		//   call `end()` when done.
-		// - Main loop reads 16 kHz samples from `resampleIn.stdout`, runs DTLN
-		//   step + flush, writes 16 kHz output to `resampleOut.stdin` via
-		//   `commitStepBatch`.
-		// - Output drainer reads source-rate samples from `resampleOut.stdout`
-		//   and appends them to the `output` ChunkBuffer.
-		// - At end-of-stream, main loop closes `resampleOut.stdin`, and the
-		//   drainer's `read()` returns `length === 0` when ffmpeg finishes
-		//   draining its tail.
 		const pumpDone = pair !== undefined ? pumpSourceToResampleIn({ buffer, resampleIn: pair.resampleIn, channels, chunkFrames: CHUNK_FRAMES }) : Promise.resolve();
 		const drainerDone = pair !== undefined ? drainResampleOutToBuffer({ resampleOut: pair.resampleOut, output, channels, sourceRate, bitDepth, originalFrames, writerState }) : Promise.resolve();
 
-		// === Main loop: pull 16 kHz samples (resampled or direct), feed into
-		// per-channel DTLN streams in lockstep, commit BLOCK_SHIFT outputs per
-		// channel back through resampleOut (or directly). ===
 		for (;;) {
 			const got16k = await pullNextChunkAt16k({ buffer, pair, channels, frames: CHUNK_FRAMES });
 
@@ -258,21 +214,9 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 			}
 		}
 
-		// The pump task should already be done by this point (we drained all of
-		// resampleIn's output, which requires the pump to have closed stdin first).
-		// Await defensively to surface any pump-side errors.
+		// Await defensively to surface pump-side errors.
 		await pumpDone;
 
-		// Drainer awaited later, after we've finished pushing through resampleOut.
-
-		// Source exhausted. Any partial samples in `stepAccum` (length <
-		// BLOCK_SHIFT) are silently dropped — this matches the original
-		// `processDtlnFrames` behaviour, where trailing samples below the
-		// BLOCK_SHIFT boundary never enter inference.
-		//
-		// HOWEVER: if we haven't fed BLOCK_LEN samples yet (samplesFed < BLOCK_LEN),
-		// the original WOULD have padded with zeros and fired one block. Reproduce
-		// that here by zero-padding step calls until samplesFed === BLOCK_LEN.
 		if (samplesFed > 0 && samplesFed < BLOCK_LEN) {
 			const zeroInputs: Array<Float32Array> = [];
 
@@ -292,8 +236,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 			}
 		}
 
-		// Drain each per-channel OLA scratch via flush() — returns the trailing
-		// (BLOCK_LEN - BLOCK_SHIFT) = 384 samples per channel.
+		// flush() returns the trailing BLOCK_LEN - BLOCK_SHIFT = 384 samples per channel.
 		const flushOutputs: Array<Float32Array> = [];
 
 		for (let ch = 0; ch < channels; ch++) flushOutputs.push(streams[ch]?.flush() ?? new Float32Array(0));
@@ -312,22 +255,18 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 			}
 		}
 
-		// Commit any remaining step-batch contents (partial batch at tail).
 		if (stepBatchLen > 0) {
 			await commitStepBatch({ stepBatch, length: stepBatchLen, channels, pair, output, sourceRate, bitDepth, originalFrames, writerState });
 			stepBatchLen = 0;
 		}
 
-		// Close output resampler stdin; wait for the drainer to finish copying
-		// the tail into output.
 		if (pair) {
 			await pair.resampleOut.end();
 		}
 
 		await drainerDone;
 
-		// Zero-pad if total written < originalFrames (rate conversion rounding,
-		// or trailing-input-dropped scenarios).
+		// Zero-pad: rate-conversion rounding can leave written < originalFrames.
 		await padTail(output, channels, originalFrames, writerState.written, sourceRate, bitDepth);
 	}
 }
@@ -377,9 +316,7 @@ function appendToStepBatch(args: {
 	let offset = 0;
 	let warmupLeft = warmupRemaining;
 
-	// Drop warm-up samples first (they're zeros from the DtlnBlockStream's
-	// pre-first-inference sliding window — the original `processDtlnFrames`
-	// wrapper trims the same prefix at the end of its flow).
+	// Drop warm-up samples: zeros from the pre-first-inference sliding window, dropped to match `processDtlnFrames`.
 	if (warmupLeft > 0) {
 		const drop = Math.min(warmupLeft, length);
 
@@ -391,10 +328,7 @@ function appendToStepBatch(args: {
 
 	while (offset < length) {
 		if (batchLen >= batchSize) {
-			// Caller is responsible for flushing the batch before more samples
-			// arrive. In normal flow, batchSize is much larger than any single
-			// append (BLOCK_SHIFT = 128 or BLOCK_LEN - BLOCK_SHIFT = 384), so
-			// the batch never overflows mid-append.
+			// Caller must flush the batch before appending; this guards that contract.
 			throw new Error(`appendToStepBatch: batch overflow (offset=${String(offset)}, length=${String(length)}, batchLen=${String(batchLen)}, batchSize=${String(batchSize)}). Caller must flush before appending more.`);
 		}
 
@@ -441,12 +375,8 @@ async function commitStepBatch(args: {
 	}
 
 	if (pair) {
-		// Feed 16 kHz samples into resampleOut.stdin. The background drainer
-		// task (see `drainResampleOutToBuffer`) reads stdout in parallel and
-		// commits source-rate frames to `output`.
 		await pair.resampleOut.write(slices);
 	} else {
-		// Direct path — 16 kHz === sourceRate.
 		const remaining = Math.max(0, originalFrames - writerState.written);
 
 		if (remaining > 0) {
@@ -459,13 +389,6 @@ async function commitStepBatch(args: {
 	}
 }
 
-/**
- * Background drainer for the output resampler: continuously reads source-rate
- * samples from `resampleOut.stdout` and appends them to `output` (clamped to
- * `originalFrames` total). Terminates when `resampleOut.stdout` signals EOF,
- * which happens after the main loop calls `resampleOut.end()` and ffmpeg
- * drains its tail.
- */
 async function drainResampleOutToBuffer(args: {
 	readonly resampleOut: ResampleStream;
 	readonly output: ChunkBuffer;
@@ -487,15 +410,6 @@ async function drainResampleOutToBuffer(args: {
 	}
 }
 
-/**
- * Pull up to `frames` of 16 kHz samples for the DTLN segment loop. When `pair`
- * is set, reads from `resampleIn.stdout`; the producer side is handled by a
- * separate `pumpSourceToResampleIn` task running in parallel (see
- * `runMainPass`). Otherwise reads directly from `buffer` at 16 kHz.
- *
- * Returns a per-channel `Float32Array[]` of equal length, or `undefined` on
- * end-of-stream.
- */
 async function pullNextChunkAt16k(args: {
 	readonly buffer: ChunkBuffer;
 	readonly pair: StreamPair | undefined;
@@ -519,10 +433,6 @@ async function pullNextChunkAt16k(args: {
 		return out;
 	}
 
-	// Resample path: read directly from resampleIn.stdout. The pump task feeds
-	// stdin in the background; read() blocks until ffmpeg produces output, then
-	// returns up to `frames` of 16 kHz samples. `length === 0` signals
-	// end-of-stream (ffmpeg drained its tail after the pump called `end()`).
 	const out = await pair.resampleIn.read(frames);
 	const got = out[0]?.length ?? 0;
 
@@ -531,13 +441,6 @@ async function pullNextChunkAt16k(args: {
 	return out;
 }
 
-/**
- * Drain `buffer` (at sourceRate) into `resampleIn.stdin`, then call `end()`.
- * Runs as a background task in parallel with the main loop's reads from
- * `resampleIn.stdout`. ResampleStream handles per-write backpressure via its
- * internal `pendingDrain` promise, so a slow ffmpeg won't blow up Node's
- * memory.
- */
 async function pumpSourceToResampleIn(args: {
 	readonly buffer: ChunkBuffer;
 	readonly resampleIn: ResampleStream;

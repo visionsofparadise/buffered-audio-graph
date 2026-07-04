@@ -14,11 +14,7 @@ function generateSine(frequency: number, amplitude: number, sampleRate: number, 
 
 describe("LoudnessAccumulator", () => {
 	it("silence yields integrated -Infinity, range 0, and short-term/momentary at the dB floor", () => {
-		// 4 s of silence: long enough for at least one closed 3 s short-term
-		// block. integrated must -Infinity (every block fails the absolute
-		// gate); range must be 0 (fewer than two short-term survivors); the
-		// momentary/shortTerm arrays themselves carry the LUFS_OFFSET +
-		// 10*log10(1e-10) = -100.691 floor for each closed block (ungated).
+		// 4 s of silence gives ≥1 closed 3 s block: integrated -Infinity (absolute-gate fail), range 0 (<2 survivors), and each closed momentary/shortTerm block carries the LUFS_OFFSET + 10*log10(1e-10) = -100.691 floor.
 		const sampleRate = 48000;
 		const silence = new Float32Array(sampleRate * 4);
 
@@ -58,19 +54,14 @@ describe("LoudnessAccumulator", () => {
 
 		const result = accumulator.finalize();
 
-		// Both consume the same K-weighted squared sums and apply the same
-		// 400 ms / 100 ms BS.1770 gating helper, so the integrated value
-		// must match to within float round-off.
+		// Both consume the same K-weighted squared sums and the same 400 ms / 100 ms gating helper, so integrated must match to float round-off.
 		expect(Math.abs(result.integrated - referenceIntegrated) / Math.abs(referenceIntegrated)).toBeLessThan(1e-9);
 
-		// 5 s sine. blockStep = 4800 frames @ 48 kHz.
-		// Momentary blocks: floor((5*48000 - 0.4*48000) / 4800) + 1 = 47.
-		// Short-term blocks: floor((5*48000 - 3*48000) / 4800) + 1 = 21.
+		// momentary = floor((5*48000 - 0.4*48000)/4800)+1 = 47; short-term = floor((5*48000 - 3*48000)/4800)+1 = 21.
 		expect(result.momentary.length).toBe(47);
 		expect(result.shortTerm.length).toBe(21);
 
-		// Sanity: a steady-state sine has all short-term values close to
-		// the integrated value, so the LRA spread is small.
+		// Steady-state sine: all short-term values near integrated, so LRA spread is small (<0.5).
 		expect(result.range).toBeGreaterThanOrEqual(0);
 		expect(result.range).toBeLessThan(0.5);
 	});
@@ -147,8 +138,6 @@ describe("LoudnessAccumulator", () => {
 		const first = accumulator.finalize();
 		const second = accumulator.finalize();
 
-		// Same reference — caches the result object so callers can rely on
-		// repeated reads being free.
 		expect(second).toBe(first);
 		expect(second.momentary).toBe(first.momentary);
 		expect(second.shortTerm).toBe(first.shortTerm);

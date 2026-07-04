@@ -21,10 +21,7 @@ function measure(channels: ReadonlyArray<Float32Array>, sampleRate: number, chan
 }
 
 describe("IntegratedLufsAccumulator", () => {
-	// EBU R128 reference: a 1 kHz sine at -20 dBFS peak (≈ -23 dBFS RMS) measures
-	// -23 LUFS integrated under K-weighting. The K-weighting filter contributes
-	// ~+0.7 dB of gain at 1 kHz which exactly offsets the -0.691 LUFS_OFFSET
-	// plus the small RMS-to-LUFS bookkeeping, landing the measurement at -23.
+	// EBU R128 reference: a 1 kHz sine at -20 dBFS peak (≈ -23 dBFS RMS) measures -23 LUFS; K-weighting's +0.7 dB at 1 kHz offsets the -0.691 LUFS_OFFSET plus RMS-to-LUFS bookkeeping.
 	it("happy path: 1 kHz sine at -20 dBFS yields integrated LUFS within ±0.3 dB of -23", () => {
 		const sampleRate = 48000;
 		const sine = generateSine(1000, 0.1, sampleRate, 5);
@@ -54,9 +51,7 @@ describe("IntegratedLufsAccumulator", () => {
 		const integrated = measure([combined], sampleRate);
 		const activeOnly = measure([sine], sampleRate);
 
-		// If the relative gate were not working, the silent tail would
-		// drag integrated LUFS far below the active region. With the
-		// gate, integrated should sit close to the active-region value.
+		// Without the relative gate the silent tail would drag integrated LUFS far below the active region; the gate keeps it close.
 		expect(integrated).toBeGreaterThan(activeOnly - 1.0);
 		expect(integrated).toBeLessThan(activeOnly + 1.0);
 	});
@@ -64,8 +59,7 @@ describe("IntegratedLufsAccumulator", () => {
 	it("two identical channels are +3.01 dB louder than one (BS.1770 sums channel powers)", () => {
 		const sampleRate = 48000;
 		const sine = generateSine(1000, 0.1, sampleRate, 5);
-		// Use a fresh copy for the second channel because biquad state is
-		// per-channel and we want truly equivalent input on each.
+		// Fresh copy for the second channel — biquad state is per-channel.
 		const sineCopy = Float32Array.from(sine);
 
 		const mono = measure([sine], sampleRate);
@@ -81,8 +75,7 @@ describe("IntegratedLufsAccumulator", () => {
 		const sine = generateSine(1000, 0.1, sampleRate, 5);
 		const noise = new Float32Array(sine.length);
 
-		// Fill the silent channel with a small but non-trivial signal so
-		// we'd notice if its weight weren't actually zeroed.
+		// Non-trivial signal in the zero-weighted channel so we'd notice if its weight weren't actually zeroed.
 		for (let i = 0; i < noise.length; i++) {
 			noise[i] = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / sampleRate);
 		}
@@ -103,11 +96,7 @@ describe("IntegratedLufsAccumulator", () => {
 		expect(Math.abs(lufs48 - lufs441)).toBeLessThan(0.1);
 	});
 
-	// Streaming-equivalence: feeding the same signal through the
-	// accumulator in arbitrary chunk sizes must produce the same number
-	// (within float round-off) as a single big push. Catches biquad-state
-	// drift across push() boundaries and off-by-one errors in the block-
-	// open / block-close accounting.
+	// Streaming-equivalence catches biquad-state drift across push() boundaries and off-by-one errors in block open/close accounting.
 	it("streaming in 4096-frame chunks matches one-shot to within 1e-6 dB", () => {
 		const sampleRate = 48000;
 		const sine = generateSine(1000, 0.1, sampleRate, 5);
@@ -129,10 +118,7 @@ describe("IntegratedLufsAccumulator", () => {
 	});
 
 	it("awkward 7777-frame chunks (misaligned to both blockSize and blockStep) match one-shot", () => {
-		// blockSize = 19200 frames @ 48 kHz, blockStep = 4800 frames. 7777
-		// is coprime to both, so chunk boundaries land at every position
-		// inside the block grid across the run — exercising every off-by-
-		// one path in the open/close accounting.
+		// blockSize=19200, blockStep=4800 @ 48 kHz; 7777 is coprime to both, so chunk boundaries land at every position in the block grid, exercising every off-by-one path.
 		const sampleRate = 48000;
 		const sine = generateSine(1000, 0.1, sampleRate, 5);
 		const oneShot = measure([sine], sampleRate);
@@ -153,8 +139,7 @@ describe("IntegratedLufsAccumulator", () => {
 	});
 
 	it("last partial chunk (N-2 then 2 frames) matches one-shot", () => {
-		// Catches off-by-one in `samplesProcessed` when a tiny tail chunk
-		// closes the final block(s).
+		// Catches off-by-one in `samplesProcessed` when a tiny tail chunk closes the final block(s).
 		const sampleRate = 48000;
 		const sine = generateSine(1000, 0.1, sampleRate, 5);
 		const oneShot = measure([sine], sampleRate);
@@ -185,42 +170,25 @@ describe("getLraConsideredMinLufs", () => {
 	});
 
 	it("single block at -30 LUFS survives both gates and is returned as the min", () => {
-		// Absolute gate: -30 > -70 ✓. Linear-energy mean of one block is
-		// itself, so 10*log10(10^-3) = -30; relative threshold = -50;
-		// the block (-30) is > -50 → survives → min = -30.
+		// One block: relative threshold = -30 + (-20) = -50; -30 > -50 → survives → min = -30.
 		expect(getLraConsideredMinLufs([-30])).toBe(-30);
 	});
 
 	it("blocks [-20, -25, -30, -45, -60] yield min(considered) = -45", () => {
-		// Absolute gate: all five > -70, all survive.
-		// Linear-energy mean:
-		//   sum = 10^-2 + 10^-2.5 + 10^-3 + 10^-4.5 + 10^-6
-		//       ≈ 0.01 + 0.0031623 + 0.001 + 0.0000316 + 0.000001
-		//       ≈ 0.01419492
-		//   mean ≈ 0.002838984
-		//   10*log10(mean) ≈ -25.466
-		//   relativeThreshold ≈ -25.466 + (-20) = -45.466
-		// Strict `>` comparison (matches computeLraFromShortTerm):
-		//   -20, -25, -30, -45 all > -45.466 → survive.
-		//   -60 < -45.466 → gated.
-		// min(considered) = -45.
+		// Linear-energy-mean relativeThreshold ≈ -45.466; under strict `>`, -45 survives and -60 is gated, so min(considered) = -45.
 		expect(getLraConsideredMinLufs([-20, -25, -30, -45, -60])).toBe(-45);
 	});
 
 	it("blocks [-90, -85, -25] yield -25 (absolute gate drops -90 and -85)", () => {
-		// -90 and -85 are both < -70 → fail absolute gate. Only -25 survives.
-		// Single-survivor relative threshold = -25 + (-20) = -45;
-		// -25 > -45 → survives both gates → min = -25.
+		// -90/-85 fail the absolute gate; single survivor -25, relative threshold -45, so min = -25.
 		expect(getLraConsideredMinLufs([-90, -85, -25])).toBe(-25);
 	});
 
 	it("agreement with computeLraFromShortTerm: on a non-trivial fixture where LRA > 0, returns a finite value within the absolute gate", () => {
-		// Build a synthetic short-term sequence by running LoudnessAccumulator
-		// on two concatenated sine tones at different amplitudes — this
-		// produces multiple short-term blocks spanning a real LRA.
+		// Two concatenated sine tones at different amplitudes produce multiple short-term blocks spanning a real (>0) LRA.
 		const sampleRate = 48000;
-		const loudSine = generateSine(1000, 0.1, sampleRate, 6); // ~-23 LUFS
-		const quietSine = generateSine(1000, 0.01, sampleRate, 6); // ~-43 LUFS
+		const loudSine = generateSine(1000, 0.1, sampleRate, 6);
+		const quietSine = generateSine(1000, 0.01, sampleRate, 6);
 		const combined = new Float32Array(loudSine.length + quietSine.length);
 
 		combined.set(loudSine, 0);
@@ -232,20 +200,15 @@ describe("getLraConsideredMinLufs", () => {
 
 		const result = accumulator.finalize();
 
-		// Sanity check on the fixture itself: a real LRA must be positive
-		// for the agreement check to be meaningful.
+		// A real LRA must be positive for the agreement check to be meaningful.
 		expect(result.range).toBeGreaterThan(0);
 		expect(result.shortTerm.length).toBeGreaterThan(0);
 
 		const consideredMin = getLraConsideredMinLufs(result.shortTerm);
 
-		// Helper must return a finite value (the considered set is non-empty
-		// when LRA is computable) within the BS.1770 absolute gate.
+		// Helper must return a finite value within the absolute gate, and its min must be ≤ every considered block (≤ max short-term).
 		expect(Number.isFinite(consideredMin)).toBe(true);
 		expect(consideredMin).toBeGreaterThan(-70);
-		// And the helper's min must lie at or below every short-term block
-		// in the considered set — i.e. ≤ the maximum considered value, which
-		// is bounded above by the maximum short-term block.
 		expect(consideredMin).toBeLessThanOrEqual(Math.max(...result.shortTerm));
 	});
 });

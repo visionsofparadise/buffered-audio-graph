@@ -34,14 +34,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 	private winningPeakGainDb: number | null = null;
 	private unbufferCursorsReady = false;
 
-	/**
-	 * Source-measurement accumulator fed per-chunk on the way in
-	 * (`_buffer`). Lazy-init from the first chunk's rate / channel
-	 * count so `halfWidth` matches `buildBaseRateDetectionCache`'s pool.
-	 * `undefined` when `_process` is driven without any `_buffer` call
-	 * (e.g. the direct-`_process` memory regression path) — `_process`
-	 * then falls back to `measureSource(buffer, …)`.
-	 */
 	private measurementAccumulator?: SourceMeasurementAccumulator;
 
 	public unbufferElapsedMs = 0;
@@ -212,8 +204,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		const limitDbRepr = `${bestLimitDbRepr} (${limitDbSource})`;
 		const expansiveGeometry = result.bestPeakGainDb > result.bestB;
 
-		// Per-attempt trajectory dump — diagnostic for iteration
-		// trajectory (does the secant converge, oscillate, or stall?).
 		for (let attemptIdx = 0; attemptIdx < result.attempts.length; attemptIdx++) {
 			const attempt = result.attempts[attemptIdx];
 

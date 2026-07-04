@@ -55,7 +55,6 @@ describe("DuplicateChannelsNode", () => {
 		const node = duplicateChannels({ channels: 2 });
 		const chunk = makeMonoChunk(0.5);
 		const output = await applyDuplicate(node, chunk);
-		// Mutating one channel should not affect the other
 		const ch0 = output.samples[0]!;
 		const ch1 = output.samples[1]!;
 		ch0[0] = 0.99;

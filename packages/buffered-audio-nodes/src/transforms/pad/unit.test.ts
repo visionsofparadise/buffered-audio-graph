@@ -64,7 +64,6 @@ async function runPad(properties: Parameters<typeof pad>[0], input: Array<AudioC
 	return concatChannel(await drain(output), channel);
 }
 
-/** A mono chunk whose sample i is `0.1 + i * step` (distinct, non-zero values). */
 function makeRamp(frames: number, offset = 0, step = 0.0001): AudioChunk {
 	const channel = new Float32Array(frames);
 
@@ -106,13 +105,10 @@ describe("pad", () => {
 
 		expect(out.length).toBe(leading + inputFrames + trailing);
 
-		// Leading region all zero.
 		for (let i = 0; i < leading; i++) expect(out[i]).toBe(0);
 
-		// Middle region sample-identical to input.
 		for (let i = 0; i < inputFrames; i++) expect(out[leading + i]).toBe(original[i]);
 
-		// Trailing region all zero.
 		for (let i = 0; i < trailing; i++) expect(out[leading + inputFrames + i]).toBe(0);
 	});
 

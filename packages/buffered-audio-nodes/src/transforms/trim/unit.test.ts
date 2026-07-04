@@ -39,7 +39,6 @@ async function drain(readable: ReadableStream<AudioChunk>): Promise<Array<AudioC
 	return out;
 }
 
-/** Concatenate one channel of the emitted chunks into a single Float32Array. */
 function concatChannel(chunks: Array<AudioChunk>, channel: number): Float32Array {
 	const total = chunks.reduce((sum, c) => sum + (c.samples[channel]?.length ?? 0), 0);
 	const out = new Float32Array(total);
@@ -57,7 +56,6 @@ function concatChannel(chunks: Array<AudioChunk>, channel: number): Float32Array
 	return out;
 }
 
-/** Drive a trim stream over the given input chunks and return the concatenated output channel. */
 async function runTrim(properties: Parameters<typeof trim>[0], input: Array<AudioChunk>, channel = 0): Promise<Float32Array> {
 	const node = trim(properties);
 	const stream = node.createStream() as TrimStream;
@@ -66,10 +64,6 @@ async function runTrim(properties: Parameters<typeof trim>[0], input: Array<Audi
 	return concatChannel(await drain(output), channel);
 }
 
-/**
- * Build a single mono chunk: `leadingSilence` zero frames, then `signal` (each
- * sample set to `amplitude`), then `trailingSilence` zero frames.
- */
 function makeChunk(leadingSilence: number, signalFrames: number, trailingSilence: number, amplitude: number, offset = 0): AudioChunk {
 	const frames = leadingSilence + signalFrames + trailingSilence;
 	const channel = new Float32Array(frames);
@@ -79,7 +73,6 @@ function makeChunk(leadingSilence: number, signalFrames: number, trailingSilence
 	return { samples: [channel], offset, sampleRate: SAMPLE_RATE, bitDepth: 32 };
 }
 
-/** Split a chunk's channels into `parts` contiguous chunks with correct offsets. */
 function splitChunk(chunk: AudioChunk, parts: number): Array<AudioChunk> {
 	const frames = chunk.samples[0]?.length ?? 0;
 	const size = Math.ceil(frames / parts);
@@ -108,7 +101,6 @@ describe("trim", () => {
 
 		const out = await runTrim({ margin: 0 }, [input]);
 
-		// margin 0: output is exactly the above-threshold region.
 		expect(out.length).toBe(signal);
 
 		for (let i = 0; i < signal; i++) expect(out[i]).toBe(0.5);
@@ -121,7 +113,6 @@ describe("trim", () => {
 		const frames = lead + signal + trail;
 		const channel = new Float32Array(frames);
 
-		// Ramp above threshold across the signal region so each sample is distinct.
 		for (let i = 0; i < signal; i++) channel[lead + i] = 0.1 + (i / signal) * 0.8;
 
 		const input: AudioChunk = { samples: [channel], offset: 0, sampleRate: SAMPLE_RATE, bitDepth: 32 };
@@ -142,14 +133,11 @@ describe("trim", () => {
 
 		const out = await runTrim({ margin }, [input]);
 
-		// startFrame = firstAbove - marginFrames; endFrame = lastAbove + 1 + marginFrames.
 		expect(out.length).toBe(signal + 2 * marginFrames);
 
-		// The margin regions are the original silence samples (zero) preserved.
 		for (let i = 0; i < marginFrames; i++) expect(out[i]).toBe(0);
 		for (let i = 0; i < marginFrames; i++) expect(out[out.length - 1 - i]).toBe(0);
 
-		// The signal sits exactly in the middle.
 		for (let i = 0; i < signal; i++) expect(out[marginFrames + i]).toBe(0.5);
 	});
 
@@ -163,7 +151,6 @@ describe("trim", () => {
 
 		const out = await runTrim({ margin }, [input]);
 
-		// startFrame clamps to 0 (lead < marginFrames), so leading kept = lead.
 		expect(out.length).toBe(lead + signal + marginFrames);
 
 		for (let i = 0; i < lead; i++) expect(out[i]).toBe(0);
@@ -178,7 +165,6 @@ describe("trim", () => {
 
 		const out = await runTrim({ margin: 0, start: true, end: false }, [input]);
 
-		// start trimmed to firstAbove, end untouched → signal + trailing silence.
 		expect(out.length).toBe(signal + trail);
 
 		for (let i = 0; i < signal; i++) expect(out[i]).toBe(0.5);
@@ -193,7 +179,6 @@ describe("trim", () => {
 
 		const out = await runTrim({ margin: 0, start: false, end: true }, [input]);
 
-		// end trimmed to lastAbove+1, start untouched → leading silence + signal.
 		expect(out.length).toBe(lead + signal);
 
 		for (let i = 0; i < lead; i++) expect(out[i]).toBe(0);
@@ -237,7 +222,6 @@ describe("trim", () => {
 		const input: AudioChunk = { samples: [channel], offset: 0, sampleRate: SAMPLE_RATE, bitDepth: 32 };
 		const out = await runTrim({ margin: 0, threshold }, [input]);
 
-		// Nothing strictly above threshold → treated as all-silent → empty.
 		expect(out.length).toBe(0);
 	});
 
@@ -252,7 +236,6 @@ describe("trim", () => {
 	});
 
 	it("trims silence across a chunk boundary (multi-chunk signal)", async () => {
-		// Signal straddles the split point; margin 0 so the keep region is exact.
 		const whole = makeChunk(600, 900, 600, 0.5);
 		const out = await runTrim({ margin: 0 }, splitChunk(whole, 4));
 

@@ -4,19 +4,6 @@ import { ChunkBuffer } from "./chunk-buffer";
 
 const STRIPE_BYTES = 10 * 1024 * 1024;
 
-/**
- * Build a new `ChunkBuffer` containing the source buffer's frames in reversed
- * order. Source is read in stripes from the end of the temp file via
- * positional `FileHandle.read` (Node's forward-only `ReadStream` doesn't fit
- * reverse iteration); each stripe is frame-reversed in memory and appended
- * to the destination via the standard streamed `write()` API.
- *
- * If `dest` is provided, frames are appended to it. Otherwise a fresh
- * `ChunkBuffer` is allocated and returned.
- *
- * The source's pending writes are flushed first so the on-disk file matches
- * `source.frames`.
- */
 export async function reverseBuffer(source: ChunkBuffer, dest?: ChunkBuffer): Promise<ChunkBuffer> {
 	await source.flushWrites();
 

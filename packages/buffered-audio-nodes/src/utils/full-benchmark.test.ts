@@ -8,20 +8,17 @@ import { ExecutionProvider } from "@buffered-audio/core";
 
 const testVoice = audio.testVoice;
 
-// --- FFT backend configs ---
 const fftConfigs: Array<{ label: string; providers: ReadonlyArray<ExecutionProvider> }> = [
 	{ label: "js", providers: ["cpu"] },
 	{ label: "fftw", providers: ["cpu-native", "cpu"] },
 	{ label: "vkfft", providers: ["gpu", "cpu"] },
 ];
 
-// --- ONNX configs ---
 const onnxConfigs: Array<{ label: string; providers: ReadonlyArray<ExecutionProvider> }> = [
 	{ label: "cpu", providers: ["cpu"] },
 	{ label: "gpu+cpu", providers: ["gpu", "cpu-native", "cpu"] },
 ];
 
-// --- Collect all results ---
 const allResults: Array<{
 	group: string;
 	transform: string;
@@ -42,11 +39,7 @@ function record(group: string, transform: string, backend: string, r: BenchmarkR
 	});
 }
 
-// ============================================================
-// FFT-backend-aware transforms
-// ============================================================
 describe("FFT backends", () => {
-	// dtln (also ONNX — tests FFT portion)
 	for (const { label, providers } of fftConfigs) {
 		it(`dtln [${label}]`, async () => {
 			const t = dtln({ modelPath1: binaries.model1, modelPath2: binaries.model2, ffmpegPath: binaries.ffmpeg, onnxAddonPath: binaries.onnxAddon, vkfftAddonPath: binaries.vkfftAddon, fftwAddonPath: binaries.fftwAddon });
@@ -56,9 +49,6 @@ describe("FFT backends", () => {
 	}
 });
 
-// ============================================================
-// ONNX transforms
-// ============================================================
 describe("ONNX models", () => {
 	for (const { label, providers } of onnxConfigs) {
 		it(`dtln [${label}]`, async () => {
@@ -85,9 +75,6 @@ describe("ONNX models", () => {
 	}
 });
 
-// ============================================================
-// Final summary
-// ============================================================
 describe("summary", () => {
 	it("print results", () => {
 		const pad = (s: string, n: number) => s.padStart(n);
@@ -98,7 +85,6 @@ describe("summary", () => {
 		console.log("  FULL BENCHMARK — test-voice.wav");
 		console.log("=".repeat(90));
 
-		// FFT section
 		console.log("\n  FFT BACKENDS");
 		console.log("  " + "-".repeat(86));
 		console.log(
@@ -140,7 +126,6 @@ describe("summary", () => {
 			);
 		}
 
-		// Real-time multipliers
 		console.log("\n  " + rpad("(real-time)", 22));
 		for (const transform of fftTransforms) {
 			const js = allResults.find((r) => r.group === "fft" && r.transform === transform && r.backend === "js");
@@ -151,7 +136,6 @@ describe("summary", () => {
 			console.log("  " + rpad(transform, 22) + pad(fmt(js), 12) + pad(fmt(fftw), 12) + pad(fmt(vkfft), 12));
 		}
 
-		// ONNX section
 		console.log("\n  ONNX MODELS");
 		console.log("  " + "-".repeat(60));
 		console.log("  " + rpad("Transform", 22) + pad("cpu", 14) + pad("gpu+cpu", 14) + pad("speedup", 12));

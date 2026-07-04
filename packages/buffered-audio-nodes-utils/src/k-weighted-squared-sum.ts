@@ -1,24 +1,5 @@
 import { preFilterCoefficients, rlbFilterCoefficients } from "./biquad";
 
-/**
- * Streaming BS.1770-4 K-weighting front-end.
- *
- * Applies the cascaded pre-filter and RLB high-pass biquads per channel,
- * squares each filtered sample, and sums the channel-weighted squared
- * contributions into a caller-provided per-frame Float64 buffer. The
- * BS.1770 block-summing stage is intentionally absent — that lives in
- * {@link BlockSumAccumulator}; this primitive is the K-weighted squared
- * sum source-of-truth.
- *
- * Channel weighting follows BS.1770-4 Table 4: caller supplies one weight
- * per channel (defaults to 1.0 each, correct for mono and stereo).
- * Surround weighting (Ls/Rs at 1.41) is the caller's responsibility.
- *
- * Biquad state carries across {@link push} calls so chunk boundaries are
- * invisible to the result. The output buffer is caller-owned to avoid
- * per-push allocation; the caller is responsible for sizing it to at
- * least `frames` entries.
- */
 export class KWeightedSquaredSum {
 	private readonly channelCount: number;
 
@@ -33,7 +14,6 @@ export class KWeightedSquaredSum {
 	private readonly rlbA1: number;
 	private readonly rlbA2: number;
 
-	// Per-channel K-weighting biquad state (pre-filter then RLB).
 	private readonly preX1: Float64Array;
 	private readonly preX2: Float64Array;
 	private readonly preY1: Float64Array;
@@ -88,14 +68,7 @@ export class KWeightedSquaredSum {
 		}
 	}
 
-	/**
-	 * Consume `frames` of audio. `channels[c]` must have at least `frames`
-	 * valid samples starting at index 0; oversized buffers are fine.
-	 * `output` must have at least `frames` entries — `output[i]` receives
-	 * the K-weighted, channel-weighted, squared sum at frame `i`. Biquad
-	 * state advances exactly as if the samples were appended to a single
-	 * contiguous buffer.
-	 */
+	// `channels[c]` and `output` need >= `frames` entries from index 0 (oversized OK); `output[i]` gets the K-weighted channel-weighted squared sum at frame `i`; biquad state advances as if appended contiguously.
 	push(channels: ReadonlyArray<Float32Array>, frames: number, output: Float64Array): void {
 		if (channels.length !== this.channelCount) {
 			throw new Error(`KWeightedSquaredSum: push got ${channels.length} channels, expected ${this.channelCount}`);

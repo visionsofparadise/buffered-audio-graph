@@ -21,9 +21,7 @@ function rms(signal: Float32Array): number {
 	return Math.sqrt(sum / signal.length);
 }
 
-// Goertzel-style single-frequency power estimate: returns the squared magnitude
-// at the target frequency bin. Lets us measure energy at a specific frequency
-// without pulling in a full FFT.
+// Goertzel-style single-frequency power estimate — energy at one frequency without a full FFT.
 function goertzelPower(signal: Float32Array, targetHz: number, sampleRate: number): number {
 	const omega = (2 * Math.PI * targetHz) / sampleRate;
 	const coeff = 2 * Math.cos(omega);
@@ -37,7 +35,6 @@ function goertzelPower(signal: Float32Array, targetHz: number, sampleRate: numbe
 		s1 = s0;
 	}
 
-	// Squared magnitude of the DFT bin at targetHz.
 	return s1 * s1 + s2 * s2 - coeff * s1 * s2;
 }
 
@@ -62,8 +59,6 @@ describe("decimate", () => {
 	});
 
 	it("preserves a 1 kHz passband sinewave through 48 kHz → 3.2 kHz decimation", () => {
-		// 1 kHz sits safely below the new Nyquist of 1600 Hz; anti-alias LP at
-		// 0.9 × 1600 = 1440 Hz should leave it largely intact.
 		const sampleRate = 48000;
 		const downsampledRate = 3200;
 		const input = makeSine(1000, sampleRate, sampleRate); // 1 s
@@ -71,9 +66,6 @@ describe("decimate", () => {
 
 		expect(output.length).toBe(Math.floor(input.length / 15));
 
-		// Sample a handful of frequencies around the target and confirm the
-		// dominant energy is within a ±50 Hz window of 1 kHz. Using ±200 Hz
-		// as the "total" band gives a conservative >90% energy fraction target.
 		const innerBandHz = [950, 975, 1000, 1025, 1050];
 		const totalBandHz = [850, 900, 950, 975, 1000, 1025, 1050, 1100, 1150];
 		let innerPower = 0;
@@ -92,16 +84,13 @@ describe("decimate", () => {
 	});
 
 	it("rejects 6 kHz out-of-band content by ≥20 dB through 48 kHz → 3.2 kHz decimation", () => {
-		// 6 kHz is well above the new Nyquist of 1600 Hz and the anti-alias
-		// cutoff of 1440 Hz — the biquad cascade should attenuate it substantially.
 		const sampleRate = 48000;
 		const input = makeSine(6000, sampleRate, sampleRate); // 1 s
 		const output = decimate(input, 15);
 
 		const inputRms = rms(input);
 		const outputRms = rms(output);
-		// Skip the initial transient of the biquad cascade by measuring over the
-		// middle portion of the output.
+		// Skip the biquad cascade's initial transient — measure the middle portion.
 		const midStart = Math.floor(output.length / 4);
 		const midLen = Math.floor(output.length / 2);
 		const midOutput = output.slice(midStart, midStart + midLen);
@@ -109,7 +98,6 @@ describe("decimate", () => {
 		const attenuationDb = 20 * Math.log10(inputRms / Math.max(midRms, 1e-12));
 
 		expect(attenuationDb).toBeGreaterThan(20);
-		// Sanity: the output RMS itself is also much lower than the input RMS.
 		expect(outputRms).toBeLessThan(inputRms * 0.1);
 	});
 

@@ -7,16 +7,11 @@ import { ChunkBuffer, type StreamContext } from "@buffered-audio/core";
 import { Vst3Stream } from ".";
 import { spawnVstHostReady, VstHostExitedBeforeReadyError } from "./utils/process";
 
-// Stub binary mimics the real `vst-host` whole-file CLI shape: parses
-// --stages-json/--sample-rate/--channels, prints READY, echoes stdin → stdout.
-// We pass `process.execPath` (node) as the binary and inject the stub's path
-// via `extraArgs`; this exercises the full spawn / READY / write / read /
-// teardown lifecycle without needing the PyInstaller bundle, but DOES spawn a
-// real subprocess — hence "integration", not "unit".
+// Stub binary mimics the real `vst-host` CLI shape (node as binary + stub via `extraArgs`);
+// spawns a real subprocess exercising the full lifecycle — hence "integration", not "unit".
 const stubBinary = fileURLToPath(new URL("./__fixtures__/stub-binary.mjs", import.meta.url));
 
-// Crash-then-ready stub: crashes (exits before READY) for the first N spawns,
-// then behaves like stubBinary. Spawn count tracked in a per-test counter file.
+// Crashes (exits before READY) for the first N spawns, then behaves like stubBinary; count tracked in a file.
 const crashBinary = fileURLToPath(new URL("./__fixtures__/crash-then-ready.mjs", import.meta.url));
 
 const newCounterFile = async (): Promise<string> => join(await mkdtemp(join(tmpdir(), "vst3-retry-")), "count");
@@ -101,8 +96,7 @@ describe("Vst3Stream subprocess lifecycle", () => {
 	}, 30_000);
 
 	it("handles a non-block-aligned buffer", async () => {
-		// Whole-file mode has no per-block alignment requirement; any positive
-		// frame count must round-trip through the stub.
+		// Whole-file mode has no per-block alignment requirement; any positive frame count must round-trip.
 		const stream = new Vst3Stream({
 			vstHostPath: process.execPath,
 			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
@@ -135,9 +129,7 @@ describe("Vst3Stream subprocess lifecycle", () => {
 
 describe("Vst3Stream init-crash retry", () => {
 	it("re-spawns past a non-deterministic init crash and processes cleanly", async () => {
-		// vst-host crashes (exits 3221225477 before READY) on the first 2 spawns,
-		// succeeds on the 3rd. The buffer must still round-trip through the echo
-		// stub — the retry is transparent to processing.
+		// Crashes (exit 3221225477 before READY) on the first 2 spawns, succeeds on the 3rd; retry is transparent.
 		const counter = await newCounterFile();
 		const stream = new Vst3Stream({
 			vstHostPath: process.execPath,

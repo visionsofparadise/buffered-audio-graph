@@ -8,24 +8,7 @@ import type { AudioChunk } from "./node";
 
 const HIGH_WATER_MARK = 10 * 1024 * 1024;
 
-/**
- * Sequential forward-only audio buffer backed by a temp file. Reads and writes
- * are independent Node streams (`ReadStream` / `WriteStream`) with a 10 MB
- * `highWaterMark` — Node's stream internals act as the cache in front of the
- * file.
- *
- * Reads do not see writes that are still in the writer's cache. Call
- * `flushWrites()` to push the cache to disk; calling `read()` on its own does
- * not flush.
- *
- * `reset()` flushes the writer, ends the reader, and rewinds the write
- * position to byte 0. The next write overwrites the file in place from the
- * start (without truncating — bytes past the new write region are preserved).
- * The next read opens a fresh stream from byte 0.
- *
- * Channel count is locked on the first `write()`. Subsequent writes with a
- * different channel count throw.
- */
+// `reset()` overwrites the file in place without truncating — bytes past the new write region persist until overwritten.
 export class ChunkBuffer {
 	private _frames = 0;
 	private _channels = 0;

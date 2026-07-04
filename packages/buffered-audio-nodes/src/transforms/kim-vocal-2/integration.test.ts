@@ -24,13 +24,7 @@ describeIfFixtureSet("kim-vocal-2", () => {
 		expect(notAnomalous(output).pass).toBe(true);
 	}, 240_000);
 
-	// Exercises the resample path inside `_process` (`needsResample === true`
-	// because the input sample rate differs from kim-vocal-2's 44.1 kHz native).
-	// The transform spawns `ResampleStream` for input + output resampling via
-	// ffmpeg subprocesses with the Phase 9.3 background pump/drainer pattern.
-	// The test only passes if the pump/drainer pattern is correct — otherwise
-	// ffmpeg's ~225 K stdin buffer causes the segment loop to deadlock waiting
-	// for resampler stdout that never arrives.
+	// Exercises the resample path (input rate is not 44.1 kHz); passes only if the background pump/drainer pattern is correct, else ffmpeg's ~225 K stdin buffer deadlocks the segment loop.
 	(hasAudioFixtures("testVoice48k") ? it : it.skip)("processes voice audio at 48 kHz (resample path)", async () => {
 		const transform = kimVocal2({
 			modelPath: binaries.kimVocal2,

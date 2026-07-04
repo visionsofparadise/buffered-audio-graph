@@ -17,10 +17,6 @@ export const stageSchema = z.object({
 		.optional()
 		.meta({ input: "file", mode: "open", accept: ".vstpreset" })
 		.describe("Optional .vstpreset state file applied after the plugin loads"),
-	parameters: z
-		.record(z.string(), z.union([z.number(), z.string(), z.boolean()]))
-		.optional()
-		.describe("Optional parameter overrides applied after presetPath. Keys map to Pedalboard parameter names exposed by the plugin."),
 });
 
 export const schema = z.object({
@@ -40,43 +36,16 @@ export interface Vst3Properties extends TransformNodeProperties {
 	readonly vstHostPath: string;
 	readonly stages: ReadonlyArray<VstStage>;
 	readonly bypass?: boolean;
-	/**
-	 * Extra args appended after the canonical CLI args. Test-only; allows the
-	 * unit tests to spawn `node <stub.mjs>` by passing `node` as `vstHostPath`
-	 * and `[stub.mjs]` here.
-	 */
+	// test-only: spawn `node <stub>` by passing `node` as vstHostPath + [stub] here.
 	readonly extraArgs?: ReadonlyArray<string>;
 }
 
-/**
- * Bypass stream: leaves the buffer untouched. No subprocess spawn, no plugin
- * load. Used when the node is configured with `bypass: true`.
- */
 export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends BufferedTransformStream<P> {
 	override _process(_buffer: ChunkBuffer): void {
 		// Bypass: leave buffer contents untouched.
 	}
 }
 
-/**
- * Whole-file VST3 chain stream. The framework drives `_process` exactly once
- * (after the upstream EOF flushes the accumulated buffer at `bufferSize:
- * WHOLE_FILE`). The buffer is streamed through a `vst-host` subprocess that
- * runs Pedalboard's offline mode (`reset=True`) over the configured chain;
- * Pedalboard handles plugin delay compensation internally so the returned
- * audio is sample-aligned with the input — no leading silence, no tail loss.
- *
- * Memory discipline: although `bufferSize: WHOLE_FILE` schedules the
- * `_process` call after EOF, the JS-side memory cost is bounded.
- * `processStreamingThroughVstHost` drains the buffer to subprocess stdin in
- * `CHUNK_FRAMES`-sized chunks, then `clear()`s the buffer (Pedalboard's
- * offline mode has captured the full input internally by then), then drains
- * subprocess stdout chunk-by-chunk back into the SAME buffer. No temp
- * ChunkBuffer, no stream-copy phase. Disk usage stays at 1× source size.
- * The subprocess holds the full interleaved input in its own RAM
- * (Pedalboard's offline-mode constraint), but that's not part of the Node
- * heap.
- */
 export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends BufferedTransformStream<P> {
 	private streamContext?: StreamContext;
 	private stagesJsonPath?: string;
@@ -113,24 +82,13 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 			String(channels),
 		];
 
-		// iZotope plugins (Neutron especially) intermittently crash vst-host
-		// during plugin init (Windows 0xC0000005, exit 3221225477) before any
-		// audio is written — non-deterministic. `spawnVstHostReady` re-spawns on
-		// that crash (safe: pre-stdin, so idempotent) and fails fast on the
-		// wrapper's deterministic errors. See design-vst3.md (2026-06-01).
+		// Retries the pre-READY init crash (Windows 0xC0000005 / exit 3221225477); see design-vst3.md (2026-06-01).
 		const handle = await spawnVstHostReady(this.properties.vstHostPath, args, {
 			onRetry: (failedAttempt, error) => {
 				this.log("vst-host init crash, retrying", { attempt: failedAttempt, error: error.message }, "warn");
 			},
 		});
 
-		// vst-host's Pedalboard-offline protocol needs the full interleaved
-		// input on stdin before any output is produced (whole-chain plugin
-		// delay compensation). `processStreamingThroughVstHost` drains
-		// `buffer` to stdin chunk-by-chunk, closes stdin, clears the buffer
-		// (input is now captured inside the subprocess), then drains stdout
-		// chunk-by-chunk back into the same `buffer`. In-place — no temp
-		// ChunkBuffer.
 		await processStreamingThroughVstHost(handle, buffer, channels, sampleRate, bd);
 	}
 

@@ -19,23 +19,8 @@ function stftFrameCount(signalLength: number, frameSize: number, hopSize: number
 	return Math.floor((signalLength - frameSize) / hopSize) + 1;
 }
 
-/**
- * Streaming 4× true-peak (dBTP) accumulator that also tracks the
- * input-sample index of the peak — the argmax the Item-7 gate needs.
- *
- * Node-local (NOT the shared `@buffered-audio/utils` `TruePeakAccumulator`,
- * which tracks only the running max, not the argmax). Per channel it holds
- * a `TruePeakUpsampler(4)` whose 12-tap history carries across {@link push}
- * calls so chunk boundaries are invisible to the result. Fed per-chunk from
- * `CrestReduceStream._buffer` in the same channel-major order and with the
- * same first-occurrence (`>`) tie-break and `inputBase + floor(index/4)`
- * input-sample mapping the whole-buffer walk used, so the finalized
- * `{ db, peakInputSample }` is bit-identical to the pre-reshape
- * whole-buffer measurement over the same contiguous samples.
- *
- * `_sampleRate` is unused — the BS.1770-4 Annex 1 polyphase FIR is
- * rate-independent — and is accepted for API symmetry.
- */
+// Node-local (tracks the argmax the Item-7 gate needs, unlike the shared accumulator). The per-channel
+// upsampler's 12-tap history carries across pushes, so the result is bit-identical to a whole-buffer walk.
 export class TruePeakArgmaxAccumulator {
 	private readonly upsamplers: Array<TruePeakUpsampler>;
 	private runningMax = 0;
@@ -83,13 +68,7 @@ export class TruePeakArgmaxAccumulator {
 	}
 }
 
-/**
- * Whole-signal 4× true peak (dBTP) — the gate's single global measurement,
- * driven over a sequential chunked walk of the disk-backed buffer through a
- * cold {@link TruePeakArgmaxAccumulator}. Retained for the
- * {@link binding.ts} `measureWholeSignalTruePeakDb` caller (the node-local
- * `_buffer` measurement uses the accumulator directly).
- */
+// Streaming whole-signal 4× true peak; retained for the binding.ts measureWholeSignalTruePeakDb caller.
 export async function measureBufferTruePeakDb(buffer: ChunkBuffer, sampleRate: number): Promise<number> {
 	const channelCount = buffer.channels;
 	const totalFrames = buffer.frames;
@@ -116,23 +95,15 @@ export async function measureBufferTruePeakDb(buffer: ChunkBuffer, sampleRate: n
 	return accumulator.finalize().db;
 }
 
-/** Per-frame channel-sum window peak metadata captured during the trajectory walk. */
 export interface WindowPeak {
-	/** Window max |peak| (linear). */
 	readonly peakMagnitude: number;
-	/** `peakPriorityAmount(window, 0, frameSize)` — the same headroom value the fit used for this frame (∈ [0,1]). */
 	readonly headroom: number;
 }
 
-/** Item-7 search parameters for the per-binding-peak coefficient search wired into the trajectory walk. */
 export interface ItemSevenSearchParams {
-	/** Whole-signal 4× true peak (dBTP). */
 	readonly globalTruePeakDb: number;
-	/** Input-sample index of the global 4× true peak. */
 	readonly peakInputSample: number;
-	/** Runtime sample rate (Hz). */
 	readonly sampleRate: number;
-	/** Item-7 stability bound `λ ∈ (0,1)`. */
 	readonly lambda: number;
 }
 
@@ -300,20 +271,8 @@ export async function streamLatticeTrajectory(
 	return { trajectory, frameCount, signalLength, windowPeaks, bindingMask };
 }
 
-/**
- * Emission-time per-chunk applicator for the time-varying normalized
- * lattice all-pass. Constructed once per stream with the smoothed control
- * trajectory + geometry; holds the per-channel section state and the
- * absolute sample index and carries them across {@link apply} calls, so
- * feeding it the emitted chunks in order produces output bit-identical to
- * running the lattice over one contiguous pass (the recurrence depends only
- * on the running sample counter and carried state, never on chunk
- * boundaries). Recurrence is transcribed verbatim from `lattice.ts`
- * `processLatticeChannel`; the committed decorrelation amount is already
- * folded into the trajectory rows, so `scale` is the literal `1` identity
- * no-op kept for transcription symmetry with the byte-frozen kernel (there
- * is no exposed group-delay knob).
- */
+// Emission-time per-chunk applicator; carries per-channel state + the absolute sample index across chunks,
+// so the output is bit-identical to a contiguous pass. Recurrence transcribed verbatim from processLatticeChannel.
 export class LatticeApplyState {
 	// Mirrors lattice.ts MAX_REFLECTION (module-private there); both sides must clamp identically.
 	private static readonly MAX_REFLECTION = 0.95;

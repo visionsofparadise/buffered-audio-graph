@@ -27,7 +27,6 @@ describe("WriteModule", () => {
 			expect(result.durationFrames).toBe(original.durationFrames);
 			expect(result.channels).toBe(original.channels);
 
-			// Verify sample data integrity — compare a segment
 			const compareLength = Math.min(1000, original.durationFrames);
 			for (let ch = 0; ch < original.channels; ch++) {
 				const origCh = original.samples[ch]!;
@@ -57,13 +56,11 @@ describe("WriteModule", () => {
 			expect(result.durationFrames).toBe(original.durationFrames);
 			expect(result.channels).toBe(original.channels);
 
-			// 16-bit quantization means less precision, but duration and shape should match
 			const origCh0 = original.samples[0]!;
 			const resultCh0 = result.samples[0]!;
 			const compareLength = Math.min(1000, original.durationFrames);
 
 			for (let i = 0; i < compareLength; i++) {
-				// 16-bit has ~1/32768 precision
 				expect(resultCh0[i]).toBeCloseTo(origCh0[i]!, 3);
 			}
 		} finally {
@@ -87,7 +84,6 @@ describe("WriteModule", () => {
 			expect(result.durationFrames).toBe(original.durationFrames);
 			expect(result.channels).toBe(original.channels);
 
-			// 32f should be lossless for Float32 data
 			const origCh0 = original.samples[0]!;
 			const resultCh0 = result.samples[0]!;
 			const compareLength = Math.min(1000, original.durationFrames);

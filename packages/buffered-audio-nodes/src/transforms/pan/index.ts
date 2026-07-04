@@ -8,14 +8,6 @@ export const schema = z.object({
 
 export interface PanProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-/**
- * Pan transform.
- * - Mono input (1 ch): equal-power pan to stereo.
- * - Stereo input (2 ch): balance (pan shifts gain between existing L/R).
- * - More than 2 channels: throws (unsupported).
- *
- * Equal-power law: L = cos(θ), R = sin(θ), where θ = (pan + 1) / 2 * π/2.
- */
 export class PanStream extends BufferedTransformStream<PanProperties> {
 	override _unbuffer(chunk: AudioChunk): AudioChunk {
 		const { pan } = this.properties;
@@ -25,13 +17,11 @@ export class PanStream extends BufferedTransformStream<PanProperties> {
 			throw new Error(`PanNode supports 1 or 2 channel inputs only, got ${channels}`);
 		}
 
-		// Equal-power angle: pan=-1 -> θ=0 (all left), pan=0 -> θ=π/4, pan=1 -> θ=π/2 (all right)
 		const theta = ((pan + 1) / 2) * (Math.PI / 2);
 		const leftGain = Math.cos(theta);
 		const rightGain = Math.sin(theta);
 
 		if (channels === 1) {
-			// Mono -> stereo
 			const mono = chunk.samples[0] ?? new Float32Array(0);
 			const frames = mono.length;
 			const left = new Float32Array(frames);
@@ -47,8 +37,6 @@ export class PanStream extends BufferedTransformStream<PanProperties> {
 			return { samples: [left, right], offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 		}
 
-		// Stereo balance: linear crossfade between L and R channels.
-		// pan=-1: L=1, R=0; pan=0: L=1, R=1; pan=1: L=0, R=1
 		const inputLeft = chunk.samples[0] ?? new Float32Array(0);
 		const inputRight = chunk.samples[1] ?? new Float32Array(0);
 		const frames = inputLeft.length;
@@ -71,7 +59,7 @@ export class PanNode extends TransformNode<PanProperties> {
 	static override readonly moduleName = "Pan";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Position mono signal in stereo field or adjust stereo balance";
+	static override readonly moduleDescription = "Position mono signal in stereo field or adjust stereo balance; throws for inputs with more than 2 channels";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is PanNode {
 		return TransformNode.is(value) && value.type[2] === "pan";

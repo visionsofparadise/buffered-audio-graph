@@ -11,9 +11,7 @@ import { coldStartSeed, validateTransferSeed } from "./utils/warmup";
 
 const testVoice = audio.testVoice;
 
-// Default Kalman params for unit tests — `R/K` is the hop/fft ratio. At our
-// default 1024/4096 it's 0.25; tests use the same so behaviour matches the
-// node's runtime.
+// R/K is the hop/fft ratio (0.25 at default 1024/4096); must match the node's runtime.
 const DEFAULT_R_OVER_K = 1024 / 4096;
 
 describe("DeBleed", () => {
@@ -25,20 +23,13 @@ describe("DeBleed", () => {
 		expect(somethingChanged(input, output).pass).toBe(true);
 	}, 1_800_000);
 
-	// Phase 2 unit: parameter mappings must hit MEF's documented defaults at the
-	// user-facing default knob positions per design-de-bleed.md "2026-05-01: New
-	// user parameter surface".
+	// Parameter mappings must hit MEF's documented defaults at the default knob positions.
 	describe("MEF parameter mappings", () => {
 		it("adaptationSpeed=3 maps to A=0.998 (MEF Table 1 default)", () => {
 			expect(adaptationSpeedToMarkovForgetting(3)).toBeCloseTo(0.998, 6);
 		});
 
-		// Production LAMBDA_SCALE was retuned 2026-05-02 from MEF's λ=1.5-at-mid
-		// (LAMBDA_SCALE=0.3) to LAMBDA_SCALE=5.0 to close the body HP@100 RMS
-		// gap to within 1 dB of iZotope RX at max strength on real podcast
-		// audio. With the new scale, reductionStrength=5 → λ=25. See
-		// design-de-bleed.md "2026-05-02: RX-parity tuning (Phase 3)" for
-		// sweep data and the trade-off rationale.
+		// Expected λ=25 reflects the LAMBDA_SCALE=5.0 production retune; see design-de-bleed.md.
 		it("reductionStrength=5 maps to lambda=25 (LAMBDA_SCALE=5.0 production default)", () => {
 			expect(reductionStrengthToOversubtraction(5)).toBeCloseTo(25, 6);
 		});
@@ -60,8 +51,7 @@ describe("DeBleed", () => {
 		});
 	});
 
-	// Phase 2.5 unit: degeneracy fallback per the prompt's exact threshold
-	// (NaN; ≥80% bins below 1e-4 × max-bin-magnitude; Inf/denormal).
+	// Degeneracy thresholds: NaN; ≥80% bins below 1e-4 × max-bin-magnitude; Inf/denormal.
 	describe("warmup seed validation", () => {
 		it("accepts a healthy seed", () => {
 			const real = new Float32Array([0.5, 0.4, 0.3, 0.2, 0.1]);
@@ -89,7 +79,7 @@ describe("DeBleed", () => {
 		});
 
 		it("rejects a seed where ≥80% of bins are below 1e-4 × max", () => {
-			// 10 bins; max is 1.0; 9 bins at 1e-7 (= 1e-7 × 1 — well below 1e-4 × 1).
+			// 90% of bins at 1e-7 (max 1.0) — over the 80% gate.
 			const real = new Float32Array([1, 1e-7, 1e-7, 1e-7, 1e-7, 1e-7, 1e-7, 1e-7, 1e-7, 1e-7]);
 			const imag = new Float32Array(10);
 			const validation = validateTransferSeed({ real, imag });
@@ -99,7 +89,7 @@ describe("DeBleed", () => {
 		});
 
 		it("accepts a seed where 70% of bins are below threshold (under 80%)", () => {
-			// 10 bins; max is 1.0; 7 bins at 1e-7 (70% silent — under the 80% gate).
+			// 70% of bins at 1e-7 (max 1.0) — under the 80% gate.
 			const real = new Float32Array([1, 0.5, 0.3, 1e-7, 1e-7, 1e-7, 1e-7, 1e-7, 1e-7, 1e-7]);
 			const imag = new Float32Array(10);
 			const validation = validateTransferSeed({ real, imag });
@@ -125,13 +115,7 @@ describe("DeBleed", () => {
 		});
 	});
 
-	// Phase 2.2-a (post-review correction): the Kalman update must drive Ĥ
-	// towards the true bleed path on a synthetic single-reference fixture.
-	// Convergence target ~2 s of audio per MEF Fig. 8 — at hop=1024 / sr=48000
-	// that's ~94 frames; we run 200 to leave headroom for the post-Eq. 16
-	// state-dependent process noise to settle. Pure-bleed fixture (no target
-	// speech) so the Kalman is at iSIR = +∞ — the favourable end of MEF's
-	// reported regime, where convergence is fastest.
+	// Convergence target ~2 s (~94 frames at hop=1024/sr=48000) per MEF Fig. 8; run 200 for headroom. Pure-bleed fixture (no target speech) → iSIR=+∞.
 	describe("FDAF Kalman convergence on a fixed-path synthetic fixture", () => {
 		it("Ĥ converges towards the true bleed path within ~200 frames", () => {
 			const numBins = 8;
@@ -156,8 +140,6 @@ describe("DeBleed", () => {
 			const bleedTotalReal = new Float32Array(numBins);
 			const bleedTotalImag = new Float32Array(numBins);
 
-			// Synthesise 400 frames: random reference complex values, target = trueH · ref
-			// (i.e. pure bleed, no target speech). Kalman should converge Ĥ → trueH.
 			let pseudoSeed = 0xc0ffee;
 			const pseudoRandom = (): number => {
 				pseudoSeed = (pseudoSeed * 1664525 + 1013904223) >>> 0;
@@ -169,7 +151,6 @@ describe("DeBleed", () => {
 				for (let bin = 0; bin < numBins; bin++) {
 					refReal[bin] = pseudoRandom();
 					refImag[bin] = pseudoRandom();
-					// target = trueH · ref (complex multiply)
 					targetReal[bin] = trueHRe * refReal[bin]! - trueHIm * refImag[bin]!;
 					targetImag[bin] = trueHRe * refImag[bin]! + trueHIm * refReal[bin]!;
 				}
@@ -177,7 +158,6 @@ describe("DeBleed", () => {
 				kalmanUpdateFrame(targetReal, targetImag, [refReal], [refImag], states, kalmanParams, bleedTotalReal, bleedTotalImag, false);
 			}
 
-			// Average across bins to smooth out pseudo-random tail variance.
 			let sumHRe = 0;
 			let sumHIm = 0;
 
@@ -194,12 +174,7 @@ describe("DeBleed", () => {
 		});
 	});
 
-	// Phase 2.2-b (post-review): abrupt-path-change tracking. The reviewer flagged
-	// this as the highest-value missing test — it exercises the dynamic-path
-	// tracking that motivates the new node. Synthesise 800 frames where H_true
-	// flips at frame 400. Assert Ĥ tracks the new path within ~100 frames
-	// (~2.1 s at hop=1024/sr=48000), matching MEF Fig. 8's ~2 s convergence
-	// claim on path-change events.
+	// Abrupt-path-change tracking: H_true flips at frame 400; Ĥ must re-converge within ~100 frames (~2.1 s) per MEF Fig. 8.
 	describe("FDAF Kalman tracks abrupt path change", () => {
 		it("Ĥ re-converges within ~100 frames after a mid-stream H_true flip", () => {
 			const numBins = 8;
@@ -211,8 +186,7 @@ describe("DeBleed", () => {
 			const seed = coldStartSeed(numBins);
 			const states: Array<KalmanState> = [createKalmanState(numBins, seed)];
 
-			// Higher adaptation speed for an abrupt-change test — default A=0.998
-			// would track too slowly to recover within 100 frames.
+			// Higher adaptation speed — default A=0.998 tracks too slowly to recover within 100 frames.
 			const adaptationSpeed = 8;
 			const markovForgetting = adaptationSpeedToMarkovForgetting(adaptationSpeed);
 			const kalmanParams: KalmanParams = {
@@ -252,7 +226,6 @@ describe("DeBleed", () => {
 				kalmanUpdateFrame(targetReal, targetImag, [refReal], [refImag], states, kalmanParams, bleedTotalReal, bleedTotalImag, false);
 			}
 
-			// After 400 frames at path B, Ĥ should be near (hPathBRe, hPathBIm).
 			let sumHRe = 0;
 			let sumHIm = 0;
 
@@ -264,21 +237,14 @@ describe("DeBleed", () => {
 			const meanHRe = sumHRe / numBins;
 			const meanHIm = sumHIm / numBins;
 
-			// Loose tolerance — abrupt flip + finite adaptation rate; the assertion is
-			// that the filter has clearly committed to path B's neighbourhood, NOT
-			// stuck at A.
+			// Loose 0.15 tolerance — asserts the filter committed to path B's neighbourhood, not that it stuck at A.
 			expect(Math.abs(meanHRe - hPathBRe)).toBeLessThan(0.15);
 			expect(Math.abs(meanHIm - hPathBIm)).toBeLessThan(0.15);
 		});
 	});
 
-	// Phase 2.3 unit (post-review): MWF Eq. 25 form regression. With target-only
-	// signal (no interferers) the gain → 1; with interferer-only the gain → 0;
-	// with mixed the gain is in (0, 1). Verify λ scales suppression: at λ=3 we
-	// see more suppression than at λ=0.3 on the same mix.
+	// MWF Eq. 25 invariant: target-only → gain~1, interferer-only → gain~0, mixed → (0,1); higher λ → more suppression.
 	describe("MWF Eq. 25 form regression", () => {
-		// Helper: drive PSD smoothing to steady state by repeating Eq. 28 update
-		// many times, then compute one MWF mask.
 		function runMwfSteadyState(
 			targetReal: Float32Array,
 			targetImag: Float32Array,
@@ -312,8 +278,7 @@ describe("DeBleed", () => {
 			const bleedReal = new Float32Array(numBins);
 			const bleedImag = new Float32Array(numBins);
 
-			// Seed prev-output PSD with target |Y|² so the dominant-bin construction
-			// recognises target-active bins.
+			// Seed prev-output PSD with target |Y|² so the dominant-bin construction recognises target-active bins.
 			const prevOutputPsd = new Float32Array(numBins).fill(0.7 * 0.7);
 
 			const mask = runMwfSteadyState(targetReal, targetImag, bleedReal, bleedImag, 1.5, prevOutputPsd);
@@ -325,8 +290,7 @@ describe("DeBleed", () => {
 
 		it("mask is ~0 when target = predicted bleed (pure interferer)", () => {
 			const numBins = 4;
-			// Y_m = D̂ — the entire target spectrum IS the predicted bleed. Φ̂_YY
-			// (= |Y − D̂|²) is therefore zero, so Φ̂_SS = 0 and W = 0/(0+λ·Φ̂_DD) → 0.
+			// Y_m = D̂: Φ̂_YY = |Y − D̂|² = 0 → Φ̂_SS = 0 → W → 0.
 			const value = 0.7;
 			const targetReal = new Float32Array(numBins).fill(value);
 			const targetImag = new Float32Array(numBins).fill(0);
@@ -369,7 +333,6 @@ describe("DeBleed", () => {
 			const maskHigh = runMwfSteadyState(targetReal, targetImag, bleedReal, bleedImag, 3.0, prevOutputPsd);
 
 			for (let bin = 0; bin < numBins; bin++) {
-				// Higher λ → smaller W (more suppression).
 				expect(maskHigh[bin]!).toBeLessThan(maskLow[bin]!);
 			}
 		});
@@ -390,12 +353,7 @@ describe("DeBleed", () => {
 		});
 	});
 
-	// Phase 3.1 unit: MSAD per MEF §4.1 Eqs. 31–37. The detector's basic
-	// correctness check is "loud channel reports active, silent channel does
-	// not." Synthetic single-talker fixture: one channel carries pseudo-random
-	// signal energy across all bins; the others are silent. After warmup
-	// (Minimum Statistics tracker needs ~D × U = 96 frames to fill its sliding
-	// window), the loud channel should report active.
+	// MSAD invariant: loud channel active, silent inactive. MS tracker needs ~D×U=96 frames to fill its sliding window before the decision is valid.
 	describe("MSAD Eqs. 31–37 single-talker", () => {
 		it("loud channel reports active; silent channel reports inactive", () => {
 			const numBins = 64;
@@ -412,8 +370,6 @@ describe("DeBleed", () => {
 				return pseudoSeed / 0xffffffff - 0.5;
 			};
 
-			// Warmup: 100 frames of all-quiet noise so Minimum Statistics learns
-			// a low noise floor across all channels.
 			const noiseLevel = 0.001;
 
 			for (let frame = 0; frame < 100; frame++) {
@@ -427,8 +383,6 @@ describe("DeBleed", () => {
 				computeMsadDecision(reals, imags, states);
 			}
 
-			// Active phase: ref0 (channel index 1) speaks loudly across all bins;
-			// target (0) and ref1 (2) stay at the noise floor.
 			let lastDecision = computeMsadDecision(reals, imags, states);
 
 			for (let frame = 0; frame < 30; frame++) {
@@ -466,8 +420,6 @@ describe("DeBleed", () => {
 				return pseudoSeed / 0xffffffff - 0.5;
 			};
 
-			// Warmup: 100 frames of quiet noise to seed the Minimum Statistics
-			// noise floor for both channels.
 			const noiseLevel = 0.001;
 
 			for (let frame = 0; frame < 100; frame++) {
@@ -481,10 +433,7 @@ describe("DeBleed", () => {
 				computeMsadDecision(reals, imags, states);
 			}
 
-			// Double-talk phase: each channel's energy concentrates on a disjoint
-			// half of the bins. Even bins → target loud; odd bins → ref loud.
-			// Per Eq. 31's SPR, each channel "wins" its half-bins. Both channels
-			// should report active.
+			// Double-talk: each channel's energy concentrates on a disjoint half of the bins, so each wins its half via Eq. 31's SPR — both report active.
 			let lastDecision = computeMsadDecision(reals, imags, states);
 
 			for (let frame = 0; frame < 30; frame++) {
@@ -507,17 +456,13 @@ describe("DeBleed", () => {
 		});
 	});
 
-	// Phase 3.3 unit: ISP restoration. After ≥ thresholdFrames of silence and a
-	// transition to active, the live Kalman state must be RESTORED to the
-	// previously-stored value rather than carrying any drift accumulated during
-	// the silence.
+	// ISP restoration: after ≥thresholdFrames of silence then a transition to active, the live Kalman state must be RESTORED, not carry drift.
 	describe("ISP restoration on inactive→active transition", () => {
 		it("restores stored Ĥ / P after a pause exceeding the threshold", () => {
 			const numBins = 4;
 			const ispState = createIspState(numBins);
 			const thresholdFrames = 5;
 
-			// Frame 1: ref active. Live Ĥ = (1, 1); applyIsp stores it.
 			const kalmanState = {
 				hReal: new Float32Array(numBins).fill(1),
 				hImag: new Float32Array(numBins).fill(1),
@@ -529,8 +474,6 @@ describe("DeBleed", () => {
 			expect(ispState.hasStored).toBe(true);
 			expect(ispState.inactiveFrames).toBe(0);
 
-			// Pause: 6 frames of inactivity (> threshold of 5). During the pause
-			// the live Kalman state drifts to (3, 3) — what we want to discard.
 			for (let i = 0; i < 6; i++) {
 				applyIspRestoration(kalmanState, ispState, false, thresholdFrames);
 			}
@@ -540,8 +483,6 @@ describe("DeBleed", () => {
 			kalmanState.hImag.fill(3);
 			kalmanState.stateVariance.fill(2);
 
-			// Resume: ref active again — pause exceeded threshold so we should
-			// see RESTORATION, not store. Live state should snap back to (1, 1, 0.5).
 			applyIspRestoration(kalmanState, ispState, true, thresholdFrames);
 
 			for (let bin = 0; bin < numBins; bin++) {
@@ -558,7 +499,6 @@ describe("DeBleed", () => {
 			const ispState = createIspState(numBins);
 			const thresholdFrames = 5;
 
-			// Initial active: store (1, 1, 0.5).
 			const kalmanState = {
 				hReal: new Float32Array(numBins).fill(1),
 				hImag: new Float32Array(numBins).fill(1),
@@ -568,19 +508,16 @@ describe("DeBleed", () => {
 
 			applyIspRestoration(kalmanState, ispState, true, thresholdFrames);
 
-			// Pause: 3 frames (< threshold of 5).
 			for (let i = 0; i < 3; i++) {
 				applyIspRestoration(kalmanState, ispState, false, thresholdFrames);
 			}
 
-			// Live drifts to (2, 2). Resume.
 			kalmanState.hReal.fill(2);
 			kalmanState.hImag.fill(2);
 			kalmanState.stateVariance.fill(0.7);
 
 			applyIspRestoration(kalmanState, ispState, true, thresholdFrames);
 
-			// No restoration — short pause; the new active state IS stored over.
 			for (let bin = 0; bin < numBins; bin++) {
 				expect(kalmanState.hReal[bin]!).toBe(2);
 				expect(kalmanState.hImag[bin]!).toBe(2);

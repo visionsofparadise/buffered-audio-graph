@@ -27,17 +27,10 @@ function maxAbs(signal: Float32Array, start = 0): number {
 }
 
 describe("TruePeakUpsampler (BS.1770-4 Annex 1 polyphase FIR)", () => {
-	// Feeding a single 1.0 sample preceded by zeros and then padding
-	// with zeros lets us read the impulse response straight out of the
-	// output buffer. Phase 0 is the identity tap (output[0] = 1.0).
-	// Phase p at sample n corresponds to coefficient[phase=p][tap=n].
+	// Feeding a 1.0 sample amid zeros reads the impulse response straight from the output; phase 0 identity → output[0]=1.0; phase p at sample n = coefficient[p][n].
 	it("impulse response matches the published phase coefficients", () => {
 		const upsampler = new TruePeakUpsampler(4);
-		// Drive 12 input samples: a 1.0 followed by 11 zeros, then
-		// trailing zeros to flush. After processing input index n, the
-		// output block at indices [n*4, n*4+3] uses x[n], x[n-1], ...
-		// so the impulse response of phase p at input-index n is in
-		// output[n*4 + p].
+		// After input index n, output block [n*4, n*4+3] uses x[n], x[n-1]..., so phase p's impulse response at input index n is in output[n*4 + p].
 		const input = new Float32Array(TAPS);
 
 		input[0] = 1.0;
@@ -47,10 +40,7 @@ describe("TruePeakUpsampler (BS.1770-4 Annex 1 polyphase FIR)", () => {
 		// Phase 0 first output should be exactly 1.0 (identity tap).
 		expect(out[0]).toBe(1.0);
 
-		// Phases 1..3: tap k corresponds to output position
-		// (k * PHASES + phase). The newest sample (the 1.0) was fed at
-		// input index 0 — at input index k it sits k positions back in
-		// the history, weighted by coefficient[phase][k].
+		// Tap k maps to output position k*PHASES + phase; the newest sample sits k positions back at input index k, weighted by coefficient[phase][k].
 		const expectedCoefficients: Array<Array<number>> = [
 			[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 			[
@@ -81,18 +71,7 @@ describe("TruePeakUpsampler (BS.1770-4 Annex 1 polyphase FIR)", () => {
 		}
 	});
 
-	// Constant input. After the 12-tap transient the upsampled output
-	// converges to roughly the input DC value. The BS.1770-4 Annex 1
-	// FIR phases do not have unity DC gain per phase by construction
-	// — the spec optimises for passband response inside a defined
-	// band, not for flat DC across all four phases — so steady-state
-	// per-phase outputs come within ~3% of the input. Empirically:
-	// phase 0 = identity (exact); phase 1 ≈ 0.5008; phase 2 ≈ 0.4865
-	// (sum ≈ 0.973); phase 3 ≈ 0.5008 (mirror of phase 1).
-	// Well within true-peak measurement tolerance (true peak picks
-	// max across all phases — the under-shooting phases never win the
-	// max). The test asserts the looser ~3% bound that the spec
-	// actually delivers.
+	// BS.1770-4 Annex 1 phases lack unity DC gain per phase (spec optimises passband, not flat DC), so steady-state per-phase outputs come within ~3% of input (phase 0 exact; phase 1 ≈ 0.5008; phase 2 ≈ 0.4865; phase 3 ≈ 0.5008); harmless for true peak (under-shooting phases never win the max).
 	it("DC at 0.5 is preserved (within ~3%) after the FIR transient settles", () => {
 		const upsampler = new TruePeakUpsampler(4);
 		const input = new Float32Array(64).fill(0.5);
@@ -104,9 +83,7 @@ describe("TruePeakUpsampler (BS.1770-4 Annex 1 polyphase FIR)", () => {
 		}
 	});
 
-	// A 1 kHz sine at 48 kHz with non-integer samples-per-cycle. After
-	// the FIR settles, the upsampled max should sit ≈ amplitude (no
-	// systematic loss, modest intersample-peak lift).
+	// 1 kHz sine at non-integer samples-per-cycle; after settling the upsampled max ≈ amplitude (no systematic loss).
 	it("1 kHz sine at 0.5 amplitude has upsampled peak ≈ 0.5", () => {
 		const sampleRate = 48000;
 		const frames = sampleRate; // 1 s
@@ -120,42 +97,29 @@ describe("TruePeakUpsampler (BS.1770-4 Annex 1 polyphase FIR)", () => {
 		expect(peak).toBeLessThan(0.55);
 	});
 
-	// Inter-sample peak recovery: a sine just below Nyquist with a
-	// half-sample phase offset places true peaks between sample-grid
-	// points. The sample-grid peak comes in below the actual amplitude
-	// (since the maxima fall between samples); a spec-compliant 4×
-	// upsampler recovers a peak much closer to the true amplitude.
+	// Inter-sample peak recovery: a sine just below Nyquist with a half-sample phase offset puts true peaks between sample points; a spec-compliant 4× upsampler recovers a peak closer to the true amplitude.
 	it("inter-sample peak: sine just below Nyquist with phase offset is recovered above the sample-grid peak", () => {
 		const sampleRate = 48000;
 		const amplitude = 1.0;
-		// Sine at fs/4 - a few hundred Hz, phase π/4 — the sample-grid
-		// peak sits below `amplitude` because the maxima land between
-		// samples. A spec-compliant 4× upsampler should bring the
-		// recovered peak well above the sample-grid peak.
+		// freq = fs/4 - 100, phase π/4 → sample-grid peak sits below amplitude because maxima land between samples.
 		const freqHz = sampleRate / 4 - 100;
 		const frames = 4096;
 		const input = makeSine(freqHz, amplitude, sampleRate, frames, Math.PI / 4);
 
-		// Sample-grid peak baseline.
 		const samplePeak = maxAbs(input);
 
 		const upsampler = new TruePeakUpsampler(4);
 		const out = upsampler.upsample(input);
 
-		// Skip the FIR ramp-up.
 		const truePeak = maxAbs(out, TAPS * 4);
 
 		expect(truePeak).toBeGreaterThan(samplePeak);
-		// True peak should sit close to the actual amplitude (1.0)
-		// with some FIR-imposed slack — the 4× grid still doesn't hit
-		// the exact maximum, but it is much closer than the original
-		// sample grid.
+		// True peak sits near actual amplitude (1.0) with FIR slack — the 4× grid still misses the exact max but is much closer than the sample grid.
 		expect(truePeak).toBeGreaterThan(0.95);
 		expect(truePeak).toBeLessThan(1.05);
 	});
 
-	// State carries across `upsample()` calls. Feeding an input in two
-	// halves must produce byte-identical output to feeding it whole.
+	// State carries across `upsample()` calls; two halves must produce byte-identical output to one whole push.
 	it("streaming continuity: two halves match a single push (byte-identical)", () => {
 		const sine = makeSine(1234, 0.7, 48000, 8192);
 
@@ -177,8 +141,7 @@ describe("TruePeakUpsampler (BS.1770-4 Annex 1 polyphase FIR)", () => {
 		}
 	});
 
-	// reset() should clear state so the same input produces the same
-	// fresh-stream output as a brand-new instance.
+	// reset() should clear state so the same input produces the same fresh-stream output as a new instance.
 	it("reset() restores a cold filter state", () => {
 		const sine = makeSine(1000, 0.5, 48000, 4096);
 

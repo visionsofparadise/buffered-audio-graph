@@ -5,47 +5,10 @@ import { readWavSamples } from "../../utils/read-to-buffer";
 import { audio, hasAudioFixtures } from "../../utils/test-binaries";
 import { crestReduce, CrestReduceNode, CrestReduceStream, schema } from ".";
 
-// ─────────────────────────────────────────────────────────────────────
-// crestReduce invariant suite — RE-SPEC'd to the 2026-05-17 KEYSTONE
-// rework (user-directed, grounded diagnosis):
-//   * `strength` is REMOVED entirely (no schema field, no factory
-//     option, no `_process` destructure, no `strength <= 0` bypass) —
-//     the node ALWAYS applies the optimal value (the per-binding-peak
-//     Item-7 search over the 4×-true-peak objective + commit-only-
-//     if-better decide the realised decorrelation; identity `c=0` is
-//     the guaranteed per-window floor).
-//   * The binding GATE is 4×-true-peak-domain (the window's own 4× true
-//     peak vs the global 4× true peak, SAME domain — OR the global-TP
-//     frame, force-bound) AND headroom.
-//   * The Item-7 COMMIT OBJECTIVE is the cross-channel 4× true-peak
-//     power (not the raw window sample peak).
-//   * The control trajectory IS a per-frame DECORRELATION ENVELOPE: 0
-//     at every non-active frame, the Item-7 optimal at active-band peak
-//     frames; per-peak-exact hold + bidirectional `smoothing` spill
-//     (smoothing-INVARIANT whole-signal reduction).
-//
-// The predecessor `strength` specs ( (iv) monotonicity, (vii)
-// bit-exact bypass ) are SUPERSEDED by explicit user direction (there
-// is no `strength`); they are re-spec'd to real keystone guards (a
-// determinism/idempotence guard, a always-runs-the-path guard), NOT
-// silently dropped. Efficacy / never-worsen / HARD-RULE / streaming
-// guards are NOT weakened.
-//
-// The 2026-05-17 search→CALCULATE resolution replaced the Item-7 Newton
-// + `Math.random` re-acquire with a DETERMINISTIC bounded minimiser, so
-// every search-dependent spec is intrinsically reproducible — there is
-// no RNG, no seed, no `searchRandom` seam.
-// ─────────────────────────────────────────────────────────────────────
-
 const TEST_SAMPLE_RATE = 48_000;
 
-/**
- * Whole-signal 4× true peak (dBTP). A FRESH `TruePeakAccumulator` per
- * call (never reused — its 12-tap polyphase history carries across
- * pushes and its running max only grows; reuse would contaminate the
- * comparison). Shift-invariant, so the lattice's bounded
- * internal/identity group delay does not affect this measurement.
- */
+// FRESH TruePeakAccumulator per call (never reused — its 12-tap history carries across pushes and its
+// running max only grows, so reuse would contaminate the comparison).
 function truePeakDb(channels: ReadonlyArray<Float32Array>, sampleRate: number): number {
 	const accumulator = new TruePeakAccumulator(sampleRate, channels.length, 4);
 
@@ -180,10 +143,6 @@ function makeSparseBinding(frames: number, sampleRate: number): Float32Array {
 	return out;
 }
 
-/**
- * Deterministic synthetic source — LCG-seeded white noise + a low and a
- * high sine, the `makeSynthetic` shape from `loudness-target/unit.test.ts`.
- */
 function makeSynthetic(frames: number, sampleRate: number, seed = 1): Float32Array {
 	const out = new Float32Array(frames);
 	let state = seed >>> 0;
@@ -201,15 +160,7 @@ function makeSynthetic(frames: number, sampleRate: number, seed = 1): Float32Arr
 	return out;
 }
 
-/**
- * Drive `CrestReduceStream` end-to-end as a single input chunk and
- * reassemble the per-channel output — the WHOLE-FILE driving shape
- * (`bufferSize: Infinity`, `overlap: 0`; accumulate-at-flush). The
- * keystone schema (`smoothing` (ms, default 100) / `frameSize` +
- * FFT-addon paths — NO `strength`). The per-binding-peak minimiser is
- * DETERMINISTIC (no RNG, no seed) — identical input ⇒ identical output
- * (the 2026-05-17 search→calculate resolution).
- */
+// WHOLE-FILE drive (bufferSize: Infinity, overlap: 0, accumulate-at-flush); DETERMINISTIC — identical input ⇒ identical output.
 async function runStream(
 	channels: ReadonlyArray<Float32Array>,
 	sampleRate: number,
@@ -332,8 +283,6 @@ describe("CrestReduce discoverability", () => {
 		const parsed = schema.parse({});
 
 		expect("strength" in parsed).toBe(false);
-		// The remaining user surface: `smoothing` (default 100) +
-		// `frameSize` (default 2048) + the FFT-addon paths.
 		expect(parsed.smoothing).toBe(100);
 		expect(parsed.frameSize).toBe(2048);
 	});
@@ -528,7 +477,6 @@ describe("CrestReduce (iii) `smoothing` — present, default 100; reduction smoo
 		const input = makeSparseBinding(SPARSE_FRAMES, TEST_SAMPLE_RATE);
 		const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
 
-		// Same input, deterministic minimiser, ONLY `smoothing` differs.
 		const tight = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 20 });
 		const wide = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 400 });
 
@@ -595,19 +543,6 @@ describe("CrestReduce (iii) `smoothing` — present, default 100; reduction smoo
 	}, TIMEOUT);
 });
 
-/**
- * ───── (iv): determinism / reproducibility (SUPERSEDES the predecessor
- * `strength` monotonicity spec — there is no `strength`) ─────
- * Re-spec'd guard, NOT a silent drop: with no `strength`, the prior
- * "higher strength ⇒ ≤ TP / ≥ reduction" monotonicity is void by user
- * direction. The keystone guarantee in its place: the node is fully
- * DETERMINISTIC — the 2026-05-17 search→calculate resolution replaced
- * the Item-7 Newton + `Math.random` re-acquire with a deterministic
- * bounded minimiser, so the same input + params yields a BIT-IDENTICAL
- * output (no RNG, no seed anywhere on the search/gate/envelope path),
- * and a genuine reduction holds on headroom-bearing content (efficacy
- * is not weakened).
- */
 describe("CrestReduce (iv) determinism / reproducibility (re-spec of the superseded `strength` monotonicity)", () => {
 	const TIMEOUT = 120_000;
 	const FRAMES = TEST_SAMPLE_RATE;
@@ -702,21 +637,10 @@ describe("CrestReduce (vi) silence / sub-frame", () => {
 	}, TIMEOUT);
 });
 
-/**
- * ───── (vii): the node ALWAYS runs the gate/search/lattice path
- * (SUPERSEDES the predecessor `strength = 0` bit-exact bypass — there
- * is no bypass) ─────
- * Re-spec'd guard, NOT a silent drop: the 2026-05-17 keystone removed
- * the `strength` parameter and its `strength <= 0` early-return. There
- * is NO node-level bypass — the node always runs the path. Assert that
- * directly: on real-ish content the output is length-preserving,
- * finite, and a genuine transform was applied (%changed > 0 — NOT a
- * passthrough). The per-binding minimiser is deterministic (no RNG), so
- * the path runs identically every time.
- */
+// the node always runs the path — no bypass (there is no `strength`).
 describe("CrestReduce (vii) always runs the path — no bypass (re-spec of the superseded `strength = 0` bypass)", () => {
 	const TIMEOUT = 60_000;
-	const SYNTHETIC_FRAMES = TEST_SAMPLE_RATE; // 1 s — spans many frame/hop cycles
+	const SYNTHETIC_FRAMES = TEST_SAMPLE_RATE;
 
 	it("synthetic LCG content is genuinely transformed (no bypass; deterministic path), length-preserving and finite", async () => {
 		const input = makeSynthetic(SYNTHETIC_FRAMES, TEST_SAMPLE_RATE);

@@ -4,9 +4,6 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({});
 
-/**
- * Downmix N channels to 1 by averaging all channels equally.
- */
 export class DownmixMonoStream extends BufferedTransformStream {
 	override _unbuffer(chunk: AudioChunk): AudioChunk {
 		const channels = chunk.samples.length;

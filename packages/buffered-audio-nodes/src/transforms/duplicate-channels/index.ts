@@ -8,10 +8,6 @@ export const schema = z.object({
 
 export interface DuplicateChannelsProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-/**
- * Duplicate a single mono channel into N identical output channels.
- * Requires exactly 1 input channel; throws for any other channel count.
- */
 export class DuplicateChannelsStream extends BufferedTransformStream<DuplicateChannelsProperties> {
 	override _unbuffer(chunk: AudioChunk): AudioChunk {
 		const inputChannels = chunk.samples.length;
@@ -36,7 +32,7 @@ export class DuplicateChannelsNode extends TransformNode<DuplicateChannelsProper
 	static override readonly moduleName = "Duplicate Channels";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Duplicate a mono signal into multiple identical output channels";
+	static override readonly moduleDescription = "Duplicate a mono signal into multiple identical output channels; requires exactly 1 input channel, throws otherwise";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is DuplicateChannelsNode {
 		return TransformNode.is(value) && value.type[2] === "duplicate-channels";

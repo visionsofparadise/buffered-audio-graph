@@ -72,22 +72,6 @@ describe("Vst3Node schema", () => {
 		expect(result.success).toBe(false);
 	});
 
-	it("accepts a parameters override map", () => {
-		const result = schema.parse({
-			stages: [
-				{ pluginPath: "/p", parameters: { freq: 5506, threshold: -16, sidechain: "HighPass ", bypass: false } },
-			],
-		});
-
-		expect(result.stages[0]!.parameters).toEqual({ freq: 5506, threshold: -16, sidechain: "HighPass ", bypass: false });
-	});
-
-	it("rejects a parameters value of an unsupported type", () => {
-		const result = schema.safeParse({ stages: [{ pluginPath: "/p", parameters: { freq: { nested: 5506 } } }] });
-
-		expect(result.success).toBe(false);
-	});
-
 	it("rejects a non-boolean bypass", () => {
 		const result = schema.safeParse({ stages: [{ pluginPath: "/p" }], bypass: "yes" });
 
@@ -129,10 +113,7 @@ describe("Vst3Node bypass short-circuit", () => {
 		const node = vst3({ vstHostPath: "/missing/binary", stages: [{ pluginPath: "/missing/plugin.vst3" }], bypass: true });
 		const stream = node.createStream();
 
-		// Bypass must NOT spawn a subprocess; missing paths would make any spawn
-		// fail loudly. The Vst3PassthroughStream type assertion already proves
-		// the short-circuit; this is a behavioural cross-check on the in-process
-		// passthrough.
+		// Bypass must NOT spawn a subprocess; the missing paths would make any spawn fail loudly.
 		await stream.setup(dummyInput(), buildContext());
 
 		const samples = [Float32Array.from([0.1, -0.2, 0.3, -0.4, 0.5]), Float32Array.from([-0.1, 0.2, -0.3, 0.4, -0.5])];

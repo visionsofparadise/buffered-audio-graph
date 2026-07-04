@@ -3,22 +3,7 @@ import { binaries, hasBinaryFixtures } from "../../../utils/test-binaries";
 import { createOnnxSession } from "../../../utils/onnx-runtime";
 import { BLOCK_SHIFT, DtlnBlockStream, WARMUP_SHIFTS, processDtlnFrames } from "./dtln";
 
-/**
- * Bit-exact equivalence test for the new `DtlnBlockStream` streaming-block API.
- *
- * Builds two outputs for the same input signal:
- *
- * 1. **Whole-array reference** — `processDtlnFrames(signal)`, which itself is
- *    implemented atop `DtlnBlockStream` plus a warm-up/trim wrapper.
- * 2. **Manual streaming caller** — feeds the same signal `BLOCK_SHIFT` samples
- *    at a time directly into `DtlnBlockStream.step()`, then calls `flush()` and
- *    applies the same warm-up trim.
- *
- * The two paths must produce bit-identical output. If they ever diverge, the
- * `DtlnBlockStream` class has state leakage between blocks or its OLA
- * accumulation has drifted out of sync with what `processDtlnFrames` does
- * internally.
- */
+// Whole-array and manual-streaming paths must be bit-identical; divergence means state leakage / OLA drift in `DtlnBlockStream`.
 const describeIfFixtureSet = hasBinaryFixtures("model1", "model2", "onnxAddon") ? describe : describe.skip;
 
 describeIfFixtureSet("DtlnBlockStream bit-exact equivalence", () => {
@@ -27,9 +12,7 @@ describeIfFixtureSet("DtlnBlockStream bit-exact equivalence", () => {
 		const session2 = createOnnxSession(binaries.onnxAddon, binaries.model2, { executionProviders: ["cpu"] });
 
 		try {
-			// 1 second @ 16 kHz = 16000 frames. Deterministic pseudo-random signal
-			// (LCG, fixed seed) — avoids reliance on test audio fixtures and stays
-			// representative of broadband noise that exercises the masking model.
+			// Deterministic LCG (fixed seed): broadband noise exercising the masking model without fixtures.
 			const length = 16000;
 			const signal = new Float32Array(length);
 			let state = 0x12_34_56_78;
@@ -39,12 +22,8 @@ describeIfFixtureSet("DtlnBlockStream bit-exact equivalence", () => {
 				signal[index] = (state / 0x80_00_00_00 - 1) * 0.3;
 			}
 
-			// Reference: whole-array path.
 			const reference = processDtlnFrames(signal, session1, session2);
 
-			// Streaming: feed BLOCK_SHIFT-sized blocks one at a time, then flush.
-			// Match the same totalSteps / warm-up / trim contract that
-			// `processDtlnFrames` follows so the two outputs align.
 			const BLOCK_LEN = 512;
 			const effectiveLength = Math.max(length, BLOCK_LEN);
 			const lastOffset = Math.floor((effectiveLength - BLOCK_LEN) / BLOCK_SHIFT) * BLOCK_SHIFT;
@@ -100,7 +79,7 @@ describeIfFixtureSet("DtlnBlockStream bit-exact equivalence", () => {
 
 			expect(streamed.length).toBe(reference.length);
 
-			// Bit-exact: every sample identical (no tolerance).
+			// Bit-exact: no tolerance.
 			let firstDiff = -1;
 
 			for (let index = 0; index < length; index++) {

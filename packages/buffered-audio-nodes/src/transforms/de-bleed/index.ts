@@ -10,11 +10,6 @@ import { computeMwfMask, createInterfererPsdState, reductionStrengthToOversubtra
 import { applyIspRestoration, computeMsadDecision, createIspState, createMsadChannelState, ISP_THRESHOLD_FRAMES, type IspState, type MsadChannelState } from "./utils/mef-msad";
 import { coldStartSeed, validateTransferSeed } from "./utils/warmup";
 
-// New parameter surface per design-de-bleed.md 2026-05-01 "New user parameter
-// surface — `reductionStrength`, `artifactSmoothing`, `adaptationSpeed` over
-// 0–10". `references` carries over the 2026-04-21 multi-reference decision.
-// The old `referencePath` field is removed; old NLMS-era `filterLength` /
-// `stepSize` stay removed.
 export const schema = z.object({
 	references: z.array(z.string()).default([]).describe("References"),
 	reductionStrength: z.number().min(0).max(10).multipleOf(0.1).default(5).describe("Reduction Strength"),
@@ -37,11 +32,6 @@ export const schema = z.object({
 
 export interface DeBleedProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-// Streaming chunked `_process` budget and carry constants. See
-// design-de-bleed.md 2026-04-21 "Streaming chunked two-pass `_process`" for the
-// per-chunk STFT matrix budget and 2026-04-21 "DFTT batched via addon 2D FFT"
-// for the DFTT batched-buffer peak (~73 MB at default params) that motivates
-// the 96 MB ceiling.
 const BUDGET_BYTES = Number(process.env.DEBLEED_BUDGET_BYTES) || 96 * 1024 * 1024;
 const MATRIX_COUNT = 5;
 const FLOOR_FRAMES = 256;
@@ -49,23 +39,10 @@ const CEILING_FRAMES = Number(process.env.DEBLEED_CEILING_FRAMES) || 4096;
 const MAX_CARRY_FRAMES = 32;
 const STREAM_COPY_FRAMES = 44100;
 
-// MEF parameter constants per design-de-bleed.md "2026-05-01: New user
-// parameter surface" + "2026-05-01: Replace stages 1+2 with MEF".
-//
-//   λ = 0.3 · reductionStrength    (linear, default 1.5 at user 5)
-//   A = 0.998^(2^((s−3)/3))        (default 0.998 at user 3)
-//   β = 0.5                         (PSD temporal smoothing, MEF default)
-//   warmupSeconds = 30              (~6× MEF's 2-s convergence time)
-//   R/K = hopSize / fftSize         (MEF Eq. 23 factor; 0.25 at default 1024/4096)
-//
-// `K_kalman` (per-bin count for the Kalman state) is derived from `fftSize`
-// per design-de-bleed.md "2026-05-01: Use existing fftSize=4096 STFT for MEF
-// stages 1+2". Single internal constant referencing fftSize so a future move
-// to a parallel-STFT design (Option B) is a one-place change.
 const MEF_TEMPORAL_SMOOTHING = 0.5;
 const WARMUP_SECONDS = 30;
 const MWF_EPSILON = 1e-10;
-const ARTIFACT_THRESHOLD_SCALE = 0.15; // user 0–10 × 0.15 → threshold 0–1.5 (matches legacy 0–15 × 0.1)
+const ARTIFACT_THRESHOLD_SCALE = 0.15;
 
 function computeChunkFrames(numBins: number): number {
 	const rawFrames = Math.floor(BUDGET_BYTES / (MATRIX_COUNT * numBins * 4));
@@ -80,31 +57,6 @@ function allocateStftOutput(frames: number, numBins: number): StftOutput {
 	};
 }
 
-/**
- * Sequential window reader for the de-bleed STFT pipeline.
- *
- * Each de-bleed STFT "chunk" needs `winFrames * hopSize + (fftSize - hopSize)`
- * sample-domain samples covering a virtual signal that consists of:
- *   - `edgePadSamples` zeros (leading virtual edge pad)
- *   - `totalFrames` real samples from the underlying ChunkBuffer
- *   - `edgePadSamples` zeros (trailing virtual edge pad)
- *
- * Successive chunks step by `chunkFrames * hopSize` virtual samples and
- * overlap by `(winFrames - chunkFrames) * hopSize` samples on each side
- * (`carry * hopSize` on each side, except clipped at virtual edges).
- *
- * `WindowReader` reads from the underlying ChunkBuffer sequentially —
- * `await buffer.reset()` before instantiating, then call `advance()` once per
- * chunk to slide the per-channel scratch left by `step` samples and append the
- * next `step` samples (zero-padded if the buffer is exhausted). The reader
- * tracks its position in the virtual signal so the first chunk's scratch is
- * prefilled with `edgePadSamples` leading zeros, and the last chunks zero-fill
- * the trailing tail naturally when the buffer returns short reads.
- *
- * This replaces the previous offset-based `readChunkIntoPadded` helper. Both
- * the target and each reference buffer drive their own `WindowReader` advanced
- * in lockstep with the outer chunk loop.
- */
 class WindowReader {
 	private readonly scratch: Array<Float32Array>;
 	private readonly windowSamples: number;
@@ -123,7 +75,6 @@ class WindowReader {
 		return this.scratch;
 	}
 
-	/** Fill the leading `edgePadSamples` of the virtual signal with zeros and load the rest of the first window from `buffer`. */
 	async preload(buffer: ChunkBuffer, edgePadSamples: number): Promise<void> {
 		for (let ch = 0; ch < this.channels; ch++) this.scratch[ch]!.fill(0);
 
@@ -138,7 +89,6 @@ class WindowReader {
 		this.virtualCursor = this.windowSamples;
 	}
 
-	/** Slide scratch left by `step` samples; append `step` new samples from `buffer` (zero-filled past end). */
 	async advance(buffer: ChunkBuffer, step: number): Promise<void> {
 		if (step <= 0) return;
 
@@ -184,16 +134,6 @@ class WindowReader {
 	}
 }
 
-/**
- * Read `frames` STFT frames worth of samples from a sequential `ChunkBuffer`
- * (advances the read cursor by `frames * hopSize + (fftSize - hopSize)` samples
- * minus any leading virtual edge pad). Used by the one-shot warm-up pass.
- *
- * When `edgePadSamples > 0`, the file is treated as if it were virtually
- * extended by `edgePadSamples` zero samples at the start AND end. The first
- * `edgePadSamples` of `out` are left as zero; the remainder is filled from the
- * buffer (zero-padded if the buffer is shorter than requested).
- */
 async function readSequentialPadded(
 	chunkBuffer: ChunkBuffer,
 	channelIndex: number,
@@ -232,42 +172,6 @@ async function readSequentialPadded(
 	}
 }
 
-/**
- * Adaptive de-bleed node — MEF FDAF Kalman + MWF + Lukin-Todd post-filter.
- *
- * Pipeline per design-de-bleed.md "2026-05-01: Replace stages 1+2 with MEF":
- *
- *   - **Stage 0 (MSAD)**: per-band SNR thresholding to gate Kalman update and
- *     trigger ISP restoration.
- *   - **Stage 1 (FDAF Kalman)**: per-frame frequency-domain Kalman update
- *     on `Ĥ_{m,μ}(ℓ,k)` per (target, reference) pair.
- *   - **Stage 2 (MWF)**: per-frame Wiener gain mask with per-interferer PSD
- *     `Φ̂_{D̂D̂,m} = |D̂_m^total|²` smoothed temporally (β = 0.5 MEF default).
- *   - **Stage 3 (NLM + DFTT)**: Lukin-Todd 2D smoothing of the gain mask.
- *   - **Stage 4 (synthesis)**: iSTFT of the masked target STFT.
- *
- * **IO pattern** (post chunk-buffer-sequential-api refactor): the target
- * `buffer` is treated as read-only during `_process`; a fresh `outputBuffer`
- * is allocated, all processed audio is streamed sequentially into it, then the
- * input buffer is cleared and the output is stream-copied back. The
- * `WindowReader` helper maintains a per-buffer sample-domain scratch that
- * advances in lockstep with the outer chunk loop — replacing the prior
- * offset-based reads against the input buffer. References use the same
- * `WindowReader` pattern, driven in lockstep with the target.
- *
- * **Outer-loop ordering**: all channels processed in lockstep per chunk
- * (option A from the Phase 6 plan). The per-channel algorithmic state
- * (Kalman, MWF PSD, MSAD, ISP) has no cross-channel coupling, so reordering
- * the inherent two nested loops from `for ch: for chunk` to
- * `for chunk: for ch` is a pure refactor with no algorithmic effect. This is
- * required by the new sequential ChunkBuffer API: `outputBuffer.write` stores
- * all channels at each frame position, so we must produce all channels'
- * samples for a given output frame range in one go.
- *
- * **Hard "do not extend" boundary** (Kokkinis): per-interferer PSD is
- * `|D̂^WF|²` from the Kalman bleed estimate ONLY. No PSD envelope of target,
- * no dominant-bin selection, no coherence-based interferer-PSD estimator.
- */
 export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 	private fftBackend?: FftBackend;
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
@@ -356,20 +260,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		this.referenceBuffers = [];
 	}
 
-	/**
-	 * Run the first-N-seconds warm-up scan across all target channels and all
-	 * references in a single sequential pass over each buffer.
-	 *
-	 * Each buffer is rewound to its start, then sequentially read for
-	 * `warmupSamples` real samples. STFTs are computed once per buffer (one
-	 * STFT per channel for the multi-channel target, one STFT per reference
-	 * for the references). Per-channel cross-spectral accumulators then
-	 * consume the pre-computed STFTs.
-	 *
-	 * Returns a `channels × refCount` array of `TransferFunction` seeds:
-	 * `seedsByChannel[ch][refIndex]`. Degeneracy validation and cold-start
-	 * fallback per `validateTransferSeed`.
-	 */
 	private async warmupSeedsAllChannels(
 		buffer: ChunkBuffer,
 		channels: number,
@@ -390,9 +280,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		await buffer.reset();
 		for (let ch = 0; ch < channels; ch++) targetPaddeds[ch]!.fill(0);
 
-		// Sequential read of the first `warmupSamples` real samples of the target
-		// (all channels in one read pass), placed at offset 0 of each per-channel
-		// padded buffer (no leading edge pad in warm-up).
 		const targetSamples = warmupFrames * hopSize + (fftSize - hopSize);
 		let written = 0;
 		let toRead = Math.min(targetSamples, buffer.frames);
@@ -413,24 +300,20 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 			toRead -= chunkFrames;
 		}
 
-		// Each reference: read first warmup samples of channel 0.
 		for (let refIndex = 0; refIndex < refCount; refIndex++) {
 			await referenceBuffers[refIndex]!.reset();
 			await readSequentialPadded(referenceBuffers[refIndex]!, 0, warmupFrames, refPaddeds[refIndex]!, hopSize, fftSize, 0);
 		}
 
-		// Compute STFTs: target × channels, references × refCount.
 		const targetStftOutputs = Array.from({ length: channels }, () => allocateStftOutput(warmupFrames, numBins));
 		const refStftOutputs = Array.from({ length: refCount }, () => allocateStftOutput(warmupFrames, numBins));
 
 		const targetStfts = targetPaddeds.map((padded, ch) => stft(padded, fftSize, hopSize, targetStftOutputs[ch], this.fftBackend, this.fftAddonOptions));
 		const refStfts = refPaddeds.map((padded, refIndex) => stft(padded, fftSize, hopSize, refStftOutputs[refIndex], this.fftBackend, this.fftAddonOptions));
 
-		// Per-reference whole-file max |R|² (shared across all target channels).
 		const maxRefPows = refStfts.map((refStft) => findMaxRefPower(refStft.real, refStft.imag, refStft.frames, numBins));
 		const weightEpsilons = maxRefPows.map((maxPow) => 1e-10 * (maxPow + 1e-20));
 
-		// Per-channel: accumulate cross-power against each reference and finalize.
 		const seedsByChannel: Array<Array<TransferFunction>> = [];
 
 		for (let ch = 0; ch < channels; ch++) {
@@ -471,7 +354,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 		if (totalFrames === 0 || channels === 0) return;
 
-		// Per-stage timing accumulators — populated only when DEBLEED_PROFILE=1.
 		const profileEnabled = process.env.DEBLEED_PROFILE === "1";
 		const profileMs = { warmup: 0, stftRead: 0, msad: 0, kalman: 0, mwf: 0, nlm: 0, dftt: 0, applyMaskIstft: 0, write: 0 };
 		const _profStart = (): number => profileEnabled ? performance.now() : 0;
@@ -479,7 +361,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 			if (profileEnabled) profileMs[key] += performance.now() - t0;
 		};
 
-		// MEF parameter mappings per the design's parameter-surface decision.
 		const lambda = reductionStrengthToOversubtraction(reductionStrength);
 		const markovForgetting = adaptationSpeedToMarkovForgetting(adaptationSpeed);
 		const thresholdOverride = Number(process.env.DEBLEED_THRESHOLD);
@@ -498,55 +379,40 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 		const carry = MAX_CARRY_FRAMES;
 
-		// Edge pad for the process pass. The iSTFT OLA windowSum is partial
-		// within `(fftSize - hopSize)` samples of any signal boundary; we
-		// virtually extend the file with `edgePadSamples` zeros at start AND
-		// end. The iSTFT then reconstructs `[0, totalFrames)` from a fully-
-		// determined windowSum and no edge-guard trim is needed.
 		const edgePadSamples = fftSize - hopSize;
 		const virtualTotal = totalFrames + 2 * edgePadSamples;
 		const virtualLogicalLength = Math.max(virtualTotal, fftSize);
 		const virtualPaddedLength = virtualLogicalLength + ((hopSize - ((virtualLogicalLength - fftSize) % hopSize)) % hopSize);
 		const processStftFrames = Math.floor((virtualPaddedLength - fftSize) / hopSize) + 1;
 
-		// Warm-up scan: first WARMUP_SECONDS of audio, capped to total file length.
 		const effectiveSampleRate = sampleRate ?? 48000;
 		const warmupSamples = Math.min(WARMUP_SECONDS * effectiveSampleRate, totalFrames);
 		const warmupFrames = Math.max(0, Math.floor((warmupSamples - fftSize) / hopSize) + 1);
 
-		// --- Warm-up scan across all target channels and references ---
 		const _twarm = _profStart();
 		const seedsByChannel = await this.warmupSeedsAllChannels(buffer, channels, warmupFrames, fftSize, hopSize);
 
 		_profAdd("warmup", _twarm);
 
-		// Rewind buffers for the main streaming pass.
 		await buffer.reset();
 		for (const refBuffer of referenceBuffers) await refBuffer.reset();
 
-		// --- Allocate per-channel state ---
 		const kalmanStatesByCh: Array<Array<KalmanState>> = seedsByChannel.map((seeds) => seeds.map((seed) => createKalmanState(numBins, seed)));
 		const interfererPsdByCh: Array<InterfererPsdState> = Array.from({ length: channels }, () => createInterfererPsdState(numBins));
 		const msadChannelStatesByCh: Array<Array<MsadChannelState>> = Array.from({ length: channels }, () => Array.from({ length: refCount + 1 }, () => createMsadChannelState(numBins)));
 		const ispStatesByCh: Array<Array<IspState>> = Array.from({ length: channels }, () => Array.from({ length: refCount }, () => createIspState(numBins)));
 
-		// MSAD ISP threshold: 0.5-s pause threshold per MEF §4.1.
 		const ispThresholdFrames = sampleRate ? Math.max(1, Math.round(0.5 * sampleRate / hopSize)) : ISP_THRESHOLD_FRAMES;
 
 		const windowFrames = chunkFrames + 2 * carry;
 		const windowSamples = windowFrames * hopSize + (fftSize - hopSize);
 
-		// Per-channel + per-reference STFT-output and intermediate scratch buffers.
-		// Allocate once; reused across chunks. Per-channel arrays because
-		// processing happens per-channel within each chunk and we want each
-		// channel's STFT data to be independent.
 		const targetStftOutputs: Array<StftOutput> = Array.from({ length: channels }, () => allocateStftOutput(windowFrames, numBins));
 		const refStftOutputs: Array<StftOutput> = Array.from({ length: refCount }, () => allocateStftOutput(windowFrames, numBins));
 		const rawMask = new Float32Array(windowFrames * numBins);
 		const nlmMask = new Float32Array(windowFrames * numBins);
 		const finalMask = new Float32Array(windowFrames * numBins);
 
-		// Window readers for the target (multi-channel) and each reference (mono read).
 		const targetReader = new WindowReader(channels, windowSamples);
 		const refReaders: Array<WindowReader> = referenceBuffers.map(() => new WindowReader(1, windowSamples));
 
@@ -555,18 +421,14 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 			await refReaders[refIndex]!.preload(referenceBuffers[refIndex]!, edgePadSamples);
 		}
 
-		// Per-frame scratch buffers for the Kalman + MWF inner loop.
 		const refFrameReals = new Array<Float32Array>(refCount);
 		const refFrameImags = new Array<Float32Array>(refCount);
 		const bleedTotalReal = new Float32Array(numBins);
 		const bleedTotalImag = new Float32Array(numBins);
 
-		// Scratch arrays for MSAD per-frame channel-bin views — `[target, ref0, ref1, ...]`.
 		const msadFrameReals = new Array<Float32Array>(refCount + 1);
 		const msadFrameImags = new Array<Float32Array>(refCount + 1);
 
-		// Output buffer — sequential writes only. After the channel loop, the
-		// input buffer is cleared and outputBuffer is stream-copied back.
 		const outputBuffer = new ChunkBuffer();
 
 		try {
@@ -579,12 +441,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 				const winFrames = winEnd - winStart;
 				const winSamples = winFrames * hopSize + (fftSize - hopSize);
 
-				// Advance the readers so their scratch covers the virtual sample
-				// range [winStart * hopSize, winStart * hopSize + windowSamples).
-				// `windowSamples` is the steady-state scratch length (winFrames at
-				// its max = chunkFrames + 2*carry); at the first/last chunks where
-				// `winFrames < chunkFrames + 2*carry`, the scratch holds more
-				// samples than `winSamples` — we slice down below.
 				if (outStart !== 0) {
 					const stepFrames = winStart - prevWinStart;
 					const stepSamples = stepFrames * hopSize;
@@ -603,7 +459,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 				prevWinStart = winStart;
 
-				// --- Compute target STFT per channel; reference STFTs ---
 				const _tstft = _profStart();
 				const targetScratch = targetReader.getScratch();
 				const targetStfts: Array<StftResult> = [];
@@ -625,15 +480,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 				_profAdd("stftRead", _tstft);
 
-				// --- Per-channel iSTFT output collection for this chunk ---
-				// Each entry is the iSTFT result Float32Array (length = winSamples)
-				// per channel. After all channels are processed for this chunk we
-				// extract the center samples and stream-write them as multi-channel
-				// frames to outputBuffer.
 				const cleanedByChannel: Array<Float32Array> = [];
 
-				// Per-frame scratch buffers for `Ŝ_m = W · Y_m`. One pair per
-				// channel because the channel loop runs within the chunk.
 				const sHatRe = new Float32Array(numBins);
 				const sHatIm = new Float32Array(numBins);
 
@@ -654,7 +502,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 							refFrameImags[refIndex] = refStftsForChunk[refIndex]!.imag.subarray(frameOffset, frameOffset + numBins);
 						}
 
-						// --- Stage 0: MSAD ---
 						msadFrameReals[0] = frameReal;
 						msadFrameImags[0] = frameImag;
 
@@ -668,7 +515,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 						_profAdd("msad", _tmsad);
 
-						// --- Stage 1: FDAF Kalman ---
 						const _tkal = _profStart();
 
 						kalmanUpdateFrame(
@@ -689,7 +535,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 						_profAdd("kalman", _tkal);
 
-						// --- Stage 2: MWF ---
 						const _tmwf = _profStart();
 
 						updateInterfererPsd(bleedTotalReal, bleedTotalImag, interfererPsd, mwfParams.temporalSmoothing);
@@ -709,7 +554,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 						_profAdd("mwf", _tmwf);
 					}
 
-					// --- Stage 3: NLM + DFTT ---
 					const rawView = rawMask.subarray(0, winFrames * numBins);
 					const nlmView = nlmMask.subarray(0, winFrames * numBins);
 					const finalView = finalMask.subarray(0, winFrames * numBins);
@@ -752,7 +596,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 					);
 					_profAdd("dftt", _tdftt);
 
-					// --- Stage 4: apply mask, iSTFT ---
 					const _tapp = _profStart();
 					const targetRealBuf = targetStft.real;
 					const targetImagBuf = targetStft.imag;
@@ -774,15 +617,12 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 					_profAdd("applyMaskIstft", _tapp);
 				}
 
-				// --- Stream-write all channels' center samples for this chunk to outputBuffer ---
 				const centerStartFrame = outStart - winStart;
 				const centerStartSample = centerStartFrame * hopSize;
 				const isFinalChunk = outStart + outFramesThisChunk >= processStftFrames;
 				const cleanedLength = cleanedByChannel[0]!.length;
 				const centerEndSample = isFinalChunk ? cleanedLength : (centerStartFrame + outFramesThisChunk) * hopSize;
 
-				// Map the virtual write range back to real-file samples by subtracting
-				// the leading edge pad.
 				const virtualWriteStart = winStart * hopSize + centerStartSample;
 				const realWriteStart = virtualWriteStart - edgePadSamples;
 				const realWriteEnd = realWriteStart + (centerEndSample - centerStartSample);
@@ -799,13 +639,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 					writeSamplesByChannel.push(cleanedByChannel[ch]!.subarray(sliceFromOffset, sliceFromOffset + sliceLength));
 				}
 
-				// `outputBuffer` is written from `clipStart` in real-file coords. The
-				// sequential API has no offset; we instead rely on the writes arriving
-				// in monotonically increasing order across the outer loop. For chunks
-				// where `clipStart > prevClipEnd` (the edge pad zone in the first chunk
-				// produced no writes but later chunks have realWriteStart > 0), we
-				// pad with zero frames to keep the output buffer's frame count aligned
-				// with real-file frame positions.
 				if (clipStart > outputBuffer.frames) {
 					const padFrames = clipStart - outputBuffer.frames;
 					const zeroSamples: Array<Float32Array> = [];
@@ -824,9 +657,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 				_profAdd("write", _twrite);
 			}
 
-			// Trailing zero-pad if the output ended short of totalFrames (shouldn't
-			// normally happen — processStftFrames covers virtualTotal — but
-			// defensive against off-by-one at the final chunk's clip math).
+			// Defensive trailing zero-pad against off-by-one in the final chunk's clip math.
 			if (outputBuffer.frames < totalFrames) {
 				const padFrames = totalFrames - outputBuffer.frames;
 				const zeroSamples: Array<Float32Array> = [];
@@ -836,7 +667,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 				await outputBuffer.write(zeroSamples, sampleRate, bitDepth);
 			}
 
-			// --- Stream-copy outputBuffer → buffer ---
 			await buffer.clear();
 			await outputBuffer.reset();
 

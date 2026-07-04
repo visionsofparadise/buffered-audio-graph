@@ -1,16 +1,9 @@
 #!/usr/bin/env node
-// Stub `vst-host` binary for unit tests. Mimics the contract of the real
-// vst-host CLI just enough for the Vst3Stream lifecycle tests:
-//   1. Parse the canonical args (--stages-json, --sample-rate, --channels);
-//      the stages JSON is read but its contents aren't exercised — only its
-//      existence is validated.
-//   2. Print `READY\n` once startup is "complete".
-//   3. Read all stdin, echo back to stdout verbatim.
+// Stub `vst-host` binary for tests. Contract:
+//   1. Parse the canonical args (--stages-json, --sample-rate, --channels).
+//   2. Print `READY\n`.
+//   3. Echo all stdin back to stdout verbatim.
 //   4. Close stdout and exit cleanly when stdin closes.
-//
-// Real audio processing (plugin load, Pedalboard, numpy) is out of scope —
-// this fixture exists to verify the spawn / READY / process / teardown flow
-// for the whole-file protocol.
 
 import { readFileSync } from "node:fs";
 import process from "node:process";

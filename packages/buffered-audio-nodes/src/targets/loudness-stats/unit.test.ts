@@ -10,12 +10,6 @@ import { audio } from "../../utils/test-binaries";
 const testVoice = audio.testVoice;
 const TEST_SAMPLE_RATE = 48_000;
 
-/**
- * Drive a LoudnessStatsStream with synthetic audio. Returns the computed
- * stats. Builds a one-chunk ReadableStream and pipes it through the full
- * setup → _write → _close lifecycle so the sidecar file open in `_setup`
- * is exercised the same way as in production.
- */
 async function runStats(channels: ReadonlyArray<Float32Array>, sampleRate: number, options?: { bucketCount?: number; outputPath?: string }): Promise<NonNullable<LoudnessStatsStream["stats"]>> {
 	const stream = new LoudnessStatsStream({
 		bucketCount: options?.bucketCount ?? 1024,
@@ -45,7 +39,6 @@ async function runStats(channels: ReadonlyArray<Float32Array>, sampleRate: numbe
 	return stats;
 }
 
-/** Deterministic uniform-[-amplitude, amplitude) signal via LCG. */
 function makeUniform(length: number, amplitude: number, seed: number): Float32Array {
 	const buffer = new Float32Array(length);
 	let state = seed >>> 0;
@@ -80,7 +73,6 @@ describe("loudness-stats", () => {
 		expect(target.stats).toBeDefined();
 		expect(target.stats!.integrated).toBeGreaterThan(-70);
 		expect(target.stats!.integrated).toBeLessThan(0);
-		// Smoke: amplitude field is populated.
 		expect(target.stats!.amplitude).toBeDefined();
 		expect(target.stats!.amplitude.totalSamples).toBeGreaterThan(0);
 	}, 240_000);
@@ -101,9 +93,7 @@ describe("loudness-stats", () => {
 		const samples = makeSine(TEST_SAMPLE_RATE * 4, amplitude, 440, TEST_SAMPLE_RATE);
 		const stats = await runStats([samples], TEST_SAMPLE_RATE);
 
-		// Median of |A sin(x)| over a full cycle is A × sin(π/4) = A / √2.
-		// (MAD is A × 2/π; median is A / √2 ≈ 0.707A. Plan says "≈ A × 2/π" but
-		// that's the mean — median is √2/2. Test against the actual median.)
+		// Median of |A sin(x)| over a full cycle is A × sin(π/4) = A / √2 (not the mean A × 2/π).
 		const expectedMedian = amplitude / Math.SQRT2;
 
 		expect(stats.amplitude.median).toBeGreaterThan(expectedMedian * 0.95);
@@ -154,12 +144,9 @@ describe("loudness-stats", () => {
 	});
 
 	// truePeak goes through TruePeakAccumulator (4× upsample), so a sine
-	// whose sample peak lies between samples should report a truePeak
-	// strictly above the sample peak. A 1 kHz sine at 48 kHz has 48
-	// samples per cycle (non-integer phase at the peak), giving measurable
-	// intersample lift. This is the behavioural correction being made in
-	// Phase 2 — the old implementation would have returned exactly 0 dBTP
-	// (sample peak), the corrected one returns slightly above.
+	// whose sample peak lies between samples reports a truePeak strictly
+	// above the sample peak. A 1 kHz sine at 48 kHz has non-integer phase
+	// at the peak, giving measurable intersample lift.
 	it("truePeak captures intersample lift on a 1 kHz sine at sample peak 1.0", async () => {
 		const samples = makeSine(TEST_SAMPLE_RATE * 1, 1.0, 1000, TEST_SAMPLE_RATE);
 		const stats = await runStats([samples], TEST_SAMPLE_RATE);
@@ -185,7 +172,7 @@ describe("loudness-stats", () => {
 			outputPath: "",
 			bufferSize: Infinity,
 		});
-		const totalFrames = TEST_SAMPLE_RATE * 70; // 70 s
+		const totalFrames = TEST_SAMPLE_RATE * 70;
 		const chunkFrames = 4096;
 		const chunkCount = Math.ceil(totalFrames / chunkFrames);
 		const input = new ReadableStream<AudioChunk>({

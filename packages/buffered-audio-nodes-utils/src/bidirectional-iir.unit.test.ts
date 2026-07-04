@@ -97,12 +97,12 @@ describe("BidirectionalIir", () => {
 	describe("zero phase response on a sine", () => {
 		it("bidirectional output peaks align with input peaks for a sine well below cutoff", () => {
 			const sampleRate = 48000;
-			const smoothingMs = 10; // cutoff ~ 15.9 Hz
+			const smoothingMs = 10;
 			const iir = new BidirectionalIir({ smoothingMs, sampleRate });
 
-			const frequencyHz = 2; // well below cutoff
+			const frequencyHz = 2;
 			const periodSamples = sampleRate / frequencyHz;
-			const length = Math.round(periodSamples * 8); // 8 full cycles
+			const length = Math.round(periodSamples * 8);
 			const input = new Float32Array(length);
 
 			for (let i = 0; i < length; i++) {
@@ -228,13 +228,6 @@ describe("BidirectionalIir", () => {
 		});
 	});
 
-	/**
-	 * Phase 3 of plan-loudness-target-upsampled-streaming. New
-	 * `applyForwardPass` (chunked-streaming forward HALF using
-	 * `alphaBidirectional`) and `applyBackwardPassInPlace` (whole-array
-	 * backward HALF, in-place) compose to produce the same output as
-	 * `applyBidirectional` byte-for-byte.
-	 */
 	describe("applyForwardPass + applyBackwardPassInPlace", () => {
 		const sampleRate = 48000;
 		const smoothingMs = 5;

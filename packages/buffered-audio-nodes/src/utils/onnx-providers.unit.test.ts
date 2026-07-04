@@ -9,7 +9,6 @@ describe("filterOnnxProviders", () => {
 	const originalPlatform = process.platform;
 
 	beforeEach(() => {
-		// no-op; each test sets its own platform
 	});
 
 	afterEach(() => {

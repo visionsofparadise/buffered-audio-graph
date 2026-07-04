@@ -21,10 +21,7 @@ function measure(channels: ReadonlyArray<Float32Array>, sampleRate: number): num
 }
 
 describe("TruePeakAccumulator", () => {
-	// DC has no intersample structure to lift, so the upsampled max should
-	// match the input amplitude (within filter-startup transient
-	// tolerance). Catches a coding error that would scale or invert the
-	// input on the upsample path.
+	// DC has no intersample structure, so upsampled max should match the input amplitude (within filter-startup transient); catches a bug that would scale/invert the input.
 	it("DC at 0.5 returns true peak ≈ 0.5 (no intersample lift)", () => {
 		const sampleRate = 48000;
 		const length = sampleRate; // 1 s
@@ -34,21 +31,15 @@ describe("TruePeakAccumulator", () => {
 
 		const result = measure([dc], sampleRate);
 
-		// Allow modest tolerance for filter ramp-up at the leading edge.
+		// Modest tolerance for filter ramp-up at the leading edge.
 		expect(result).toBeGreaterThan(0.4);
 		expect(result).toBeLessThan(0.6);
 	});
 
-	// A 1 kHz sine at 0 dBFS sample peak (amplitude 1.0) should produce
-	// an upsampled true peak ≥ 1.0. For a sample peak that lands exactly
-	// on a sample, intersample lift is small; for sine frequencies with
-	// non-integer samples-per-cycle, the intersample lift is non-trivial.
-	// We only test SHAPE: peak ≥ 1.0 (the sample peak), not the precise
-	// upsampled value (which depends on AA filter design).
+	// A 1 kHz sine at 0 dBFS sample peak should yield upsampled true peak ≥ 1.0; tests SHAPE (≥ sample peak) not the precise value (depends on AA filter design).
 	it("0 dBFS sine: true peak is at least the sample peak", () => {
 		const sampleRate = 48000;
-		// 997 Hz at 48 kHz has non-integer samples-per-cycle, exposing
-		// intersample peak lift. Amplitude 1.0 = 0 dBFS sample peak.
+		// 997 Hz at 48 kHz has non-integer samples-per-cycle, exposing intersample peak lift; amplitude 1.0 = 0 dBFS sample peak.
 		const sine = generateSine(997, 1.0, sampleRate, 1);
 		const result = measure([sine], sampleRate);
 
@@ -63,9 +54,7 @@ describe("TruePeakAccumulator", () => {
 		expect(result).toBe(0);
 	});
 
-	// Multi-channel true peak is a single max across ALL channels. If
-	// the accumulator tracked per-channel maxes and returned channel 0,
-	// we'd get 0.3 instead of 0.7 here.
+	// Multi-channel true peak is a single max across ALL channels; per-channel tracking returning channel 0 would give 0.3 not 0.7.
 	it("multi-channel max is single value across channels", () => {
 		const sampleRate = 48000;
 		const length = sampleRate;
@@ -79,15 +68,11 @@ describe("TruePeakAccumulator", () => {
 
 		const result = measure([left, right], sampleRate);
 
-		// True peak should reflect the louder channel (0.7) with some
-		// filter-transient tolerance.
 		expect(result).toBeGreaterThan(0.6);
 		expect(result).toBeLessThan(0.8);
 	});
 
-	// Streaming-equivalence: feeding the same signal in arbitrary chunk
-	// sizes must produce the same number (within float round-off) as a
-	// single big push. Catches biquad-state drift across push() boundaries.
+	// Streaming-equivalence catches biquad-state drift across push() boundaries.
 	it("chunked input matches whole-buffer input", () => {
 		const sampleRate = 48000;
 		const sine = generateSine(997, 0.8, sampleRate, 1);

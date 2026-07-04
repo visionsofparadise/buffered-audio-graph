@@ -178,7 +178,7 @@ Remove background noise from speech using DTLN neural network
 
 ### Duplicate Channels
 
-Duplicate a mono signal into multiple identical output channels
+Duplicate a mono signal into multiple identical output channels; requires exactly 1 input channel, throws otherwise
 
 [Source](./src/transforms/duplicate-channels/index.ts)
 
@@ -299,7 +299,7 @@ Add silence to start or end of audio
 
 ### Pan
 
-Position mono signal in stereo field or adjust stereo balance
+Position mono signal in stereo field or adjust stereo balance; throws for inputs with more than 2 channels
 
 [Source](./src/transforms/pan/index.ts)
 
@@ -418,7 +418,6 @@ Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)
 | `stages[].pluginPath` | string | — | VST3 plugin file or bundle |
 | `stages[].pluginName` | string, optional | — | Sub-plugin name when pluginPath is a multi-plugin shell (e.g. WaveShell) |
 | `stages[].presetPath` | string, optional | — | Optional .vstpreset state file applied after the plugin loads |
-| `stages[].parameters` | record, optional | — | Optional parameter overrides applied after presetPath. Keys map to Pedalboard parameter names exposed by the plugin. |
 | `bypass` | boolean | `false` | Pass audio through unchanged (no subprocess spawn) |
 
 ### Waveform

@@ -23,7 +23,6 @@ describe("coefficient functions at 48kHz", () => {
 	it("lowPassCoefficients produces different coefficients at quality=0.5 vs quality=2.0", () => {
 		const low = lowPassCoefficients(48000, 1000, 0.5);
 		const high = lowPassCoefficients(48000, 1000, 2.0);
-		// At least one coefficient must differ between the two quality settings
 		const allSame = low.fb.every((v, i) => v === high.fb[i]) && low.fa.every((v, i) => v === high.fa[i]);
 		expect(allSame).toBe(false);
 	});

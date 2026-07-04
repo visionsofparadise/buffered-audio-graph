@@ -108,9 +108,7 @@ describe("slidingWindowMin (whole-array)", () => {
 		const length = 200;
 		const halfWidth = 10;
 		const input = new Float32Array(length);
-		// Float32-representable spike value so the assertion compares
-		// stored-vs-stored without the implicit Number → Float32 rounding
-		// that bit-flips `0.1`.
+		// Float32-representable spike value so the assertion compares stored-vs-stored without the Number→Float32 rounding that bit-flips `0.1`.
 		const spike = Math.fround(0.1);
 
 		input.fill(1.0);
@@ -121,7 +119,6 @@ describe("slidingWindowMin (whole-array)", () => {
 		for (let frameIdx = 100 - halfWidth; frameIdx <= 100 + halfWidth; frameIdx++) {
 			expect(result[frameIdx]).toBe(spike);
 		}
-		// Outside the window the min is the flat-high value.
 		expect(result[100 - halfWidth - 1]).toBe(1.0);
 		expect(result[100 + halfWidth + 1]).toBe(1.0);
 	});

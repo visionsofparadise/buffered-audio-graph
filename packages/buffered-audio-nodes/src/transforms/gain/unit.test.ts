@@ -48,7 +48,6 @@ describe("GainNode", () => {
 			await stream._buffer(chunk, buffer);
 			const output = stream._unbuffer(chunk);
 
-			// 6 dB ≈ linear 1.995
 			expect(output.samples[0]![0]).toBeCloseTo(0.25 * Math.pow(10, 6 / 20), 4);
 		} finally {
 			await buffer.close();

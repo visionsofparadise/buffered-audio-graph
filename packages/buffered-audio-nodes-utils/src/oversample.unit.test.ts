@@ -4,7 +4,6 @@ import { Oversampler, type OversamplingFactor } from "./oversample";
 const SAMPLE_RATE = 48000;
 const FRAMES = 2048;
 
-// RMS of a Float32Array
 function rms(signal: Float32Array): number {
 	let sum = 0;
 
@@ -15,12 +14,10 @@ function rms(signal: Float32Array): number {
 	return Math.sqrt(sum / signal.length);
 }
 
-// Generate a pure DC signal
 function makeDC(value: number, frames: number): Float32Array {
 	return new Float32Array(frames).fill(value);
 }
 
-// Generate a sinusoid at the given frequency
 function makeSine(freqHz: number, frames: number, sampleRate: number): Float32Array {
 	const out = new Float32Array(frames);
 
@@ -76,8 +73,6 @@ describe("Oversampler", () => {
 			const osr = new Oversampler(1, SAMPLE_RATE);
 			const input = makeSine(1000, FRAMES, SAMPLE_RATE);
 
-			// Running many calls should never produce different results at
-			// factor 1 — no state to drift.
 			const first = osr.oversample(input, (x) => x);
 
 			for (let i = 0; i < 10; i++) {
@@ -138,14 +133,12 @@ describe("Oversampler", () => {
 				const dcValue = 0.5;
 				const input = makeDC(dcValue, FRAMES);
 
-				// Warm up to let the filter settle
 				for (let chunk = 0; chunk < 5; chunk++) {
 					osr.oversample(input, (x) => x);
 				}
 
 				const output = osr.oversample(input, (x) => x);
 
-				// Check the settled second half
 				const halfStart = Math.floor(FRAMES / 2);
 				let maxError = 0;
 
@@ -206,11 +199,9 @@ describe("Oversampler", () => {
 				const totalFrames = FRAMES * 4;
 				const signal = makeSine(1000, totalFrames, SAMPLE_RATE);
 
-				// Single-pass reference
 				const refOsr = new Oversampler(factor, SAMPLE_RATE);
 				const refOutput = refOsr.oversample(signal, (x) => x);
 
-				// Chunked
 				const chunkedOsr = new Oversampler(factor, SAMPLE_RATE);
 				const chunkedOutput = new Float32Array(totalFrames);
 
@@ -255,8 +246,6 @@ describe("Oversampler", () => {
 			osr.reset();
 			const afterReset = osr.oversample(signal, (x) => x);
 
-			// The first few samples should differ — the reset cleared the
-			// filter state, so the output starts from a cold state.
 			let identical = true;
 
 			for (let index = 0; index < 20; index++) {

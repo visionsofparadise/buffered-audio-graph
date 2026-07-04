@@ -217,7 +217,6 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	private async handleFlushStream(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
 		const child = this.child;
 
-		// No chunks ever arrived — nothing to flush.
 		if (!child) {
 			this.emitProgress("buffer", this.framesProcessed, this._sourceTotalFrames, { force: true });
 			this.emitProgress("emit", this.outputOffset, undefined, { force: true });
@@ -245,9 +244,8 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 			throw new Error(`ffmpeg exited ${exitResult.code}${detail}`);
 		}
 
-		// Drain any complete frames that arrived after the last 'data' event but
-		// before 'end'. Listener-vs-event-loop races make this rare but possible.
-		// Discard any sub-frame trailing bytes (ffmpeg-side bug if present).
+		// Drain complete frames that arrived after the last 'data' event but before 'end' (listener race).
+		// Sub-frame trailing bytes are discarded (would be an ffmpeg-side bug).
 		if (this.stdoutStash.length >= this.inputChannels * 4) {
 			this.handleStdoutBytes(Buffer.alloc(0), controller);
 		}
@@ -289,9 +287,6 @@ export class FfmpegNode<P extends FfmpegProperties = FfmpegProperties> extends T
 	override readonly type: ReadonlyArray<string> = ["buffered-audio-node", "transform", "ffmpeg"];
 
 	constructor(properties: P) {
-		// bufferSize unused — createTransformStream is overridden, base handleTransform never runs.
-		// Set to 0 (per-chunk pass-through) for documentary truth and to avoid misleading WHOLE_FILE
-		// semantics if some future code path reads it.
 		super({ bufferSize: 0, latency: WHOLE_FILE, ...properties });
 	}
 

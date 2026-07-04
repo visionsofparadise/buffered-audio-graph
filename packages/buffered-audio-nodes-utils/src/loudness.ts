@@ -13,24 +13,11 @@ const LRA_RELATIVE_GATE_OFFSET_LU = -20;
 const LRA_LOW_PERCENTILE = 0.1;
 const LRA_HIGH_PERCENTILE = 0.95;
 
-/**
- * Apply the BS.1770-4 two-stage gating to a list of closed block sums and
- * return integrated LUFS (or -Infinity if no block survives gating).
- *
- * `closedBlockSums[i]` is the raw sum of K-weighted squared samples for
- * block `i` (NOT divided by `blockSize`). Stage 1 absolute-gates blocks
- * at -70 LUFS; stage 2 relative-gates surviving blocks at -10 LU below
- * the absolute-gated mean.
- *
- * internal: shared with LoudnessAccumulator (Phase 4)
- */
 function applyBs1770Gating(closedBlockSums: ReadonlyArray<number>, blockSize: number): number {
 	const blockCount = closedBlockSums.length;
 
 	if (blockCount === 0) return -Infinity;
 
-	// Stage 1: absolute gate at -70 LUFS. Compare powers directly to
-	// avoid log10 in the gating loop.
 	const absoluteThresholdPower = Math.pow(10, (ABSOLUTE_GATE_LUFS - LUFS_OFFSET) / 10);
 	let absoluteSurvivorCount = 0;
 	let absoluteSum = 0;
@@ -46,7 +33,6 @@ function applyBs1770Gating(closedBlockSums: ReadonlyArray<number>, blockSize: nu
 
 	if (absoluteSurvivorCount === 0) return -Infinity;
 
-	// Stage 2: relative gate at -10 LU below absolute-gated mean LUFS.
 	const absoluteMean = absoluteSum / absoluteSurvivorCount;
 	const relativeThresholdLufs = LUFS_OFFSET + 10 * Math.log10(absoluteMean) + RELATIVE_GATE_OFFSET_LU;
 	const relativeThresholdPower = Math.pow(10, (relativeThresholdLufs - LUFS_OFFSET) / 10);
@@ -70,52 +56,18 @@ function applyBs1770Gating(closedBlockSums: ReadonlyArray<number>, blockSize: nu
 	return LUFS_OFFSET + 10 * Math.log10(integratedMean);
 }
 
-/**
- * Streaming BS.1770-4 / EBU R128 integrated-loudness accumulator.
- *
- * K-weights each channel via cascaded pre-filter and RLB high-pass
- * biquads, accumulates mean-square per 400 ms block at 100 ms step (75%
- * overlap), and applies the two-stage gate from BS.1770-4: an absolute
- * -70 LUFS gate followed by a relative -10 LU gate referenced to the
- * absolute-gated mean.
- *
- * Composes {@link KWeightedSquaredSum} (the K-weighted squared-sum
- * source-of-truth) with {@link BlockSumAccumulator} configured at
- * 400 ms / 100 ms; the public API and numerical behaviour are unchanged
- * from the prior inline implementation.
- *
- * Consumes the signal in arbitrarily-sized chunks. Memory held while
- * running is bounded by the biquad state plus the closed-block sums
- * (~10 doubles per second of material — ~288 KB per hour).
- *
- * Channel weighting follows BS.1770-4 Table 4: caller supplies one
- * weight per channel (defaults to 1.0 each, correct for mono and
- * stereo). Surround weighting (Ls/Rs at 1.41) is the caller's
- * responsibility — pass appropriate weights if measuring 5.1.
- *
- * Construct one accumulator per measurement, push successive chunks via
- * {@link push}, then call {@link finalize} once to obtain integrated
- * LUFS. The accumulator is single-use; create a new instance per file.
- * Returns -Infinity if no blocks survive gating (silent / near-silent
- * signal) or if fewer than one 400 ms block was pushed.
- */
 export class IntegratedLufsAccumulator {
 	private readonly blockSize: number;
 
 	private readonly kw: KWeightedSquaredSum;
 	private readonly blocks: BlockSumAccumulator;
 
-	// Reused per-frame K-weighted squared-sum buffer; grows on demand
-	// when a push asks for more frames than the previous high-water mark.
 	private outputBuffer: Float64Array = new Float64Array(0);
 
 	private finalized = false;
 
 	constructor(sampleRate: number, channelCount: number, channelWeights?: ReadonlyArray<number>) {
-		// Constructor-time validation lives inside KWeightedSquaredSum.
-		// Re-throw with the IntegratedLufsAccumulator-prefixed messages so
-		// existing callers/tests that match on the prefix continue to see
-		// it.
+		// Validation lives in KWeightedSquaredSum; re-throw with this class's prefix so callers/tests matching on it still see it.
 		if (channelCount <= 0) {
 			throw new Error(`IntegratedLufsAccumulator: channelCount must be positive, got ${channelCount}`);
 		}
@@ -132,13 +84,7 @@ export class IntegratedLufsAccumulator {
 		this.blocks = new BlockSumAccumulator(this.blockSize, blockStep);
 	}
 
-	/**
-	 * Consume `frames` of audio. `channels[c]` must have at least
-	 * `frames` valid samples starting at index 0; oversized buffers are
-	 * fine and avoid the need for caller-side slicing. The accumulator
-	 * advances biquad state and block accounting exactly as if these
-	 * samples were appended to a single contiguous buffer.
-	 */
+	// `channels[c]` needs >= `frames` valid samples from index 0 (oversized OK); state advances as if appended to one contiguous buffer.
 	push(channels: ReadonlyArray<Float32Array>, frames: number): void {
 		if (this.finalized) {
 			throw new Error("IntegratedLufsAccumulator: push() called after finalize()");
@@ -154,12 +100,6 @@ export class IntegratedLufsAccumulator {
 		this.blocks.push(this.outputBuffer, frames);
 	}
 
-	/**
-	 * Apply the BS.1770 two-stage gating to all completed blocks and
-	 * return integrated LUFS. Returns -Infinity if no blocks completed
-	 * (signal shorter than one 400 ms block) or if every block fails the
-	 * absolute or relative gate.
-	 */
 	finalize(): number {
 		this.finalized = true;
 
@@ -167,19 +107,7 @@ export class IntegratedLufsAccumulator {
 	}
 }
 
-/**
- * Compute Loudness Range (LRA) from a list of short-term LUFS values, per
- * EBU Tech 3342. Two-stage gate (absolute -70 LUFS, relative -20 LU below
- * the absolute-gated mean) followed by the 10th–95th percentile spread of
- * the surviving short-term values.
- *
- * Mirrors the prior post-hoc implementation in
- * `loudness-stats/utils/measurement.ts:computeLra` exactly, including the
- * `< 2` survivor short-circuits and the `Math.floor(0.1 * n)` /
- * `Math.min(Math.ceil(0.95 * n) - 1, n - 1)` percentile index forms.
- *
- * internal: helper for LoudnessAccumulator
- */
+// Mirrors the prior `loudness-stats/utils/measurement.ts:computeLra` exactly (percentile index forms, `<2`-survivor short-circuits) for numerical parity.
 function computeLraFromShortTerm(shortTermLoudness: ReadonlyArray<number>): number {
 	const absoluteGated: Array<number> = [];
 
@@ -222,47 +150,12 @@ function computeLraFromShortTerm(shortTermLoudness: ReadonlyArray<number>): numb
 	return (relativeGated[highIndex] ?? 0) - (relativeGated[lowIndex] ?? 0);
 }
 
-/**
- * Stats over the BS.1770 / EBU R128 LRA "considered" set: short-term
- * blocks that survive both the absolute gate (-70 LUFS) and the
- * relative gate (-20 LU below the absolute-gated linear-energy mean).
- *
- * - `min`: lowest considered LUFS. Used as auto-derived `floor` in
- *   loudnessTarget (the absolute lower bound of the gain-riding
- *   zone; samples below this level were not loud enough to
- *   participate in perceived loudness).
- * - `median`: 50th-percentile considered LUFS. Used as auto-derived
- *   `pivot` in loudnessTarget (the "typical" body level — anchor
- *   where the body's average loudness sits). Median is chosen over
- *   mean because the gated set can be skewed by transient-rich or
- *   noise-floor-heavy material; median is robust to either tail.
- *
- * Both fields are `Number.POSITIVE_INFINITY` when `shortTerm` is
- * empty or every block is gated out — callers treat this as "no
- * considered set" and choose a sentinel fallback.
- */
 export interface LraConsideredStats {
 	readonly min: number;
 	readonly median: number;
 }
 
-/**
- * Returns the {@link LraConsideredStats} (min + median) of the
- * BS.1770 / EBU R128 LRA "considered" set in a single pass.
- *
- * Same gating sequence as {@link computeLraFromShortTerm}; all three
- * share the `LRA_ABSOLUTE_GATE_LUFS` and `LRA_RELATIVE_GATE_OFFSET_LU`
- * constants defined in this module, including the strict `>`
- * comparisons used by the EBU Tech 3342 reference.
- *
- * Median follows the standard convention: for `n` considered blocks
- * sorted ascending, `n` odd → element at index `(n-1)/2`; `n` even →
- * arithmetic mean of indices `n/2 - 1` and `n/2`. Computation
- * happens in dB units (not linear), matching how the values are
- * consumed positionally as dBFS anchors on the loudnessTarget curve.
- */
 export function getLraConsideredStats(shortTerm: ReadonlyArray<number>): LraConsideredStats {
-	// Stage 1: absolute gate at -70 LUFS.
 	const aboveAbsolute: Array<number> = [];
 
 	for (let index = 0; index < shortTerm.length; index++) {
@@ -277,10 +170,6 @@ export function getLraConsideredStats(shortTerm: ReadonlyArray<number>): LraCons
 		return { min: Number.POSITIVE_INFINITY, median: Number.POSITIVE_INFINITY };
 	}
 
-	// Stage 2: relative gate at -20 LU below the absolute-gated linear-
-	// energy mean. Mirrors `computeLraFromShortTerm`'s inline arithmetic:
-	// the LUFS_OFFSET cancels out of the comparison and is omitted from
-	// both the mean and the threshold.
 	let absoluteSum = 0;
 
 	for (let index = 0; index < aboveAbsolute.length; index++) {
@@ -315,28 +204,11 @@ export function getLraConsideredStats(shortTerm: ReadonlyArray<number>): LraCons
 	return { min, median };
 }
 
-/**
- * Backwards-compatible wrapper returning only `min(considered)`.
- * Prefer {@link getLraConsideredStats} for new call sites that need
- * either statistic.
- */
+// Back-compat wrapper returning only `min(considered)`; prefer `getLraConsideredStats` for new call sites.
 export function getLraConsideredMinLufs(shortTerm: ReadonlyArray<number>): number {
 	return getLraConsideredStats(shortTerm).min;
 }
 
-/**
- * Aggregate result from {@link LoudnessAccumulator.finalize}.
- *
- * - `integrated`: BS.1770-4 integrated LUFS (two-stage gate, 400 ms / 100 ms).
- *   `-Infinity` if no block survives gating or the input is shorter than
- *   one 400 ms block.
- * - `momentary`: per-400-ms-block LUFS values at 100 ms step. Ungated.
- *   The empty array means no full 400 ms block was completed.
- * - `shortTerm`: per-3-s-block LUFS values at 100 ms step. Ungated.
- *   The empty array means no full 3 s block was completed.
- * - `range`: EBU Tech 3342 Loudness Range (LU). `0` when fewer than two
- *   short-term blocks survive the LRA two-stage gate.
- */
 export interface LoudnessAccumulatorResult {
 	integrated: number;
 	momentary: Array<number>;
@@ -344,23 +216,6 @@ export interface LoudnessAccumulatorResult {
 	range: number;
 }
 
-/**
- * Streaming single-pass loudness accumulator producing all four
- * BS.1770 / EBU R128 metrics from one K-weight pass over the input.
- *
- * Composes one {@link KWeightedSquaredSum} feeding two parallel
- * {@link BlockSumAccumulator}s — 400 ms / 100 ms (integrated + momentary)
- * and 3 s / 100 ms (short-term + range). Drop-in replacement for the
- * post-hoc whole-buffer measurement path; constant-memory regardless of
- * input length.
- *
- * Channel weighting follows BS.1770-4 Table 4 (defaults to 1.0 per
- * channel). Construct one accumulator per measurement, push successive
- * chunks via {@link push}, then call {@link finalize} once for the
- * aggregate result. The accumulator is single-use; create a new instance
- * per file. {@link finalize} is idempotent (subsequent calls return the
- * cached result reference).
- */
 export class LoudnessAccumulator {
 	private readonly blockSize400: number;
 	private readonly blockSize3s: number;
@@ -369,16 +224,13 @@ export class LoudnessAccumulator {
 	private readonly blocks400: BlockSumAccumulator;
 	private readonly blocks3s: BlockSumAccumulator;
 
-	// Reused per-frame K-weighted squared-sum buffer; grows on demand
-	// when a push asks for more frames than the previous high-water mark.
 	private outputBuffer: Float64Array = new Float64Array(0);
 
 	private finalized = false;
 	private cachedResult: LoudnessAccumulatorResult | undefined;
 
 	constructor(sampleRate: number, channelCount: number, channelWeights?: ReadonlyArray<number>) {
-		// Mirror IntegratedLufsAccumulator: validate at the wrapper so
-		// callers see consistent error prefixes.
+		// Validate at the wrapper (mirroring IntegratedLufsAccumulator) so callers see consistent error prefixes.
 		if (channelCount <= 0) {
 			throw new Error(`LoudnessAccumulator: channelCount must be positive, got ${channelCount}`);
 		}
@@ -397,11 +249,6 @@ export class LoudnessAccumulator {
 		this.blocks3s = new BlockSumAccumulator(this.blockSize3s, blockStep);
 	}
 
-	/**
-	 * Consume `frames` of audio, advancing the K-weighting state and both
-	 * block-sum accumulators in lockstep. Identical chunk-boundary
-	 * semantics to {@link IntegratedLufsAccumulator.push}.
-	 */
 	push(channels: ReadonlyArray<Float32Array>, frames: number): void {
 		if (this.finalized) {
 			throw new Error("LoudnessAccumulator: push() called after finalize()");
@@ -418,11 +265,6 @@ export class LoudnessAccumulator {
 		this.blocks3s.push(this.outputBuffer, frames);
 	}
 
-	/**
-	 * Finalize and return all four metrics. Idempotent — additional calls
-	 * return the same cached result object reference. Subsequent
-	 * {@link push} calls throw.
-	 */
 	finalize(): LoudnessAccumulatorResult {
 		if (this.cachedResult !== undefined) return this.cachedResult;
 

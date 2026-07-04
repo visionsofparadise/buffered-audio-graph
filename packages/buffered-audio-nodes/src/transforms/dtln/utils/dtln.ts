@@ -10,41 +10,6 @@ const WARMUP_SHIFTS = BLOCK_LEN / BLOCK_SHIFT - 1; // 3
 
 export { BLOCK_LEN, BLOCK_SHIFT, WARMUP_SHIFTS };
 
-/**
- * Stateful streaming-block DTLN processor.
- *
- * Internally maintains the sliding input window (`BLOCK_LEN`), the OLA accumulator
- * (`BLOCK_LEN`), and the two LSTM states across calls. Each `step(input)` consumes
- * exactly `BLOCK_SHIFT` samples and emits exactly `BLOCK_SHIFT` samples of output
- * from the leftmost (stable) edge of the OLA accumulator.
- *
- * **Warm-up**: the first `WARMUP_SHIFTS = 3` `step()` calls emit zeros because the
- * sliding input window is not yet filled with real samples (DTLN's reference
- * algorithm requires a full `BLOCK_LEN` window before the first inference). The
- * caller is responsible for discarding those initial zero samples.
- *
- * **Drain**: after the last `step()`, the OLA accumulator still holds
- * `BLOCK_LEN - BLOCK_SHIFT = 384` samples of finalized output from the last
- * inference's right-side contribution. Call `flush()` once to retrieve them.
- *
- * **Bit-exact equivalence with the whole-array `processDtlnFrames`**: for an
- * input signal of length `L`, the caller:
- *
- * 1. Computes `effectiveLength = max(L, BLOCK_LEN)`,
- *    `lastOffset = floor((effectiveLength - BLOCK_LEN) / BLOCK_SHIFT) * BLOCK_SHIFT`,
- *    `numBlocks = lastOffset / BLOCK_SHIFT + 1`,
- *    `totalSteps = numBlocks + WARMUP_SHIFTS`.
- * 2. Feeds the signal to `step()` in `BLOCK_SHIFT`-sized chunks; when real samples
- *    run out, zero-pads the remaining `step()` calls (this matches the original's
- *    zero-pad-to-`BLOCK_LEN` behaviour for short inputs AND the original's silent
- *    "trailing samples below `BLOCK_SHIFT` boundary are dropped" behaviour for long
- *    inputs).
- * 3. Calls `flush()` once.
- * 4. Concatenates: `concat(stepOutputs..., flushOutput)`.
- * 5. Drops the first `WARMUP_SHIFTS * BLOCK_SHIFT = 384` samples (the warm-up
- *    zeros), then takes the first `L` samples (matches the original's truncation
- *    to `originalLength`).
- */
 export class DtlnBlockStream {
 	private readonly session1: OnnxSession;
 	private readonly session2: OnnxSession;
@@ -85,24 +50,14 @@ export class DtlnBlockStream {
 		this.stftOutput = { real: this.stftRealScratch, imag: this.stftImagScratch };
 	}
 
-	/**
-	 * Feed `BLOCK_SHIFT` samples; return `BLOCK_SHIFT` samples of output (from the
-	 * stable left edge of the OLA accumulator). The first `WARMUP_SHIFTS` calls
-	 * return zeros (the sliding window is not yet full of real samples).
-	 */
 	step(inputBlock: Float32Array): Float32Array {
 		if (inputBlock.length !== BLOCK_SHIFT) {
 			throw new Error(`DtlnBlockStream.step: expected ${String(BLOCK_SHIFT)} samples, got ${String(inputBlock.length)}`);
 		}
 
-		// Slide input window left by BLOCK_SHIFT; copy new BLOCK_SHIFT samples into the rightmost slot.
 		this.inputBuffer.copyWithin(0, BLOCK_SHIFT, BLOCK_LEN);
 		this.inputBuffer.set(inputBlock, BLOCK_LEN - BLOCK_SHIFT);
 
-		// Once the window is full, every step fires one inference. Until then,
-		// the buffer's left side contains zeros (from initialization), and firing
-		// inference would produce different results than the reference's
-		// "pad-then-run-from-offset-0" behaviour, so we don't fire.
 		if (this.inputFilled < BLOCK_LEN) {
 			this.inputFilled += BLOCK_SHIFT;
 
@@ -114,23 +69,16 @@ export class DtlnBlockStream {
 			this.runBlock();
 		}
 
-		// Emit BLOCK_SHIFT stable samples from the OLA accumulator's left edge.
 		const out = new Float32Array(BLOCK_SHIFT);
 
 		out.set(this.olaScratch.subarray(0, BLOCK_SHIFT));
 
-		// Shift the OLA accumulator left by BLOCK_SHIFT; zero-fill the freed tail.
 		this.olaScratch.copyWithin(0, BLOCK_SHIFT, BLOCK_LEN);
 		this.olaScratch.fill(0, BLOCK_LEN - BLOCK_SHIFT, BLOCK_LEN);
 
 		return out;
 	}
 
-	/**
-	 * Drain the OLA accumulator's remaining stable samples
-	 * (`BLOCK_LEN - BLOCK_SHIFT = 384` samples). After this, the stream's state
-	 * is exhausted but no new inference has run.
-	 */
 	flush(): Float32Array {
 		const remaining = BLOCK_LEN - BLOCK_SHIFT;
 		const out = new Float32Array(remaining);
@@ -189,12 +137,6 @@ export class DtlnBlockStream {
 	}
 }
 
-/**
- * Whole-array DTLN processor. Equivalent to feeding `signal` through a fresh
- * `DtlnBlockStream` in `BLOCK_SHIFT`-sized chunks, then dropping the warm-up
- * zeros and trimming to `signal.length`. Retained as a convenience for callers
- * that have the whole signal in hand (e.g. unit tests).
- */
 export function processDtlnFrames(
 	signal: Float32Array,
 	session1: OnnxSession,

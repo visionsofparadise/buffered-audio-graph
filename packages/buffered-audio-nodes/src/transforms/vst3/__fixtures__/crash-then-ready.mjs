@@ -1,17 +1,10 @@
 #!/usr/bin/env node
-// Crash-then-ready stub `vst-host` for the init-crash retry tests. Extends
-// stub-binary.mjs: for the first N spawns it exits with a configurable code
-// BEFORE printing READY (simulating the non-deterministic iZotope 0xC0000005
-// init crash), then on the (N+1)th spawn behaves like stub-binary — prints
-// READY and echoes stdin → stdout.
-//
-// Spawn count is tracked across processes via a counter file, so the parent
-// can drive "crash K times, then succeed" and assert exactly how many spawns
-// happened. Flags (parsed positionally like stub-binary, order-independent):
+// Crash-then-ready stub `vst-host` for the init-crash retry tests. For the first N spawns
+// it exits with a configurable code BEFORE printing READY, then behaves like stub-binary.
+// Spawn count is tracked across processes via a counter file. Flags:
 //   --crash-file <path>   counter file; incremented once per spawn (required)
 //   --crash-count <n>     crash on spawns 1..n (default 0 = never crash)
 //   --crash-code <code>   exit code used for the crash (default 3221225477)
-// The canonical vst-host args (--stages-json/--sample-rate/--channels) follow.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import process from "node:process";
@@ -35,7 +28,6 @@ if (!crashFile) {
 	process.exit(2);
 }
 
-// Increment the cross-process spawn counter; `attempt` is this spawn's 1-based number.
 let attempt = 0;
 
 try {
@@ -52,7 +44,6 @@ if (attempt <= crashCount) {
 	process.exit(crashCode);
 }
 
-// Success path: same contract as stub-binary.mjs.
 const stagesJson = readArg("--stages-json", null);
 const sampleRate = Number.parseInt(readArg("--sample-rate", "0"), 10);
 const channels = Number.parseInt(readArg("--channels", "0"), 10);

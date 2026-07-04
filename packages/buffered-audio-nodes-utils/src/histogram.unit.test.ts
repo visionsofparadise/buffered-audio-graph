@@ -15,7 +15,6 @@ function makeUniformHalfOpen(length: number, seed: number): Float32Array {
 }
 
 function makeGaussian(length: number, sigma: number, seed: number): Float32Array {
-	// Box–Muller from a deterministic LCG. Two uniforms in, two normals out.
 	const buffer = new Float32Array(length);
 	let state = seed >>> 0;
 	const nextUniform = (): number => {
@@ -96,8 +95,7 @@ describe("amplitudeHistogram", () => {
 		const result = amplitudeHistogram([samples], 16);
 
 		expect(result.bucketMax).toBeCloseTo(0.42, 6);
-		// One sample, target = 0.5; cumulative passes 0.5 inside the last
-		// bucket at fraction 0.5 → median lands at 15.5 / 16 × 0.42.
+		// One sample, target 0.5, cumulative passes 0.5 inside the last bucket at fraction 0.5 → median at 15.5/16 × 0.42.
 		expect(result.median).toBeCloseTo((15.5 / 16) * 0.42, 5);
 	});
 
@@ -114,9 +112,7 @@ describe("amplitudeHistogram", () => {
 		const right = new Float32Array([-0.5, -0.6, -0.7, -0.8]);
 		const result = amplitudeHistogram([left, right], 8);
 
-		// Eight unique |x| values evenly spaced in [0.1, 0.8]. Total
-		// samples = 8, target cumulative = 4 → median should fall near
-		// the boundary between the 4th and 5th values, around 0.45.
+		// Eight unique |x| values evenly spaced in [0.1, 0.8], target cumulative 4 → median near the 4th/5th boundary ≈ 0.45.
 		expect(result.bucketMax).toBeCloseTo(0.8, 6);
 		expect(result.median).toBeGreaterThan(0.4);
 		expect(result.median).toBeLessThan(0.55);

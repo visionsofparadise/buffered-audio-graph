@@ -1,37 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { deinterleaveBuffer, interleave } from "./interleave";
 
-/**
- * Streaming ffmpeg-backed resampler.
- *
- * Spawns one `ffmpeg` subprocess and exposes it as a writer/reader pair:
- *
- * 1. `write(samples)` interleaves and writes raw `f32le` PCM to ffmpeg's
- *    stdin, awaiting `drain` if the kernel pipe fills.
- * 2. `read(frames)` returns up to `frames` of deinterleaved `f32le` PCM
- *    from stdout. The returned per-channel `Float32Array[]` has
- *    `length <= frames`; a length of `0` signals end-of-stream (after
- *    `end()` was called and ffmpeg drained its tail). A short non-zero
- *    return is normal while the resampler's internal buffering is in
- *    flight — callers loop until they've accumulated what they need.
- *    `read` blocks only when no data is currently available AND stdout
- *    has not yet ended.
- * 3. `end()` closes stdin so ffmpeg can emit its tail and exit; `read()`
- *    may then be called repeatedly until it returns a short chunk to
- *    drain the tail.
- * 4. `close()` is idempotent and always safe — it kills the subprocess
- *    if still running and unhooks listeners. Call from `finally` so an
- *    error in the surrounding pipeline never orphans the child.
- *
- * Designed for the **concurrent in-place segment streaming** pattern in
- * `htdemucs` / `kim-vocal-2`: the caller spawns one `ResampleStream` for
- * input (sourceRate → 44 100) and one for output (44 100 → sourceRate),
- * interleaving `write` and `read` calls in lockstep with the segment
- * loop. The internal stdout listener drains ffmpeg's stdout into an
- * in-memory queue concurrently with the caller's writes, preventing the
- * classic write-stdin-without-reading-stdout deadlock.
- */
-
 const STDERR_CAP_BYTES = 64 * 1024;
 
 interface PendingRead {
@@ -100,8 +69,7 @@ export class ResampleStream {
 			this.onExit();
 		});
 		this.child.stdin.on("error", (error: Error & { code?: string }) => {
-			// EPIPE is expected when ffmpeg exits early; surface other errors via the
-			// stdin-write path or via `close()` if no caller is currently writing.
+			// EPIPE is expected when ffmpeg exits early; surface other errors via the write path or close().
 			if (error.code === "EPIPE") return;
 			this.exitError ??= error;
 		});
@@ -137,14 +105,10 @@ export class ResampleStream {
 		if (frames <= 0) return this.emptyChannels();
 		if (this.pendingRead) throw new Error("ResampleStream: concurrent read");
 
-		// Fast path: any complete frame is available — return immediately with
-		// up to `frames` of it. Callers loop to accumulate more.
 		if (this.chunkedBytes >= this.bytesPerFrame) return this.drainOutput(frames);
 
 		if (this.exitError) throw this.exitError;
 
-		// No data buffered. If ffmpeg has finished and stdout is closed, return
-		// a zero-length chunk to signal end-of-stream.
 		if (this.stdoutEnded && this.exited) return this.emptyChannels();
 
 		return new Promise<Array<Float32Array>>((resolve, reject) => {
@@ -182,8 +146,7 @@ export class ResampleStream {
 			}
 		}
 
-		// Wait for the child to fully exit so the temp resources release. Wrap in a
-		// best-effort timer so a stuck subprocess can't hang the pipeline tear-down.
+		// Best-effort SIGKILL timer so a stuck subprocess can't hang pipeline tear-down.
 		if (!this.exited) {
 			await new Promise<void>((resolve) => {
 				let settled = false;
@@ -240,8 +203,6 @@ export class ResampleStream {
 
 		const { frames, resolve, reject } = this.pendingRead;
 
-		// Any complete frame available — satisfy the read immediately. The
-		// caller loops if it wants more.
 		if (this.chunkedBytes >= this.bytesPerFrame) {
 			this.pendingRead = undefined;
 			resolve(this.drainOutput(frames));
@@ -258,7 +219,6 @@ export class ResampleStream {
 				return;
 			}
 
-			// No data left to read — signal end-of-stream with an empty chunk.
 			resolve(this.emptyChannels());
 		}
 	}

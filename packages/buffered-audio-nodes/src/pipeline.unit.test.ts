@@ -48,18 +48,15 @@ describe("Pipeline integration", () => {
 
 			expect(outputSamples.length).toBe(frames);
 
-			// Find output peak — should be close to 1.0 (the ceiling)
 			let outputPeak = 0;
 			for (let index = 0; index < outputSamples.length; index++) {
 				const absolute = Math.abs(outputSamples[index] ?? 0);
 				if (absolute > outputPeak) outputPeak = absolute;
 			}
 
-			// 16-bit quantization introduces some error, but peak should be near ceiling
 			expect(outputPeak).toBeGreaterThan(0.95);
 			expect(outputPeak).toBeLessThanOrEqual(1.0);
 
-			// Verify shape is preserved: ratio between any two non-zero samples should match input
 			const inputRatio = (samples[10] ?? 0) / (samples[5] ?? 1);
 			const outputRatio = (outputSamples[10] ?? 0) / (outputSamples[5] ?? 1);
 			expect(Math.abs(inputRatio - outputRatio)).toBeLessThan(0.01);
