@@ -36,6 +36,8 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 	private measurementAccumulator?: SourceMeasurementAccumulator;
 	private capturedDetectionEnvelope: ChunkBuffer | null = null;
+	private capturedKwSquared: ChunkBuffer | null = null;
+	private capturedD4max: ChunkBuffer | null = null;
 
 	public unbufferElapsedMs = 0;
 
@@ -57,6 +59,8 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		if (this.measurementAccumulator === undefined) {
 			this.capturedDetectionEnvelope = new ChunkBuffer();
+			this.capturedKwSquared = new ChunkBuffer();
+			this.capturedD4max = new ChunkBuffer();
 			this.measurementAccumulator = new SourceMeasurementAccumulator(
 				chunk.sampleRate,
 				channelCount,
@@ -64,6 +68,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 				windowSamplesFromMs(this.properties.smoothing, chunk.sampleRate),
 				this.capturedDetectionEnvelope,
 				chunk.bitDepth,
+				{ kwSquared: this.capturedKwSquared, d4max: this.capturedD4max },
 			);
 		}
 
@@ -88,13 +93,23 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		this.learnTimingMs.sourceMeasurement += Date.now() - tMeasure0;
 
-		// Ownership moves out of the field here: iterateForTargets closes the envelope it is handed; the frames-mismatch/no-loudness paths close it locally.
+		// Ownership moves out of the fields here: iterateForTargets closes whatever it is handed; the
+		// frames-mismatch / no-loudness paths close locally.
 		const capturedDetectionEnvelope = this.capturedDetectionEnvelope;
+		const capturedKwSquared = this.capturedKwSquared;
+		const capturedD4max = this.capturedD4max;
 
 		this.capturedDetectionEnvelope = null;
+		this.capturedKwSquared = null;
+		this.capturedD4max = null;
 
 		const detectionEnvelope = capturedDetectionEnvelope !== null && capturedDetectionEnvelope.frames === frames
 			? capturedDetectionEnvelope
+			: undefined;
+		const proxyCaches = detectionEnvelope !== undefined
+			&& capturedKwSquared !== null && capturedKwSquared.frames === frames
+			&& capturedD4max !== null && capturedD4max.frames === frames
+			? { kwSquared: capturedKwSquared, d4max: capturedD4max }
 			: undefined;
 
 		if (detectionEnvelope === undefined && capturedDetectionEnvelope !== null) {
@@ -106,10 +121,21 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			await capturedDetectionEnvelope.close();
 		}
 
+		// Close any proxy caches not handed to iteration (mismatch, or detection invalidated).
+		if (proxyCaches === undefined) {
+			if (capturedKwSquared !== null) await capturedKwSquared.close();
+			if (capturedD4max !== null) await capturedD4max.close();
+		}
+
 		const { integratedLufs: sourceLufs, lra: sourceLra, truePeakDb: sourcePeakDb } = measurement;
 
 		if (!Number.isFinite(sourceLufs)) {
 			if (detectionEnvelope !== undefined) await detectionEnvelope.close();
+			if (proxyCaches !== undefined) {
+				await proxyCaches.kwSquared.close();
+				await proxyCaches.d4max.close();
+			}
+
 			this.log("source has no measurable loudness; pass-through", { sourceLufs });
 
 			return;
@@ -194,6 +220,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			peakTolerance,
 			seedB,
 			detectionEnvelope,
+			proxyCaches,
 		});
 
 		this.learnTimingMs.iteration = Date.now() - tIterate0;
@@ -203,12 +230,13 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		this.winningLimitDb = result.bestLimitDb;
 		this.winningPeakGainDb = result.bestPeakGainDb;
 
-		const lastAttempt = result.attempts[result.attempts.length - 1];
-		const outputLufsRepr = lastAttempt ? (targetLufs + lastAttempt.lufsErr).toFixed(2) : "n/a";
-		const outputLraRepr = lastAttempt ? lastAttempt.outputLra.toFixed(2) : "n/a";
-		const lufsDeltaRepr = lastAttempt ? lastAttempt.lufsErr.toFixed(2) : "n/a";
-		const outputTruePeakRepr = lastAttempt ? (effectiveTargetTp + lastAttempt.peakErr).toFixed(2) : "n/a";
-		const peakDeltaRepr = lastAttempt ? lastAttempt.peakErr.toFixed(2) : "n/a";
+		// Headline numbers are the exact BS.1770 measurement of the WINNING (applied) envelope, not the last
+		// attempt — correct whether the loop iterated on proxy or exact, and the applied envelope is the winner.
+		const outputLufsRepr = result.winnerOutputLufs !== null ? result.winnerOutputLufs.toFixed(2) : "n/a";
+		const outputLraRepr = result.winnerOutputLra !== null ? result.winnerOutputLra.toFixed(2) : "n/a";
+		const lufsDeltaRepr = result.winnerOutputLufs !== null ? (result.winnerOutputLufs - targetLufs).toFixed(2) : "n/a";
+		const outputTruePeakRepr = result.winnerOutputTruePeakDb !== null ? result.winnerOutputTruePeakDb.toFixed(2) : "n/a";
+		const peakDeltaRepr = result.winnerOutputTruePeakDb !== null ? (result.winnerOutputTruePeakDb - effectiveTargetTp).toFixed(2) : "n/a";
 		const bestPeakGainDbRepr = result.bestPeakGainDb.toFixed(4);
 		const bestLimitDbRepr = result.bestLimitDb.toFixed(4);
 		const pivotRepr = userPivot === undefined
@@ -315,6 +343,16 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		if (this.capturedDetectionEnvelope !== null) {
 			await this.capturedDetectionEnvelope.close();
 			this.capturedDetectionEnvelope = null;
+		}
+
+		if (this.capturedKwSquared !== null) {
+			await this.capturedKwSquared.close();
+			this.capturedKwSquared = null;
+		}
+
+		if (this.capturedD4max !== null) {
+			await this.capturedD4max.close();
+			this.capturedD4max = null;
 		}
 	}
 

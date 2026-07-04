@@ -56,13 +56,24 @@ export class SourceMeasurementAccumulator {
 	private readonly upsamplers: Array<TruePeakUpsampler>;
 	private readonly slidingWindow: SlidingWindowMaxStream;
 	private readonly detectionEnvelope: ChunkBuffer | null;
-	private readonly detectionBitDepth: number | undefined;
+	private readonly kwSquaredBuffer: ChunkBuffer | null;
+	private readonly d4maxBuffer: ChunkBuffer | null;
+	private readonly persistBitDepth: number | undefined;
 	private levelsScratch: Float32Array | null = null;
 	private baseScratch: Float32Array | null = null;
+	private kwSquaredScratch: Float32Array | null = null;
 	private readonly upsampleScratches: Array<Float32Array> = [];
 	private pushedFrames = 0;
 
-	constructor(sampleRate: number, channelCount: number, limitPercentile: number, halfWidth: number, detectionEnvelope: ChunkBuffer | null = null, detectionBitDepth?: number) {
+	constructor(
+		sampleRate: number,
+		channelCount: number,
+		limitPercentile: number,
+		halfWidth: number,
+		detectionEnvelope: ChunkBuffer | null = null,
+		persistBitDepth?: number,
+		proxyCaches?: { kwSquared: ChunkBuffer; d4max: ChunkBuffer },
+	) {
 		this.limitPercentile = limitPercentile;
 		this.sampleRate = sampleRate;
 		this.loudness = new LoudnessAccumulator(sampleRate, channelCount);
@@ -76,7 +87,9 @@ export class SourceMeasurementAccumulator {
 
 		this.slidingWindow = new SlidingWindowMaxStream(halfWidth);
 		this.detectionEnvelope = detectionEnvelope;
-		this.detectionBitDepth = detectionBitDepth;
+		this.kwSquaredBuffer = proxyCaches?.kwSquared ?? null;
+		this.d4maxBuffer = proxyCaches?.d4max ?? null;
+		this.persistBitDepth = persistBitDepth;
 	}
 
 	async push(channels: ReadonlyArray<Float32Array>, frames: number): Promise<void> {
@@ -148,13 +161,33 @@ export class SourceMeasurementAccumulator {
 
 		this.pushedFrames += frames;
 
+		// kw²[n] (per-frame K-weighted channel-summed square) and d4max[n] (= baseChunk, pre-pool inter-sample
+		// peak) are the loudnessTarget proxy-measurement caches. Both are per-frame (full `frames`, no slider
+		// deferral), so their totals equal the source frame count without a trailing flush.
+		if (this.d4maxBuffer !== null) {
+			await this.d4maxBuffer.write([baseChunk], this.sampleRate, this.persistBitDepth);
+		}
+
+		if (this.kwSquaredBuffer !== null) {
+			if (this.kwSquaredScratch === null || this.kwSquaredScratch.length < frames) {
+				this.kwSquaredScratch = new Float32Array(frames);
+			}
+
+			const kwSquared = this.loudness.peekLastSquaredSums();
+			const kwF32 = this.kwSquaredScratch.subarray(0, frames);
+
+			for (let frameIdx = 0; frameIdx < frames; frameIdx++) kwF32[frameIdx] = kwSquared[frameIdx] ?? 0;
+
+			await this.kwSquaredBuffer.write([kwF32], this.sampleRate, this.persistBitDepth);
+		}
+
 		const pooled = this.slidingWindow.push(baseChunk, false);
 
 		if (pooled.length > 0) {
 			this.detectionHistogram.push([pooled], pooled.length);
 
 			if (this.detectionEnvelope !== null) {
-				await this.detectionEnvelope.write([pooled], this.sampleRate, this.detectionBitDepth);
+				await this.detectionEnvelope.write([pooled], this.sampleRate, this.persistBitDepth);
 			}
 		}
 	}
@@ -169,13 +202,16 @@ export class SourceMeasurementAccumulator {
 			this.detectionHistogram.push([trailing], trailing.length);
 
 			if (this.detectionEnvelope !== null) {
-				await this.detectionEnvelope.write([trailing], this.sampleRate, this.detectionBitDepth);
+				await this.detectionEnvelope.write([trailing], this.sampleRate, this.persistBitDepth);
 			}
 		}
 
 		if (this.detectionEnvelope !== null) {
 			await this.detectionEnvelope.flushWrites();
 		}
+
+		if (this.d4maxBuffer !== null) await this.d4maxBuffer.flushWrites();
+		if (this.kwSquaredBuffer !== null) await this.kwSquaredBuffer.flushWrites();
 
 		const loudnessResult = this.loudness.finalize();
 		const truePeakLin = this.truePeak.finalize();

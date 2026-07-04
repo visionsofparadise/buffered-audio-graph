@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getLraConsideredMinLufs, IntegratedLufsAccumulator, LoudnessAccumulator } from "./loudness";
+import { KWeightedSquaredSum } from "./k-weighted-squared-sum";
+import { getLraConsideredMinLufs, IntegratedLufsAccumulator, LoudnessAccumulator, PreWeightedLoudnessAccumulator } from "./loudness";
 
 function generateSine(frequency: number, amplitude: number, sampleRate: number, durationSeconds: number): Float32Array {
 	const length = Math.floor(sampleRate * durationSeconds);
@@ -210,5 +211,54 @@ describe("getLraConsideredMinLufs", () => {
 		expect(Number.isFinite(consideredMin)).toBe(true);
 		expect(consideredMin).toBeGreaterThan(-70);
 		expect(consideredMin).toBeLessThanOrEqual(Math.max(...result.shortTerm));
+	});
+});
+
+describe("PreWeightedLoudnessAccumulator", () => {
+	// Fed the same per-frame K-weighted squared sums that LoudnessAccumulator computes internally, the
+	// pre-weighted path must reproduce LoudnessAccumulator's integrated LUFS + LRA bit-for-bit — it shares
+	// the block-sum + BS.1770 gating + LRA logic and only skips the K-filter. This is the invariant the
+	// loudnessTarget proxy measurement relies on.
+	it("matches LoudnessAccumulator when fed the K-weighted squared sums directly", () => {
+		const sampleRate = 48000;
+		const loud = generateSine(220, 0.4, sampleRate, 6);
+		const quiet = generateSine(220, 0.02, sampleRate, 6);
+		const channelA = new Float32Array(loud.length + quiet.length);
+		const channelB = new Float32Array(loud.length + quiet.length);
+
+		channelA.set(loud, 0);
+		channelA.set(quiet, loud.length);
+
+		// Second channel scaled differently to exercise the channel-summed square.
+		for (let i = 0; i < channelA.length; i++) channelB[i] = (channelA[i] ?? 0) * 0.5;
+
+		const frames = channelA.length;
+		const reference = new LoudnessAccumulator(sampleRate, 2);
+
+		reference.push([channelA, channelB], frames);
+
+		const referenceResult = reference.finalize();
+
+		// Reproduce the per-frame kw² stream (what SourceMeasurementAccumulator persists via peekLastSquaredSums).
+		const kw = new KWeightedSquaredSum(sampleRate, 2);
+		const squaredSums = new Float64Array(frames);
+
+		kw.push([channelA, channelB], frames, squaredSums);
+
+		const proxy = new PreWeightedLoudnessAccumulator(sampleRate);
+
+		proxy.push(squaredSums, frames);
+
+		const proxyResult = proxy.finalize();
+
+		expect(proxyResult.integrated).toBeCloseTo(referenceResult.integrated, 10);
+		expect(proxyResult.range).toBeCloseTo(referenceResult.range, 10);
+	});
+
+	it("throws on push after finalize", () => {
+		const accumulator = new PreWeightedLoudnessAccumulator(48000);
+
+		accumulator.finalize();
+		expect(() => accumulator.push(new Float64Array(10), 10)).toThrow("push() called after finalize()");
 	});
 });

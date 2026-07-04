@@ -1,5 +1,5 @@
 import { ChunkBuffer } from "@buffered-audio/core";
-import { BidirectionalIir, LoudnessAccumulator, SlidingWindowMinStream, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
+import { BidirectionalIir, LoudnessAccumulator, PreWeightedLoudnessAccumulator, SlidingWindowMinStream, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { applyBaseRateChunk } from "./apply";
 import { type Anchors, gainDbAt } from "./curve";
 import { applyBackwardPassOverChunkBuffer, windowSamplesFromMs } from "./envelope";
@@ -47,6 +47,11 @@ export interface IterateResult {
 	converged: boolean;
 	// 0 when a pre-built detectionEnvelope was supplied.
 	detectionCacheBuildMs: number;
+	// Exact BS.1770 measurement of the winning (applied) envelope. When the loop iterated on the proxy,
+	// these are the authoritative output numbers; `converged` is derived from them. null on pass-through.
+	winnerOutputLufs: number | null;
+	winnerOutputTruePeakDb: number | null;
+	winnerOutputLra: number | null;
 }
 
 export interface IterateForTargetsArgs {
@@ -66,6 +71,9 @@ export interface IterateForTargetsArgs {
 	seedB?: number | undefined;
 	// Pre-built base-rate detection envelope (ownership transfers; closed by this call). Must be bit-identical to buildBaseRateDetectionCache output for the same buffer/halfWidth.
 	detectionEnvelope?: ChunkBuffer | undefined;
+	// Proxy-measurement caches (ownership transfers; closed by this call). When both present, per-attempt
+	// output is measured via the cheap proxy (Σ g²·kw² + max(g·d4max)); the winner is verified exactly.
+	proxyCaches?: { kwSquared: ChunkBuffer; d4max: ChunkBuffer } | undefined;
 }
 
 export async function iterateForTargets(args: IterateForTargetsArgs): Promise<IterateResult> {
@@ -91,6 +99,10 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 	if (channelCount === 0 || frames === 0) {
 		if (args.detectionEnvelope !== undefined) await args.detectionEnvelope.close();
+		if (args.proxyCaches !== undefined) {
+			await args.proxyCaches.kwSquared.close();
+			await args.proxyCaches.d4max.close();
+		}
 
 		return {
 			bestSmoothedEnvelopeBuffer: new ChunkBuffer(),
@@ -100,6 +112,9 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			attempts: [],
 			converged: false,
 			detectionCacheBuildMs: 0,
+			winnerOutputLufs: null,
+			winnerOutputTruePeakDb: null,
+			winnerOutputLra: null,
 		};
 	}
 
@@ -140,6 +155,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 	try {
 		const skipPeak = targetTp === undefined;
+		const proxyCaches = args.proxyCaches;
 
 		let currentBoost = clampBoost(
 			seedB !== undefined && Number.isFinite(seedB) ? seedB : targetLufs - sourceLufs,
@@ -180,12 +196,11 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				minHeldBuffer: minHeldEnvelopeBuffer,
 			});
 
-			const measured = await measureAttemptOutput({
-				source: buffer,
-				sampleRate,
-				channelCount,
-				gSmoothed: activeRef,
-			});
+			// Per-attempt error via the proxy when caches are supplied (≤0.0002 LUFS / 0.0000 dBTP vs exact);
+			// the winning envelope is verified exactly after the loop. Falls back to exact when no caches.
+			const measured = proxyCaches !== undefined
+				? await measureAttemptOutputProxy({ kwSquared: proxyCaches.kwSquared, d4max: proxyCaches.d4max, gSmoothed: activeRef, sampleRate })
+				: await measureAttemptOutput({ source: buffer, sampleRate, channelCount, gSmoothed: activeRef });
 
 			const lufsErr = measured.outputLufs - targetLufs;
 			const peakErr = measured.outputTruePeakDb - effectiveTargetTp;
@@ -223,33 +238,10 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			const matchesToTwoDp =
 				Math.round(Math.abs(lufsErr) * 100) === 0
 				&& (skipPeak || Math.round(Math.abs(peakErr) * 100) === 0);
-
-			if (matchesToTwoDp) {
-				return {
-					bestSmoothedEnvelopeBuffer: winningRef,
-					bestB: bestBoost,
-					bestLimitDb: currentLimit,
-					bestPeakGainDb,
-					attempts,
-					converged: true,
-					detectionCacheBuildMs,
-				};
-			}
-
 			const lufsConverged = Math.abs(lufsErr) < tolerance;
 			const peakConverged = skipPeak || Math.abs(peakErr) < peakTolerance;
 
-			if (lufsConverged && peakConverged) {
-				return {
-					bestSmoothedEnvelopeBuffer: winningRef,
-					bestB: bestBoost,
-					bestLimitDb: currentLimit,
-					bestPeakGainDb,
-					attempts,
-					converged: true,
-					detectionCacheBuildMs,
-				};
-			}
+			if (matchesToTwoDp || (lufsConverged && peakConverged)) break;
 
 			if (attemptIdx === maxAttempts - 1) break;
 
@@ -266,19 +258,40 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			}
 		}
 
+		// Exact BS.1770 verify of the winning (applied) envelope: authoritative output numbers + the reported
+		// `converged` gate, regardless of whether the loop iterated on proxy or exact.
+		const winnerExact = winningPopulated
+			? await measureAttemptOutput({ source: buffer, sampleRate, channelCount, gSmoothed: winningRef })
+			: undefined;
+		const winnerLufsErr = winnerExact !== undefined ? winnerExact.outputLufs - targetLufs : Infinity;
+		const winnerPeakErr = winnerExact !== undefined ? winnerExact.outputTruePeakDb - effectiveTargetTp : Infinity;
+		const converged = winnerExact !== undefined
+			&& (
+				(Math.round(Math.abs(winnerLufsErr) * 100) === 0 && (skipPeak || Math.round(Math.abs(winnerPeakErr) * 100) === 0))
+				|| (Math.abs(winnerLufsErr) < tolerance && (skipPeak || Math.abs(winnerPeakErr) < peakTolerance))
+			);
+
 		return {
 			bestSmoothedEnvelopeBuffer: winningRef,
 			bestB: bestBoost,
 			bestLimitDb: currentLimit,
 			bestPeakGainDb,
 			attempts,
-			converged: false,
+			converged,
 			detectionCacheBuildMs,
+			winnerOutputLufs: winnerExact?.outputLufs ?? null,
+			winnerOutputTruePeakDb: winnerExact?.outputTruePeakDb ?? null,
+			winnerOutputLra: winnerExact?.outputLra ?? null,
 		};
 	} finally {
-		// detectionEnvelope has no downstream consumer — close on every path. The winner is returned
-		// via IterateResult and outlives this call; the losing ping-pong buffer is closed below.
+		// detectionEnvelope + proxy caches have no downstream consumer — close on every path. The winner is
+		// returned via IterateResult and outlives this call; the losing ping-pong buffer is closed below.
 		await detectionEnvelope.close();
+		if (args.proxyCaches !== undefined) {
+			await args.proxyCaches.kwSquared.close();
+			await args.proxyCaches.d4max.close();
+		}
+
 		await forwardEnvelopeBuffer.close();
 		await minHeldEnvelopeBuffer.close();
 		// Pathological branch (no best-attempt update ever fired — impossible for non-zero frames): close both.
@@ -427,6 +440,69 @@ export async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<Me
 	const outputTruePeakDb = linearToDb(truePeakLinear);
 
 	return { outputLufs: result.integrated, outputLra: result.range, outputTruePeakDb };
+}
+
+export interface MeasureAttemptProxyArgs {
+	kwSquared: ChunkBuffer;
+	d4max: ChunkBuffer;
+	gSmoothed: ChunkBuffer;
+	sampleRate: number;
+}
+
+// Proxy output measurement: LUFS/LRA from block-gated Σ g²·kw²[n] (PreWeightedLoudnessAccumulator, same
+// BS.1770 gating as the exact path minus the K-filter); true peak from max(g[n]·d4max[n]). Valid because
+// the smoothing-bandlimited g is near-DC over the K-filter memory and the inter-sample peak grid, so
+// K(g·x) ≈ g·K(x) and upsample(g·x) ≈ g·upsample(x). Measured ≤0.0002 LUFS / 0.0000 dBTP vs exact on the
+// production master material (see design-loudness-target 2026-07-05). Reads three mono buffers — no
+// per-attempt multichannel source read, K-filter, or FIR.
+export async function measureAttemptOutputProxy(args: MeasureAttemptProxyArgs): Promise<MeasureAttemptResult> {
+	const { kwSquared, d4max, gSmoothed, sampleRate } = args;
+	const accumulator = new PreWeightedLoudnessAccumulator(sampleRate);
+	const pScratch = new Float64Array(CHUNK_FRAMES);
+	let maxTruePeak = 0;
+
+	await kwSquared.reset();
+	await d4max.reset();
+	await gSmoothed.reset();
+
+	for (;;) {
+		const kwChunk = await kwSquared.read(CHUNK_FRAMES);
+		const frames = kwChunk.samples[0]?.length ?? 0;
+
+		if (frames === 0) break;
+
+		const d4Chunk = await d4max.read(frames);
+		const gChunk = await gSmoothed.read(frames);
+		const kwArr = kwChunk.samples[0];
+		const d4Arr = d4Chunk.samples[0];
+		const gArr = gChunk.samples[0];
+
+		if (kwArr === undefined || d4Arr?.length !== frames || gArr?.length !== frames) {
+			throw new Error(
+				`measureAttemptOutputProxy: cache length mismatch (kw²=${kwArr?.length ?? 0}, d4max=${d4Arr?.length ?? 0}, g=${gArr?.length ?? 0}); expected ${frames}`,
+			);
+		}
+
+		const scaledSquares = pScratch.subarray(0, frames);
+
+		for (let frameIdx = 0; frameIdx < frames; frameIdx++) {
+			const gain = gArr[frameIdx] ?? 0;
+
+			scaledSquares[frameIdx] = gain * gain * (kwArr[frameIdx] ?? 0);
+
+			const truePeak = gain * (d4Arr[frameIdx] ?? 0);
+
+			if (truePeak > maxTruePeak) maxTruePeak = truePeak;
+		}
+
+		accumulator.push(scaledSquares, frames);
+
+		if (frames < CHUNK_FRAMES) break;
+	}
+
+	const result = accumulator.finalize();
+
+	return { outputLufs: result.integrated, outputLra: result.range, outputTruePeakDb: linearToDb(maxTruePeak) };
 }
 
 interface BoostStep {
