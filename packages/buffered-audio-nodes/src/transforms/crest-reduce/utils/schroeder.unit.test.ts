@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { achievableCrestFactorDb, NEWMAN_ACHIEVABLE_CREST_FACTOR_DB, relativePower, schroederTargetPhase } from "./schroeder";
+import { relativePower, schroederTargetPhase } from "./schroeder";
 
 /**
  * Independent closed-form reference for Ojarand & Min Eq. (2)
@@ -130,21 +130,5 @@ describe("schroederTargetPhase", () => {
 
 	it("returns an empty array for an empty spectrum (no throw)", () => {
 		expect(schroederTargetPhase([], 0).length).toBe(0);
-	});
-});
-
-describe("achievableCrestFactorDb", () => {
-	it("returns the Newman ≈ 4.6 dB floor for a high-crest input", () => {
-		expect(achievableCrestFactorDb(18)).toBeCloseTo(NEWMAN_ACHIEVABLE_CREST_FACTOR_DB, 12);
-	});
-
-	it("clamps to the input when the frame already sits below the generic floor", () => {
-		// A single tone has crest factor 3 dB < 4.6 dB; the target floor
-		// must not be set ABOVE where the frame already sits.
-		expect(achievableCrestFactorDb(3)).toBeCloseTo(3, 12);
-	});
-
-	it("falls back to the Newman figure for a non-finite input", () => {
-		expect(achievableCrestFactorDb(Number.NEGATIVE_INFINITY)).toBeCloseTo(NEWMAN_ACHIEVABLE_CREST_FACTOR_DB, 12);
 	});
 });

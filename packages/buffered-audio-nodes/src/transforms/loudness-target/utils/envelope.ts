@@ -1,37 +1,9 @@
 import { ChunkBuffer, reverseBuffer } from "@buffered-audio/core";
-import { BidirectionalIir, linearToDb, slidingWindowMax } from "@buffered-audio/utils";
-import { type Anchors, gainDbAt } from "./curve";
+import type { BidirectionalIir } from "@buffered-audio/utils";
 
 // Sliding-window-min primitive: https://en.wikipedia.org/wiki/Sliding_window_minimum
 export function windowSamplesFromMs(smoothingMs: number, sampleRate: number): number {
 	return Math.max(1, Math.round((smoothingMs * sampleRate) / 1000));
-}
-
-// Legacy equivalence reference; production path is streamCurveAndForwardIir + applyBackwardPassOverChunkBuffer.
-export function peakRespectingEnvelope(
-	detection: Float32Array,
-	anchors: Anchors,
-	smoothingMs: number,
-	sampleRate: number,
-): Float32Array {
-	const length = detection.length;
-
-	if (length === 0) return new Float32Array(0);
-
-	const halfWidth = windowSamplesFromMs(smoothingMs, sampleRate);
-	const detectionWindow = slidingWindowMax(detection, halfWidth);
-	const gWindow = new Float32Array(length);
-
-	for (let sampleIdx = 0; sampleIdx < length; sampleIdx++) {
-		const levelDb = linearToDb(detectionWindow[sampleIdx] ?? 0);
-		const gainDb = gainDbAt(levelDb, anchors);
-
-		gWindow[sampleIdx] = Math.pow(10, gainDb / 20);
-	}
-
-	const iir = new BidirectionalIir({ smoothingMs, sampleRate });
-
-	return iir.applyBidirectional(gWindow);
 }
 
 // When provided, `minHeldBuffer.frames` MUST equal `sourceBuffer.frames` (read in lockstep; throws on mismatch).

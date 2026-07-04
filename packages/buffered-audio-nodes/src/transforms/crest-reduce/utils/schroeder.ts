@@ -1,9 +1,6 @@
 // Schroeder (1970) near-optimal low-crest phase, per Ojarand & Min (2017) §I.A Eqs. (2)–(3),
 // DOI 10.5755/j01.eie.23.2.18001 — see design-crest-reduce.md §Algorithm Specification item 1.
 
-// Boyd (1986) §IV/§VI Newman achievable crest-factor floor.
-export const NEWMAN_ACHIEVABLE_CREST_FACTOR_DB = 4.6;
-
 // Boyd (1986) §III Shapiro-Rudin real-signal achievable crest-factor bound (CF ≤ 2 ⇒ ≤ 6.02 dB).
 export const SHAPIRO_RUDIN_ACHIEVABLE_CREST_FACTOR_DB = 6.02;
 
@@ -57,10 +54,4 @@ export function schroederTargetPhase(magnitude: ReadonlyArray<number> | Float32A
 	}
 
 	return phase;
-}
-
-export function achievableCrestFactorDb(inputCrestFactorDb: number): number {
-	if (!Number.isFinite(inputCrestFactorDb)) return NEWMAN_ACHIEVABLE_CREST_FACTOR_DB;
-
-	return Math.min(NEWMAN_ACHIEVABLE_CREST_FACTOR_DB, inputCrestFactorDb);
 }

@@ -1,48 +1,5 @@
 import { computeIstftScaled, type ComplexStft } from "./dsp";
 
-export interface NormStats {
-	readonly mean: number;
-	readonly std: number;
-}
-
-export function normalizeAudio(
-	left: Float32Array,
-	right: Float32Array,
-	frames: number,
-): { readonly normalizedLeft: Float32Array; readonly normalizedRight: Float32Array; readonly stats: NormStats } {
-	const stereo = new Float32Array(2 * frames);
-
-	stereo.set(left, 0);
-	stereo.set(right, frames);
-
-	let sum = 0;
-
-	for (const sample of stereo) {
-		sum += sample;
-	}
-
-	const mean = sum / stereo.length;
-	let variance = 0;
-
-	for (const sample of stereo) {
-		const diff = sample - mean;
-
-		variance += diff * diff;
-	}
-
-	const std = Math.sqrt(variance / stereo.length) || 1;
-
-	const normalizedLeft = new Float32Array(frames);
-	const normalizedRight = new Float32Array(frames);
-
-	for (let index = 0; index < frames; index++) {
-		normalizedLeft[index] = ((left[index] ?? 0) - mean) / std;
-		normalizedRight[index] = ((right[index] ?? 0) - mean) / std;
-	}
-
-	return { normalizedLeft, normalizedRight, stats: { mean, std } };
-}
-
 export function buildModelInput(
 	segLeft: Float32Array,
 	segRight: Float32Array,
@@ -146,41 +103,4 @@ export function extractStems(
 			}
 		}
 	}
-}
-
-export function mixStems(
-	stemOutputs: ReadonlyArray<Float32Array>,
-	sumWeight: Float32Array,
-	stemGains: ReadonlyArray<number>,
-	stats: NormStats,
-	frames: number,
-	channels: number,
-): Array<Float32Array> {
-	const outputChannels: Array<Float32Array> = [];
-
-	for (let ch = 0; ch < channels; ch++) {
-		const output = new Float32Array(frames);
-		const srcCh = Math.min(ch, 1);
-
-		for (let index = 0; index < frames; index++) {
-			const sw = sumWeight[index] ?? 1;
-			let normalizedSum = 0;
-
-			for (let source = 0; source < 4; source++) {
-				const gain = stemGains[source] ?? 1;
-
-				if (gain === 0) continue;
-
-				const arr = stemOutputs[source * 2 + srcCh];
-
-				normalizedSum += (arr ? (arr[index] ?? 0) / sw : 0) * gain;
-			}
-
-			output[index] = normalizedSum * stats.std + stats.mean;
-		}
-
-		outputChannels.push(output);
-	}
-
-	return outputChannels;
 }

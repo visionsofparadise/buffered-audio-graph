@@ -97,13 +97,3 @@ export function processSegment(
 
 	return { left: segOutLeft, right: segOutRight };
 }
-
-export function normalizeOverlapAdd(output: Float32Array, weights: Float32Array, length: number): void {
-	for (let index = 0; index < length; index++) {
-		const sw = weights[index] ?? 1;
-
-		if (sw > 0) {
-			output[index] = (output[index] ?? 0) / sw;
-		}
-	}
-}

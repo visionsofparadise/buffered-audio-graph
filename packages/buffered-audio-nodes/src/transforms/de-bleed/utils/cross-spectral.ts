@@ -111,31 +111,3 @@ export function finalizeTransferFunction(
 
 	return { real: hReal, imag: hImag };
 }
-
-/** @see header JSDoc. */
-export function estimateTransferFunction(
-	targetReal: Float32Array,
-	targetImag: Float32Array,
-	refReal: Float32Array,
-	refImag: Float32Array,
-	numFrames: number,
-	numBins: number,
-	epsilon?: number,
-): TransferFunction {
-	const accumulator = createTransferAccumulator(numBins);
-	const maxRefPow = findMaxRefPower(refReal, refImag, numFrames, numBins);
-	const weightEpsilon = 1e-10 * (maxRefPow + 1e-20);
-
-	accumulateTransferChunk(
-		targetReal,
-		targetImag,
-		refReal,
-		refImag,
-		numFrames,
-		numBins,
-		weightEpsilon,
-		accumulator,
-	);
-
-	return finalizeTransferFunction(accumulator, epsilon);
-}
