@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { BufferedStream } from "./stream";
+import { DEFAULT_PROGRESS_QUANTUM, type BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload } from "./stream";
 
 export interface AudioChunk {
 	readonly samples: Array<Float32Array>;
@@ -10,6 +10,35 @@ export interface AudioChunk {
 
 export type ExecutionProvider = "gpu" | "cpu-native" | "cpu";
 
+export interface NodeIdentity {
+	readonly moduleName: string;
+	readonly id?: string;
+	readonly type: ReadonlyArray<string>;
+}
+
+export type StreamEvent =
+	| { kind: "started" }
+	| ({ kind: "finished" } & FinishedPayload)
+	| ({ kind: "progress" } & ProgressPayload)
+	| ({ kind: "log" } & LogPayload);
+
+export function wireStreamEvents(stream: BufferedStream, identity: NodeIdentity, onEvent: (node: NodeIdentity, event: StreamEvent) => void): void {
+	stream.events.on("started", () => onEvent(identity, { kind: "started" }));
+	stream.events.on("finished", (payload) => onEvent(identity, { kind: "finished", ...payload }));
+	stream.events.on("progress", (payload) => onEvent(identity, { kind: "progress", ...payload }));
+	stream.events.on("log", (payload) => onEvent(identity, { kind: "log", ...payload }));
+}
+
+export function wireStream(node: BufferedAudioNode, stream: BufferedStream, context: StreamContext): void {
+	stream.quantumFraction = context.progressQuantum ?? DEFAULT_PROGRESS_QUANTUM;
+
+	if (!context.onEvent) return;
+
+	const identity: NodeIdentity = { moduleName: (node.constructor as typeof BufferedAudioNode).moduleName, id: node.id, type: node.type };
+
+	wireStreamEvents(stream, identity, context.onEvent);
+}
+
 export interface StreamContext {
 	readonly executionProviders: ReadonlyArray<ExecutionProvider>;
 	readonly memoryLimit: number;
@@ -17,6 +46,8 @@ export interface StreamContext {
 	readonly highWaterMark: number;
 	readonly signal?: AbortSignal;
 	readonly visited: Set<BufferedAudioNode>;
+	readonly onEvent?: (node: NodeIdentity, event: StreamEvent) => void;
+	readonly progressQuantum?: number;
 }
 
 export interface RenderOptions {
@@ -25,6 +56,8 @@ export interface RenderOptions {
 	readonly memoryLimit?: number;
 	readonly signal?: AbortSignal;
 	readonly executionProviders?: ReadonlyArray<ExecutionProvider>;
+	readonly onEvent?: (node: NodeIdentity, event: StreamEvent) => void;
+	readonly progressQuantum?: number;
 }
 
 export interface BufferedAudioNodeProperties {

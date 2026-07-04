@@ -51,7 +51,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 	}
 
 	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
-		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: filterOnnxProviders(context.executionProviders) });
+		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: filterOnnxProviders(context.executionProviders) }, (message, data) => this.log(message, data));
 
 		return super._setup(input, context);
 	}

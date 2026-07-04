@@ -1,5 +1,5 @@
 import { ChunkBuffer } from "./chunk-buffer";
-import { BufferedAudioNode, type AudioChunk, type BufferedAudioNodeProperties, type StreamContext } from "./node";
+import { BufferedAudioNode, wireStream, type AudioChunk, type BufferedAudioNodeProperties, type StreamContext } from "./node";
 import { BufferedStream } from "./stream";
 import { TargetNode } from "./target";
 import { teeReadable } from "./utils/tee-readable";
@@ -17,6 +17,9 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 	processingMs = 0;
 	framesProcessed = 0;
+
+	private framesBuffered = 0;
+	private framesEmitted = 0;
 
 	private chunkBuffer?: ChunkBuffer;
 	private bufferOffset = 0;
@@ -93,8 +96,9 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 			this.processingMs += performance.now() - start;
 			this.framesProcessed += samplesIn;
+			this.framesBuffered += samplesIn;
 
-			this.events.emit("progress", { framesProcessed: this.framesProcessed, sourceTotalFrames: this.sourceTotalFrames });
+			this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
 			return;
 		}
@@ -122,14 +126,18 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 		this.processingMs += performance.now() - start;
 		this.framesProcessed += samplesIn;
+		this.framesBuffered += samplesIn;
 
-		this.events.emit("progress", { framesProcessed: this.framesProcessed, sourceTotalFrames: this.sourceTotalFrames });
+		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 	}
 
 	private async handleFlush(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
+		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames, { force: true });
+
 		if (!this.chunkBuffer || this.chunkBuffer.frames === 0) {
 			await this.emitFlushChunks(controller);
-			this.events.emit("finished");
+			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames, { force: true });
+			this.events.emit("finished", { framesDone: this.framesBuffered, processingMs: this.processingMs });
 
 			return;
 		}
@@ -137,7 +145,8 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		if (this.bufferSize === 0) {
 			await this.chunkBuffer.close();
 			await this.emitFlushChunks(controller);
-			this.events.emit("finished");
+			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames, { force: true });
+			this.events.emit("finished", { framesDone: this.framesBuffered, processingMs: this.processingMs });
 
 			return;
 		}
@@ -151,7 +160,8 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		}
 
 		await this.emitFlushChunks(controller);
-		this.events.emit("finished");
+		this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames, { force: true });
+		this.events.emit("finished", { framesDone: this.framesBuffered, processingMs: this.processingMs });
 	}
 
 	private async emitFlushChunks(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
@@ -161,6 +171,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 		for (const chunk of chunks) {
 			controller.enqueue(chunk);
+			this.framesEmitted += chunk.samples[0]?.length ?? 0;
 		}
 	}
 
@@ -169,9 +180,14 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 		const samplesBeforeProcess = this.chunkBuffer.frames;
 		const start = performance.now();
+		const wholeFile = this.bufferSize === WHOLE_FILE;
 
 		await this.chunkBuffer.flushWrites();
+
+		if (wholeFile) this.emitProgress("process", 0, undefined, { force: true });
 		await this._process(this.chunkBuffer);
+		if (wholeFile) this.emitProgress("process", samplesBeforeProcess, samplesBeforeProcess, { force: true });
+
 		await this.emitBuffer(controller);
 
 		this.processingMs += performance.now() - start;
@@ -212,6 +228,9 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 			const result = await this._unbuffer(adjusted);
 
 			if (result) controller.enqueue(result);
+
+			this.framesEmitted += chunkFrames;
+			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 
 			if (overlapScratch) {
 				if (chunkFrames >= overlap) {
@@ -297,6 +316,8 @@ export abstract class TransformNode<P extends TransformNodeProperties = Transfor
 		const stream = this.createStream();
 
 		this.streams.push(stream);
+
+		wireStream(this, stream, context);
 
 		const output = await stream.setup(readable, context);
 

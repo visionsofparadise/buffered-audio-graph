@@ -59,7 +59,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 		// CreateSession itself throws, so DML failure means the entire session
 		// fails — we have to opt out of GPU here entirely. Documented in
 		// design-gpu-acceleration.md (2026-05-03).
-		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] });
+		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
 
 		return super._setup(input, context);
 	}

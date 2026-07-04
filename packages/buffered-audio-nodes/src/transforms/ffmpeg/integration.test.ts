@@ -3,6 +3,7 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
+import type { NodeIdentity, StreamEvent, StreamPhase } from "@buffered-audio/core";
 import { runTransform } from "../../utils/test-pipeline";
 import { notSilent, expectedDuration, notAnomalous } from "../../utils/test-audio";
 import { audio, binaries, hasBinaryFixtures } from "../../utils/test-binaries";
@@ -51,6 +52,71 @@ describeIfFfmpegFixture("FFmpeg", () => {
 			// be exact (or below 1e-7 to allow for any internal float promotion).
 			expect(maxAbsDiff).toBeLessThanOrEqual(1e-7);
 		}
+	}, 240_000);
+
+	it("emits quantum-bounded progress events per phase, not one per chunk", async () => {
+		const { context } = await readToBuffer(testVoice);
+		const inputFrames = context.durationFrames ?? 0;
+
+		const tempPath = join(tmpdir(), `ban-test-${randomBytes(8).toString("hex")}.wav`);
+
+		const source = read(testVoice);
+		const transform = ffmpeg({ ffmpegPath: binaries.ffmpeg, args: ["-af", "anull"] });
+
+		source.to(transform);
+		transform.to(write(tempPath, { bitDepth: "32f" }));
+
+		const progressByPhase = new Map<StreamPhase, number>();
+		const finishedFramesDone: Array<number> = [];
+
+		const onEvent = (node: NodeIdentity, event: StreamEvent): void => {
+			if (node.moduleName !== "FFmpeg") return;
+
+			if (event.kind === "progress") {
+				progressByPhase.set(event.phase, (progressByPhase.get(event.phase) ?? 0) + 1);
+			} else if (event.kind === "finished") {
+				finishedFramesDone.push(event.framesDone);
+			}
+		};
+
+		try {
+			await source.render({ onEvent, chunkSize: 4096 });
+		} finally {
+			try {
+				await unlink(tempPath);
+			} catch {
+				// Temp file may not exist if the pipeline failed before write.
+			}
+		}
+
+		const bufferCount = progressByPhase.get("buffer") ?? 0;
+		const emitCount = progressByPhase.get("emit") ?? 0;
+
+		// A 4096-frame chunk size over a multi-second fixture produces hundreds of
+		// stdin writes / stdout drains; the pre-contract code emitted one progress
+		// event per stdin write. The quantum schedule caps each phase far below that.
+		const sourceChunks = Math.ceil(inputFrames / 4096);
+
+		expect(sourceChunks).toBeGreaterThan(20);
+
+		// `buffer` has a known total (durationFrames) → default quantum 0.1 gives at
+		// most ~11 boundary crossings plus the forced final.
+		expect(bufferCount).toBeGreaterThan(0);
+		expect(bufferCount).toBeLessThanOrEqual(13);
+
+		// `emit` is unknown-total (rate-changing filters make output length differ) →
+		// UNKNOWN_TOTAL_QUANTUM_FRAMES (480k) boundaries plus the forced final. For a
+		// short fixture that is just the forced final (1) or a couple of events.
+		expect(emitCount).toBeGreaterThan(0);
+		expect(emitCount).toBeLessThanOrEqual(Math.ceil(inputFrames / 480_000) + 2);
+
+		// Both phases are bounded well under the per-chunk count.
+		expect(bufferCount).toBeLessThan(sourceChunks);
+		expect(emitCount).toBeLessThan(sourceChunks);
+
+		// `finished` carries the authoritative input frame count.
+		expect(finishedFramesDone).toHaveLength(1);
+		expect(finishedFramesDone[0]).toBe(inputFrames);
 	}, 240_000);
 
 	it("resample roundtrip preserves length within ±2 frames", async () => {

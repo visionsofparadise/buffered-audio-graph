@@ -92,7 +92,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		const { integratedLufs: sourceLufs, lra: sourceLra, truePeakDb: sourcePeakDb } = measurement;
 
 		if (!Number.isFinite(sourceLufs)) {
-			console.log(`[loudness-target] source has no measurable loudness (LUFS=${String(sourceLufs)}); pass-through.`);
+			this.log("source has no measurable loudness; pass-through", { sourceLufs });
 
 			return;
 		}
@@ -104,13 +104,13 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			effectivePivotDb = userPivot;
 		} else if (Number.isFinite(measurement.pivotAutoDb)) {
 			effectivePivotDb = measurement.pivotAutoDb;
-			console.log(
-				`[loudness-target] pivot auto-derived to ${effectivePivotDb.toFixed(2)} dBFS (median(considered LRA blocks))`,
-			);
+			this.log("pivot auto-derived (median(considered LRA blocks))", { pivotDb: effectivePivotDb });
 		} else {
 			effectivePivotDb = -40;
-			console.warn(
-				`[loudness-target] pivot auto-derivation produced no considered LRA blocks; falling back to ${effectivePivotDb} dBFS. Supply 'pivot' explicitly for tighter control on short or near-silent sources.`,
+			this.log(
+				"pivot auto-derivation produced no considered LRA blocks; falling back. Supply 'pivot' explicitly for tighter control on short or near-silent sources.",
+				{ fallbackPivotDb: effectivePivotDb },
+				"warn",
 			);
 		}
 
@@ -121,9 +121,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			effectiveFloorDb = userFloor;
 		} else if (Number.isFinite(measurement.floorAutoDb)) {
 			effectiveFloorDb = measurement.floorAutoDb;
-			console.log(
-				`[loudness-target] floor auto-derived to ${effectiveFloorDb.toFixed(2)} dBFS (min(considered LRA blocks))`,
-			);
+			this.log("floor auto-derived (min(considered LRA blocks))", { floorDb: effectiveFloorDb });
 		} else {
 			effectiveFloorDb = null;
 		}
@@ -131,8 +129,9 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		if (effectiveFloorDb !== null && effectiveFloorDb >= effectivePivotDb) {
 			const clampedFloorDb = effectivePivotDb - FLOOR_PIVOT_EPSILON_DB;
 
-			console.log(
-				`[loudness-target] floor (${effectiveFloorDb.toFixed(2)} dBFS) >= pivot (${effectivePivotDb.toFixed(2)} dBFS); clamping floor to ${clampedFloorDb.toFixed(3)} dBFS (pivot - ${FLOOR_PIVOT_EPSILON_DB} dB).`,
+			this.log(
+				"floor >= pivot; clamping floor to (pivot - epsilon)",
+				{ floorDb: effectiveFloorDb, pivotDb: effectivePivotDb, clampedFloorDb, epsilonDb: FLOOR_PIVOT_EPSILON_DB },
 			);
 			effectiveFloorDb = clampedFloorDb;
 		}
@@ -212,7 +211,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		const limitDbRepr = `${bestLimitDbRepr} (${limitDbSource})`;
 		const expansiveGeometry = result.bestPeakGainDb > result.bestB;
-		const expansionSuffix = expansiveGeometry ? " EXPANSIVE_UPPER_SEGMENT" : "";
 
 		// Per-attempt trajectory dump — diagnostic for iteration
 		// trajectory (does the secant converge, oscillate, or stall?).
@@ -220,37 +218,52 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			const attempt = result.attempts[attemptIdx];
 
 			if (attempt === undefined) continue;
-			console.log(
-				`[loudness-target] attempt ${(attemptIdx + 1).toString().padStart(2)}: ` +
-					`B=${attempt.boost.toFixed(4).padStart(9)} ` +
-					`peakGainDb=${attempt.peakGainDb.toFixed(4).padStart(9)} ` +
-					`lufsErr=${attempt.lufsErr.toFixed(4).padStart(8)} ` +
-					`peakErr=${attempt.peakErr.toFixed(4).padStart(8)} ` +
-					`outputLra=${attempt.outputLra.toFixed(4).padStart(7)}`,
-			);
+			this.log("attempt", {
+				attempt: attemptIdx + 1,
+				B: attempt.boost,
+				peakGainDb: attempt.peakGainDb,
+				lufsErr: attempt.lufsErr,
+				peakErr: attempt.peakErr,
+				outputLra: attempt.outputLra,
+			});
+			this.progress(attemptIdx + 1, maxAttempts);
 		}
 
 		const fmt = (x: number | undefined): string => (x === undefined ? "off" : String(x));
 
-		console.log(
-			`[loudness-target] iteration: attempts=${result.attempts.length} ` +
-				`converged=${String(result.converged)} ` +
-				`seedB=${seedB.toFixed(4)} ` +
-				`bestB=${result.bestB.toFixed(4)} bestLimitDb=${bestLimitDbRepr} bestPeakGainDb=${bestPeakGainDbRepr} ` +
-				`outputLufs=${outputLufsRepr} (Δ${lufsDeltaRepr}) outputLra=${outputLraRepr} ` +
-				`outputTruePeakDb=${outputTruePeakRepr} (Δ${peakDeltaRepr}) ` +
-				`targetLufs=${targetLufs.toFixed(2)} ` +
-				`targetTp=${targetTp === undefined ? "source" : String(targetTp)} ` +
-				`limitDb=${limitDbRepr} limitPercentile=${limitPercentile} ` +
-				`sourceLufs=${sourceLufs.toFixed(2)} sourcePeakDb=${sourcePeakDb.toFixed(2)} sourceLra=${sourceLra.toFixed(2)} ` +
-				`pivot=${pivotRepr} floor=${floorRepr} ` +
-				`smoothing=${smoothing} tolerance=${fmt(tolerance)} peakTolerance=${fmt(peakTolerance)} maxAttempts=${fmt(maxAttempts)}` +
-				expansionSuffix,
-		);
+		this.log("iteration", {
+			attempts: result.attempts.length,
+			converged: result.converged,
+			seedB,
+			bestB: result.bestB,
+			bestLimitDb: bestLimitDbRepr,
+			bestPeakGainDb: bestPeakGainDbRepr,
+			outputLufs: outputLufsRepr,
+			lufsDelta: lufsDeltaRepr,
+			outputLra: outputLraRepr,
+			outputTruePeakDb: outputTruePeakRepr,
+			peakDelta: peakDeltaRepr,
+			targetLufs,
+			targetTp: targetTp === undefined ? "source" : String(targetTp),
+			limitDb: limitDbRepr,
+			limitPercentile,
+			sourceLufs,
+			sourcePeakDb,
+			sourceLra,
+			pivot: pivotRepr,
+			floor: floorRepr,
+			smoothing,
+			tolerance: fmt(tolerance),
+			peakTolerance: fmt(peakTolerance),
+			maxAttempts: fmt(maxAttempts),
+			expansiveUpperSegment: expansiveGeometry,
+		});
 
 		if (expansiveGeometry) {
-			console.warn(
-				`[loudness-target] peakGainDb (${bestPeakGainDbRepr}) > B (${result.bestB.toFixed(4)}); upper segment of curve is expansive between pivot and limit. Brick-wall above limit still caps output at targetTp — note for listening QA.`,
+			this.log(
+				"peakGainDb > B; upper segment of curve is expansive between pivot and limit. Brick-wall above limit still caps output at targetTp — note for listening QA.",
+				{ peakGainDb: bestPeakGainDbRepr, B: result.bestB },
+				"warn",
 			);
 		}
 	}
@@ -262,13 +275,16 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			const limitDbRepr = this.winningLimitDb === null ? "n/a" : this.winningLimitDb.toFixed(4);
 			const peakGainDbRepr = this.winningPeakGainDb === null ? "n/a" : this.winningPeakGainDb.toFixed(4);
 
-			console.log(
-				`[loudness-target timing] sourceMeasurement=${this.learnTimingMs.sourceMeasurement}ms ` +
-					`detection=${this.learnTimingMs.detection}ms ` +
-					`iteration=${this.learnTimingMs.iteration}ms ` +
-					`unbufferApply=${this.unbufferElapsedMs}ms ` +
-					`total=${total}ms winningB=${bRepr} winningLimitDb=${limitDbRepr} winningPeakGainDb=${peakGainDbRepr}`,
-			);
+			this.log("timing", {
+				sourceMeasurementMs: this.learnTimingMs.sourceMeasurement,
+				detectionMs: this.learnTimingMs.detection,
+				iterationMs: this.learnTimingMs.iteration,
+				unbufferApplyMs: this.unbufferElapsedMs,
+				totalMs: total,
+				winningB: bRepr,
+				winningLimitDb: limitDbRepr,
+				winningPeakGainDb: peakGainDbRepr,
+			});
 		}
 
 		if (this.winningSmoothedEnvelopeBuffer !== null) {

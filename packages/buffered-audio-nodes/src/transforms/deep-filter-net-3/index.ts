@@ -43,7 +43,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 
 	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
 		// DML rejects ops in DFN3's graph and silently routes them to CPU per frame, ~5x slower than CPU EP. See plan-dfn-streaming.md.
-		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] });
+		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
 
 		const sourceRate = this.properties.sampleRate;
 

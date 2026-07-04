@@ -449,7 +449,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 				if (validation.degenerate) {
 
-					console.warn(`de-bleed: warm-up seed degenerate (${validation.reason}); falling back to cold-start Ĥ(ℓ=0) = 0.`);
+					this.log("warm-up seed degenerate; falling back to cold-start Ĥ(ℓ=0) = 0", { reason: validation.reason }, "warn");
 
 					return coldStartSeed(numBins);
 				}
@@ -858,18 +858,18 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 			const total = profileMs.warmup + profileMs.stftRead + profileMs.msad + profileMs.kalman + profileMs.mwf + profileMs.nlm + profileMs.dftt + profileMs.applyMaskIstft + profileMs.write;
 			const pct = (key: keyof typeof profileMs): string => `${(profileMs[key] / 1000).toFixed(2)}s (${((profileMs[key] / total) * 100).toFixed(1)}%)`;
 
-			// eslint-disable-next-line no-console -- profile output is opt-in via env var
-			console.log(`[deBleed profile]
-  warmup        : ${pct("warmup")}
-  stft+read     : ${pct("stftRead")}
-  msad          : ${pct("msad")}
-  kalman+isp    : ${pct("kalman")}
-  mwf           : ${pct("mwf")}
-  nlm           : ${pct("nlm")}
-  dftt          : ${pct("dftt")}
-  applyMask+istft: ${pct("applyMaskIstft")}
-  write         : ${pct("write")}
-  TOTAL         : ${(total / 1000).toFixed(2)}s`);
+			this.log("profile", {
+				warmup: pct("warmup"),
+				stftRead: pct("stftRead"),
+				msad: pct("msad"),
+				kalman: pct("kalman"),
+				mwf: pct("mwf"),
+				nlm: pct("nlm"),
+				dftt: pct("dftt"),
+				applyMaskIstft: pct("applyMaskIstft"),
+				write: pct("write"),
+				totalS: (total / 1000).toFixed(2),
+			});
 		}
 	}
 }

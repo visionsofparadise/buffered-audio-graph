@@ -1,4 +1,4 @@
-import { BufferedAudioNode, type AudioChunk, type BufferedAudioNodeProperties, type StreamContext } from "./node";
+import { BufferedAudioNode, wireStream, type AudioChunk, type BufferedAudioNodeProperties, type StreamContext } from "./node";
 import { BufferedStream } from "./stream";
 
 export interface TargetNodeProperties extends BufferedAudioNodeProperties {}
@@ -36,12 +36,13 @@ export abstract class BufferedTargetStream<P extends TargetNodeProperties = Targ
 
 				this.framesWritten += chunk.samples[0]?.length ?? 0;
 
-				this.events.emit("progress", { framesProcessed: this.framesWritten, sourceTotalFrames: this.sourceTotalFrames });
+				this.emitProgress("write", this.framesWritten, this.sourceTotalFrames);
 			},
 			close: async () => {
 				await this._close();
 
-				this.events.emit("finished");
+				this.emitProgress("write", this.framesWritten, this.sourceTotalFrames, { force: true });
+				this.events.emit("finished", { framesDone: this.framesWritten });
 			},
 		});
 	}
@@ -58,6 +59,8 @@ export abstract class TargetNode<P extends TargetNodeProperties = TargetNodeProp
 		const stream = this.createStream();
 
 		this.streams.push(stream);
+
+		wireStream(this, stream, context);
 
 		return Promise.resolve([stream.setup(readable, context)]);
 	}

@@ -36,7 +36,7 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 
 		if (sourcePeakLinear <= 0) {
 			this.gain = 1;
-			console.log(`[true-peak-normalize] sourceTP=-Infinity target=${this.properties.target} gain=1`);
+			this.log("true peak measured", { sourceTpDb: -Infinity, targetDb: this.properties.target, gain: 1 });
 
 			return;
 		}
@@ -45,7 +45,7 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 
 		this.gain = Math.pow(10, (this.properties.target - sourcePeakDb) / 20);
 
-		console.log(`[true-peak-normalize] sourceTP=${sourcePeakDb} target=${this.properties.target} gain=${this.gain}`);
+		this.log("true peak measured", { sourceTpDb: sourcePeakDb, targetDb: this.properties.target, gain: this.gain });
 	}
 
 	override _unbuffer(chunk: AudioChunk): AudioChunk {

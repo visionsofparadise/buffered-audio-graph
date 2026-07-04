@@ -57,8 +57,8 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
 		const onnxProviders = filterOnnxProviders(context.executionProviders);
 
-		this.session1 = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath1, { executionProviders: onnxProviders });
-		this.session2 = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath2, { executionProviders: onnxProviders });
+		this.session1 = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath1, { executionProviders: onnxProviders }, (message, data) => this.log(message, data));
+		this.session2 = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath2, { executionProviders: onnxProviders }, (message, data) => this.log(message, data));
 
 		const cpuProviders = context.executionProviders.filter((ep) => ep !== "gpu");
 		const fft = initFftBackend(cpuProviders.length > 0 ? cpuProviders : ["cpu"], this.properties);

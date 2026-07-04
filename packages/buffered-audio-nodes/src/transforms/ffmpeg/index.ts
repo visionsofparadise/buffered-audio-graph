@@ -168,6 +168,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		controller.enqueue(audioChunk);
 		this.outputOffset += frameCount;
+		this.emitProgress("emit", this.outputOffset);
 
 		this.stdoutStash = merged.subarray(completeBytes);
 	}
@@ -210,7 +211,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		}
 
 		this.framesProcessed += frames;
-		this.events.emit("progress", { framesProcessed: this.framesProcessed, sourceTotalFrames: this._sourceTotalFrames });
+		this.emitProgress("buffer", this.framesProcessed, this._sourceTotalFrames);
 	}
 
 	private async handleFlushStream(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
@@ -218,7 +219,9 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		// No chunks ever arrived — nothing to flush.
 		if (!child) {
-			this.events.emit("finished");
+			this.emitProgress("buffer", this.framesProcessed, this._sourceTotalFrames, { force: true });
+			this.emitProgress("emit", this.outputOffset, undefined, { force: true });
+			this.events.emit("finished", { framesDone: this.framesProcessed });
 
 			return;
 		}
@@ -249,7 +252,9 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 			this.handleStdoutBytes(Buffer.alloc(0), controller);
 		}
 
-		this.events.emit("finished");
+		this.emitProgress("buffer", this.framesProcessed, this._sourceTotalFrames, { force: true });
+		this.emitProgress("emit", this.outputOffset, undefined, { force: true });
+		this.events.emit("finished", { framesDone: this.framesProcessed });
 	}
 
 	override async _teardown(): Promise<void> {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AudioChunk, StreamContext } from "./node";
+import type { ProgressPayload, StreamPhase } from "./stream";
 import { BufferedTransformStream, WHOLE_FILE, type TransformNodeProperties } from "./transform";
 
 function createChunk(value: number, offset: number, frames: number): AudioChunk {
@@ -146,5 +147,70 @@ describe("BufferedTransformStream._flush", () => {
 		expect(output).toHaveLength(2);
 		expect(output[0]?.samples[0]?.[0]).toBe(1);
 		expect(output[1]?.samples[0]?.[0]).toBe(2);
+	});
+});
+
+async function runProgress(bufferSize: number, chunks: Array<AudioChunk>): Promise<Array<ProgressPayload>> {
+	const stream = new BufferedTransformStream({ bufferSize });
+	const events: Array<ProgressPayload> = [];
+
+	stream.events.on("progress", (payload) => events.push(payload));
+
+	const output = await stream._setup(readableFrom(chunks), context());
+	await drain(output);
+
+	return events;
+}
+
+function phases(events: Array<ProgressPayload>): Array<StreamPhase> {
+	return events.map((e) => e.phase);
+}
+
+describe("BufferedTransformStream phase emission", () => {
+	it("WHOLE_FILE: buffer → forced process start/end → emit, in order", async () => {
+		const input = [createChunk(1, 0, 100), createChunk(2, 100, 100)];
+		const events = await runProgress(WHOLE_FILE, input);
+
+		const seq = phases(events);
+		const firstProcess = seq.indexOf("process");
+		const lastProcess = seq.lastIndexOf("process");
+
+		expect(seq).toContain("buffer");
+		expect(seq).toContain("process");
+		expect(seq).toContain("emit");
+
+		// two forced process events: start (framesDone 0) then end (framesDone = frames)
+		const processEvents = events.filter((e) => e.phase === "process");
+		expect(processEvents).toHaveLength(2);
+		expect(processEvents[0]?.framesDone).toBe(0);
+		expect(processEvents[1]?.framesDone).toBe(200);
+
+		// all buffer events precede the first process; all emit events follow the last process
+		expect(seq.slice(0, firstProcess).every((p) => p === "buffer")).toBe(true);
+		expect(seq.slice(lastProcess + 1).every((p) => p === "emit")).toBe(true);
+	});
+
+	it("bufferSize 0: buffer and emit only, no process events", async () => {
+		const input = [createChunk(1, 0, 100), createChunk(2, 100, 100)];
+		const events = await runProgress(0, input);
+
+		expect(events.some((e) => e.phase === "process")).toBe(false);
+		expect(events.some((e) => e.phase === "buffer")).toBe(true);
+		expect(events.some((e) => e.phase === "emit")).toBe(true);
+	});
+
+	it("finite block: no process events, forced final emit at flush and no per-block spam", async () => {
+		const input = [createChunk(1, 0, 100), createChunk(2, 100, 50)];
+		const events = await runProgress(64, input);
+
+		expect(events.some((e) => e.phase === "process")).toBe(false);
+
+		// context() has no durationFrames → emit uses the unknown-total quantum (480_000).
+		// The first block crosses boundary 0 (throttled emit); no further boundary is crossed
+		// until the forced final at flush. So emit events are bounded (not one per block), and
+		// the last carries the cumulative total.
+		const emitEvents = events.filter((e) => e.phase === "emit");
+		expect(emitEvents.length).toBeLessThanOrEqual(2);
+		expect(emitEvents.at(-1)?.framesDone).toBe(150);
 	});
 });

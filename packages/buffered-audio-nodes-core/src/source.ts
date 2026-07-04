@@ -1,4 +1,4 @@
-import { BufferedAudioNode, type AudioChunk, type BufferedAudioNodeProperties, type ExecutionProvider, type RenderOptions, type StreamContext } from "./node";
+import { BufferedAudioNode, wireStream, type AudioChunk, type BufferedAudioNodeProperties, type ExecutionProvider, type RenderOptions, type StreamContext } from "./node";
 import { BufferedStream } from "./stream";
 import { TargetNode } from "./target";
 import { TransformNode } from "./transform";
@@ -20,6 +20,7 @@ export interface SourceNodeProperties extends BufferedAudioNodeProperties {}
 
 export abstract class BufferedSourceStream<P extends SourceNodeProperties = SourceNodeProperties> extends BufferedStream<P> {
 	private framesRead = 0;
+	private hasStarted = false;
 
 	abstract getMetadata(): Promise<SourceMetadata>;
 
@@ -35,6 +36,7 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 		let done = false;
 
 		this.framesRead = 0;
+		this.hasStarted = false;
 
 		const { signal, durationFrames: sourceTotalFrames, highWaterMark } = context;
 
@@ -50,11 +52,18 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 					}
 
 					try {
+						if (!this.hasStarted) {
+							this.hasStarted = true;
+							this.events.emit("started");
+						}
+
 						const chunk = await this._read();
 
 						if (!chunk) {
 							done = true;
+							this.emitProgress("read", this.framesRead, sourceTotalFrames, { force: true });
 							await this._flush();
+							this.events.emit("finished", { framesDone: this.framesRead });
 							controller.close();
 
 							return;
@@ -62,7 +71,7 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 
 						this.framesRead += chunk.samples[0]?.length ?? 0;
 						controller.enqueue(chunk);
-						this.events.emit("progress", { framesProcessed: this.framesRead, sourceTotalFrames });
+						this.emitProgress("read", this.framesRead, sourceTotalFrames);
 					} catch (error) {
 						done = true;
 						controller.error(error);
@@ -104,6 +113,8 @@ export abstract class SourceNode<P extends SourceNodeProperties = SourceNodeProp
 		const stream = this.createStream();
 
 		this.streams.push(stream);
+
+		wireStream(this, stream, context);
 
 		const readable = await stream.setup(context);
 		const promises = await this.setupChildren(readable, context);
@@ -148,6 +159,8 @@ export abstract class SourceNode<P extends SourceNodeProperties = SourceNodeProp
 			highWaterMark: options?.highWaterMark ?? computedHighWaterMark,
 			signal: options?.signal,
 			visited: new Set<BufferedAudioNode>(),
+			onEvent: options?.onEvent,
+			progressQuantum: options?.progressQuantum,
 		};
 
 		const start = performance.now();

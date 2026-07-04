@@ -103,17 +103,11 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 
 		if (!NodeClass) throw new Error(`Unknown node: "${nodeDef.nodeName}" in package "${nodeDef.packageName}"`);
 
-		// Apply the node's Zod schema to the serialized parameters before
-		// construction — symmetric with `pack()` (which serializes via
-		// `ctor.schema.parse(node.properties)`) and with the convenience
-		// constructors (which `schema.parse(options)` before `new`). Without
-		// this, a bag that omits a defaulted parameter (e.g. crestReduce with
-		// only `smoothing` set) instantiates the node with that parameter
-		// `undefined` instead of its schema default, surfacing as a
-		// downstream `NaN`/crash (frameSize→hopSize→frameCount).
 		const ctor = NodeClass as unknown as typeof BufferedAudioNode;
 		const parameters = ctor.schema.parse(nodeDef.parameters ?? {}) as Record<string, unknown>;
 		const instance = new NodeClass(parameters);
+
+		instance.properties = { ...instance.properties, id: nodeDef.id };
 
 		if (nodeDef.options?.bypass) {
 			instance.properties = { ...instance.properties, bypass: nodeDef.options.bypass };
@@ -156,8 +150,10 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 	return sources;
 }
 
-export async function renderGraph(definition: GraphDefinition, registry: NodeRegistry, options?: RenderOptions): Promise<void> {
+export async function renderGraph(definition: GraphDefinition, registry: NodeRegistry, options?: RenderOptions): Promise<Array<SourceNode>> {
 	const sources = unpack(definition, registry);
 
 	await Promise.all(sources.map((source) => source.render(options)));
+
+	return sources;
 }

@@ -120,7 +120,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 		// wrapper's deterministic errors. See design-vst3.md (2026-06-01).
 		const handle = await spawnVstHostReady(this.properties.vstHostPath, args, {
 			onRetry: (failedAttempt, error) => {
-				console.error(`[vst3] vst-host init crash on attempt ${failedAttempt}, retrying: ${error.message}`);
+				this.log("vst-host init crash, retrying", { attempt: failedAttempt, error: error.message }, "warn");
 			},
 		});
 

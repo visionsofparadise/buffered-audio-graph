@@ -33,7 +33,12 @@ interface OnnxAddonSession {
 
 const require = createRequire(import.meta.url);
 
-export function createOnnxSession(addonPath: string, modelPath: string, options?: OnnxSessionOptions): OnnxSession {
+export function createOnnxSession(
+	addonPath: string,
+	modelPath: string,
+	options?: OnnxSessionOptions,
+	log?: (message: string, data?: Record<string, unknown>) => void,
+): OnnxSession {
 	let addon: OnnxAddon;
 
 	try {
@@ -61,7 +66,7 @@ export function createOnnxSession(addonPath: string, modelPath: string, options?
 		provider = `<unknown> (getProvider() threw: ${error instanceof Error ? error.message : String(error)})`;
 	}
 
-	console.log(`[onnx-runtime] session created for ${modelName} using ${provider}`);
+	log?.("onnx session created", { modelName, provider });
 
 	return {
 		run(inputs) {
