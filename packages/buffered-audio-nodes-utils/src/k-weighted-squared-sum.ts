@@ -100,47 +100,69 @@ export class KWeightedSquaredSum {
 		const rlbB2 = this.rlbB2;
 		const rlbA1 = this.rlbA1;
 		const rlbA2 = this.rlbA2;
-		const preX1 = this.preX1;
-		const preX2 = this.preX2;
-		const preY1 = this.preY1;
-		const preY2 = this.preY2;
-		const rlbX1 = this.rlbX1;
-		const rlbX2 = this.rlbX2;
-		const rlbY1 = this.rlbY1;
-		const rlbY2 = this.rlbY2;
 
-		for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
-			let sampleContribution = 0;
+		// Channel-outer with biquad state in scalars; channel 0 writes `output`, later channels add.
+		// output[f] accumulates in channel order exactly as the prior frame-outer form (0 + x === x).
+		for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
+			const channel = channels[channelIndex] ?? channels[0] ?? new Float32Array(0);
+			const weight = weights[channelIndex] ?? 1;
+			let px1 = this.preX1[channelIndex] ?? 0;
+			let px2 = this.preX2[channelIndex] ?? 0;
+			let py1 = this.preY1[channelIndex] ?? 0;
+			let py2 = this.preY2[channelIndex] ?? 0;
+			let rx1 = this.rlbX1[channelIndex] ?? 0;
+			let rx2 = this.rlbX2[channelIndex] ?? 0;
+			let ry1 = this.rlbY1[channelIndex] ?? 0;
+			let ry2 = this.rlbY2[channelIndex] ?? 0;
 
-			for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
-				const channel = channels[channelIndex] ?? channels[0] ?? new Float32Array(0);
-				const x0 = channel[frameIndex] ?? 0;
-				const px1 = preX1[channelIndex] ?? 0;
-				const px2 = preX2[channelIndex] ?? 0;
-				const py1 = preY1[channelIndex] ?? 0;
-				const py2 = preY2[channelIndex] ?? 0;
-				const preY = preB0 * x0 + preB1 * px1 + preB2 * px2 - preA1 * py1 - preA2 * py2;
+			if (channelIndex === 0) {
+				for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
+					const x0 = channel[frameIndex] ?? 0;
+					const preY = preB0 * x0 + preB1 * px1 + preB2 * px2 - preA1 * py1 - preA2 * py2;
 
-				preX2[channelIndex] = px1;
-				preX1[channelIndex] = x0;
-				preY2[channelIndex] = py1;
-				preY1[channelIndex] = preY;
+					px2 = px1;
+					px1 = x0;
+					py2 = py1;
+					py1 = preY;
 
-				const rx1 = rlbX1[channelIndex] ?? 0;
-				const rx2 = rlbX2[channelIndex] ?? 0;
-				const ry1 = rlbY1[channelIndex] ?? 0;
-				const ry2 = rlbY2[channelIndex] ?? 0;
-				const rlbY = rlbB0 * preY + rlbB1 * rx1 + rlbB2 * rx2 - rlbA1 * ry1 - rlbA2 * ry2;
+					const rlbY = rlbB0 * preY + rlbB1 * rx1 + rlbB2 * rx2 - rlbA1 * ry1 - rlbA2 * ry2;
 
-				rlbX2[channelIndex] = rx1;
-				rlbX1[channelIndex] = preY;
-				rlbY2[channelIndex] = ry1;
-				rlbY1[channelIndex] = rlbY;
+					rx2 = rx1;
+					rx1 = preY;
+					ry2 = ry1;
+					ry1 = rlbY;
 
-				sampleContribution += (weights[channelIndex] ?? 1) * rlbY * rlbY;
+					output[frameIndex] = weight * rlbY * rlbY;
+				}
+			} else {
+				for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
+					const x0 = channel[frameIndex] ?? 0;
+					const preY = preB0 * x0 + preB1 * px1 + preB2 * px2 - preA1 * py1 - preA2 * py2;
+
+					px2 = px1;
+					px1 = x0;
+					py2 = py1;
+					py1 = preY;
+
+					const rlbY = rlbB0 * preY + rlbB1 * rx1 + rlbB2 * rx2 - rlbA1 * ry1 - rlbA2 * ry2;
+
+					rx2 = rx1;
+					rx1 = preY;
+					ry2 = ry1;
+					ry1 = rlbY;
+
+					output[frameIndex] = (output[frameIndex] ?? 0) + weight * rlbY * rlbY;
+				}
 			}
 
-			output[frameIndex] = sampleContribution;
+			this.preX1[channelIndex] = px1;
+			this.preX2[channelIndex] = px2;
+			this.preY1[channelIndex] = py1;
+			this.preY2[channelIndex] = py2;
+			this.rlbX1[channelIndex] = rx1;
+			this.rlbX2[channelIndex] = rx2;
+			this.rlbY1[channelIndex] = ry1;
+			this.rlbY2[channelIndex] = ry2;
 		}
 	}
 }

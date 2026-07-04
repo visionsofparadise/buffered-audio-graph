@@ -34,6 +34,7 @@ export async function buildBaseRateDetectionCache(
 	const slidingWindow = new SlidingWindowMaxStream(halfWidth);
 	const detectScratch4x = new Float32Array(CHUNK_FRAMES * OVERSAMPLE_FACTOR);
 	const detectScratchBase = new Float32Array(CHUNK_FRAMES);
+	const upsampleScratches: Array<Float32Array> = [];
 
 	let consumedBaseFrames = 0;
 
@@ -60,8 +61,14 @@ export async function buildBaseRateDetectionCache(
 			}
 
 			const slice = channel.length === chunkFrames ? channel : channel.subarray(0, chunkFrames);
+			let scratch = upsampleScratches[channelIdx];
 
-			upChannels.push(upsampler.upsample(slice));
+			if (scratch === undefined || scratch.length < chunkFrames * OVERSAMPLE_FACTOR) {
+				scratch = new Float32Array(chunkFrames * OVERSAMPLE_FACTOR);
+				upsampleScratches[channelIdx] = scratch;
+			}
+
+			upChannels.push(upsampler.upsample(slice, scratch));
 		}
 
 		const detect4xChunk = detectScratch4x.subarray(0, upChunkLength);

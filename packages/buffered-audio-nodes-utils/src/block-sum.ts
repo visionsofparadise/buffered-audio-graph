@@ -46,35 +46,46 @@ export class BlockSumAccumulator {
 		const ringSize = this.ringSize;
 		const activeBlockSums = this.activeBlockSums;
 
+		// Open blocks are exactly [nextBlockToClose, nextBlockToOpen): a sample at index i belongs to
+		// blocks ceil((i−size+1)/step)..floor(i/step); the close loop has already advanced
+		// nextBlockToClose to that minimum and the open loop advances nextBlockToOpen past that
+		// maximum, so per-sample ceil/floor reduce to two boundary counters.
+		let samplesProcessed = this.samplesProcessed;
+		let nextBlockToOpen = this.nextBlockToOpen;
+		let nextBlockToClose = this.nextBlockToClose;
+		let nextOpenAt = nextBlockToOpen * blockStep;
+		let nextCloseAt = nextBlockToClose * blockStep + blockSize;
+
 		for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
-			const globalSampleIndex = this.samplesProcessed;
 			const sampleContribution = perFrameSums[frameIndex] ?? 0;
 
-			const rawMinBlock = Math.ceil((globalSampleIndex - blockSize + 1) / blockStep);
-			const minBlock = rawMinBlock < 0 ? 0 : rawMinBlock;
-			const maxBlock = Math.floor(globalSampleIndex / blockStep);
-
-			while (this.nextBlockToOpen <= maxBlock) {
-				activeBlockSums[this.nextBlockToOpen % ringSize] = 0;
-				this.nextBlockToOpen++;
+			while (samplesProcessed >= nextOpenAt) {
+				activeBlockSums[nextBlockToOpen % ringSize] = 0;
+				nextBlockToOpen++;
+				nextOpenAt += blockStep;
 			}
 
-			for (let blockIndex = minBlock; blockIndex <= maxBlock; blockIndex++) {
-				const slot = blockIndex % ringSize;
+			let slot = nextBlockToClose % ringSize;
 
+			for (let blockIndex = nextBlockToClose; blockIndex < nextBlockToOpen; blockIndex++) {
 				activeBlockSums[slot] = (activeBlockSums[slot] ?? 0) + sampleContribution;
+				slot++;
+
+				if (slot === ringSize) slot = 0;
 			}
 
-			this.samplesProcessed = globalSampleIndex + 1;
+			samplesProcessed++;
 
-			while (this.samplesProcessed >= this.nextBlockToClose * blockStep + blockSize) {
-				const closingIndex = this.nextBlockToClose;
-				const slot = closingIndex % ringSize;
-
-				this.closedBlockSums.push(activeBlockSums[slot] ?? 0);
-				this.nextBlockToClose++;
+			while (samplesProcessed >= nextCloseAt) {
+				this.closedBlockSums.push(activeBlockSums[nextBlockToClose % ringSize] ?? 0);
+				nextBlockToClose++;
+				nextCloseAt += blockStep;
 			}
 		}
+
+		this.samplesProcessed = samplesProcessed;
+		this.nextBlockToOpen = nextBlockToOpen;
+		this.nextBlockToClose = nextBlockToClose;
 	}
 
 	finalize(): Array<number> {

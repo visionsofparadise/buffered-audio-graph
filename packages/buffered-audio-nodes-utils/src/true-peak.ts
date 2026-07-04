@@ -5,6 +5,7 @@ const DEFAULT_OVERSAMPLE_FACTOR: TruePeakUpsamplingFactor = 4;
 export class TruePeakAccumulator {
 	private readonly channelCount: number;
 	private readonly upsamplers: ReadonlyArray<TruePeakUpsampler>;
+	private upsampleScratch: Float32Array = new Float32Array(0);
 	private runningMax = 0;
 
 	constructor(_sampleRate: number, channelCount: number, oversampleFactor: TruePeakUpsamplingFactor = DEFAULT_OVERSAMPLE_FACTOR) {
@@ -45,7 +46,12 @@ export class TruePeakAccumulator {
 			}
 
 			const slice = channel.length === frames ? channel : channel.subarray(0, frames);
-			const upsampled = upsampler.upsample(slice);
+
+			if (this.upsampleScratch.length < frames * upsampler.factor) {
+				this.upsampleScratch = new Float32Array(frames * upsampler.factor);
+			}
+
+			const upsampled = upsampler.upsample(slice, this.upsampleScratch);
 
 			for (let index = 0; index < upsampled.length; index++) {
 				const sample = upsampled[index] ?? 0;

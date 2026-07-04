@@ -1,5 +1,20 @@
-import { ChunkBuffer, reverseBuffer } from "@buffered-audio/core";
+import { open, type FileHandle } from "node:fs/promises";
+import { ChunkBuffer } from "@buffered-audio/core";
 import type { BidirectionalIir } from "@buffered-audio/utils";
+
+async function readFully(handle: FileHandle, target: Buffer, position: number): Promise<void> {
+	let filled = 0;
+
+	while (filled < target.length) {
+		const { bytesRead } = await handle.read(target, filled, target.length - filled, position + filled);
+
+		if (bytesRead === 0) {
+			throw new Error(`readFully: unexpected EOF at byte ${position + filled}`);
+		}
+
+		filled += bytesRead;
+	}
+}
 
 // Sliding-window-min primitive: https://en.wikipedia.org/wiki/Sliding_window_minimum
 export function windowSamplesFromMs(smoothingMs: number, sampleRate: number): number {
@@ -31,82 +46,113 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 	const sr = sourceBuffer.sampleRate;
 	const bd = sourceBuffer.bitDepth;
 
-	const reversedSource = await reverseBuffer(sourceBuffer);
+	await sourceBuffer.flushWrites();
 
+	const sourcePath = sourceBuffer.tempFilePath();
+
+	if (sourcePath === undefined) return;
+
+	// Two reverse-stripe passes over the mono buffers' temp files replace the prior reverseBuffer
+	// materialisations (reversedSource, iirForwardOrder). Reversing from-the-end flips the ragged
+	// tail stripe to the front, so both passes see the exact chunk cadence — and therefore the exact
+	// fp sequence — of the prior chunk-locked loops.
 	const filteredReversed = new ChunkBuffer();
-	const iirForwardOrder = minHeldBuffer === undefined ? undefined : new ChunkBuffer();
+	const reverseScratch = new Float32Array(chunkSize);
 
 	try {
-		await reversedSource.reset();
-
-		// Seed backward state with the first sample of the reversed source (= original's last sample),
+		// Backward IIR = forward IIR over reversed time; state seeds from the source's last sample,
 		// matching `applyBackwardPassInPlace`'s init rule.
-		const seedChunk = await reversedSource.read(1);
-		const backwardState = { value: seedChunk.samples[0]?.[0] ?? 0 };
+		const sourceHandle = await open(sourcePath, "r");
 
-		await reversedSource.reset();
+		try {
+			const backwardState = { value: 0 };
+			let seeded = false;
+			let endFrame = totalFrames;
 
-		for (;;) {
-			const chunk = await reversedSource.read(chunkSize);
-			const data = chunk.samples[0];
-			const chunkLength = data?.length ?? 0;
+			while (endFrame > 0) {
+				const stripeFrames = Math.min(chunkSize, endFrame);
+				const startFrame = endFrame - stripeFrames;
+				const stripeBytes = Buffer.alloc(stripeFrames * 4);
 
-			if (data === undefined || chunkLength === 0) break;
+				await readFully(sourceHandle, stripeBytes, startFrame * 4);
 
-			const filtered = iir.applyForwardPass(data, backwardState);
+				const stripe = new Float32Array(stripeBytes.buffer, stripeBytes.byteOffset, stripeFrames);
+				const reversed = reverseScratch.subarray(0, stripeFrames);
 
-			await filteredReversed.write([filtered], sr, bd);
+				for (let sampleIdx = 0; sampleIdx < stripeFrames; sampleIdx++) {
+					reversed[sampleIdx] = stripe[stripeFrames - 1 - sampleIdx] ?? 0;
+				}
 
-			if (chunkLength < chunkSize) break;
+				if (!seeded) {
+					backwardState.value = reversed[0] ?? 0;
+					seeded = true;
+				}
+
+				const filtered = iir.applyForwardPass(reversed, backwardState);
+
+				await filteredReversed.write([filtered], sr, bd);
+				endFrame = startFrame;
+			}
+		} finally {
+			await sourceHandle.close();
 		}
 
 		await filteredReversed.flushWrites();
 
-		if (iirForwardOrder === undefined) {
-			await reverseBuffer(filteredReversed, destBuffer);
-		} else {
-			await reverseBuffer(filteredReversed, iirForwardOrder);
-			await iirForwardOrder.flushWrites();
+		const filteredPath = filteredReversed.tempFilePath();
 
-			await iirForwardOrder.reset();
-			await minHeldBuffer!.reset();
+		if (filteredPath === undefined) return;
 
-			for (;;) {
-				const iirChunk = await iirForwardOrder.read(chunkSize);
-				const iirData = iirChunk.samples[0];
-				const chunkLength = iirData?.length ?? 0;
+		// Un-reverse into dest, folding the per-sample clamp into the same stripe walk.
+		const filteredHandle = await open(filteredPath, "r");
 
-				if (iirData === undefined || chunkLength === 0) break;
+		try {
+			if (minHeldBuffer !== undefined) await minHeldBuffer.reset();
 
-				const minChunk = await minHeldBuffer!.read(chunkLength);
-				const minData = minChunk.samples[0];
+			let endFrame = totalFrames;
 
-				if (minData?.length !== chunkLength) {
-					throw new Error(
-						`applyBackwardPassOverChunkBuffer: minHeldBuffer returned ${minData?.length ?? 0} samples; expected ${chunkLength}`,
-					);
+			while (endFrame > 0) {
+				const stripeFrames = Math.min(chunkSize, endFrame);
+				const startFrame = endFrame - stripeFrames;
+				const stripeBytes = Buffer.alloc(stripeFrames * 4);
+
+				await readFully(filteredHandle, stripeBytes, startFrame * 4);
+
+				const stripe = new Float32Array(stripeBytes.buffer, stripeBytes.byteOffset, stripeFrames);
+				const forwardOrder = reverseScratch.subarray(0, stripeFrames);
+
+				for (let sampleIdx = 0; sampleIdx < stripeFrames; sampleIdx++) {
+					forwardOrder[sampleIdx] = stripe[stripeFrames - 1 - sampleIdx] ?? 0;
 				}
 
-				const clamped = new Float32Array(chunkLength);
+				if (minHeldBuffer !== undefined) {
+					const minChunk = await minHeldBuffer.read(stripeFrames);
+					const minData = minChunk.samples[0];
 
-				for (let sampleIdx = 0; sampleIdx < chunkLength; sampleIdx++) {
-					const iirValue = iirData[sampleIdx] ?? 0;
-					const minValue = minData[sampleIdx] ?? 0;
+					if (minData?.length !== stripeFrames) {
+						throw new Error(
+							`applyBackwardPassOverChunkBuffer: minHeldBuffer returned ${minData?.length ?? 0} samples; expected ${stripeFrames}`,
+						);
+					}
 
-					clamped[sampleIdx] = iirValue < minValue ? iirValue : minValue;
+					for (let sampleIdx = 0; sampleIdx < stripeFrames; sampleIdx++) {
+						const iirValue = forwardOrder[sampleIdx] ?? 0;
+						const minValue = minData[sampleIdx] ?? 0;
+
+						forwardOrder[sampleIdx] = iirValue < minValue ? iirValue : minValue;
+					}
 				}
 
-				await destBuffer.write([clamped], sr, bd);
-
-				if (chunkLength < chunkSize) break;
+				await destBuffer.write([forwardOrder], sr, bd);
+				endFrame = startFrame;
 			}
-
-			await destBuffer.flushWrites();
+		} finally {
+			await filteredHandle.close();
 		}
+
+		await destBuffer.flushWrites();
 	} finally {
-		await reversedSource.close();
 		await filteredReversed.close();
-		if (iirForwardOrder !== undefined) await iirForwardOrder.close();
 	}
 }
 

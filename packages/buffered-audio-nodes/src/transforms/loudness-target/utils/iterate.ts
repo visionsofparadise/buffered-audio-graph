@@ -35,6 +35,7 @@ export interface IterationAttempt {
 	outputLra: number;
 	peakGainDb: number;
 	peakErr: number;
+	elapsedMs: number;
 }
 
 export interface IterateResult {
@@ -44,6 +45,8 @@ export interface IterateResult {
 	bestPeakGainDb: number;
 	attempts: ReadonlyArray<IterationAttempt>;
 	converged: boolean;
+	// 0 when a pre-built detectionEnvelope was supplied.
+	detectionCacheBuildMs: number;
 }
 
 export interface IterateForTargetsArgs {
@@ -61,6 +64,8 @@ export interface IterateForTargetsArgs {
 	tolerance?: number;
 	peakTolerance: number;
 	seedB?: number | undefined;
+	// Pre-built base-rate detection envelope (ownership transfers; closed by this call). Must be bit-identical to buildBaseRateDetectionCache output for the same buffer/halfWidth.
+	detectionEnvelope?: ChunkBuffer | undefined;
 }
 
 export async function iterateForTargets(args: IterateForTargetsArgs): Promise<IterateResult> {
@@ -85,6 +90,8 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 	const frames = buffer.frames;
 
 	if (channelCount === 0 || frames === 0) {
+		if (args.detectionEnvelope !== undefined) await args.detectionEnvelope.close();
+
 		return {
 			bestSmoothedEnvelopeBuffer: new ChunkBuffer(),
 			bestB: 0,
@@ -92,6 +99,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			bestPeakGainDb: 0,
 			attempts: [],
 			converged: false,
+			detectionCacheBuildMs: 0,
 		};
 	}
 
@@ -110,13 +118,15 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 	const halfWidth = windowSamplesFromMs(smoothingMs, sampleRate);
 	const iir = new BidirectionalIir({ smoothingMs, sampleRate });
 
-	const detectionEnvelope = await buildBaseRateDetectionCache({
+	const tCacheBuild0 = Date.now();
+	const detectionEnvelope = args.detectionEnvelope ?? await buildBaseRateDetectionCache({
 		buffer,
 		sampleRate,
 		channelCount,
 		frames,
 		halfWidth,
 	});
+	const detectionCacheBuildMs = args.detectionEnvelope !== undefined ? 0 : Date.now() - tCacheBuild0;
 
 	const forwardEnvelopeBuffer = new ChunkBuffer();
 	const minHeldEnvelopeBuffer = new ChunkBuffer();
@@ -144,6 +154,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		let previousStepMagnitude = Infinity;
 
 		for (let attemptIdx = 0; attemptIdx < maxAttempts; attemptIdx++) {
+			const tAttempt0 = Date.now();
 			const anchors: Anchors = {
 				floorDb: anchorBase.floorDb,
 				pivotDb: anchorBase.pivotDb,
@@ -186,6 +197,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				outputLra: measured.outputLra,
 				peakGainDb: currentPeakGainDb,
 				peakErr,
+				elapsedMs: Date.now() - tAttempt0,
 			});
 
 			const peakScoreTerm = skipPeak ? 0 : peakErr * peakErr;
@@ -220,6 +232,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 					bestPeakGainDb,
 					attempts,
 					converged: true,
+					detectionCacheBuildMs,
 				};
 			}
 
@@ -234,6 +247,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 					bestPeakGainDb,
 					attempts,
 					converged: true,
+					detectionCacheBuildMs,
 				};
 			}
 
@@ -259,6 +273,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			bestPeakGainDb,
 			attempts,
 			converged: false,
+			detectionCacheBuildMs,
 		};
 	} finally {
 		// detectionEnvelope has no downstream consumer — close on every path. The winner is returned

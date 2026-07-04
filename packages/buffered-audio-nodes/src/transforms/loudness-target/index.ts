@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { applyBaseRateChunk } from "./utils/apply";
 import { windowSamplesFromMs } from "./utils/envelope";
@@ -35,6 +35,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 	private unbufferCursorsReady = false;
 
 	private measurementAccumulator?: SourceMeasurementAccumulator;
+	private capturedDetectionEnvelope: ChunkBuffer | null = null;
 
 	public unbufferElapsedMs = 0;
 
@@ -54,13 +55,19 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		const tPush0 = Date.now();
 
-		this.measurementAccumulator ??= new SourceMeasurementAccumulator(
-			chunk.sampleRate,
-			channelCount,
-			this.properties.limitPercentile,
-			windowSamplesFromMs(this.properties.smoothing, chunk.sampleRate),
-		);
-		this.measurementAccumulator.push(chunk.samples, frames);
+		if (this.measurementAccumulator === undefined) {
+			this.capturedDetectionEnvelope = new ChunkBuffer();
+			this.measurementAccumulator = new SourceMeasurementAccumulator(
+				chunk.sampleRate,
+				channelCount,
+				this.properties.limitPercentile,
+				windowSamplesFromMs(this.properties.smoothing, chunk.sampleRate),
+				this.capturedDetectionEnvelope,
+				chunk.bitDepth,
+			);
+		}
+
+		await this.measurementAccumulator.push(chunk.samples, frames);
 
 		this.learnTimingMs.sourceMeasurement += Date.now() - tPush0;
 	}
@@ -76,14 +83,33 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		const tMeasure0 = Date.now();
 		const measurement = this.measurementAccumulator !== undefined
-			? this.measurementAccumulator.finalize()
+			? await this.measurementAccumulator.finalize()
 			: await measureSource(buffer, sampleRate, limitPercentile, windowSamplesFromMs(smoothing, sampleRate));
 
 		this.learnTimingMs.sourceMeasurement += Date.now() - tMeasure0;
 
+		// Ownership moves out of the field here: iterateForTargets closes the envelope it is handed; the frames-mismatch/no-loudness paths close it locally.
+		const capturedDetectionEnvelope = this.capturedDetectionEnvelope;
+
+		this.capturedDetectionEnvelope = null;
+
+		const detectionEnvelope = capturedDetectionEnvelope !== null && capturedDetectionEnvelope.frames === frames
+			? capturedDetectionEnvelope
+			: undefined;
+
+		if (detectionEnvelope === undefined && capturedDetectionEnvelope !== null) {
+			this.log(
+				"captured detection envelope frames mismatch; rebuilding at barrier",
+				{ capturedFrames: capturedDetectionEnvelope.frames, bufferFrames: frames },
+				"warn",
+			);
+			await capturedDetectionEnvelope.close();
+		}
+
 		const { integratedLufs: sourceLufs, lra: sourceLra, truePeakDb: sourcePeakDb } = measurement;
 
 		if (!Number.isFinite(sourceLufs)) {
+			if (detectionEnvelope !== undefined) await detectionEnvelope.close();
 			this.log("source has no measurable loudness; pass-through", { sourceLufs });
 
 			return;
@@ -167,9 +193,11 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			tolerance,
 			peakTolerance,
 			seedB,
+			detectionEnvelope,
 		});
 
 		this.learnTimingMs.iteration = Date.now() - tIterate0;
+		this.learnTimingMs.detection = result.detectionCacheBuildMs;
 		this.winningSmoothedEnvelopeBuffer = result.bestSmoothedEnvelopeBuffer;
 		this.winningB = result.bestB;
 		this.winningLimitDb = result.bestLimitDb;
@@ -215,6 +243,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 				lufsErr: attempt.lufsErr,
 				peakErr: attempt.peakErr,
 				outputLra: attempt.outputLra,
+				elapsedMs: attempt.elapsedMs,
 			});
 			this.progress(attemptIdx + 1, maxAttempts);
 		}
@@ -280,6 +309,12 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		if (this.winningSmoothedEnvelopeBuffer !== null) {
 			await this.winningSmoothedEnvelopeBuffer.close();
 			this.winningSmoothedEnvelopeBuffer = null;
+		}
+
+		// Non-null only when _process never ran (upstream error); the normal path hands ownership to iterateForTargets.
+		if (this.capturedDetectionEnvelope !== null) {
+			await this.capturedDetectionEnvelope.close();
+			this.capturedDetectionEnvelope = null;
 		}
 	}
 

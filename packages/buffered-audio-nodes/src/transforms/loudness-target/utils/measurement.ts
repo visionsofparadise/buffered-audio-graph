@@ -49,17 +49,22 @@ function emptyMeasurement(): SourceMeasurement {
 
 export class SourceMeasurementAccumulator {
 	private readonly limitPercentile: number;
+	private readonly sampleRate: number;
 	private readonly loudness: LoudnessAccumulator;
 	private readonly truePeak: TruePeakAccumulator;
 	private readonly detectionHistogram: AmplitudeHistogramAccumulator;
 	private readonly upsamplers: Array<TruePeakUpsampler>;
 	private readonly slidingWindow: SlidingWindowMaxStream;
+	private readonly detectionEnvelope: ChunkBuffer | null;
+	private readonly detectionBitDepth: number | undefined;
 	private levelsScratch: Float32Array | null = null;
 	private baseScratch: Float32Array | null = null;
+	private readonly upsampleScratches: Array<Float32Array> = [];
 	private pushedFrames = 0;
 
-	constructor(sampleRate: number, channelCount: number, limitPercentile: number, halfWidth: number) {
+	constructor(sampleRate: number, channelCount: number, limitPercentile: number, halfWidth: number, detectionEnvelope: ChunkBuffer | null = null, detectionBitDepth?: number) {
 		this.limitPercentile = limitPercentile;
+		this.sampleRate = sampleRate;
 		this.loudness = new LoudnessAccumulator(sampleRate, channelCount);
 		this.truePeak = new TruePeakAccumulator(sampleRate, channelCount);
 		this.detectionHistogram = new AmplitudeHistogramAccumulator(HISTOGRAM_BUCKETS);
@@ -70,9 +75,11 @@ export class SourceMeasurementAccumulator {
 		}
 
 		this.slidingWindow = new SlidingWindowMaxStream(halfWidth);
+		this.detectionEnvelope = detectionEnvelope;
+		this.detectionBitDepth = detectionBitDepth;
 	}
 
-	push(channels: ReadonlyArray<Float32Array>, frames: number): void {
+	async push(channels: ReadonlyArray<Float32Array>, frames: number): Promise<void> {
 		if (frames === 0) return;
 
 		this.loudness.push(channels, frames);
@@ -90,8 +97,14 @@ export class SourceMeasurementAccumulator {
 			}
 
 			const slice = channel.length === frames ? channel : channel.subarray(0, frames);
+			let scratch = this.upsampleScratches[channelIdx];
 
-			upChannels.push(upsampler.upsample(slice));
+			if (scratch === undefined || scratch.length < frames * OVERSAMPLE_FACTOR) {
+				scratch = new Float32Array(frames * OVERSAMPLE_FACTOR);
+				this.upsampleScratches[channelIdx] = scratch;
+			}
+
+			upChannels.push(upsampler.upsample(slice, scratch));
 		}
 
 		const upChunkLength = frames * OVERSAMPLE_FACTOR;
@@ -139,10 +152,14 @@ export class SourceMeasurementAccumulator {
 
 		if (pooled.length > 0) {
 			this.detectionHistogram.push([pooled], pooled.length);
+
+			if (this.detectionEnvelope !== null) {
+				await this.detectionEnvelope.write([pooled], this.sampleRate, this.detectionBitDepth);
+			}
 		}
 	}
 
-	finalize(): SourceMeasurement {
+	async finalize(): Promise<SourceMeasurement> {
 		if (this.pushedFrames === 0) return emptyMeasurement();
 
 		// Final isFinal=true push drains the slider's deferred trailing outputs before assembly; histogram totals depend on it.
@@ -150,6 +167,14 @@ export class SourceMeasurementAccumulator {
 
 		if (trailing.length > 0) {
 			this.detectionHistogram.push([trailing], trailing.length);
+
+			if (this.detectionEnvelope !== null) {
+				await this.detectionEnvelope.write([trailing], this.sampleRate, this.detectionBitDepth);
+			}
+		}
+
+		if (this.detectionEnvelope !== null) {
+			await this.detectionEnvelope.flushWrites();
 		}
 
 		const loudnessResult = this.loudness.finalize();
@@ -199,12 +224,12 @@ export async function measureSource(buffer: ChunkBuffer, sampleRate: number, lim
 
 		if (chunkFrames === 0) break;
 
-		accumulator.push(chunk.samples, chunkFrames);
+		await accumulator.push(chunk.samples, chunkFrames);
 
 		if (chunkFrames < CHUNK_FRAMES) break;
 	}
 
-	return accumulator.finalize();
+	return await accumulator.finalize();
 }
 
 function computeLimitAutoDb(buckets: Uint32Array, bucketMax: number, pivotAutoDb: number, limitPercentile: number): number {
