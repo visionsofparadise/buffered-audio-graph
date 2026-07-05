@@ -28,6 +28,42 @@ const MIN_SECANT_SLOPE = 0.05;
 export const DEFAULT_MAX_ATTEMPTS = 10;
 export const DEFAULT_TOLERANCE = 0.5;
 
+// Per-attempt gain LUT (gainDb -> linear gain). Keyed on the curve's output gainDb, not detection dB: the upper
+// segment's slope is unbounded as (limitDb−pivotDb) → LIMIT_EPSILON_DB, so input-side quantization would be amplified
+// arbitrarily; output-side is flat. Math.pow fallback outside the domain covers deep brick-wall values.
+const GAIN_LUT_MIN_DB = -80;
+const GAIN_LUT_MAX_DB = 40;
+const GAIN_LUT_STEP_DB = 0.01;
+const GAIN_LUT_INV_STEP = 1 / GAIN_LUT_STEP_DB;
+const GAIN_LUT_SIZE = Math.round((GAIN_LUT_MAX_DB - GAIN_LUT_MIN_DB) / GAIN_LUT_STEP_DB) + 1;
+// Stored-silence detection value: linearToDb(0) clamps to −200 dB. Used as the missing-sample sentinel so a gap reads
+// as silence (not full-scale) on the dB detection axis.
+const GAIN_LUT_STORED_SILENCE_DB = -200;
+
+function buildGainLut(): Float64Array {
+	const lut = new Float64Array(GAIN_LUT_SIZE);
+
+	for (let entryIdx = 0; entryIdx < GAIN_LUT_SIZE; entryIdx++) {
+		lut[entryIdx] = Math.pow(10, (GAIN_LUT_MIN_DB + entryIdx * GAIN_LUT_STEP_DB) / 20);
+	}
+
+	return lut;
+}
+
+function gainLutLerp(lut: Float64Array, gainDb: number): number {
+	if (gainDb < GAIN_LUT_MIN_DB || gainDb >= GAIN_LUT_MAX_DB) {
+		return Math.pow(10, gainDb / 20);
+	}
+
+	const pos = (gainDb - GAIN_LUT_MIN_DB) * GAIN_LUT_INV_STEP;
+	const lutIdx = pos | 0;
+	const frac = pos - lutIdx;
+	const lo = lut[lutIdx] ?? 0;
+	const hi = lut[lutIdx + 1] ?? 0;
+
+	return lo + (hi - lo) * frac;
+}
+
 export interface IterationAttempt {
 	boost: number;
 	limitDb: number;
@@ -214,10 +250,9 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				elapsedMs: Date.now() - tAttempt0,
 			});
 
-			// Tolerance-normalized best-attempt score: each axis's error divided by its own gate tolerance, taken as a
-			// max. `score < 1 ⇔ passes both gates`, so a gate-failing attempt (term > 1) can never beat a gate-passing
-			// one (score < 1) — the elected winner matches the convergence gates. tolerance/peakTolerance are both
-			// strictly positive (schema `.gt(0)`; tolerance defaults to DEFAULT_TOLERANCE = 0.5).
+			// Best-attempt score = max of each axis's error over its own gate tolerance. `score < 1 ⇔ passes both
+			// gates`, so a gate-failing attempt can never beat a gate-passing one — the winner matches the gates.
+			// Both divisors are schema-positive (`.gt(0)`).
 			const lufsScoreTerm = Math.abs(lufsErr) / tolerance;
 			const peakScoreTerm = skipPeak ? 0 : Math.abs(peakErr) / peakTolerance;
 			const score = Math.max(lufsScoreTerm, peakScoreTerm);
@@ -333,6 +368,9 @@ export async function streamCurveAndForwardIir(
 
 	const gWindowScratch = new Float32Array(CHUNK_FRAMES);
 
+	// Built once per attempt, not per sample.
+	const gainLut = buildGainLut();
+
 	const detectionSampleRate = detectionEnvelope.sampleRate;
 	const detectionBitDepth = detectionEnvelope.bitDepth;
 
@@ -348,10 +386,11 @@ export async function streamCurveAndForwardIir(
 		const gWindowChunk = gWindowScratch.subarray(0, chunkLength);
 
 		for (let outputIdx = 0; outputIdx < chunkLength; outputIdx++) {
-			const levelDb = linearToDb(windowChunk[outputIdx] ?? 0);
+			// windowChunk holds dB (producers convert at write); feed straight to gainDbAt.
+			const levelDb = windowChunk[outputIdx] ?? GAIN_LUT_STORED_SILENCE_DB;
 			const gainDb = gainDbAt(levelDb, anchors);
 
-			gWindowChunk[outputIdx] = Math.pow(10, gainDb / 20);
+			gWindowChunk[outputIdx] = gainLutLerp(gainLut, gainDb);
 		}
 
 		consumedFrames += chunkLength;

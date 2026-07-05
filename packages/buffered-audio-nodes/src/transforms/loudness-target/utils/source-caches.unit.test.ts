@@ -1,7 +1,8 @@
 import { ChunkBuffer } from "@buffered-audio/core";
-import { SlidingWindowMaxStream, TruePeakUpsampler } from "@buffered-audio/utils";
+import { SlidingWindowMaxStream, TruePeakUpsampler, linearToDb } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
 import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./iterate";
+import { SourceMeasurementAccumulator } from "./measurement";
 import { buildBaseRateDetectionCache } from "./source-caches";
 
 const SAMPLE_RATE = 48_000;
@@ -187,7 +188,16 @@ describe("buildBaseRateDetectionCache", () => {
 				const pooled = slidingWindow.push(detectBase, isFinal);
 
 				if (pooled.length > 0) {
-					refDetection.set(pooled, writeOffset);
+					// Detection envelope is stored in dB (the producer converts the LINEAR pooled slider output via
+					// linearToDb into an f32 scratch). Mirror that here so the byte-exact maxDiff === 0 contract holds:
+					// f32-store dB, same rounding path as the buffer write.
+					const dbPooled = new Float32Array(pooled.length);
+
+					for (let i = 0; i < pooled.length; i++) {
+						dbPooled[i] = linearToDb(pooled[i] ?? 0);
+					}
+
+					refDetection.set(dbPooled, writeOffset);
 					writeOffset += pooled.length;
 				}
 
@@ -270,20 +280,24 @@ describe("buildBaseRateDetectionCache", () => {
 
 				if (v > maxBaseAbs) maxBaseAbs = v;
 			}
-			// Find the max post-collapse detection in the transient
+
+			// Detection envelope is stored in dB; linearToDb is monotonic, so the strictly-larger relationship is
+			// preserved on the dB axis. Compare both quantities in dB.
+			const maxBaseAbsDb = linearToDb(maxBaseAbs);
+			// Find the max post-collapse detection (dB) in the transient
 			// region (slightly widened to absorb slider lead/lag).
-			let maxDetection = 0;
+			let maxDetectionDb = -Infinity;
 
 			for (let i = 1980; i < 2070; i++) {
-				const v = got[i] ?? 0;
+				const v = got[i] ?? -Infinity;
 
-				if (v > maxDetection) maxDetection = v;
+				if (v > maxDetectionDb) maxDetectionDb = v;
 			}
 			// The structural property: detection sees a strictly
 			// LARGER level than the base-rate source samples in the
 			// peak's neighborhood. If max-of-4 ever degraded to "every
 			// 4th sample of upsampled" this assertion would fire.
-			expect(maxDetection).toBeGreaterThan(maxBaseAbs);
+			expect(maxDetectionDb).toBeGreaterThan(maxBaseAbsDb);
 		} finally {
 			await detectionEnvelope.close();
 			await buffer.close();
@@ -341,36 +355,45 @@ describe("buildBaseRateDetectionCache", () => {
 			// counts the surrounding plateau — locking the slider's
 			// `±halfWidth` widening property without fragility against
 			// the upsampler's filter delay.
-			let clusterMax = 0;
+			// Detection envelope is stored in dB now: the 0.9 spike lands
+			// near −0.9 dB while the quiet field is linearToDb(0) = −200 dB
+			// (the clamp floor). So clusterMax is a NEGATIVE-but-finite dB
+			// value well above the silence floor; init to −Infinity and use
+			// a −Infinity missing-sample sentinel (silence-equivalent, not
+			// 0 dB = full scale).
+			let clusterMax = -Infinity;
 			let clusterMaxIdx = -1;
 
 			for (let i = spikeIdx - 16; i <= spikeIdx + 16; i++) {
-				const v = got[i] ?? 0;
+				const v = got[i] ?? -Infinity;
 
 				if (v > clusterMax) {
 					clusterMax = v;
 					clusterMaxIdx = i;
 				}
 			}
-			expect(clusterMax).toBeGreaterThan(0);
+			// Spike ≈ −0.9 dB; quiet field ≈ −200 dB. A clean separation:
+			// clusterMax sits well above −100 dB.
+			expect(clusterMax).toBeGreaterThan(-100);
 			expect(clusterMaxIdx).toBeGreaterThanOrEqual(0);
 
 			// Walk outward from `clusterMaxIdx` to find the maximal
 			// contiguous run of samples holding `clusterMax` (within
-			// a tight relative tolerance for IEEE-754 rounding). The
-			// slider's contract: every sample within `±halfWidth` of
-			// a cluster sample holds at least that cluster sample's
-			// value. Since the cluster spans multiple base-rate
-			// samples around `clusterMaxIdx`, the post-slider plateau
-			// is at least `2 × halfWidth + 1` long.
-			const tolerance = clusterMax * 1e-6;
+			// a tight tolerance for IEEE-754 rounding). The slider's
+			// contract: every sample within `±halfWidth` of a cluster
+			// sample holds at least that cluster sample's value. Since
+			// the cluster spans multiple base-rate samples around
+			// `clusterMaxIdx`, the post-slider plateau is at least
+			// `2 × halfWidth + 1` long. Absolute dB tolerance (a relative
+			// `clusterMax * 1e-6` would invert sign under negative dB).
+			const tolerance = 1e-4;
 			let left = clusterMaxIdx;
 
-			while (left > 0 && (got[left - 1] ?? 0) >= clusterMax - tolerance) left--;
+			while (left > 0 && (got[left - 1] ?? -Infinity) >= clusterMax - tolerance) left--;
 
 			let right = clusterMaxIdx;
 
-			while (right < got.length - 1 && (got[right + 1] ?? 0) >= clusterMax - tolerance) right++;
+			while (right < got.length - 1 && (got[right + 1] ?? -Infinity) >= clusterMax - tolerance) right++;
 
 			const plateauWidth = right - left + 1;
 
@@ -378,6 +401,79 @@ describe("buildBaseRateDetectionCache", () => {
 		} finally {
 			await detectionEnvelope.close();
 			await buffer.close();
+		}
+	});
+
+	it("producer parity: detection envelope is bit-identical to SourceMeasurementAccumulator at a slider-drain-overflow length", async () => {
+		// Regression pin for the fixed-scratch truncation (Phase 2 review, Finding 1). On the FINAL push the
+		// SlidingWindowMaxStream drains its deferred look-ahead and emits `chunkFrames + halfWidth` samples in one
+		// call. With `frames` an exact multiple of CHUNK_FRAMES, the final source-caches push emits
+		// CHUNK_FRAMES + halfWidth > CHUNK_FRAMES samples — the old fixed-CHUNK_FRAMES dbScratch clamped
+		// `subarray(0, pooled.length)` to CHUNK_FRAMES, dropped the last `halfWidth` dB samples (silent TypedArray
+		// no-ops), and wrote a short envelope. SourceMeasurementAccumulator's grow-on-demand toDbScratch never
+		// truncates, so the two producers diverged on this length — breaking the "envelope must be bit-identical to
+		// buildBaseRateDetectionCache" contract. This test fails on the pre-fix sizing and passes after.
+		const frames = 2 * CHUNK_FRAMES; // 88_200 — final push emits CHUNK_FRAMES + halfWidth > CHUNK_FRAMES
+		const halfWidth = 480; // > 0 so the drain overflows CHUNK_FRAMES; matches the anchor render's smoothing
+		const channels = [
+			makeSineWithNoise(0xDEAD_BEEF, frames, 0.42, 750),
+			makeSineWithNoise(0x0FF1_CE00, frames, 0.31, 1230),
+		];
+
+		const cacheBuffer = await makeBufferFromChannels(channels);
+		const accumBuffer = await makeBufferFromChannels(channels);
+
+		const detectionEnvelope = await buildBaseRateDetectionCache({
+			buffer: cacheBuffer,
+			sampleRate: SAMPLE_RATE,
+			channelCount: 2,
+			frames,
+			halfWidth,
+		});
+
+		// Drive SourceMeasurementAccumulator exactly as measureSource does (CHUNK_FRAMES reads, push, finalize),
+		// writing its detection envelope into a ChunkBuffer for comparison.
+		const accumEnvelope = new ChunkBuffer();
+		const accumulator = new SourceMeasurementAccumulator(SAMPLE_RATE, 2, 0.98, halfWidth, accumEnvelope);
+
+		await accumBuffer.reset();
+		for (;;) {
+			const chunk = await accumBuffer.read(CHUNK_FRAMES);
+			const chunkFrames = chunk.samples[0]?.length ?? 0;
+
+			if (chunkFrames === 0) break;
+
+			await accumulator.push(chunk.samples, chunkFrames);
+
+			if (chunkFrames < CHUNK_FRAMES) break;
+		}
+
+		await accumulator.finalize();
+
+		try {
+			const gotCache = await readAllSingleChannel(detectionEnvelope);
+			const gotAccum = await readAllSingleChannel(accumEnvelope);
+
+			// The invariant: both producers must emit `frames` samples (nothing truncated). Under the pre-fix
+			// sizing the cache envelope was short by `halfWidth`, so this length check alone would fire.
+			expect(gotCache.length).toBe(frames);
+			expect(gotAccum.length).toBe(frames);
+
+			let maxDiff = 0;
+
+			for (let sampleIdx = 0; sampleIdx < frames; sampleIdx++) {
+				const diff = Math.abs((gotCache[sampleIdx] ?? 0) - (gotAccum[sampleIdx] ?? 0));
+
+				if (diff > maxDiff) maxDiff = diff;
+			}
+
+			// Same source, same halfWidth, same linearToDb → bit-identical envelope (both f32).
+			expect(maxDiff).toBe(0);
+		} finally {
+			await detectionEnvelope.close();
+			await accumEnvelope.close();
+			await cacheBuffer.close();
+			await accumBuffer.close();
 		}
 	});
 

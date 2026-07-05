@@ -1,5 +1,5 @@
 import { ChunkBuffer } from "@buffered-audio/core";
-import { SlidingWindowMaxStream, TruePeakUpsampler } from "@buffered-audio/utils";
+import { SlidingWindowMaxStream, TruePeakUpsampler, linearToDb } from "@buffered-audio/utils";
 import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./iterate";
 
 export interface BuildBaseRateDetectionCacheArgs {
@@ -34,6 +34,10 @@ export async function buildBaseRateDetectionCache(
 	const slidingWindow = new SlidingWindowMaxStream(halfWidth);
 	const detectScratch4x = new Float32Array(CHUNK_FRAMES * OVERSAMPLE_FACTOR);
 	const detectScratchBase = new Float32Array(CHUNK_FRAMES);
+	// Converts the LINEAR pooled slider output to dB before the envelope write (see measurement.ts's toDbScratch).
+	// Must grow on demand, NOT a fixed CHUNK_FRAMES: the slider's final push emits chunkFrames + halfWidth samples,
+	// which can exceed CHUNK_FRAMES — a fixed scratch would truncate the tail and diverge from the accumulator.
+	let dbScratch: Float32Array | null = null;
 	const upsampleScratches: Array<Float32Array> = [];
 
 	let consumedBaseFrames = 0;
@@ -106,9 +110,17 @@ export async function buildBaseRateDetectionCache(
 		const pooled = slidingWindow.push(detectBaseChunk, isFinal);
 
 		if (pooled.length > 0) {
-			// `pooled` is a subview of the slider's internal output buffer (overwritten by the next push);
-			// the buffer's write path .set()-copies, so this is safe.
-			await detectionEnvelope.write([pooled], sampleRate, sourceBitDepth);
+			if (dbScratch === null || dbScratch.length < pooled.length) {
+				dbScratch = new Float32Array(pooled.length);
+			}
+
+			const dbChunk = dbScratch.subarray(0, pooled.length);
+
+			for (let sampleIdx = 0; sampleIdx < pooled.length; sampleIdx++) {
+				dbChunk[sampleIdx] = linearToDb(pooled[sampleIdx] ?? 0);
+			}
+
+			await detectionEnvelope.write([dbChunk], sampleRate, sourceBitDepth);
 		}
 
 		if (chunkFrames < CHUNK_FRAMES) break;

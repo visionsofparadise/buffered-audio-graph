@@ -59,6 +59,7 @@ export class SourceMeasurementAccumulator {
 	private readonly persistBitDepth: number | undefined;
 	private levelsScratch: Float32Array | null = null;
 	private baseScratch: Float32Array | null = null;
+	private dbScratch: Float32Array | null = null; // see toDbScratch
 	private readonly upsampleScratches: Array<Float32Array> = [];
 	private pushedFrames = 0;
 
@@ -161,9 +162,26 @@ export class SourceMeasurementAccumulator {
 			this.detectionHistogram.push([pooled], pooled.length);
 
 			if (this.detectionEnvelope !== null) {
-				await this.detectionEnvelope.write([pooled], this.sampleRate, this.persistBitDepth);
+				await this.detectionEnvelope.write([this.toDbScratch(pooled)], this.sampleRate, this.persistBitDepth);
 			}
 		}
+	}
+
+	// LINEAR pooled slider output -> dB, into a reused scratch. The histogram keeps the linear axis; only the
+	// detection-envelope buffer stores dB (never converts `pooled`/`trailing` in place — an axis mixup silently
+	// corrupts limitAutoDb / the predictor).
+	private toDbScratch(linear: Float32Array): Float32Array {
+		if (this.dbScratch === null || this.dbScratch.length < linear.length) {
+			this.dbScratch = new Float32Array(linear.length);
+		}
+
+		const out = this.dbScratch.subarray(0, linear.length);
+
+		for (let sampleIdx = 0; sampleIdx < linear.length; sampleIdx++) {
+			out[sampleIdx] = linearToDb(linear[sampleIdx] ?? 0);
+		}
+
+		return out;
 	}
 
 	async finalize(): Promise<SourceMeasurement> {
@@ -176,7 +194,7 @@ export class SourceMeasurementAccumulator {
 			this.detectionHistogram.push([trailing], trailing.length);
 
 			if (this.detectionEnvelope !== null) {
-				await this.detectionEnvelope.write([trailing], this.sampleRate, this.persistBitDepth);
+				await this.detectionEnvelope.write([this.toDbScratch(trailing)], this.sampleRate, this.persistBitDepth);
 			}
 		}
 
