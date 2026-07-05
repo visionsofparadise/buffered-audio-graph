@@ -2,7 +2,7 @@
 export type { AudioChunk, ExecutionProvider, NodeIdentity, RenderOptions, StreamContext, StreamEvent } from "./node";
 export type { FileInputMeta, ModuleSchema } from "./schema";
 
-export { ChunkBuffer } from "./chunk-buffer";
+export { ChunkBuffer, ReverseChunkReader } from "./chunk-buffer";
 export { BufferedAudioNode, type BufferedAudioNodeInput, type BufferedAudioNodeProperties } from "./node";
 export { BufferedSourceStream, SourceNode, type RenderTiming, type SourceMetadata, type SourceNodeProperties } from "./source";
 export { BufferedStream, UNKNOWN_TOTAL_QUANTUM_FRAMES, type FinishedPayload, type LogPayload, type ProgressPayload, type StreamEventMap, type StreamPhase } from "./stream";
