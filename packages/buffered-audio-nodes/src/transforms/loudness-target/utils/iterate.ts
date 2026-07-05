@@ -214,8 +214,13 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				elapsedMs: Date.now() - tAttempt0,
 			});
 
-			const peakScoreTerm = skipPeak ? 0 : peakErr * peakErr;
-			const score = Math.sqrt(lufsErr * lufsErr + peakScoreTerm);
+			// Tolerance-normalized best-attempt score: each axis's error divided by its own gate tolerance, taken as a
+			// max. `score < 1 ⇔ passes both gates`, so a gate-failing attempt (term > 1) can never beat a gate-passing
+			// one (score < 1) — the elected winner matches the convergence gates. tolerance/peakTolerance are both
+			// strictly positive (schema `.gt(0)`; tolerance defaults to DEFAULT_TOLERANCE = 0.5).
+			const lufsScoreTerm = Math.abs(lufsErr) / tolerance;
+			const peakScoreTerm = skipPeak ? 0 : Math.abs(peakErr) / peakTolerance;
+			const score = Math.max(lufsScoreTerm, peakScoreTerm);
 
 			if (score < bestScore) {
 				bestScore = score;

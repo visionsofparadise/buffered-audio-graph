@@ -345,15 +345,17 @@ describe("iterateForTargets", () => {
 		expect(result.bestSmoothedEnvelopeBuffer.frames).toBe(FRAME_COUNT);
 
 		// Best score must be the minimum across all attempts. Score
-		// formula post joint-iteration rewrite (2026-05-13):
-		// `sqrt(lufsErr^2 + peakErr^2)` — both signed (two-sided), equal
-		// weighting between axes (no per-axis priority; joint iteration
-		// treats both targets symmetrically).
-		const scoreOf = (attempt: { lufsErr: number; peakErr: number }): number => {
-			return Math.sqrt(attempt.lufsErr * attempt.lufsErr + attempt.peakErr * attempt.peakErr);
+		// formula post tolerance-normalized rewrite (2026-07-05):
+		// `max(|lufsErr|/tolerance, |peakErr|/peakTolerance)` — the
+		// gate-normalized max; the elected winner is the attempt
+		// closest to passing both gates. Both tolerances are 1e-9 here.
+		const TOLERANCE = 1e-9;
+		const PEAK_TOLERANCE = 1e-9;
+		const scoreOfNorm = (attempt: { lufsErr: number; peakErr: number }): number => {
+			return Math.max(Math.abs(attempt.lufsErr) / TOLERANCE, Math.abs(attempt.peakErr) / PEAK_TOLERANCE);
 		};
-		const minScore = Math.min(...result.attempts.map(scoreOf));
-		const bestScore = matchedAttempt ? scoreOf(matchedAttempt) : Infinity;
+		const minScore = Math.min(...result.attempts.map(scoreOfNorm));
+		const bestScore = matchedAttempt ? scoreOfNorm(matchedAttempt) : Infinity;
 
 		expect(bestScore).toBeCloseTo(minScore, 6);
 	}, TEST_TIMEOUT_MS);
@@ -789,8 +791,10 @@ describe("iterateForTargets", () => {
 			// the attempt with the smallest `sqrt(lufsErr² + peakErr²)`.
 			// Both axes weighted equally (no priority weighting; joint
 			// iteration treats LUFS and TP symmetrically).
+			const TOLERANCE = 1e-9;
+			const PEAK_TOLERANCE = 1e-9;
 			const scoreOf = (attempt: { lufsErr: number; peakErr: number }): number => {
-				return Math.sqrt(attempt.lufsErr * attempt.lufsErr + attempt.peakErr * attempt.peakErr);
+				return Math.max(Math.abs(attempt.lufsErr) / TOLERANCE, Math.abs(attempt.peakErr) / PEAK_TOLERANCE);
 			};
 			const minScore = Math.min(...result.attempts.map(scoreOf));
 			const matchedScore = matchedAttempt ? scoreOf(matchedAttempt) : Infinity;
@@ -799,6 +803,87 @@ describe("iterateForTargets", () => {
 
 			// Envelope buffer holds a non-trivial signal.
 			expect(result.bestSmoothedEnvelopeBuffer.frames).toBeGreaterThan(0);
+		}, TEST_TIMEOUT_MS_INNER);
+
+		it("elects the gate-passing attempt over an earlier lower-L2 attempt that fails peakTolerance", async () => {
+			// Phase 1 corner (plan-loudness-target-scoring-and-gain-lut §1.2):
+			// under the tolerance-normalized score the elected winner passes
+			// both convergence gates whenever any attempt does. Wide LUFS
+			// `tolerance` (1.5) + tight `peakTolerance` (0.1): on this fixture
+			// the coupled (B, peakGainDb) trajectory produces an EARLY attempt
+			// (index 5) whose LUFS sits almost dead-on target (|lufsErr| ~0.05)
+			// but whose peak still overshoots the tight gate (|peakErr| ~0.23),
+			// giving it the SMALLEST equal-weighted L2 `sqrt(lufsErr^2 +
+			// peakErr^2)` of the run — the attempt the OLD scoring elected. The
+			// signed peak feedback keeps correcting, and a LATER attempt
+			// (index 7) clears both gates but at a larger |lufsErr| (~0.33, still
+			// well inside the wide tolerance), so its L2 is HIGHER. Old scoring
+			// keeps the gate-failing index 5; the new
+			// `max(|lufsErr|/tolerance, |peakErr|/peakTolerance)` elects the
+			// gate-passing index 7. Params below are pinned from a fixture sweep
+			// (scratch probe) that verified this exact divergence.
+			const source = makeSyntheticSource(0xF00D_FACE, 0.2, 0.4);
+			const metrics = measureSourceMetrics(source);
+			const buffer = await makeBufferFromChannels(source);
+
+			const targetLufs = Math.round((metrics.integratedLufs + 1.5) * 10) / 10;
+			const targetTp = metrics.truePeakDb - 0.5;
+			const TOLERANCE = 1.5;
+			const PEAK_TOLERANCE = 0.1;
+			const result = await iterateForTargets({
+				buffer,
+				sampleRate: SAMPLE_RATE,
+				anchorBase: { floorDb: -50, pivotDb: -30 },
+				smoothingMs: 1,
+				targetLufs,
+				targetTp,
+				limitAutoDb: Number.POSITIVE_INFINITY,
+				sourceLufs: metrics.integratedLufs,
+				sourcePeakDb: metrics.truePeakDb,
+				maxAttempts: 10,
+				tolerance: TOLERANCE,
+				peakTolerance: PEAK_TOLERANCE,
+			});
+
+			trackResultBuffers(result);
+
+			// The winner is the held (boost, peakGainDb) attempt.
+			const winner = result.attempts.find(
+				(attempt) =>
+					attempt.boost === result.bestB
+					&& attempt.peakGainDb === result.bestPeakGainDb,
+			);
+
+			expect(winner).toBeDefined();
+
+			// Invariant: the elected winner passes BOTH gates, and the run
+			// reports converged.
+			expect(Math.abs(winner?.lufsErr ?? Infinity)).toBeLessThan(TOLERANCE);
+			expect(Math.abs(winner?.peakErr ?? Infinity)).toBeLessThan(PEAK_TOLERANCE);
+			expect(result.converged).toBe(true);
+
+			// Vacuous-pin guard (plan §1.2): this only pins a regression if
+			// the fixture actually realises an EARLIER attempt with strictly
+			// lower equal-weighted L2 than the winner that ALSO fails the peak
+			// gate — the exact attempt the OLD scoring would have (wrongly)
+			// elected. If no such attempt exists the new invariant holds
+			// trivially and the test proves nothing, so assert its existence.
+			const l2 = (a: { lufsErr: number; peakErr: number }): number =>
+				Math.sqrt(a.lufsErr * a.lufsErr + a.peakErr * a.peakErr);
+			const winnerIdx = result.attempts.findIndex(
+				(attempt) =>
+					attempt.boost === result.bestB
+					&& attempt.peakGainDb === result.bestPeakGainDb,
+			);
+			const winnerL2 = winner ? l2(winner) : Infinity;
+			const gateFailingLowerL2Exists = result.attempts.some(
+				(attempt, index) =>
+					index < winnerIdx
+					&& l2(attempt) < winnerL2
+					&& Math.abs(attempt.peakErr) > PEAK_TOLERANCE,
+			);
+
+			expect(gateFailingLowerL2Exists).toBe(true);
 		}, TEST_TIMEOUT_MS_INNER);
 	});
 
