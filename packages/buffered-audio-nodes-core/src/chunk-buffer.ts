@@ -4,10 +4,105 @@ import { createReadStream, createWriteStream, type ReadStream, type WriteStream 
 import { open, unlink, type FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 import type { AudioChunk } from "./node";
 
 const HIGH_WATER_MARK = 10 * 1024 * 1024;
 const REVERSE_STRIPE_BYTES = 10 * 1024 * 1024;
+
+// ── Shared read core ──────────────────────────────────────────────────────────
+// Direction-agnostic helpers used by both the forward ChunkBuffer.read() and the
+// reverse ReverseChunkReader.read(). The reverse path is structurally identical to
+// forward: its ReverseReadable emits the file's bytes with frames pre-reversed, so
+// the same deinterleave produces reverse-time-order output.
+
+// Interleaved (frame * channels + ch) float32 bytes → per-channel planar Float32Arrays.
+function deinterleave(buf: Buffer, channels: number): Array<Float32Array> {
+	const bytesPerFrame = channels * 4;
+	const frames = Math.floor(buf.length / bytesPerFrame);
+	const interleaved = new Float32Array(buf.buffer, buf.byteOffset, frames * channels);
+	const out: Array<Float32Array> = [];
+
+	for (let ch = 0; ch < channels; ch++) out.push(new Float32Array(frames));
+
+	for (let frame = 0; frame < frames; frame++) {
+		const base = frame * channels;
+
+		for (let ch = 0; ch < channels; ch++) {
+			out[ch]![frame] = interleaved[base + ch]!;
+		}
+	}
+
+	return out;
+}
+
+function buildAudioChunk(samples: Array<Float32Array>, offset: number, sampleRate?: number, bitDepth?: number): AudioChunk {
+	return { samples, offset, sampleRate: sampleRate ?? 0, bitDepth: bitDepth ?? 0 };
+}
+
+// Serve exactly `bytesNeeded` bytes from a Readable by draining rs.read() and unshifting the
+// remainder — the re-chunker that guarantees read(n) cadence regardless of the stream's internal
+// chunking. It NEVER throws on stream failure: the wait race wakes on 'readable'/'end'/'error'/'close'
+// (all four merely wake the loop, which re-checks rs.read() then isEnded()), and a failed stream is
+// reported by isEnded() returning true, so the loop terminates and a short (possibly empty) buffer is
+// returned. Error POLICY lives in the caller: forward swallows a short return (short == end-of-data);
+// the reverse reader throws on it (short == truncation/failure, since the file length is known at open).
+async function pullBytes(rs: Readable, isEnded: () => boolean, bytesNeeded: number): Promise<Buffer> {
+	const chunks: Array<Buffer> = [];
+	let collected = 0;
+
+	while (collected < bytesNeeded) {
+		const chunk = rs.read() as Buffer | null;
+
+		if (chunk !== null) {
+			const remaining = bytesNeeded - collected;
+
+			if (chunk.length <= remaining) {
+				chunks.push(chunk);
+				collected += chunk.length;
+			} else {
+				chunks.push(chunk.subarray(0, remaining));
+				collected += remaining;
+				rs.unshift(chunk.subarray(remaining));
+			}
+
+			continue;
+		}
+
+		if (isEnded()) break;
+
+		await new Promise<void>((resolve) => {
+			const wake = (): void => {
+				rs.off("readable", wake);
+				rs.off("end", wake);
+				rs.off("error", wake);
+				rs.off("close", wake);
+				resolve();
+			};
+
+			rs.once("readable", wake);
+			rs.once("end", wake);
+			rs.once("error", wake);
+			rs.once("close", wake);
+		});
+	}
+
+	if (chunks.length === 0) return Buffer.alloc(0);
+	if (chunks.length === 1) return chunks[0]!;
+
+	return Buffer.concat(chunks);
+}
+
+// Windows-EBUSY discipline: the file descriptor isn't released until 'close' fires — without awaiting
+// it, a subsequent unlink() can race the stream's tear-down and fail with EBUSY. Shared by the forward
+// read stream teardown and the reverse reader's close().
+async function awaitStreamClose(stream: ReadStream | Readable): Promise<void> {
+	if (stream.closed) return;
+
+	await new Promise<void>((resolve) => {
+		stream.once("close", () => resolve());
+	});
+}
 
 // `reset()` overwrites the file in place without truncating — bytes past the new write region persist until overwritten.
 export class ChunkBuffer {
@@ -132,32 +227,21 @@ export class ChunkBuffer {
 		const startFrame = this.framesReadInSession;
 
 		if (channels === 0 || frames <= 0 || this._frames === 0) {
-			return this.buildAudioChunk([], startFrame);
+			return buildAudioChunk([], startFrame, this._sampleRate, this._bitDepth);
 		}
 
 		const bytesPerFrame = channels * 4;
-		const bytesNeeded = frames * bytesPerFrame;
-		const buf = await this.pullBytes(bytesNeeded);
+		const rs = this.ensureReadStream();
+		const buf = await pullBytes(rs, () => rs.destroyed || this.readStreamEnded, frames * bytesPerFrame);
 		const actualFrames = Math.floor(buf.length / bytesPerFrame);
 
-		if (actualFrames <= 0) return this.buildAudioChunk([], startFrame);
+		if (actualFrames <= 0) return buildAudioChunk([], startFrame, this._sampleRate, this._bitDepth);
 
 		this.framesReadInSession += actualFrames;
 
-		const interleaved = new Float32Array(buf.buffer, buf.byteOffset, actualFrames * channels);
-		const out: Array<Float32Array> = [];
+		const out = deinterleave(buf, channels);
 
-		for (let ch = 0; ch < channels; ch++) out.push(new Float32Array(actualFrames));
-
-		for (let frame = 0; frame < actualFrames; frame++) {
-			const base = frame * channels;
-
-			for (let ch = 0; ch < channels; ch++) {
-				out[ch]![frame] = interleaved[base + ch]!;
-			}
-		}
-
-		return this.buildAudioChunk(out, startFrame);
+		return buildAudioChunk(out, startFrame, this._sampleRate, this._bitDepth);
 	}
 
 	async reset(): Promise<void> {
@@ -221,10 +305,6 @@ export class ChunkBuffer {
 		} else if (this._channels !== target) {
 			throw new Error(`ChunkBuffer: channel count mismatch — buffer has ${String(this._channels)}, write supplied ${String(target)}`);
 		}
-	}
-
-	private buildAudioChunk(samples: Array<Float32Array>, offset: number): AudioChunk {
-		return { samples, offset, sampleRate: this._sampleRate ?? 0, bitDepth: this._bitDepth ?? 0 };
 	}
 
 	private ensureTempPath(): string {
@@ -296,75 +376,31 @@ export class ChunkBuffer {
 		this.framesReadInSession = 0;
 		rs.destroy();
 
-		// On Windows the file descriptor isn't released until 'close' fires —
-		// without this await, a subsequent `unlink()` (in clear/close) can race
-		// the stream's tear-down and fail with EBUSY.
-		if (!rs.closed) {
-			await new Promise<void>((resolve) => {
-				rs.once("close", () => resolve());
-			});
-		}
-	}
-
-	private async pullBytes(bytesNeeded: number): Promise<Buffer> {
-		const rs = this.ensureReadStream();
-		const chunks: Array<Buffer> = [];
-		let collected = 0;
-
-		while (collected < bytesNeeded) {
-			const chunk = rs.read() as Buffer | null;
-
-			if (chunk !== null) {
-				const remaining = bytesNeeded - collected;
-
-				if (chunk.length <= remaining) {
-					chunks.push(chunk);
-					collected += chunk.length;
-				} else {
-					chunks.push(chunk.subarray(0, remaining));
-					collected += remaining;
-					rs.unshift(chunk.subarray(remaining));
-				}
-
-				continue;
-			}
-
-			if (this.readStreamEnded) break;
-
-			await new Promise<void>((resolve) => {
-				const onReadable = (): void => {
-					rs.off("end", onEnd);
-					resolve();
-				};
-				const onEnd = (): void => {
-					rs.off("readable", onReadable);
-					resolve();
-				};
-
-				rs.once("readable", onReadable);
-				rs.once("end", onEnd);
-			});
-		}
-
-		if (chunks.length === 0) return Buffer.alloc(0);
-		if (chunks.length === 1) return chunks[0]!;
-
-		return Buffer.concat(chunks);
+		// On Windows the file descriptor isn't released until 'close' fires — awaitStreamClose blocks a
+		// subsequent unlink() (in clear/close) from racing the stream's tear-down and failing with EBUSY.
+		await awaitStreamClose(rs);
 	}
 }
 
 // A read-only reverse view over a source ChunkBuffer's temp file. It BORROWS, it does not OWN: it holds
-// its own FileHandle, never unlinks the file, and never mutates the source buffer. Its validity ends at
-// the next write/reset/clear/close on the source — the snapshot of frames/channels captured at open no
-// longer describes the file after those operations. There is no invalidation machinery: both call sites
-// open the reader, drain it to start-of-file, and close it with no interleaved writes on the source, so
-// the borrow window is unambiguous. The source registers the reader (when created via
-// openReverseReader) and closes it in clear()/close() before unlinking, because on Windows an open
-// handle blocks unlink with EBUSY — the same discipline the forward read stream applies in endReadStream.
+// its own FileHandle (inside a ReverseReadable), never unlinks the file, and never mutates the source
+// buffer. Its validity ends at the next write/reset/clear/close on the source — the snapshot of
+// frames/channels captured at open no longer describes the file after those operations. There is no
+// invalidation machinery: both call sites open the reader, drain it to start-of-file, and close it with
+// no interleaved writes on the source, so the borrow window is unambiguous. The source registers the
+// reader (when created via openReverseReader) and closes it in clear()/close() before unlinking, because
+// on Windows an open handle blocks unlink with EBUSY — the same discipline the forward read stream
+// applies in endReadStream.
 //
 // The read cursor starts at `frames` and walks toward 0. read(n) serves min(n, remaining) frames covering
 // source-frame window [cursor - m, cursor) returned in REVERSE time order (output frame 0 = source frame
 // cursor - 1, …), then advances the cursor toward 0. At cursor 0 read returns an empty chunk.
+//
+// Internally this rides the SAME stream-buffer caching philosophy as the forward path: a ReverseReadable
+// (a module-internal Readable) emits the file's bytes with frames pre-reversed, Node's stream buffer
+// (highWaterMark = windowBytes) is the cache, and pullBytes + deinterleave + buildAudioChunk re-chunk
+// and reconstruct planar samples exactly as forward. The reversal is irreducible (Node has no backward createReadStream);
+// pushing it to the produce side makes everything downstream direction-agnostic.
 export class ReverseChunkReader {
 	readonly frames: number;
 	readonly channels: number;
@@ -373,18 +409,14 @@ export class ReverseChunkReader {
 	private readonly sampleRate?: number;
 	private readonly bitDepth?: number;
 	private readonly bytesPerFrame: number;
-	private readonly stripeBytes: number;
+	private readonly windowBytes: number;
 	private readonly parent?: ChunkBuffer;
 
-	private cursorFrame: number;
+	private framesReturned = 0;
 	private closed = false;
 
-	private handle?: FileHandle;
-
-	// The stripe holds a contiguous raw interleaved window of the file covering byte range
-	// [stripeStartByte, stripeStartByte + stripe.length). Empty until the first read populates it.
-	private stripe = Buffer.alloc(0);
-	private stripeStartByte = 0;
+	private stream?: ReverseReadable;
+	private streamError?: Error;
 
 	constructor(
 		path: string | undefined,
@@ -392,20 +424,19 @@ export class ReverseChunkReader {
 		stripeBytes = REVERSE_STRIPE_BYTES,
 		parent?: ChunkBuffer,
 	) {
-		// A never-written source has no temp file: zero frames, every read is empty, close() is a no-op.
+		// A never-written source has no temp file: zero frames, every read is empty, close() is a no-op,
+		// and no ReverseReadable is ever constructed.
 		this.path = path;
 		this.frames = path === undefined ? 0 : meta.frames;
 		this.channels = meta.channels;
 		this.sampleRate = meta.sampleRate;
 		this.bitDepth = meta.bitDepth;
 		this.bytesPerFrame = meta.channels * 4;
-		// Frame-align the stripe (a whole multiple of bytesPerFrame, at least one frame). This keeps
-		// stripeStartByte on a frame — and therefore 4-byte — boundary, so read() can view the whole
-		// stripe as one Float32Array and index frames out of it without a per-frame allocation.
-		this.stripeBytes =
+		// Frame-align the window (a whole multiple of bytesPerFrame, at least one frame) so every emitted
+		// backward window contains whole frames — the same alignment the prior stripe cache computed.
+		this.windowBytes =
 			meta.channels === 0 ? stripeBytes : Math.max(this.bytesPerFrame, Math.floor(stripeBytes / this.bytesPerFrame) * this.bytesPerFrame);
 		this.parent = parent;
-		this.cursorFrame = this.frames;
 	}
 
 	async read(frames: number): Promise<AudioChunk> {
@@ -413,51 +444,32 @@ export class ReverseChunkReader {
 			throw new Error("ReverseChunkReader: read() after close()");
 		}
 
-		const offset = this.frames - this.cursorFrame;
+		const offset = this.framesReturned;
+		const remaining = this.frames - this.framesReturned;
 
-		if (this.path === undefined || this.channels === 0 || frames <= 0 || this.cursorFrame <= 0) {
-			return this.buildChunk([], offset);
+		if (this.path === undefined || this.channels === 0 || frames <= 0 || remaining <= 0) {
+			return buildAudioChunk([], offset, this.sampleRate, this.bitDepth);
 		}
 
-		const count = Math.min(frames, this.cursorFrame);
-		const channels = this.channels;
-		const out: Array<Float32Array> = [];
+		// Clamp to frames remaining, so in healthy operation pullBytes is never short. A short return
+		// therefore means the stream ended early (truncated file / error / external destroy) — a real
+		// failure, because the file length is known at open. Reverse-time order is already produced by
+		// ReverseReadable (bytes arrive frame-reversed); the same deinterleave used forward applies.
+		const count = Math.min(frames, remaining);
+		const rs = this.ensureStream();
+		const buf = await pullBytes(rs, () => rs.destroyed || rs.readableEnded, count * this.bytesPerFrame);
+		const actualFrames = Math.floor(buf.length / this.bytesPerFrame);
 
-		for (let ch = 0; ch < channels; ch++) out.push(new Float32Array(count));
-
-		// Source window is [windowStartFrame, cursorFrame); output frame `outIdx` maps to source frame
-		// cursorFrame - 1 - outIdx (reverse time order). Walk the window backward in stripe-bounded runs:
-		// load a stripe once, view it whole as Float32, then deinterleave every frame it holds
-		// synchronously — no per-frame await or allocation. A run stops at the stripe's lowest whole
-		// frame; the next iteration loads the adjacent backward stripe, so a read spanning multiple
-		// stripes costs one load per stripe touched.
-		const windowStartFrame = this.cursorFrame - count;
-		let topFrame = this.cursorFrame - 1;
-
-		while (topFrame >= windowStartFrame) {
-			await this.ensureFrameInStripe(topFrame * this.bytesPerFrame);
-
-			// stripeStartByte is frame-aligned (see constructor), so these divisions are exact.
-			const stripeStartFloat = this.stripeStartByte / 4;
-			const stripeBottomFrame = this.stripeStartByte / this.bytesPerFrame;
-			const runBottomFrame = Math.max(windowStartFrame, stripeBottomFrame);
-			const stripeFloats = new Float32Array(this.stripe.buffer, this.stripe.byteOffset, this.stripe.length / 4);
-
-			for (let srcFrame = topFrame; srcFrame >= runBottomFrame; srcFrame--) {
-				const floatBase = srcFrame * channels - stripeStartFloat;
-				const outIdx = this.cursorFrame - 1 - srcFrame;
-
-				for (let ch = 0; ch < channels; ch++) {
-					out[ch]![outIdx] = stripeFloats[floatBase + ch]!;
-				}
-			}
-
-			topFrame = runBottomFrame - 1;
+		if (actualFrames < count) {
+			// Short read: the stream failed or truncated. Surface the captured error (or a generic one).
+			throw this.streamError ?? new Error("ReverseChunkReader: unexpected end of reverse stream");
 		}
 
-		this.cursorFrame = windowStartFrame;
+		this.framesReturned += actualFrames;
 
-		return this.buildChunk(out, offset);
+		const out = deinterleave(buf, this.channels);
+
+		return buildAudioChunk(out, offset, this.sampleRate, this.bitDepth);
 	}
 
 	async close(): Promise<void> {
@@ -465,44 +477,113 @@ export class ReverseChunkReader {
 
 		this.closed = true;
 
-		const handle = this.handle;
+		const stream = this.stream;
 
-		this.handle = undefined;
-		this.stripe = Buffer.alloc(0);
+		this.stream = undefined;
 
-		if (handle) await handle.close();
+		if (stream) {
+			stream.destroy();
+			await awaitStreamClose(stream);
+		}
 
 		this.parent?.deregisterReverseReader(this);
 	}
 
-	// Ensures the frame beginning at `frameByte` is fully inside the current stripe, loading a fresh
-	// backward-walking stripe if not.
-	private async ensureFrameInStripe(frameByte: number): Promise<void> {
-		const frameEndByte = frameByte + this.bytesPerFrame;
-		const stripeEndByte = this.stripeStartByte + this.stripe.length;
+	private ensureStream(): ReverseReadable {
+		if (this.stream) return this.stream;
+		if (this.path === undefined) {
+			throw new Error("ReverseChunkReader: no source file");
+		}
 
-		if (frameByte < this.stripeStartByte || frameEndByte > stripeEndByte) {
-			// Load a stripe ending at the requested frame's end byte, walking backward from there.
-			await this.loadStripeEndingAt(frameEndByte);
+		const totalBytes = this.frames * this.bytesPerFrame;
+		const stream = new ReverseReadable(this.path, totalBytes, this.bytesPerFrame, this.windowBytes);
+
+		// An unlistened 'error' event crashes the process; capture it so read() can surface it after a
+		// short pullBytes return.
+		stream.once("error", (error: Error) => {
+			this.streamError = error;
+		});
+
+		this.stream = stream;
+
+		return stream;
+	}
+}
+
+// A module-internal (NOT exported) Readable that wraps a FileHandle and emits the temp file's contents as
+// an ordinary forward byte stream whose frames happen to be ordered last-to-first. This moves the reversal
+// to the produce side so everything downstream (pullBytes, deinterleave, buildAudioChunk) is
+// direction-agnostic and shared with the forward path. Backpressure is free: _read is only called when the
+// stream's internal buffer (highWaterMark = windowBytes) drains, so that buffer replaces the old
+// hand-rolled stripe cache one-for-one.
+class ReverseReadable extends Readable {
+	private readonly path: string;
+	private readonly bytesPerFrame: number;
+	private readonly windowBytes: number;
+	private pos: number;
+
+	private handle?: FileHandle;
+
+	constructor(path: string, totalBytes: number, bytesPerFrame: number, windowBytes: number) {
+		super({ highWaterMark: windowBytes });
+
+		this.path = path;
+		this.bytesPerFrame = bytesPerFrame;
+		this.windowBytes = windowBytes;
+		this.pos = totalBytes;
+	}
+
+	// Emits the next backward window [max(0, pos - windowBytes), pos), with the frame order reversed in
+	// place (channel order INSIDE each frame preserved — interleaved layout intact), then walks pos toward
+	// 0 and pushes null at start-of-file. Node does not consume a rejected _read promise — an uncaught
+	// throw becomes an unhandled rejection and the stream never errors — so any failure is routed to
+	// destroy(err), which fires the 'error'/'close' events pullBytes waits on.
+	override _read(): void {
+		void this.readWindow();
+	}
+
+	private async readWindow(): Promise<void> {
+		try {
+			if (this.pos <= 0) {
+				this.push(null);
+
+				return;
+			}
+
+			const startByte = Math.max(0, this.pos - this.windowBytes);
+			const length = this.pos - startByte;
+			const buf = Buffer.alloc(length);
+
+			await this.readFully(buf, startByte);
+
+			this.reverseFramesInPlace(buf);
+			this.pos = startByte;
+
+			this.push(buf);
+		} catch (error) {
+			this.destroy(error as Error);
 		}
 	}
 
-	// Fills the stripe with the file window [max(0, endByte - stripeBytes), endByte). A single read(n)
-	// may span more than one stripe when n exceeds (or is misaligned to) the stripe; read()'s run loop
-	// calls this once per stripe it touches, walking backward.
-	private async loadStripeEndingAt(endByte: number): Promise<void> {
-		const startByte = Math.max(0, endByte - this.stripeBytes);
-		const length = endByte - startByte;
-		const buf = Buffer.alloc(length);
+	// Reverse the frame order within the window in place: frame i swaps with frame (frameCount - 1 - i),
+	// each frame being one bytesPerFrame-wide slice. Channel order inside a frame is untouched, so the
+	// interleaved layout survives — only the time order flips.
+	private reverseFramesInPlace(buf: Buffer): void {
+		const frameCount = Math.floor(buf.length / this.bytesPerFrame);
+		const scratch = Buffer.alloc(this.bytesPerFrame);
 
-		await this.readFully(buf, startByte);
+		for (let low = 0, high = frameCount - 1; low < high; low++, high--) {
+			const lowByte = low * this.bytesPerFrame;
+			const highByte = high * this.bytesPerFrame;
 
-		this.stripe = buf;
-		this.stripeStartByte = startByte;
+			buf.copy(scratch, 0, lowByte, lowByte + this.bytesPerFrame);
+			buf.copy(buf, lowByte, highByte, highByte + this.bytesPerFrame);
+			scratch.copy(buf, highByte, 0, this.bytesPerFrame);
+		}
 	}
 
 	// The one centralized positioned read-fully helper. Loops on handle.read and throws on a zero-byte
-	// read (unexpected EOF) — the shared fix for reverse-buffer.ts's former unchecked-bytesRead bug.
+	// read (unexpected EOF) — the shared guard against the former unchecked-bytesRead short-read bug.
 	private async readFully(target: Buffer, position: number): Promise<void> {
 		const handle = await this.ensureHandle();
 		let filled = 0;
@@ -511,7 +592,7 @@ export class ReverseChunkReader {
 			const { bytesRead } = await handle.read(target, filled, target.length - filled, position + filled);
 
 			if (bytesRead === 0) {
-				throw new Error(`ReverseChunkReader: unexpected EOF at byte ${position + filled}`);
+				throw new Error(`ReverseReadable: unexpected EOF at byte ${position + filled}`);
 			}
 
 			filled += bytesRead;
@@ -520,16 +601,28 @@ export class ReverseChunkReader {
 
 	private async ensureHandle(): Promise<FileHandle> {
 		if (this.handle) return this.handle;
-		if (this.path === undefined) {
-			throw new Error("ReverseChunkReader: no source file");
-		}
 
 		this.handle = await open(this.path, "r");
 
 		return this.handle;
 	}
 
-	private buildChunk(samples: Array<Float32Array>, offset: number): AudioChunk {
-		return { samples, offset, sampleRate: this.sampleRate ?? 0, bitDepth: this.bitDepth ?? 0 };
+	override _destroy(error: Error | null, callback: (error?: Error | null) => void): void {
+		const handle = this.handle;
+
+		this.handle = undefined;
+
+		if (!handle) {
+			callback(error);
+
+			return;
+		}
+
+		// The EBUSY close discipline lives in the stream's own lifecycle: close the FileHandle (awaited),
+		// then signal completion. Preserve the destroy error.
+		handle
+			.close()
+			.then(() => callback(error))
+			.catch((closeError: unknown) => callback(error ?? (closeError as Error)));
 	}
 }

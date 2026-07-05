@@ -427,4 +427,52 @@ describe("ReverseChunkReader", () => {
 
 		await buffer.close();
 	});
+
+	it("close() mid-drain settles the in-flight read without hanging or an unhandled rejection", async () => {
+		const frames = 200_000;
+		const channels = 2;
+		const buffer = new ChunkBuffer();
+
+		await buffer.write(makeRamp(frames, channels), 44100, 32);
+		await buffer.flushWrites();
+
+		const reader = await buffer.openReverseReader();
+
+		// Start a large read, then close the reader before it settles. The in-flight read must settle
+		// (not hang) once close() destroys the underlying stream: pullBytes wakes on 'close', returns
+		// short, and read() throws. No unhandled rejection is possible because we await the promise.
+		const pending = reader.read(frames);
+		const settled = pending.then(
+			() => "resolved" as const,
+			(error: unknown) => (error as Error).message,
+		);
+
+		await reader.close();
+
+		const outcome = await settled;
+
+		// The in-flight read rejects (either the throw-after-close guard or the short-return throw,
+		// depending on ordering) — never resolves, never hangs.
+		expect(outcome).not.toBe("resolved");
+		expect(outcome).toMatch(/read\(\) after close\(\)|end of reverse stream/);
+
+		await buffer.close();
+	});
+
+	it("a truncated source file makes the in-flight read reject rather than hang", async () => {
+		const channels = 2;
+		// Write only 100 frames but tell the reader there are 4096 — the reverse stream will hit EOF
+		// mid-window, destroy(err), and the in-flight read must reject rather than hang.
+		const realFrames = 100;
+		const claimedFrames = 4096;
+		const path = await writeInterleavedRamp(realFrames, channels);
+		const reader = new ReverseChunkReader(path, { frames: claimedFrames, channels, sampleRate: 44100, bitDepth: 32 });
+
+		try {
+			await expect(reader.read(claimedFrames)).rejects.toThrow(/EOF|end of reverse stream/);
+		} finally {
+			await reader.close();
+			await unlink(path).catch(() => undefined);
+		}
+	});
 });
