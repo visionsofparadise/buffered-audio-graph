@@ -57,10 +57,6 @@ const RECENT_GRAPHS: ReadonlyArray<RecentGraph> = [
 	},
 ];
 
-// Bar widths for the decorative home-screen barcode — randomized once at
-// module load so the pattern reads as a real, irregular barcode. The count is
-// sized so the rotated barcode runs roughly the length of the vertical
-// wordmark beside it.
 const HOME_BARCODE_WIDTHS = Array.from(
 	{ length: 56 },
 	() => 1 + Math.floor(Math.random() * 4),
@@ -78,9 +74,6 @@ interface Props {
 export function HomePage({ onNewGraph, onOpenGraph, onOpenRecent }: Props) {
 	return (
 		<div className="relative flex h-full flex-col overflow-hidden bg-surface p-6">
-			{/* Decorative top-right watermark — the product wordmark and a
-			    vertical barcode (the horizontal Barcode rotated a quarter turn),
-			    sitting behind the centerpiece graph. */}
 			<div className="pointer-events-none absolute right-4 top-6 z-0 flex items-start gap-4">
 				<span
 					className="type-label text-dimmed"
@@ -110,8 +103,6 @@ export function HomePage({ onNewGraph, onOpenGraph, onOpenRecent }: Props) {
 				<HomeGraph recents={RECENT_GRAPHS} onOpenRecent={onOpenRecent} />
 			</div>
 
-			{/* Studio mark — balances the action buttons in the opposite corner.
-			    pointer-events-none so it never intercepts a graph-anchor click. */}
 			<span className="type-label pointer-events-none absolute bottom-6 left-6 z-20 text-dimmed">
 				&copy; ZCROSS
 			</span>

@@ -10,14 +10,14 @@ export interface ButtonProps extends React.ComponentPropsWithRef<"button"> {
 
 const sizeStyles = {
 	sm: "px-2.5 py-1 text-label",
-	md: "px-4 py-2 text-xs",
-	lg: "px-5 py-2.5 text-body",
+	md: "px-4 py-2.5 text-body",
+	lg: "px-6 py-3 text-[15px]",
 };
 
 const iconSizes = {
 	sm: 14,
 	md: 16,
-	lg: 18,
+	lg: 20,
 };
 
 const variantStyles = {

@@ -9,7 +9,6 @@ import { Button, IconButton } from "@buffered-audio/design-system";
  * canvas, inverting to a white highlight on hover.
  */
 
-// Home-screen-button treatment: no chrome at rest, active-inversion on hover.
 const TOOLBAR_BUTTON = "text-text-primary hover:bg-text-primary hover:text-surface";
 
 interface Props {

@@ -84,8 +84,6 @@ export const Knob = ({
 	return (
 		<div className={cn("flex flex-col items-center gap-1", className)}>
 			{!hideValue && (
-				// Fixed-width, centered readout so the layout doesn't jitter as the
-				// digit count changes mid-drag.
 				<span className="type-value w-9 text-center text-label text-text-secondary">
 					{Math.round(value * 100)}
 				</span>

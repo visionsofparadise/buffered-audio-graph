@@ -28,8 +28,6 @@ export function App() {
 			const next = current.filter((tab) => tab.id !== id);
 
 			if (activeTabId === id) {
-				// Fall back to the tab that was before the closed one, or the next
-				// remaining tab, or the home tab if no graph tabs remain.
 				const fallback = next[index - 1]?.id ?? next[index]?.id ?? "home";
 
 				setActiveTabId(fallback);
@@ -51,8 +49,6 @@ export function App() {
 	};
 
 	const handleOpenGraph = () => {
-		// In the desktop app this opens an OS file picker; the demo creates a
-		// placeholder tab so the home → graph flow can still be exercised.
 		const freshId = `tab-${Date.now()}`;
 
 		setTabs((current) => [...current, { id: freshId, name: "Opened graph" }]);

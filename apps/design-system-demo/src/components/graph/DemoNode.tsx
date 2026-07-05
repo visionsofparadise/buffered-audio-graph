@@ -83,7 +83,6 @@ function NumberControl({
 	const normalized = normalize(localValue);
 
 	if (param.type === "fader") {
-		// Fader has no onChangeEnd hook — commit on every change for now.
 		const faderOnChange = onChange
 			? (norm: number) => {
 					const committed = snapToStep(denormalize(norm), param.step);
@@ -98,8 +97,6 @@ function NumberControl({
 
 	return (
 		<div className="flex flex-col items-center gap-1">
-			{/* Value readout above the dial. Fixed width + centered so the digits
-			    don't jitter the layout as the value changes mid-drag. */}
 			<span className="type-value w-12 text-center text-label text-text-secondary">
 				{formatParamValue(localValue, param.step)}
 			</span>
@@ -110,7 +107,6 @@ function NumberControl({
 				onChange={handleChange}
 				onChangeEnd={handleEnd}
 			/>
-			{/* Unit as the label below the dial. */}
 			{param.unit !== undefined && (
 				<span className="type-label text-text-secondary">{param.unit}</span>
 			)}
@@ -194,15 +190,12 @@ function FileControl({
 	return (
 		<FileInput
 			defaultValue={param.value}
-			// Surface the schema's file-extension filter as an empty-field hint.
 			placeholder={param.accept === undefined ? undefined : `${param.accept} file`}
 			onChange={onChange ? (next) => onChange(name, next) : undefined}
 		/>
 	);
 }
 
-// Stable id source for the editable list controls — keying rows by id (not
-// array index) keeps React reconciliation correct as rows are added / removed.
 let listRowCounter = 0;
 
 function freshListRowId(): string {
@@ -254,7 +247,6 @@ function ObjectArrayControl({ param }: { readonly param: ObjectArrayParam }) {
 					key={item.id}
 					className={cn(
 						"flex flex-col gap-3",
-						// Single-edge divider between elements — no wrapping border.
 						index > 0 && "border-t border-border pt-3",
 					)}
 				>
@@ -304,9 +296,6 @@ function ParamRow({
 	readonly param: Param;
 	readonly onChange?: (name: string, value: Param["value"]) => void;
 }) {
-	// `text-xs` (12px) matches the node's other functional labels — param names
-	// read at the same scale as the rest of the node's functional text, not
-	// smaller.
 	const labelClass = cn(
 		"type-label text-xs",
 		param.complete ? "text-text-secondary" : "text-accent-primary",
@@ -367,9 +356,6 @@ function ParamRow({
 			break;
 	}
 
-	// Knobs and Toggles render compact and align well in a single horizontal row.
-	// Faders, Selects, ButtonSelections, Inputs, file fields, and object-array
-	// editors need a stacked layout so the control can take the full row width.
 	const stacked =
 		param.type === "fader" ||
 		param.type === "select" ||
@@ -423,8 +409,6 @@ function PortHandle({
 			)}
 			style={{
 				[side]: -5,
-				// Rightward-facing filled triangle — points along the L→R signal flow,
-				// so an input reads as feeding in and an output as feeding out.
 				clipPath: "polygon(0 0, 100% 50%, 0 100%)",
 			}}
 		/>
@@ -450,10 +434,6 @@ export function DemoNode({ data, selected }: DemoNodeProps) {
 	const onReset = nodeData.onReset as (() => void) | undefined;
 
 	const panelClass = cn(
-		// The panel itself owns layout, background, and the ≤2px outer radius. The
-		// header bar inside clips to the same radius via `overflow-hidden`. A
-		// subtle `border-border` frames the unit against the canvas (Resequence
-		// graph-unit treatment).
 		"flex flex-col bg-elevated rounded-xs border border-border overflow-hidden",
 		isBypassed && "opacity-60",
 		selected && "ring-1 ring-text-primary",
@@ -471,9 +451,6 @@ export function DemoNode({ data, selected }: DemoNodeProps) {
 	return (
 		<div className="relative" style={{ width: nodeData.width ?? 240 }}>
 			<div className={panelClass}>
-				{/* Header — full-panel-width colored bar carrying category + title.
-				    Uses `min-h` + vertical padding (not a fixed `h-`) so multi-line
-				    titles like `DeepFilterNet3 (Denoiser)` expand the bar to fit. */}
 				<div
 					className={cn(
 						"flex min-h-9 items-center justify-between gap-2 px-4 py-2",
@@ -483,10 +460,6 @@ export function DemoNode({ data, selected }: DemoNodeProps) {
 					<span className="text-body font-medium uppercase tracking-[0.06em] leading-tight text-surface">
 						{nodeData.name}
 					</span>
-					{/* Bypass / reset — small icon controls at the right of the header.
-					    They sit on the colored category bar, so they keep `text-surface`
-					    to stay legible; tailwind-merge lets the className override the
-					    ghost variant's text color. */}
 					<div className="flex shrink-0 items-center gap-1.5">
 						<IconButton
 							icon={Power}
@@ -510,7 +483,6 @@ export function DemoNode({ data, selected }: DemoNodeProps) {
 					</div>
 				</div>
 
-				{/* Body */}
 				{paramEntries.length > 0 && (
 					<div className="flex flex-col gap-4 px-4 py-4">
 						{paramEntries.map(([name, param]) => (
@@ -526,7 +498,6 @@ export function DemoNode({ data, selected }: DemoNodeProps) {
 
 			</div>
 
-			{/* Ports — rightward-facing triangle handles, vertically centered via React Flow defaults */}
 			{nodeData.ports.inputs.map((port) => (
 				<PortHandle
 					key={port.id}

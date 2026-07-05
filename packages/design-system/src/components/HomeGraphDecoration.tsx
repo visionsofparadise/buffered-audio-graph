@@ -1,35 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { cn } from "../utils/cn";
-import { ProjectIcon } from "./projectIcons";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { cn } from "../cn";
 
-/**
- * Decorative graph centerpiece for the home screen.
- *
- * This is NOT a functional graph — no real edges, no real node semantics. The
- * topology is intentional: a dense main cluster at the canvas center, a few
- * smaller offshoot clusters orbiting it, and one isolated anchor per recent
- * project hung off a long single-edge bridge. The anchors are the named
- * outliers — hovering one brightens its label, the anchor, and the tether
- * connecting it; clicking opens that recent.
- *
- * Non-anchor points drift on a sine wave so the canvas feels alive;
- * anchors stay still so labels don't visibly shift.
- *
- * Layout lives in a 1200×700 viewBox so it scales cleanly into whatever space
- * the home screen offers; preserveAspectRatio meet keeps the proportions
- * intact via letterboxing.
- */
-
-interface RecentGraph {
+export interface HomeGraphAnchor {
 	readonly id: string;
-	readonly name: string;
-	readonly path: string;
-	readonly relativeTime: string;
+	readonly label: string;
+	readonly secondaryLabel?: string;
+	readonly icon?: ReactNode;
 }
 
-interface Props {
-	readonly recents: ReadonlyArray<RecentGraph>;
-	readonly onOpenRecent: (name: string) => void;
+export interface HomeGraphDecorationProps {
+	readonly anchors: ReadonlyArray<HomeGraphAnchor>;
+	readonly onAnchorClick?: (id: string) => void;
 }
 
 const VIEW_W = 1200;
@@ -88,7 +69,7 @@ interface EdgeLayout {
 }
 
 interface AnnotationLayout {
-	readonly recentIndex: number;
+	readonly anchorIndex: number;
 	readonly pointIndex: number;
 	readonly labelOffsetX: number;
 	readonly labelOffsetY: number;
@@ -120,24 +101,19 @@ function dist(left: MutablePoint, right: MutablePoint) {
 	return Math.hypot(left.baseX - right.baseX, left.baseY - right.baseY);
 }
 
-function buildLayout(recentsCount: number, seed: number): Layout {
+function buildLayout(anchorCount: number, seed: number): Layout {
 	const rand = mulberry32(seed);
 	const points: Array<MutablePoint> = [];
 
-	function pushPoint(seed: {
-		baseX: number;
-		baseY: number;
-		amp: number;
-		isAnchor: boolean;
-	}) {
+	function pushPoint(seedPoint: { baseX: number; baseY: number; amp: number; isAnchor: boolean }) {
 		points.push({
-			baseX: seed.baseX,
-			baseY: seed.baseY,
+			baseX: seedPoint.baseX,
+			baseY: seedPoint.baseY,
 			phaseX: rand() * Math.PI * 2,
 			phaseY: rand() * Math.PI * 2,
 			speed: 0.32 + rand() * 0.4,
-			amp: seed.amp,
-			isAnchor: seed.isAnchor,
+			amp: seedPoint.amp,
+			isAnchor: seedPoint.isAnchor,
 		});
 	}
 
@@ -156,16 +132,12 @@ function buildLayout(recentsCount: number, seed: number): Layout {
 	const offshootRanges: Array<ClusterRange> = [];
 
 	for (let offshootIndex = 0; offshootIndex < OFFSHOOT_COUNT; offshootIndex++) {
-		const baseAngle =
-			(offshootIndex / OFFSHOOT_COUNT) * Math.PI * 2 + (rand() - 0.5) * 0.5;
+		const baseAngle = (offshootIndex / OFFSHOOT_COUNT) * Math.PI * 2 + (rand() - 0.5) * 0.5;
 		const distance = OFFSHOOT_DIST + rand() * OFFSHOOT_DIST_JITTER;
 		const centerX = CENTER_X + Math.cos(baseAngle) * distance;
 		const centerY = CENTER_Y + Math.sin(baseAngle) * distance * V_SQUASH;
-		const clusterRadius =
-			OFFSHOOT_RADIUS_MIN + rand() * (OFFSHOOT_RADIUS_MAX - OFFSHOOT_RADIUS_MIN);
-		const clusterCount =
-			OFFSHOOT_POINTS_MIN +
-			Math.floor(rand() * (OFFSHOOT_POINTS_MAX - OFFSHOOT_POINTS_MIN + 1));
+		const clusterRadius = OFFSHOOT_RADIUS_MIN + rand() * (OFFSHOOT_RADIUS_MAX - OFFSHOOT_RADIUS_MIN);
+		const clusterCount = OFFSHOOT_POINTS_MIN + Math.floor(rand() * (OFFSHOOT_POINTS_MAX - OFFSHOOT_POINTS_MIN + 1));
 		const startIndex = points.length;
 
 		for (let inner = 0; inner < clusterCount; inner++) {
@@ -185,10 +157,8 @@ function buildLayout(recentsCount: number, seed: number): Layout {
 
 	const anchorAngles: Array<number> = [];
 
-	for (let recentIndex = 0; recentIndex < recentsCount; recentIndex++) {
-		const base =
-			(recentIndex / Math.max(1, recentsCount)) * Math.PI * 2 +
-			Math.PI / Math.max(1, recentsCount);
+	for (let anchorIndex = 0; anchorIndex < anchorCount; anchorIndex++) {
+		const base = (anchorIndex / Math.max(1, anchorCount)) * Math.PI * 2 + Math.PI / Math.max(1, anchorCount);
 		const jitter = (rand() - 0.5) * 0.4;
 
 		anchorAngles.push(base + jitter);
@@ -196,8 +166,8 @@ function buildLayout(recentsCount: number, seed: number): Layout {
 
 	const anchorStartIndex = points.length;
 
-	for (let recentIndex = 0; recentIndex < recentsCount; recentIndex++) {
-		const angle = anchorAngles[recentIndex] ?? 0;
+	for (let anchorIndex = 0; anchorIndex < anchorCount; anchorIndex++) {
+		const angle = anchorAngles[anchorIndex] ?? 0;
 		const distance = ANCHOR_DIST + rand() * ANCHOR_DIST_JITTER;
 		const rawX = CENTER_X + Math.cos(angle) * distance;
 		const rawY = CENTER_Y + Math.sin(angle) * distance * V_SQUASH;
@@ -363,8 +333,8 @@ function buildLayout(recentsCount: number, seed: number): Layout {
 
 	const annotations: Array<AnnotationLayout> = [];
 
-	for (let recentIndex = 0; recentIndex < recentsCount; recentIndex++) {
-		const pointIndex = anchorStartIndex + recentIndex;
+	for (let anchorIndex = 0; anchorIndex < anchorCount; anchorIndex++) {
+		const pointIndex = anchorStartIndex + anchorIndex;
 		const anchor = points[pointIndex];
 
 		if (!anchor) continue;
@@ -381,7 +351,7 @@ function buildLayout(recentsCount: number, seed: number): Layout {
 		const align: "start" | "end" = labelOffsetX < 0 ? "end" : "start";
 
 		annotations.push({
-			recentIndex,
+			anchorIndex,
 			pointIndex,
 			labelOffsetX,
 			labelOffsetY,
@@ -392,12 +362,16 @@ function buildLayout(recentsCount: number, seed: number): Layout {
 	return { points, edges, annotations };
 }
 
-export function HomeGraph({ recents, onOpenRecent }: Props) {
-	const layout = useMemo(
-		() => buildLayout(recents.length, Math.floor(Math.random() * 0x7fffffff)),
-		[recents.length],
-	);
-	const [hoveredRecentId, setHoveredRecentId] = useState<string | null>(null);
+/**
+ * Decorative graph centerpiece. Renders a dense main cluster, a few orbiting
+ * offshoot clusters, and one isolated anchor per `anchor` hung off a long
+ * single-edge bridge. Each anchor renders its `label` (+ optional
+ * `secondaryLabel` and `icon`) and fires `onAnchorClick` with the anchor's id.
+ * Non-anchor points drift on a sine wave; anchors stay still.
+ */
+export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorationProps) {
+	const layout = useMemo(() => buildLayout(anchors.length, Math.floor(Math.random() * 0x7fffffff)), [anchors.length]);
+	const [hoveredAnchorId, setHoveredAnchorId] = useState<string | null>(null);
 
 	const circleRefs = useRef<Array<SVGCircleElement | null>>([]);
 	const edgeRefs = useRef<Array<SVGLineElement | null>>([]);
@@ -486,15 +460,15 @@ export function HomeGraph({ recents, onOpenRecent }: Props) {
 
 			{layout.annotations.map((ann) => {
 				const point = layout.points[ann.pointIndex];
-				const recent = recents[ann.recentIndex];
+				const anchor = anchors[ann.anchorIndex];
 
-				if (!point || !recent) return null;
+				if (!point || !anchor) return null;
 
-				const isHovered = hoveredRecentId === recent.id;
+				const isHovered = hoveredAnchorId === anchor.id;
 
 				return (
 					<line
-						key={`tether-${recent.id}`}
+						key={`tether-${anchor.id}`}
 						x1={point.baseX}
 						y1={point.baseY}
 						x2={point.baseX + ann.labelOffsetX}
@@ -520,14 +494,14 @@ export function HomeGraph({ recents, onOpenRecent }: Props) {
 
 			{layout.annotations.map((ann) => {
 				const point = layout.points[ann.pointIndex];
-				const recent = recents[ann.recentIndex];
+				const anchor = anchors[ann.anchorIndex];
 
-				if (!point || !recent) return null;
-				if (hoveredRecentId !== recent.id) return null;
+				if (!point || !anchor) return null;
+				if (hoveredAnchorId !== anchor.id) return null;
 
 				return (
 					<circle
-						key={`ring-${recent.id}`}
+						key={`ring-${anchor.id}`}
 						cx={point.baseX}
 						cy={point.baseY}
 						r={10}
@@ -540,32 +514,30 @@ export function HomeGraph({ recents, onOpenRecent }: Props) {
 
 			{layout.annotations.map((ann) => {
 				const point = layout.points[ann.pointIndex];
-				const recent = recents[ann.recentIndex];
+				const anchor = anchors[ann.anchorIndex];
 
-				if (!point || !recent) return null;
+				if (!point || !anchor) return null;
 
-				const isHovered = hoveredRecentId === recent.id;
+				const isHovered = hoveredAnchorId === anchor.id;
 				const labelX = point.baseX + ann.labelOffsetX;
 				const labelY = point.baseY + ann.labelOffsetY;
 				const isEndAligned = ann.align === "end";
 
+				const handleEnter = () => setHoveredAnchorId(anchor.id);
+				const handleLeave = () => setHoveredAnchorId(null);
+				const handleClick = () => onAnchorClick?.(anchor.id);
+
 				return (
-					<g key={`label-${recent.id}`}>
+					<g key={`label-${anchor.id}`}>
 						<circle
 							cx={point.baseX}
 							cy={point.baseY}
 							r={18}
 							fill="transparent"
 							style={{ cursor: "pointer" }}
-							onMouseEnter={() => {
-								setHoveredRecentId(recent.id);
-							}}
-							onMouseLeave={() => {
-								setHoveredRecentId(null);
-							}}
-							onClick={() => {
-								onOpenRecent(recent.name);
-							}}
+							onMouseEnter={handleEnter}
+							onMouseLeave={handleLeave}
+							onClick={handleClick}
 						/>
 
 						<foreignObject
@@ -576,44 +548,27 @@ export function HomeGraph({ recents, onOpenRecent }: Props) {
 							style={{ overflow: "visible" }}
 						>
 							<div
-								className={cn(
-									"flex h-full items-center justify-start gap-3",
-									isEndAligned ? "flex-row-reverse" : "flex-row",
-								)}
+								className={cn("flex h-full items-center justify-start gap-3", isEndAligned ? "flex-row-reverse" : "flex-row")}
 								style={{ cursor: "pointer" }}
-								onMouseEnter={() => {
-									setHoveredRecentId(recent.id);
-								}}
-								onMouseLeave={() => {
-									setHoveredRecentId(null);
-								}}
-								onClick={() => {
-									onOpenRecent(recent.name);
-								}}
+								onMouseEnter={handleEnter}
+								onMouseLeave={handleLeave}
+								onClick={handleClick}
 							>
-								<ProjectIcon
-									name={recent.name}
-									size={18}
-									className={isHovered ? "text-text-primary" : "text-text-secondary"}
-								/>
-								<div
-									className={cn(
-										"flex flex-col gap-0.5",
-										isEndAligned ? "items-end" : "items-start",
-									)}
-								>
+								{anchor.icon !== undefined && (
+									<span className={isHovered ? "text-text-primary" : "text-text-secondary"}>
+										{anchor.icon}
+									</span>
+								)}
+								<div className={cn("flex flex-col gap-0.5", isEndAligned ? "items-end" : "items-start")}>
 									<span
-										className={cn(
-											"whitespace-nowrap leading-tight",
-											isHovered ? "text-text-primary" : "text-text-secondary",
-										)}
+										className={cn("whitespace-nowrap leading-tight", isHovered ? "text-text-primary" : "text-text-secondary")}
 										style={{ fontSize: 14 }}
 									>
-										{recent.name}
+										{anchor.label}
 									</span>
-									<span className="type-label whitespace-nowrap text-dimmed">
-										{recent.relativeTime}
-									</span>
+									{anchor.secondaryLabel !== undefined && (
+										<span className="type-label whitespace-nowrap text-dimmed">{anchor.secondaryLabel}</span>
+									)}
 								</div>
 							</div>
 						</foreignObject>

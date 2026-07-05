@@ -1,5 +1,4 @@
 /* eslint-disable barrel-files/avoid-barrel-files */
-// Components — Controls
 export { Knob } from "./components/controls/Knob";
 export type { KnobProps } from "./components/controls/Knob";
 export { Fader } from "./components/controls/Fader";
@@ -9,7 +8,6 @@ export type { MeterProps } from "./components/controls/Meter";
 export { ButtonSelection } from "./components/controls/ButtonSelection";
 export type { ButtonSelectionProps } from "./components/controls/ButtonSelection";
 
-// Components — Primitives
 export { Button } from "./components/Button";
 export type { ButtonProps } from "./components/Button";
 export { IconButton } from "./components/IconButton";
@@ -37,8 +35,11 @@ export {
 	DropdownMenuSubTrigger,
 	DropdownMenuSubContent,
 } from "./components/DropdownMenu";
+export { HomeGraphDecoration } from "./components/HomeGraphDecoration";
+export type { HomeGraphAnchor, HomeGraphDecorationProps } from "./components/HomeGraphDecoration";
+export { Barcode, barcodeWidth } from "./components/Barcode";
+export type { BarcodeProps } from "./components/Barcode";
 
-// Color constants (for canvas / Three.js contexts)
 export {
 	surface,
 	elevated,
@@ -56,5 +57,3 @@ export {
 	light,
 } from "./colors";
 
-// Utilities
-export { cn } from "./cn";

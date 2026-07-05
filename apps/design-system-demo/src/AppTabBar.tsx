@@ -96,13 +96,9 @@ export function AppTabBar({
 		}
 	}, [editingTabId]);
 
-	// The home screen is not a tab — the `+` button reflects it as "active".
 	const isHomeActive = activeTabId === "home";
 
 	return (
-		// `bg-elevated` lifts the chrome off the `bg-surface` workspace below.
-		// No gap or padding — the menu, tabs, and `+` butt edge-to-edge for a
-		// browser-style tab strip.
 		<div className="flex h-12 shrink-0 items-center bg-elevated">
 			<DropdownButton
 				trigger={
@@ -117,7 +113,6 @@ export function AppTabBar({
 				items={APP_MENU_ITEMS}
 			/>
 
-			{/* Open-graph tabs. */}
 			{tabs.map((tab) => {
 				const isActive = tab.id === activeTabId;
 				const isEditing = editingTabId === tab.id;
@@ -135,7 +130,6 @@ export function AppTabBar({
 								: "text-text-secondary hover:text-text-primary",
 						)}
 					>
-						{/* Deterministic geometric mark for the project. */}
 						<ProjectIcon name={tab.name} size={16} className="mr-1" />
 						{isEditing ? (
 							<input
@@ -184,7 +178,6 @@ export function AppTabBar({
 								isActive
 									? "text-surface hover:bg-surface/20"
 									: "text-text-secondary hover:text-text-primary",
-								// Only surfaces on the active tab or while the tab is hovered.
 								isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100",
 							)}
 						>
@@ -194,10 +187,6 @@ export function AppTabBar({
 				);
 			})}
 
-			{/* Home button — opens the home screen, from which a new graph can be
-			    created or an existing one opened. Highlights on hover and shows
-			    the active-inversion when the home screen is open, exactly like a
-			    tab. */}
 			<IconButton
 				icon={Plus}
 				label="Home"
@@ -212,7 +201,6 @@ export function AppTabBar({
 
 			<div className="flex-1" />
 
-			{/* Reserved caption-button footprint — Electron paints OS controls here. */}
 			<div aria-hidden="true" className="h-full w-[138px]" />
 		</div>
 	);

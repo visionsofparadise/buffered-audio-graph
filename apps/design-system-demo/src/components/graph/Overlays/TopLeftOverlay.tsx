@@ -212,9 +212,6 @@ export function TopLeftOverlay({ onAddNode }: Props) {
 		<div className="absolute left-3 top-3 z-10">
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					{/* Same treatment as the rest of the top row: transparent against
-					    the canvas, white highlight on hover, active-inversion while
-					    the node menu is open. */}
 					<Button
 						variant="ghost"
 						size="lg"
@@ -242,10 +239,6 @@ export function TopLeftOverlay({ onAddNode }: Props) {
 									}}
 								>
 									<span>{node.label}</span>
-									{/* Sentence-case description, capped at three lines so a
-									    long blurb can't stretch the row. Dimmed via opacity so
-									    it follows the row's text color in both rest and
-									    highlighted states. */}
 									<span className="line-clamp-3 whitespace-normal text-xs normal-case leading-snug tracking-normal opacity-60">
 										{node.description}
 									</span>

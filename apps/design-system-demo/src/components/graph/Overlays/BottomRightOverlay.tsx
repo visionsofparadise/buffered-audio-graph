@@ -38,9 +38,7 @@ export function BottomRightOverlay() {
 					icon={X}
 					label="Cancel render"
 					size="sm"
-					onClick={() => {
-						// no-op for the demo
-					}}
+					onClick={() => {}}
 				/>
 			</div>
 			<span className="text-body text-text-primary">podcast-final.wav</span>

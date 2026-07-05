@@ -46,7 +46,6 @@ const ROW_GAP = 220;
 const col = (index: number) => index * COL_GAP;
 
 const demoNodes: Array<Node<DemoNodeData>> = [
-	// Sources
 	{
 		id: "read-1",
 		type: "demoNode",
@@ -74,8 +73,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 		type: "demoNode",
 		position: { x: col(0), y: ROW_GAP },
 		data: {
-			// Incomplete-param state — `path` is blank and the param is flagged
-			// incomplete, so its label renders coral.
 			name: "Read",
 			category: "source",
 			parameters: {
@@ -89,7 +86,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 		},
 	},
 
-	// Transforms
 	{
 		id: "gain",
 		type: "demoNode",
@@ -121,8 +117,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 		type: "demoNode",
 		position: { x: col(2), y: ROW_GAP / 2 },
 		data: {
-			// Real moduleName is "DeepFilterNet3 (Denoiser)"; the header bar shows
-			// exactly that string.
 			name: "DeepFilterNet3 (Denoiser)",
 			category: "transform",
 			parameters: {
@@ -175,7 +169,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 		type: "demoNode",
 		position: { x: col(4), y: 0 },
 		data: {
-			// Bypassed state — opacity-60.
 			name: "Normalize",
 			category: "transform",
 			bypassed: true,
@@ -198,8 +191,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 		},
 	},
 
-	// Mid-pipeline target (snapshot tap) — visually identical to a regular target,
-	// just placed mid-pipeline.
 	{
 		id: "snapshot-tap",
 		type: "demoNode",
@@ -229,14 +220,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 		},
 	},
 
-	// VST3 — the real `transforms/vst3/` node (moduleName "VST3"). Included to
-	// exercise two schema param shapes the other demo nodes don't: nested `file`
-	// fields (`.vst3` / `.vstpreset` paths) and an `objectArray` (`stages` — an
-	// ordered chain of plugin stages, each a sub-form). Per the schema: `stages`
-	// is a `z.array(stageSchema).min(1)`; each stage has `pluginPath`, optional
-	// `pluginName` (sub-plugin name for multi-plugin shells like WaveShell), and
-	// optional `presetPath`. The node's `vstHostPath` is a managed binary, so —
-	// like the Read/Write ffmpeg paths — it is omitted from the node body.
 	{
 		id: "vst3",
 		type: "demoNode",
@@ -250,8 +233,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 					type: "objectArray",
 					complete: true,
 					itemNoun: "Stage",
-					// Shape of a freshly-added stage — a stage needs a plugin, so a new
-					// one's `pluginPath` starts incomplete (coral label).
 					itemTemplate: {
 						pluginPath: {
 							type: "file",
@@ -322,7 +303,6 @@ const demoNodes: Array<Node<DemoNodeData>> = [
 		},
 	},
 
-	// Final target
 	{
 		id: "write-final",
 		type: "demoNode",

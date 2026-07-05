@@ -1,5 +1,5 @@
 import type { ComponentPropsWithRef } from "react";
-import { cn } from "@buffered-audio/design-system";
+import { cn } from "../utils/cn";
 
 export interface BarcodeProps extends Omit<ComponentPropsWithRef<"div">, "color"> {
 	readonly widths?: Array<number>;

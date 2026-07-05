@@ -1,4 +1,4 @@
-import { cn } from "@buffered-audio/design-system";
+import { cn } from "./utils/cn";
 
 export type DemoView = "app" | "showcase";
 

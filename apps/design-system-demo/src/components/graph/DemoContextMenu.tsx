@@ -1,6 +1,6 @@
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
 import type { ReactNode } from "react";
-import { cn } from "@buffered-audio/design-system";
+import { cn } from "../../utils/cn";
 
 /**
  * Carried over from the previous DemoContextMenu — these match the actions

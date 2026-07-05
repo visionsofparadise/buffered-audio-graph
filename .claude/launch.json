@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "design-system-demo",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--workspace", "design-system-demo"],
+      "port": 5173
+    }
+  ]
+}

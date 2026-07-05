@@ -31,8 +31,6 @@ function nodeColor(node: FlowNode): string {
 	return CATEGORY_COLOR[data.category];
 }
 
-// The mask outside the viewport — the `surface` token at 60% opacity,
-// derived from the imported color constant so it tracks the real token.
 const MASK_COLOR = `color-mix(in srgb, ${surface} 60%, transparent)`;
 
 export function BottomLeftOverlay() {
@@ -49,8 +47,6 @@ export function BottomLeftOverlay() {
 				width: 160,
 				height: 100,
 				backgroundColor: "var(--color-elevated)",
-				// React Flow's Panel uses absolute positioning with default margins;
-				// override to match the other overlays' 12px inset.
 				margin: 12,
 			}}
 		/>

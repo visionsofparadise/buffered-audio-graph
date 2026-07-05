@@ -1,5 +1,5 @@
 import type { ComponentPropsWithRef, ComponentType } from "react";
-import { cn } from "@buffered-audio/design-system";
+import { cn } from "../utils/cn";
 import { Barcode } from "./Barcode";
 
 /**
