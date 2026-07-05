@@ -1,11 +1,7 @@
-import type { LeafParameter, Parameter } from "../utils/buildParameters";
+import type { Parameter } from "../utils/buildParameters";
 import { ArrayRow } from "./Array";
-import { BooleanRow } from "./Boolean";
-import { EnumRow } from "./Enum";
-import { FileRow } from "./File";
-import { NumberRow } from "./Number";
+import { LeafField } from "./LeafField";
 import { ObjectRow } from "./Object";
-import { StringRow } from "./String";
 
 /**
  * Callbacks passed through the recursive parameter renderer.
@@ -25,80 +21,6 @@ export interface ParameterCallbacks {
 	/** When true, number knobs render as disabled (no callbacks available). */
 	readonly disabled?: boolean;
 }
-
-// ---------------------------------------------------------------------------
-// Leaf dispatcher — renders a single leaf parameter without path context
-// ---------------------------------------------------------------------------
-
-/**
- * Renders a single leaf parameter.
- * Used by ArrayRow to render row fields with pre-computed callbacks.
- */
-export function LeafField({
-	param,
-	dimmed,
-	disabled,
-	onParameterChange,
-	onParameterBrowse,
-}: {
-	readonly param: LeafParameter;
-	readonly dimmed?: boolean;
-	readonly disabled?: boolean;
-	readonly onParameterChange?: (name: string, value: unknown) => void;
-	readonly onParameterBrowse?: (name: string) => void;
-}) {
-	switch (param.kind) {
-		case "number":
-			return (
-				<NumberRow
-					param={param}
-					dimmed={dimmed}
-					disabled={disabled}
-					onParameterChange={onParameterChange}
-				/>
-			);
-
-		case "boolean":
-			return (
-				<BooleanRow
-					param={param}
-					dimmed={dimmed}
-					onParameterChange={onParameterChange}
-				/>
-			);
-
-		case "enum":
-			return (
-				<EnumRow
-					param={param}
-					dimmed={dimmed}
-					onParameterChange={onParameterChange}
-				/>
-			);
-
-		case "file":
-			return (
-				<FileRow
-					param={param}
-					dimmed={dimmed}
-					onParameterBrowse={onParameterBrowse}
-				/>
-			);
-
-		case "string":
-			return (
-				<StringRow
-					param={param}
-					dimmed={dimmed}
-					onParameterChange={onParameterChange}
-				/>
-			);
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Recursive dispatcher
-// ---------------------------------------------------------------------------
 
 /**
  * Recursive parameter renderer. Dispatches on Parameter kind and passes
@@ -136,7 +58,6 @@ export function ParameterField({
 			);
 
 		default: {
-			// Leaf parameter — build path-aware callbacks
 			const leafPath = [...basePath, param.name];
 
 			return (

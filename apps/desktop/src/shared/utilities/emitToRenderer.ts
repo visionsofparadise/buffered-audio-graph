@@ -13,21 +13,15 @@ export interface FileChangedPayload {
 export interface AudioProgressPayload {
 	jobId: string;
 	nodeId: string;
-	framesProcessed: number;
-	sourceTotalFrames: number;
-}
-
-export interface AudioChainCompletePayload {
-	jobId: string;
-	status: "completed" | "failed" | "aborted";
-	snapshotPaths?: Record<string, string>;
+	phase: string;
+	framesDone: number;
+	framesTotal?: number;
 }
 
 export interface MainEventMap {
 	windowBoundsChanged: [windowBounds: WindowBounds];
 	"file:changed": [payload: FileChangedPayload];
 	"audio:progress": [payload: AudioProgressPayload];
-	"audio:chainComplete": [payload: AudioChainCompletePayload];
 }
 
 export interface RendererEventMap {}

@@ -6,55 +6,47 @@ import {
 	DropdownMenuTrigger,
 	IconButton,
 } from "@buffered-audio/design-system";
-import { Icon } from "@iconify/react";
+import { Download, EllipsisVertical, Square, Trash2 } from "lucide-react";
 
-export function NodeMenu({ isSource, isProcessing, isPending, isBypassed, isInspected, onRender, onAbort }: {
+export function NodeMenu({ isSource, onRender, onAbort, onDelete }: {
 	readonly isSource: boolean;
-	readonly isProcessing: boolean;
-	readonly isPending: boolean;
-	readonly isBypassed: boolean;
-	readonly isInspected: boolean;
 	readonly onRender?: () => void;
 	readonly onAbort?: () => void;
+	readonly onDelete?: () => void;
 }) {
-	let renderLabel = "Render";
-	let renderColor = "text-chrome-text";
-
-	if (isProcessing) { renderLabel = "Abort"; renderColor = "text-state-error"; }
-	else if (isPending) { renderLabel = "Pending"; renderColor = "text-chrome-text-dim"; }
-
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<IconButton icon="lucide:ellipsis-vertical" label="Node menu" dim />
+				<IconButton
+					icon={EllipsisVertical}
+					label="Node menu"
+					variant="ghost"
+					size="sm"
+					className="text-surface hover:bg-surface/20 hover:text-surface"
+				/>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				{isSource && (
-					<DropdownMenuItem className={isInspected ? "text-primary" : undefined}>
-						<Icon icon="lucide:eye" width={12} height={12} className="shrink-0" />
-						<span>Inspect</span>
+				{!isSource && (
+					<DropdownMenuItem onSelect={() => onRender?.()}>
+						<Download size={14} strokeWidth={1.5} className="shrink-0" />
+						<span>Render</span>
 					</DropdownMenuItem>
 				)}
 
 				{!isSource && (
-					<DropdownMenuItem
-						className={renderColor}
-						onSelect={() => (isProcessing ? onAbort?.() : onRender?.())}
-					>
-						<Icon icon={isProcessing ? "lucide:square" : "lucide:play"} width={12} height={12} className="shrink-0" />
-						<span>{renderLabel}</span>
+					<DropdownMenuItem onSelect={() => onAbort?.()}>
+						<Square size={14} strokeWidth={1.5} className="shrink-0" />
+						<span>Abort</span>
 					</DropdownMenuItem>
 				)}
 
-				<DropdownMenuItem className={isBypassed ? "text-secondary" : undefined}>
-					<Icon icon="lucide:power" width={12} height={12} className="shrink-0" />
-					<span>{isBypassed ? "Enable" : "Bypass"}</span>
-				</DropdownMenuItem>
+				{!isSource && <DropdownMenuSeparator />}
 
-				<DropdownMenuSeparator />
-
-				<DropdownMenuItem className="text-state-error">
-					<Icon icon="lucide:trash-2" width={12} height={12} className="shrink-0" />
+				<DropdownMenuItem
+					className="text-accent-primary"
+					onSelect={() => onDelete?.()}
+				>
+					<Trash2 size={14} strokeWidth={1.5} className="shrink-0" />
 					<span>Delete</span>
 				</DropdownMenuItem>
 			</DropdownMenuContent>

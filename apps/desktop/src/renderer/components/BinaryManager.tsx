@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
 import { Button } from "@buffered-audio/design-system";
-import type { AppContext } from "../models/Context";
+import { useCallback, useEffect, useState } from "react";
 import type { ModuleJsonSchema } from "../../shared/ipc/Package/loadModules/Renderer";
+import type { AppContext } from "../models/Context";
+import { resnapshot } from "../models/ProxyStore/resnapshot";
 
 interface Props {
-	readonly context: AppContext;
 	readonly isOpen: boolean;
 	readonly onClose: () => void;
+	readonly context: AppContext;
 }
 
 interface BinaryInfo {
@@ -39,9 +40,11 @@ function extractBinaries(context: AppContext): Array<BinaryInfo> {
 		}));
 }
 
-export function BinaryManager({ context, isOpen, onClose }: Props) {
+export const BinaryManager = resnapshot<Props>(({ isOpen, onClose, context }: Props) => {
 	const { app, appStore, main } = context;
+
 	const binaries = extractBinaries(context);
+
 	const [bundledPaths, setBundledPaths] = useState<ReadonlySet<string>>(() => new Set());
 
 	useEffect(() => {
@@ -111,48 +114,43 @@ export function BinaryManager({ context, isOpen, onClose }: Props) {
 			className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
 			onClick={handleOverlayClick}
 		>
-			<div className="bg-chrome-base w-[480px] max-h-[80vh] flex flex-col overflow-hidden">
-				<div className="flex items-center justify-between px-4 py-3 border-b border-chrome-border">
-					<h2 className="font-technical uppercase tracking-[0.06em] text-chrome-text text-md">
-						Binary Manager
-					</h2>
-					<Button variant="ghost" size="sm" onClick={onClose}>
+			<div className="bg-elevated w-[480px] max-h-[80vh] flex flex-col overflow-hidden rounded-xs border border-border">
+				<div className="flex items-center justify-between px-4 py-3 border-b border-border">
+					<h2 className="type-label text-body text-text-primary">Binary Manager</h2>
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={onClose}
+					>
 						Close
 					</Button>
 				</div>
 
 				<div className="flex-1 overflow-y-auto px-4 py-3">
-					{binaries.length === 0 && (
-						<p className="text-chrome-text-dim text-xs">
-							No binary dependencies declared by installed modules.
-						</p>
-					)}
+					{binaries.length === 0 && <p className="text-dimmed text-xs">No binary dependencies declared by installed modules.</p>}
 
 					<ul className="flex flex-col gap-2">
 						{binaries.map((binary) => {
 							const isBundled = binary.currentPath !== undefined && bundledPaths.has(binary.currentPath);
 
 							return (
-								<li key={binary.name} className="flex items-center gap-2">
-									<span className="font-technical text-chrome-text text-sm w-32">
-										{binary.name}
-									</span>
-									<span className="font-body text-sm flex-1 truncate flex items-center gap-2">
+								<li
+									key={binary.name}
+									className="flex items-center gap-2"
+								>
+									<span className="type-label text-text-primary w-32">{binary.name}</span>
+									<span className="text-sm flex-1 truncate flex items-center gap-2">
 										{binary.currentPath ? (
 											<>
-												<span className="text-chrome-text-secondary truncate">{binary.currentPath}</span>
-												{isBundled && (
-													<span className="font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] text-chrome-text-dim bg-chrome-raised px-1.5 shrink-0">
-														Bundled default
-													</span>
-												)}
+												<span className="text-text-secondary truncate">{binary.currentPath}</span>
+												{isBundled && <span className="type-label text-xs text-dimmed bg-surface px-1.5 shrink-0">Bundled default</span>}
 											</>
 										) : (
-											<span className="text-chrome-text-dim">Not configured</span>
+											<span className="text-dimmed">Not configured</span>
 										)}
 									</span>
 									<Button
-										variant="secondary"
+										variant="outline"
 										size="sm"
 										onClick={() => void handleBrowse(binary.name)}
 									>
@@ -166,4 +164,4 @@ export function BinaryManager({ context, isOpen, onClose }: Props) {
 			</div>
 		</div>
 	);
-}
+});

@@ -8,8 +8,7 @@
     "paths": {
       "@buffered-audio/core": ["packages/buffered-audio-nodes-core/src/index.ts"],
       "@buffered-audio/core/*": ["packages/buffered-audio-nodes-core/src/*"]
-    },
-    "types": ["@webgpu/types"]
+    }
   },
   "include": ["src", "forge.env.d.ts"],
   "exclude": [".vite", "node_modules", "out"]

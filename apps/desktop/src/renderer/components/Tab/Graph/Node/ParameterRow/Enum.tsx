@@ -1,4 +1,7 @@
 import { ButtonSelection, Select } from "@buffered-audio/design-system";
+import { cn } from "../../../../../utils/cn";
+import { humanizeFieldName, paramLabelClass } from "./utils/labels";
+
 export interface EnumParameter {
 	readonly kind: "enum";
 	readonly name: string;
@@ -18,10 +21,8 @@ export function EnumRow({
 	const useButtons = param.options.every((opt) => opt.length <= 10);
 
 	return (
-		<div className={`flex flex-col gap-1 ${dimmed ? "opacity-40" : ""}`}>
-			<span className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${dimmed ? "text-chrome-text-dim" : "text-chrome-text-secondary"}`}>
-				{param.name}
-			</span>
+		<div className={cn("flex flex-col", dimmed && "opacity-40")}>
+			<span className={cn(paramLabelClass(true), "mb-1")}>{humanizeFieldName(param.name)}</span>
 			{useButtons ? (
 				<ButtonSelection
 					active={param.value}
@@ -32,7 +33,7 @@ export function EnumRow({
 				<Select
 					value={param.value}
 					options={param.options}
-					onSelect={onParameterChange ? (option) => onParameterChange(param.name, option) : undefined}
+					onChange={onParameterChange ? (option) => onParameterChange(param.name, option) : undefined}
 				/>
 			)}
 		</div>

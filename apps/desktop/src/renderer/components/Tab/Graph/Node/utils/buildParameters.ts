@@ -36,10 +36,6 @@ export interface ArrayRow {
 
 export type Parameter = LeafParameter | ObjectParameter | ArrayParameter;
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
 function buildLeafParameter(
 	name: string,
 	prop: ModuleJsonSchemaProperty,
@@ -152,7 +148,6 @@ function buildSingleParameter(
 	currentValue: unknown,
 	binaryDefaults: Record<string, string>,
 ): Parameter | null {
-	// object container
 	if (prop.type === "object" && prop.properties) {
 		return {
 			kind: "object",
@@ -161,7 +156,6 @@ function buildSingleParameter(
 		};
 	}
 
-	// array<object> editor
 	if (prop.type === "array" && prop.items?.type === "object" && prop.items.properties) {
 		const itemProperties = prop.items.properties;
 		const rawArray = Array.isArray(currentValue) ? currentValue : [];
@@ -175,9 +169,7 @@ function buildSingleParameter(
 		};
 	}
 
-	// scalar leaf (includes enum, number, boolean, string, file)
 	if (prop.type === "object" || prop.type === "array") {
-		// unsupported object/array variant — skip
 		console.warn(`buildParameters: unsupported schema for "${name}" (type=${prop.type})`);
 
 		return null;
@@ -185,10 +177,6 @@ function buildSingleParameter(
 
 	return buildLeafParameter(name, prop, currentValue, binaryDefaults);
 }
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 export function buildParameters(graphNode: GraphNode, moduleSchema: ModuleJsonSchema | null, binaryDefaults: Record<string, string>): Array<Parameter> {
 	if (!moduleSchema?.properties) return [];
@@ -204,10 +192,6 @@ export function buildParameters(graphNode: GraphNode, moduleSchema: ModuleJsonSc
 
 	return parameters;
 }
-
-// ---------------------------------------------------------------------------
-// Plain-JSON helpers used by mutation helpers (Step 1.3)
-// ---------------------------------------------------------------------------
 
 /** Build a default plain-JSON value for an array item from schema defaults. */
 export function buildDefaultArrayItem(itemProperties: Readonly<Record<string, ModuleJsonSchemaProperty>>): Record<string, unknown> {

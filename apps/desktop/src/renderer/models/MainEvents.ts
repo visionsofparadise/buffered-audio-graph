@@ -27,9 +27,5 @@ export class MainEvents extends EventEmitter<MainEventMap> {
 		main.events.on("audio:progress", (_: IpcRendererEvent, ...args) => {
 			this.emit("audio:progress", ...args);
 		});
-
-		main.events.on("audio:chainComplete", (_: IpcRendererEvent, ...args) => {
-			this.emit("audio:chainComplete", ...args);
-		});
 	}
 }

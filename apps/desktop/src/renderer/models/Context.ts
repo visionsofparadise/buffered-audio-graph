@@ -5,19 +5,11 @@ import type { Logger } from "../../shared/models/Logger";
 import type { Main } from "./Main";
 import type { MainEvents } from "./MainEvents";
 import type { ProxyStore } from "./ProxyStore/ProxyStore";
+import type { ActiveCommands } from "./State/ActiveCommands";
 import type { AppState } from "./State/App";
 import type { GraphState } from "./State/Graph";
-
-export interface HistoryEntry {
-	label: string;
-	undo: () => void;
-	redo: () => void;
-}
-
-export interface HistoryState {
-	entries: Array<HistoryEntry>;
-	cursor: number;
-}
+import type { GraphDefinitionState } from "./State/GraphDefinition";
+import type { History } from "./State/History";
 
 export interface AppContext {
 	readonly app: Snapshot<AppState>;
@@ -28,30 +20,25 @@ export interface AppContext {
 	readonly queryClient: QueryClient;
 	readonly userDataPath: string;
 	readonly windowId: string;
-	readonly historyStacks: Map<string, HistoryState>;
+	readonly activeCommands: Snapshot<ActiveCommands>;
 	readonly tabNames: Map<string, string>;
-	readonly renameCallbacks: Map<string, (name: string) => void>;
-	readonly importCallbacks: Map<string, () => Promise<void>>;
-	readonly undoCallbacks: Map<string, () => void>;
-	readonly redoCallbacks: Map<string, () => void>;
 	readonly openBagTab: () => Promise<void>;
 	readonly openBagByPath: (bagPath: string) => Promise<void>;
 	readonly newBagTab: () => Promise<void>;
 	readonly renameTab: (tabId: string, newName: string) => void;
 	readonly importBagIntoActiveTab: () => Promise<void>;
-	readonly openModuleManager: () => void;
-	readonly openBinaryManager: () => void;
+	readonly setModuleManagerOpen: (open: boolean) => void;
+	readonly setBinaryManagerOpen: (open: boolean) => void;
 }
 
 export interface GraphContext extends AppContext {
 	readonly graph: Snapshot<GraphState>;
 	readonly graphStore: ProxyStore;
-	readonly graphDefinition: GraphDefinition;
+	readonly graphDefinition: Snapshot<GraphDefinitionState>;
 	readonly mutateDefinition: (updater: (definition: GraphDefinition) => GraphDefinition) => void;
 	readonly bagPath: string;
 	readonly bagId: string;
-	readonly history: HistoryState;
-	readonly pushHistory: (entry: HistoryEntry) => void;
-	readonly undo: () => void;
-	readonly redo: () => void;
+	readonly history: Snapshot<History>;
+	/** Force an immediate save of the active graph definition (flushes the debounced write). */
+	readonly onSave: () => void;
 }

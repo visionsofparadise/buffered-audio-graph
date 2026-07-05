@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron";
 import type { FileWatcherManager } from "../../main/FileWatcherManager";
-import type { JobManager } from "../ipc/Audio/apply/utils/jobManager";
+import type { JobManager } from "../utilities/JobManager";
 import { Logger } from "./Logger";
 import type { ModuleRegistryMap } from "./ModuleRegistry";
 

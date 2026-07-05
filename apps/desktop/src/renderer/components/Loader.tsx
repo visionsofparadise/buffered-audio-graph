@@ -31,8 +31,8 @@ export function AppLoader({ queryClient, logger }: Props) {
 
 	if (!initialState || !windowId || !userDataPath) {
 		return (
-			<div className="flex h-screen items-center justify-center bg-chrome-base">
-				<div className="text-chrome-text-secondary font-technical uppercase tracking-[0.06em]">Loading...</div>
+			<div className="flex h-screen items-center justify-center bg-surface">
+				<div className="type-label text-text-secondary">Loading...</div>
 			</div>
 		);
 	}

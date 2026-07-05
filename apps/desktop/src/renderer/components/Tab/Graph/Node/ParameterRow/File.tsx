@@ -1,4 +1,7 @@
-import { Button } from "@buffered-audio/design-system";
+import { FileInput } from "@buffered-audio/design-system";
+import { cn } from "../../../../../utils/cn";
+import { humanizeFieldName, paramLabelClass } from "./utils/labels";
+
 export interface FileParameter {
 	readonly kind: "file";
 	readonly name: string;
@@ -8,30 +11,26 @@ export interface FileParameter {
 export function FileRow({
 	param,
 	dimmed,
+	onParameterChange,
 	onParameterBrowse,
 }: {
 	readonly param: FileParameter;
 	readonly dimmed?: boolean;
+	readonly onParameterChange?: (name: string, value: unknown) => void;
 	readonly onParameterBrowse?: (name: string) => void;
 }) {
+	const complete = param.value !== "";
+
 	return (
-		<div className={`flex flex-col gap-1 ${dimmed ? "opacity-40" : ""}`}>
-			<span className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${dimmed ? "text-chrome-text-dim" : "text-chrome-text-secondary"}`}>
-				{param.name}
-			</span>
-			<div className="flex items-center gap-2">
-				<span className="min-w-0 flex-1 truncate font-body text-[length:var(--text-xs)] text-chrome-text">
-					{param.value ? param.value.split(/[/\\]/).pop() : "No file selected"}
-				</span>
-				<Button
-					size="sm"
-					variant="secondary"
-					onClick={() => onParameterBrowse?.(param.name)}
-					disabled={!onParameterBrowse}
-				>
-					Browse
-				</Button>
-			</div>
+		<div className={cn("flex flex-col", dimmed && "opacity-40")}>
+			<span className={cn(paramLabelClass(complete), "mb-1")}>{humanizeFieldName(param.name)}</span>
+			<FileInput
+				key={param.value}
+				defaultValue={param.value}
+				placeholder="No file selected"
+				onChange={onParameterChange ? (next) => onParameterChange(param.name, next) : undefined}
+				onBrowse={onParameterBrowse ? () => onParameterBrowse(param.name) : undefined}
+			/>
 		</div>
 	);
 }

@@ -7,7 +7,6 @@ import type { AppState, WindowBounds } from "../models/State/App";
 
 export function useWindowState(app: Snapshot<AppState>, appStore: ProxyStore, main: Main, mainEvents: MainEvents): void {
 	useEffect(() => {
-		// Restore saved window bounds on mount
 		if (app.windowBounds) {
 			const { x, y, width, height } = app.windowBounds;
 

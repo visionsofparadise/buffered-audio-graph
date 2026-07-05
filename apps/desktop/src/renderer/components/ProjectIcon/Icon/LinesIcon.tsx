@@ -1,0 +1,25 @@
+import { cn } from "../../../utils/cn";
+import type { IconProps } from "../IconProps";
+
+export function LinesIcon({ color, size = 32, className, ref, style, ...rest }: IconProps) {
+	return (
+		<div
+			ref={ref}
+			className={cn("flex flex-col justify-between", className)}
+			style={{ width: size, height: size, ...style }}
+			{...rest}
+		>
+			{Array.from({ length: 8 }, (_, ix) => (
+				<div
+					key={`line-${ix}`}
+					style={{
+						width: `${60 + ((ix * 37) % 41)}%`,
+						height: 1,
+						backgroundColor: color,
+						opacity: ix % 2 === 0 ? 1 : 0.4,
+					}}
+				/>
+			))}
+		</div>
+	);
+}

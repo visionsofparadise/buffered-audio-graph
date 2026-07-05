@@ -1,6 +1,5 @@
 import { AbortJobMainIpc } from "./Audio/abortJob/Main";
-import { ApplyMainIpc } from "./Audio/apply/Main";
-import { RenderGraphMainIpc } from "./Audio/renderGraph/Main";
+import { RenderNodeMainIpc } from "./Audio/renderNode/Main";
 import { ShowOpenDialogMainIpc } from "./Dialog/showOpenDialog/Main";
 import { ShowSaveDialogMainIpc } from "./Dialog/showSaveDialog/Main";
 import { DeleteFileMainIpc } from "./FileSystem/deleteFile/Main";
@@ -27,8 +26,7 @@ import { SetBoundsMainIpc } from "./System/setBounds/Main";
 
 export const ASYNC_MAIN_IPCS = [
 	AbortJobMainIpc,
-	ApplyMainIpc,
-	RenderGraphMainIpc,
+	RenderNodeMainIpc,
 	DeleteFileMainIpc,
 	EnsureDirectoryMainIpc,
 	ReadDirectoryMainIpc,

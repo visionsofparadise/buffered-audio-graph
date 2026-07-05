@@ -8,91 +8,20 @@ import {
 } from "@dnd-kit/core";
 import {
 	SortableContext,
-	useSortable,
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
-import type { ArrayParameter, LeafParameter } from "../utils/buildParameters";
+import { Button } from "@buffered-audio/design-system";
+import { cn } from "../../../../../utils/cn";
+import { Plus } from "lucide-react";
+import type { ArrayParameter } from "../utils/buildParameters";
+import { humanizeFieldName, paramLabelClass } from "./utils/labels";
 import type { ParameterCallbacks } from "./ParameterField";
-import { LeafField } from "./ParameterField";
+import { SortableArrayRow } from "./SortableArrayRow";
 
-// ---------------------------------------------------------------------------
-// Sortable row
-// ---------------------------------------------------------------------------
-
-function SortableArrayRow({
-	rowId,
-	rowIndex,
-	paramName,
-	fields,
-	dimmed,
-	callbacks,
-}: {
-	readonly rowId: string;
-	readonly rowIndex: number;
-	readonly paramName: string;
-	readonly fields: ReadonlyArray<LeafParameter>;
-	readonly dimmed?: boolean;
-	readonly callbacks: ParameterCallbacks;
-}) {
-	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rowId });
-
-	const style: React.CSSProperties = {
-		transform: CSS.Transform.toString(transform),
-		transition,
-		opacity: isDragging ? 0.4 : 1,
-	};
-
-	return (
-		<div
-			ref={setNodeRef}
-			style={style}
-			className="flex flex-col gap-2 bg-chrome-base py-2 pl-2 pr-1"
-		>
-			<div className="flex items-center justify-between">
-				{/* Drag handle — noDrag prevents React Flow from intercepting pointer events */}
-				<div
-					className="noDrag flex cursor-grab items-center text-chrome-text-dim active:cursor-grabbing"
-					{...attributes}
-					{...listeners}
-				>
-					<GripVertical size={12} />
-				</div>
-
-				{/* Delete row */}
-				<button
-					type="button"
-					className="noDrag flex items-center text-chrome-text-dim hover:text-state-error"
-					onClick={() => callbacks.onArrayRowDelete?.(paramName, rowIndex)}
-				>
-					<Trash2 size={12} />
-				</button>
-			</div>
-
-			{/* Row fields */}
-			{fields.map((field) => (
-				<LeafField
-					key={field.name}
-					param={field}
-					dimmed={dimmed}
-					disabled={callbacks.disabled}
-					onParameterChange={(fieldName, value) => {
-						callbacks.onParameterChangeAtPath?.([paramName, rowIndex, fieldName], value);
-					}}
-					onParameterBrowse={(fieldName) => {
-						callbacks.onParameterBrowseAtPath?.([paramName, rowIndex, fieldName]);
-					}}
-				/>
-			))}
-		</div>
-	);
-}
-
-// ---------------------------------------------------------------------------
-// Array editor
-// ---------------------------------------------------------------------------
-
+/**
+ * Array editor — a reorderable, addable, removable list of element sub-forms.
+ * Children are field params; rows render via {@link SortableArrayRow}.
+ */
 export function ArrayRow({
 	param,
 	dimmed,
@@ -108,6 +37,8 @@ export function ArrayRow({
 		}),
 	);
 
+	const itemNoun = humanizeFieldName(param.name);
+
 	const handleDragEnd = (event: DragEndEvent) => {
 		const { active, over } = event;
 
@@ -122,10 +53,8 @@ export function ArrayRow({
 	};
 
 	return (
-		<div className="flex flex-col gap-1">
-			<span className="font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] text-chrome-text-dim">
-				{param.name}
-			</span>
+		<div className={cn("flex flex-col gap-4", dimmed && "opacity-40")}>
+			<span className={paramLabelClass(true)}>{itemNoun}</span>
 
 			<DndContext
 				sensors={sensors}
@@ -136,13 +65,14 @@ export function ArrayRow({
 					items={param.rows.map((row) => row.rowId)}
 					strategy={verticalListSortingStrategy}
 				>
-					<div className="flex flex-col gap-1">
+					<div className="flex flex-col gap-4">
 						{param.rows.map((row, rowIndex) => (
 							<SortableArrayRow
 								key={row.rowId}
 								rowId={row.rowId}
 								rowIndex={rowIndex}
 								paramName={param.name}
+								itemNoun={itemNoun}
 								fields={row.fields}
 								dimmed={dimmed}
 								callbacks={callbacks}
@@ -152,14 +82,15 @@ export function ArrayRow({
 				</SortableContext>
 			</DndContext>
 
-			<button
-				type="button"
-				className="noDrag mt-1 flex items-center gap-1 font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] text-chrome-text-dim hover:text-chrome-text"
+			<Button
+				variant="ghost"
+				size="sm"
+				icon={Plus}
 				onClick={() => callbacks.onArrayRowAdd?.(param.name)}
+				className="nodrag self-start px-1"
 			>
-				<Plus size={10} />
-				Add
-			</button>
+				{`Add ${itemNoun}`}
+			</Button>
 		</div>
 	);
 }

@@ -28,10 +28,11 @@ export async function loadGraphState(main: Main, userDataPath: string, bagId: st
 			return result.data;
 		}
 	} catch {
-		// no saved graph state
+		return GraphStateSchema.parse({});
 	}
 
 	return GraphStateSchema.parse({});
+
 }
 
 export function serializeGraphState(state: Snapshot<GraphState>): string {

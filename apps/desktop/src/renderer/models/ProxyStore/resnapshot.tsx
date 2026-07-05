@@ -74,7 +74,7 @@ function setAtPath<T>(object: T, path: PropPath, value: unknown): T {
 	return { ...object, [head]: updated } as T;
 }
 
-function resolveProxy(stores: Array<ProxyStore>, key: symbol): object {
+function resolveProxy(stores: ReadonlyArray<ProxyStore>, key: symbol): object {
 	for (const store of stores) {
 		const proxy = store.dangerouslyGetProxy(key);
 
@@ -84,7 +84,7 @@ function resolveProxy(stores: Array<ProxyStore>, key: symbol): object {
 	throw new Error(`resnapshot: no store holds a proxy for snapshot key ${String(key)}`);
 }
 
-function useResnapshotAll(stores: Array<ProxyStore>, snapshots: Array<{ _key: symbol }>): Array<object> {
+function useResnapshotAll(stores: ReadonlyArray<ProxyStore>, snapshots: Array<{ _key: symbol }>): Array<object> {
 	const proxies = useMemo(
 		() => snapshots.map((snap) => resolveProxy(stores, snap._key)),
 		[...stores, ...snapshots.map((snap) => snap._key)],
@@ -119,16 +119,25 @@ function useResnapshotAll(stores: Array<ProxyStore>, snapshots: Array<{ _key: sy
 	return useSyncExternalStore(subscribe, getSnapshot);
 }
 
+/**
+ * Constraint for components that pass through `resnapshot`. Every context level
+ * carries `appStore`; `graphStore` is present on extended levels (GraphContext).
+ * The HOC tries each store when resolving a snapshot `_key`.
+ */
 interface StoreContext {
-	appStore: ProxyStore;
+	readonly appStore: ProxyStore;
+	readonly graphStore?: ProxyStore;
 }
 
 export const resnapshot = <P extends { context: StoreContext }>(component: FC<P>): FC<P> => {
 	const componentName = component.name || "Anonymous";
 
 	const Resnapshotted: FC<P> = (props) => {
-		const { appStore } = props.context;
-		const stores = useMemo(() => [appStore], [appStore]);
+		const { appStore, graphStore } = props.context;
+		const stores = useMemo(
+			() => (graphStore ? [graphStore, appStore] : [appStore]),
+			[graphStore, appStore],
+		);
 
 		const snapshotPaths = useMemo(() => findSnapshotPaths(props), [props]);
 

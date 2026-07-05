@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron";
 import path from "path";
-import { JobManager } from "../shared/ipc/Audio/apply/utils/jobManager";
+import { JobManager } from "../shared/utilities/JobManager";
 import { ASYNC_MAIN_IPCS } from "../shared/ipc/asyncMainIpcs";
 import type { Logger } from "../shared/models/Logger";
 import { createModuleRegistry } from "../shared/models/ModuleRegistry";
@@ -16,9 +16,9 @@ const WINDOW_CONFIG = {
 	minHeight: 400,
 	titleBarStyle: "hidden" as const,
 	titleBarOverlay: {
-		color: "#0D0D0F",
-		symbolColor: "#B8B8C0",
-		height: 44,
+		color: "#100F0D",
+		symbolColor: "#918979",
+		height: 40,
 	},
 };
 

@@ -4,31 +4,43 @@ import type { NodeCategory } from "../Container";
 
 /**
  * Resolve a package module by (packageName, packageVersion, nodeName) from the
- * graph context. Returns a tuple of { category, moduleDescription, schema }.
+ * graph context. On success `unresolvedReason` is null and `schema` is the
+ * module's JSON Schema. On failure `schema` is null and `unresolvedReason`
+ * carries a human-readable reason — the node body renders it in place of the
+ * parameter controls so an unresolvable node reads as broken, not empty.
  *
  * Generic — not coupled to any particular renderer component.
  */
 export function lookupModule(
-	context: GraphContext,
 	packageName: string,
 	packageVersion: string,
 	nodeName: string,
-): { category: NodeCategory; moduleDescription: string; schema: ModuleJsonSchema | null } {
+	context: GraphContext,
+): { category: NodeCategory; moduleDescription: string; schema: ModuleJsonSchema | null; unresolvedReason: string | null } {
+	let packageFound = false;
+
 	for (const modulePackage of context.app.packages) {
 		if (modulePackage.name === packageName && modulePackage.version === packageVersion) {
+			packageFound = true;
+
 			for (const mod of modulePackage.modules) {
 				if (mod.moduleName === nodeName) {
 					return {
 						category: mod.category,
 						moduleDescription: mod.moduleDescription,
 						schema: mod.schema as ModuleJsonSchema,
+						unresolvedReason: null,
 					};
 				}
 			}
 		}
 	}
 
-	return { category: "transform", moduleDescription: "", schema: null };
+	const unresolvedReason = packageFound
+		? `Node "${nodeName}" is not in ${packageName}@${packageVersion}`
+		: `Package not installed: ${packageName}@${packageVersion}`;
+
+	return { category: "transform", moduleDescription: "", schema: null, unresolvedReason };
 }
 
 /**
@@ -53,10 +65,8 @@ export function schemaPropertyAtPath(
 		if (!current) return null;
 
 		if (typeof segment === "number") {
-			// Array index — resolve to items schema
 			current = current.items;
 		} else {
-			// Object property
 			current = current.properties?.[segment];
 		}
 	}

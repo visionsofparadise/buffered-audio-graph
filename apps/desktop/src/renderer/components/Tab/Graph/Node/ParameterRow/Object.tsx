@@ -1,4 +1,6 @@
+import { cn } from "../../../../../utils/cn";
 import type { ObjectParameter } from "../utils/buildParameters";
+import { humanizeFieldName, paramLabelClass } from "./utils/labels";
 import type { ParameterCallbacks } from "./ParameterField";
 import { ParameterField } from "./ParameterField";
 
@@ -17,11 +19,9 @@ export function ObjectRow({
 	const childPath = [...basePath, param.name];
 
 	return (
-		<div className="flex flex-col gap-2">
-			<span className="font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] text-chrome-text-dim">
-				{param.name}
-			</span>
-			<div className="flex flex-col gap-3 border-l border-chrome-border-subtle pl-2">
+		<div className={cn("flex flex-col gap-4", dimmed && "opacity-40")}>
+			<span className={paramLabelClass(true)}>{humanizeFieldName(param.name)}</span>
+			<div className="flex flex-col gap-4">
 				{param.children.map((child) => (
 					<ParameterField
 						key={child.name}

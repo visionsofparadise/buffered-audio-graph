@@ -1,7 +1,6 @@
 import type { Snapshot } from "valtio/vanilla";
 import { z } from "zod";
 import type { State } from ".";
-import { packageNameFromSpec } from "../../../shared/utilities/packageSpec";
 import { useCreateState } from "../ProxyStore/hooks/useCreateState";
 import type { ProxyStore } from "../ProxyStore/ProxyStore";
 
@@ -44,7 +43,6 @@ const ModulePackageStateSchema = z.object({
 export const AppStateSchema = z.object({
 	tabs: z.array(TabEntrySchema).default([]),
 	activeTabId: z.string().nullable().default(null),
-	theme: z.enum(["lava", "viridis"]).default("lava"),
 	windowBounds: WindowBoundsSchema.optional(),
 	recentFiles: z.array(RecentFileSchema).default([]),
 	packages: z.array(ModulePackageStateSchema).default([]),
@@ -60,7 +58,6 @@ export type AppState = z.infer<typeof AppStateSchema> & State;
 const SavedStateSchema = AppStateSchema.pick({
 	tabs: true,
 	activeTabId: true,
-	theme: true,
 	windowBounds: true,
 	recentFiles: true,
 	binaries: true,
@@ -70,114 +67,52 @@ const SavedStateSchema = AppStateSchema.pick({
 	})
 	.partial();
 
-const LegacyModulePackageStateSchema = z.object({
-	url: z.string().optional(),
-	name: z.string().optional(),
-	version: z.string().nullable().optional(),
-	status: z.string().optional(),
-	error: z.string().nullable().optional(),
-	modules: z.array(LoadedModuleInfoSchema).optional(),
-	isBuiltIn: z.boolean().optional(),
-});
-
 const BUILT_IN_PACKAGE_NAME = "@buffered-audio/nodes";
 const BUILT_IN_PACKAGE_SPEC = "@buffered-audio/nodes@latest";
+
+const BUILT_IN_PACKAGE_ENTRY: ModulePackageState = {
+	requestedSpec: BUILT_IN_PACKAGE_SPEC,
+	name: BUILT_IN_PACKAGE_NAME,
+	version: null,
+	status: "pending",
+	error: null,
+	modules: [],
+	isBuiltIn: true,
+};
 
 function resetPackageLifecycle(entry: ModulePackageState): ModulePackageState {
 	return entry.status === "ready"
 		? entry
 		: {
-			...entry,
-			status: "pending",
-			error: null,
-			modules: [],
-			version: null,
-		};
-}
-
-function migrateLegacyPackageState(value: unknown): ModulePackageState | null {
-	const current = ModulePackageStateSchema.safeParse(value);
-
-	if (current.success) {
-		return resetPackageLifecycle(current.data);
-	}
-
-	const legacy = LegacyModulePackageStateSchema.safeParse(value);
-
-	if (!legacy.success) {
-		return null;
-	}
-
-	const entry = legacy.data;
-	const isBuiltIn = entry.isBuiltIn === true || entry.name === BUILT_IN_PACKAGE_NAME;
-	let requestedSpec: string | null = null;
-
-	if (isBuiltIn) {
-		requestedSpec = BUILT_IN_PACKAGE_SPEC;
-	} else if (entry.name) {
-		const looksLikeRegistryName = entry.name.startsWith("@") || !entry.name.includes("/");
-
-		if (looksLikeRegistryName) {
-			requestedSpec = entry.version ? `${entry.name}@${entry.version}` : `${entry.name}@latest`;
-		}
-	}
-
-	if (!requestedSpec) {
-		return null;
-	}
-
-	return resetPackageLifecycle({
-		requestedSpec,
-		name: packageNameFromSpec(requestedSpec),
-		version: entry.status === "ready" ? (entry.version ?? null) : null,
-		status: entry.status === "ready" ? "ready" : "pending",
-		error: entry.status === "ready" ? (entry.error ?? null) : null,
-		modules: entry.status === "ready" ? (entry.modules ?? []) : [],
-		isBuiltIn,
-	});
+				...entry,
+				status: "pending",
+				error: null,
+				modules: [],
+				version: null,
+			};
 }
 
 function loadSavedPackages(savedPackages: Array<unknown> | undefined): Array<ModulePackageState> {
-	const migrated = (savedPackages ?? [])
-		.map((entry) => migrateLegacyPackageState(entry))
-		.filter((entry): entry is ModulePackageState => entry !== null);
+	const parsed = (savedPackages ?? [])
+		.map((entry) => ModulePackageStateSchema.safeParse(entry))
+		.filter((result): result is { success: true; data: ModulePackageState } => result.success)
+		.map((result) => resetPackageLifecycle(result.data));
 
-	if (migrated.length === 0) {
-		return [
-			{
-				requestedSpec: BUILT_IN_PACKAGE_SPEC,
-				name: BUILT_IN_PACKAGE_NAME,
-				version: null,
-				status: "pending",
-				error: null,
-				modules: [],
-				isBuiltIn: true,
-			},
-		];
+	if (parsed.length === 0) {
+		return [BUILT_IN_PACKAGE_ENTRY];
 	}
 
-	if (!migrated.some((entry) => entry.isBuiltIn)) {
-		return [
-			{
-				requestedSpec: BUILT_IN_PACKAGE_SPEC,
-				name: BUILT_IN_PACKAGE_NAME,
-				version: null,
-				status: "pending",
-				error: null,
-				modules: [],
-				isBuiltIn: true,
-			},
-			...migrated,
-		];
+	if (!parsed.some((entry) => entry.isBuiltIn)) {
+		return [BUILT_IN_PACKAGE_ENTRY, ...parsed];
 	}
 
-	return migrated.map((entry) =>
+	return parsed.map((entry) =>
 		entry.isBuiltIn
 			? {
-				...entry,
-				requestedSpec: BUILT_IN_PACKAGE_SPEC,
-				name: BUILT_IN_PACKAGE_NAME,
-			}
+					...entry,
+					requestedSpec: BUILT_IN_PACKAGE_SPEC,
+					name: BUILT_IN_PACKAGE_NAME,
+				}
 			: entry,
 	);
 }
@@ -196,7 +131,7 @@ export async function loadAppState(main: { getUserDataPath: () => Promise<string
 			saved = result.data;
 		}
 	} catch {
-		// no saved state
+		saved = {};
 	}
 
 	const tabs = saved.tabs ?? [];
@@ -208,7 +143,6 @@ export async function loadAppState(main: { getUserDataPath: () => Promise<string
 	return {
 		tabs,
 		activeTabId,
-		theme: saved.theme ?? "lava",
 		windowBounds: saved.windowBounds,
 		recentFiles: saved.recentFiles ?? [],
 		packages,

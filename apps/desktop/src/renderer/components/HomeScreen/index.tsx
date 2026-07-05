@@ -1,7 +1,9 @@
-import { Icon } from "@iconify/react";
-import { TerrainShader } from "@buffered-audio/design-system";
+import { Barcode, HomeGraphDecoration, barcodeWidth, type HomeGraphAnchor } from "@buffered-audio/design-system";
+import { FolderOpen, Plus } from "lucide-react";
 import type { AppContext } from "../../models/Context";
+import { resnapshot } from "../../models/ProxyStore/resnapshot";
 import type { RecentFile } from "../../models/State/App";
+import { ProjectIcon } from "../ProjectIcon";
 
 interface Props {
 	readonly context: AppContext;
@@ -50,63 +52,84 @@ function formatRelative(ms: number): string {
 	return `On ${formatted}`;
 }
 
-export function HomeScreen({ context }: Props) {
+const HOME_BARCODE_TEXT = "BUFFERED AUDIO GRAPH MANAGER";
+const HOME_BARCODE_NARROW = 1;
+const HOME_BARCODE_WIDE = 3;
+const HOME_BARCODE_LENGTH = barcodeWidth(HOME_BARCODE_TEXT, HOME_BARCODE_NARROW, HOME_BARCODE_WIDE, 0);
+
+export const HomeScreen = resnapshot<Props>(({ context }: Props) => {
 	const recentFiles: ReadonlyArray<RecentFile> = context.app.recentFiles.slice(0, 6);
 
+	const anchors: ReadonlyArray<HomeGraphAnchor> = recentFiles.map((recent) => ({
+		id: recent.id,
+		label: recent.name,
+		secondaryLabel: formatRelative(recent.lastOpened),
+		icon: <ProjectIcon name={recent.name} size={18} />,
+	}));
+
+	const openAnchor = (id: string): void => {
+		const match = recentFiles.find((recent) => recent.id === id);
+
+		if (match) {
+			void context.openBagByPath(match.bagPath);
+		}
+	};
+
 	return (
-		<div className="relative flex flex-1 flex-col overflow-hidden bg-void">
-			<TerrainShader colormap={context.app.theme} className="absolute inset-0" />
-			<div className="relative flex h-full flex-col p-4">
-				<h1 className="font-display text-[length:6rem] font-bold leading-none tracking-tight text-chrome-text">ENGINEERING</h1>
-
-				<div className="flex-1" />
-
-				<div className="flex flex-col gap-6">
-					{recentFiles.length > 0 && (
-						<div className="flex flex-col gap-4">
-							<span className="font-technical text-[length:var(--text-xs)] uppercase tracking-widest text-chrome-text-dim">Recent Graphs</span>
-
-							<div className="flex flex-col gap-2">
-								{recentFiles.map((recent) => (
-									<button
-										key={recent.id}
-										type="button"
-										onClick={() => void context.openBagByPath(recent.bagPath)}
-										className="flex w-fit items-baseline gap-5 text-left transition-colors duration-100 hover:bg-secondary"
-									>
-										<span className="font-body text-[length:var(--text-base)] text-chrome-text">{recent.name}</span>
-										<span className="font-technical text-[length:var(--text-xs)] text-chrome-text-dim">{recent.bagPath}</span>
-										<span className="font-technical text-[length:var(--text-xs)] text-chrome-text-dim">{formatRelative(recent.lastOpened)}</span>
-									</button>
-								))}
-							</div>
-						</div>
-					)}
-
-					<div className="flex flex-col gap-2">
-						<button
-							type="button"
-							onClick={() => void context.newBagTab()}
-							className="flex w-fit items-center gap-2 font-technical text-[length:var(--text-sm)] uppercase tracking-[0.06em] text-void transition-colors hover:brightness-110"
-						>
-							<span className="flex items-center gap-2 bg-primary">
-								<Icon icon="lucide:plus" width={16} />
-								New Graph
-							</span>
-						</button>
-						<button
-							type="button"
-							onClick={() => void context.openBagTab()}
-							className="flex w-fit items-center gap-2 font-technical text-[length:var(--text-sm)] uppercase tracking-[0.06em] text-chrome-text transition-colors hover:brightness-125"
-						>
-							<span className="flex items-center gap-2 bg-secondary">
-								<Icon icon="lucide:folder-open" width={16} />
-								Open Graph
-							</span>
-						</button>
+		<div className="relative flex flex-1 flex-col overflow-hidden bg-surface p-6">
+			<div className="pointer-events-none absolute right-4 top-6 z-0 flex items-start gap-4">
+				<span
+					className="type-label text-dimmed"
+					style={{ writingMode: "vertical-rl" }}
+				>
+					Buffered Audio Graph Manager
+				</span>
+				<div
+					className="relative w-8"
+					style={{ height: HOME_BARCODE_LENGTH }}
+				>
+					<div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90">
+						<Barcode
+							text={HOME_BARCODE_TEXT}
+							narrow={HOME_BARCODE_NARROW}
+							wide={HOME_BARCODE_WIDE}
+							height={28}
+							color="var(--color-border)"
+						/>
 					</div>
 				</div>
 			</div>
+
+			<h1 className="type-display text-display-lg leading-none text-text-primary">
+				BAGMAN
+			</h1>
+
+			<div className="relative z-10 min-h-0 flex-1">
+				<HomeGraphDecoration anchors={anchors} onAnchorClick={openAnchor} />
+			</div>
+
+			<span className="type-label pointer-events-none absolute bottom-6 left-6 z-20 text-dimmed">
+				&copy; ZCROSS
+			</span>
+
+			<div className="absolute right-6 bottom-6 z-20 flex flex-col items-end gap-3">
+				<button
+					type="button"
+					onClick={() => void context.newBagTab()}
+					className="flex w-fit items-center gap-2 px-4 py-2 text-body text-text-primary hover:bg-text-primary hover:text-surface"
+				>
+					<Plus size={16} strokeWidth={1.5} />
+					<span>New graph</span>
+				</button>
+				<button
+					type="button"
+					onClick={() => void context.openBagTab()}
+					className="flex w-fit items-center gap-2 px-4 py-2 text-body text-text-primary hover:bg-text-primary hover:text-surface"
+				>
+					<FolderOpen size={16} strokeWidth={1.5} />
+					<span>Open graph</span>
+				</button>
+			</div>
 		</div>
 	);
-}
+});

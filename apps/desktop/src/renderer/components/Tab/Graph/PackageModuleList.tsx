@@ -52,10 +52,15 @@ export function PackageModuleList({ app, onSelect }: Props) {
 					{modulePackage.modules.map((mod) => (
 						<DropdownMenuItem
 							key={mod.moduleName}
+							className="flex-col items-start gap-0.5"
 							onSelect={() => onSelect(modulePackage.name, modulePackage.version, mod.moduleName)}
-							title={mod.moduleDescription}
 						>
-							{mod.moduleName}
+							<span>{mod.moduleName}</span>
+							{mod.moduleDescription !== "" && (
+								<span className="line-clamp-3 whitespace-normal text-xs normal-case leading-snug tracking-normal opacity-60">
+									{mod.moduleDescription}
+								</span>
+							)}
 						</DropdownMenuItem>
 					))}
 				</DropdownMenuGroup>

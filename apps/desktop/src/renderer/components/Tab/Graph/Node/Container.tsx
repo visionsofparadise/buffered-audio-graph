@@ -1,38 +1,42 @@
-import { IconButton } from "@buffered-audio/design-system";
+import { cn } from "../../../../utils/cn";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { AlertTriangle } from "lucide-react";
-import type { Logger } from "../../../../../shared/models/Logger";
-import type { Main } from "../../../../models/Main";
+import { TriangleAlert } from "lucide-react";
 import { NodeMenu } from "./Menu";
-import { SnapshotPreview } from "./SnapshotPreview";
 import type { ParameterCallbacks } from "./ParameterRow/ParameterField";
 import { ParameterField } from "./ParameterRow/ParameterField";
 import type { Parameter } from "./utils/buildParameters";
 
-/** Stable inputs the per-node snapshot waveform preview needs to discover and read the latest snapshot. */
-export interface SnapshotPreviewData {
-	readonly main: Main;
-	readonly logger: Logger;
-	readonly userDataPath: string;
-	readonly bagId: string;
-}
-
+/**
+ * Per-node render staleness, derived by `useNodeStates`. It is a content-hash
+ * computation only — it no longer paints the node. The redesign moved render
+ * progress to global toasts; the type is retained because `Canvas.tsx`,
+ * `useNodeStates.ts`, and `moduleLookup.ts` still reference it.
+ */
 export type NodeState = "rendered" | "stale" | "processing" | "pending" | "error" | "bypassed";
 export type NodeCategory = "source" | "transform" | "target";
+
+/** Full-panel-width header bar tone per category. */
+const CATEGORY_HEADER_BG: Record<NodeCategory, string> = {
+	source: "bg-category-source",
+	transform: "bg-category-transform",
+	target: "bg-category-target",
+};
 
 export interface NodeContainerData {
 	readonly label: string;
 	readonly category: NodeCategory;
+	/** Content-hash staleness — computed but not painted on the node. */
 	readonly state: NodeState;
 	readonly bypassed: boolean;
 	readonly parameters: ReadonlyArray<Parameter>;
-	readonly inspected?: boolean;
-	/** Stable inputs for the per-node snapshot waveform preview. */
-	readonly snapshotPreview?: SnapshotPreviewData;
+	/**
+	 * Non-null when the node's module could not be resolved (package/version
+	 * not installed, or the node is absent from the package). The body renders
+	 * this reason in place of the parameter controls.
+	 */
+	readonly unresolvedReason: string | null;
 	readonly nodeId?: string;
 	readonly description?: string;
-	readonly error?: string;
-	readonly progress?: number;
 	/** Path-aware leaf value change — path is [topLevelName, ...nestedKeys]. */
 	readonly onParameterChangeAtPath?: (path: ReadonlyArray<string | number>, value: unknown) => void;
 	/** Path-aware browse dialog for file/folder parameters. */
@@ -45,22 +49,20 @@ export interface NodeContainerData {
 	readonly onArrayRowReorder?: (paramName: string, fromIndex: number, toIndex: number) => void;
 	readonly onRender?: () => void;
 	readonly onAbort?: () => void;
+	/** Toggle the node's bypass flag. */
+	readonly onBypass?: () => void;
+	readonly onReset?: () => void;
+	/** Remove the node from the graph. */
+	readonly onDelete?: () => void;
 	[key: string]: unknown;
 }
 
 export function NodeContainer({ data, selected }: NodeProps) {
 	const nodeData = data as unknown as NodeContainerData;
 	const isBypassed = nodeData.bypassed;
-	const isInspected = nodeData.inspected ?? false;
 	const hasInput = nodeData.category !== "source";
 	const hasOutput = nodeData.category !== "target";
 	const isSource = nodeData.category === "source";
-	const snapshotPreview = nodeData.snapshotPreview;
-	const previewNodeId = nodeData.nodeId;
-	const isProcessing = nodeData.state === "processing";
-	const isPending = nodeData.state === "pending";
-	const hasError = nodeData.error !== undefined;
-	const progress = nodeData.progress;
 
 	const disabled = !nodeData.onParameterChangeAtPath;
 	const callbacks: ParameterCallbacks = {
@@ -72,140 +74,90 @@ export function NodeContainer({ data, selected }: NodeProps) {
 		disabled,
 	};
 
-	let renderLabel: string | null = null;
-
-	if (!isSource && !isBypassed) {
-		if (isProcessing) renderLabel = "Abort";
-		else renderLabel = "Render";
-	}
-
 	return (
-		<div
-			className="relative"
-			style={{ width: 260 }}
-		>
+		<div className="relative" style={{ width: 260 }}>
 			<div
-				className={`flex flex-col gap-1 ${isBypassed ? "bg-chrome-base" : "bg-chrome-surface"} ${selected ? "ring-1 ring-interactive-focus" : ""} ${isInspected ? "ring-1 ring-primary" : ""}`}
+				className={cn(
+					"flex flex-col overflow-hidden rounded-xs border border-border bg-elevated",
+					isBypassed && "opacity-60",
+					selected && "ring-1 ring-text-primary",
+				)}
 			>
-				{/* Header */}
-				<div className="flex items-center justify-between px-3 pt-2 pb-1">
-					<span className={`font-body text-[length:var(--text-base)] font-medium ${isBypassed ? "text-chrome-text-dim" : "text-chrome-text"}`}>{nodeData.label}</span>
-					<div className="flex items-center">
-						{isSource && (
-							<IconButton
-								icon="lucide:eye"
-								label="Inspect"
-								active={isInspected}
-								activeVariant="primary"
-							/>
-						)}
-						<IconButton
-							icon="lucide:power"
-							label="Bypass"
-							active={isBypassed}
-							activeVariant="secondary"
-						/>
+				<div
+					className={cn(
+						"flex min-h-9 items-center justify-between gap-2 px-3 py-2",
+						CATEGORY_HEADER_BG[nodeData.category],
+					)}
+				>
+					<span className="text-body font-medium uppercase leading-tight tracking-[0.06em] text-surface">
+						{nodeData.label}
+					</span>
+					<div className="flex shrink-0 items-center gap-0.5">
 						<NodeMenu
 							isSource={isSource}
-							isProcessing={isProcessing}
-							isPending={isPending}
-							isBypassed={isBypassed}
-							isInspected={isInspected}
 							onRender={nodeData.onRender}
 							onAbort={nodeData.onAbort}
+							onDelete={nodeData.onDelete}
 						/>
 					</div>
 				</div>
 
-				{/* Description */}
-				{nodeData.description && (
-					<div className="px-3 pb-2">
-						<span className="font-body text-[length:var(--text-xs)] text-chrome-text-secondary">{nodeData.description}</span>
+				{nodeData.unresolvedReason !== null ? (
+					<div className="nodrag nopan flex items-start gap-2 px-3 py-4">
+						<TriangleAlert
+							size={14}
+							strokeWidth={1.5}
+							className="mt-0.5 shrink-0 text-accent-primary"
+						/>
+						<div className="flex flex-col gap-1">
+							<span className="type-label text-xs text-accent-primary">Module unavailable</span>
+							<span className="text-xs leading-snug text-text-secondary">{nodeData.unresolvedReason}</span>
+						</div>
 					</div>
-				)}
-
-				{/* Parameters */}
-				{nodeData.parameters.length > 0 && (
-					<div className="flex flex-col gap-3 px-3 pb-3">
-						{nodeData.parameters.map((param) => (
-							<ParameterField
-								key={param.name}
-								param={param}
-								basePath={[]}
-								dimmed={isBypassed}
-								callbacks={callbacks}
-							/>
-						))}
-					</div>
-				)}
-
-				{/* Render / Abort / Pending footer */}
-				{renderLabel && (
-					<div className="flex items-center justify-end px-3 pb-2">
-						{isProcessing && progress !== undefined && (
-							<div className="mr-auto flex items-center gap-2">
-								<div className="h-1 w-20 bg-chrome-raised">
-									<div
-										className="h-full bg-state-processing"
-										style={{ width: `${progress * 100}%` }}
-									/>
-								</div>
-								<span className="font-technical text-[length:var(--text-xs)] tabular-nums text-state-processing">{Math.round(progress * 100)}%</span>
-							</div>
-						)}
-						<button
-							type="button"
-							onClick={isProcessing ? nodeData.onAbort : nodeData.onRender}
-							className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${
-								isProcessing
-									? "bg-state-error text-void hover:bg-state-error/80 cursor-pointer"
-									: "bg-chrome-raised text-chrome-text-dim hover:text-chrome-text-secondary cursor-pointer"
-							}`}
-						>
-							{renderLabel}
-						</button>
-					</div>
-				)}
-
-				{/* Ports */}
-				{hasInput && (
-					<Handle
-						type="target"
-						position={Position.Left}
-						id="target"
-						className="!bg-chrome-text-dim !border-0 !rounded-none"
-						style={{ left: -5, width: 8, height: 10, clipPath: "polygon(0% 0%, 100% 50%, 0% 100%)" }}
-					/>
-				)}
-				{hasOutput && (
-					<Handle
-						type="source"
-						position={Position.Right}
-						id="source"
-						className="!bg-chrome-text-dim !border-0 !rounded-none"
-						style={{ right: -5, width: 8, height: 10, clipPath: "polygon(0% 0%, 0% 100%, 100% 50%)" }}
-					/>
+				) : (
+					nodeData.parameters.length > 0 && (
+						<div className="nodrag nopan flex flex-col gap-4 px-3 py-4">
+							{nodeData.parameters.map((param) => (
+								<ParameterField
+									key={param.name}
+									param={param}
+									basePath={[]}
+									dimmed={isBypassed}
+									callbacks={callbacks}
+								/>
+							))}
+						</div>
+					)
 				)}
 			</div>
 
-			{!isBypassed && snapshotPreview && previewNodeId !== undefined && (
-				<SnapshotPreview
-					main={snapshotPreview.main}
-					logger={snapshotPreview.logger}
-					userDataPath={snapshotPreview.userDataPath}
-					bagId={snapshotPreview.bagId}
-					nodeId={previewNodeId}
-				/>
-			)}
-
-			{hasError && (
-				<div className="mt-3 flex items-start gap-1.5 bg-state-error/20 px-3 py-2 ring-1 ring-state-error/40">
-					<AlertTriangle
-						size={12}
-						className="mt-0.5 shrink-0 text-state-error"
+			{hasInput && (
+				<Handle
+					type="target"
+					position={Position.Left}
+					id="target"
+					className="!h-5 !w-5 !rounded-none !border-0 !bg-transparent"
+					style={{ left: -10 }}
+				>
+					<span
+						className="pointer-events-none absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 bg-text-secondary"
+						style={{ clipPath: "polygon(0 0, 100% 50%, 0 100%)" }}
 					/>
-					<span className="font-body text-[length:var(--text-xs)] text-state-error">{nodeData.error}</span>
-				</div>
+				</Handle>
+			)}
+			{hasOutput && (
+				<Handle
+					type="source"
+					position={Position.Right}
+					id="source"
+					className="!h-5 !w-5 !rounded-none !border-0 !bg-transparent"
+					style={{ right: -10 }}
+				>
+					<span
+						className="pointer-events-none absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 bg-text-secondary"
+						style={{ clipPath: "polygon(0 0, 100% 50%, 0 100%)" }}
+					/>
+				</Handle>
 			)}
 		</div>
 	);

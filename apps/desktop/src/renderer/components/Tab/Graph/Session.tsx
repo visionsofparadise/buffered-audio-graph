@@ -1,75 +1,72 @@
 import type { GraphDefinition } from "@buffered-audio/core";
-import { useEffect, useMemo } from "react";
+import { ReactFlowProvider } from "@xyflow/react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useSnapshot } from "valtio";
+import { useGraphDefinition } from "../../../hooks/useGraphDefinition";
 import { useGraphState } from "../../../hooks/useGraphState";
-import { useHistory } from "../../../hooks/useHistory";
 import type { AppContext, GraphContext } from "../../../models/Context";
-import { ProxyStore } from "../../../models/ProxyStore/ProxyStore";
+import type { ProxyStore } from "../../../models/ProxyStore/ProxyStore";
 import type { TabEntry } from "../../../models/State/App";
 import type { GraphState } from "../../../models/State/Graph";
-import { ReactFlowProvider } from "@xyflow/react";
-import { computeAutoLayout } from "../../../utilities/autoLayout";
-import { importBag } from "../../../utilities/bagOperations";
-import { mergeImportedBag } from "../../../utilities/importBag";
+import type { GraphDefinitionState } from "../../../models/State/GraphDefinition";
+import { createHistory, type History } from "../../../models/State/History";
+import { computeAutoLayout } from "../../../utils/autoLayout";
+import { importBag } from "../../../utils/bagOperations";
+import { mergeImportedBag } from "../../../utils/importBag";
 import { GraphCanvas } from "./Canvas";
 
 interface Props {
 	readonly initialGraphState: Omit<GraphState, "_key">;
-	readonly context: AppContext;
+	readonly initialDefinition: Omit<GraphDefinitionState, "_key">;
+	readonly initialContent: string;
 	readonly tab: TabEntry;
-	readonly graphDefinition: GraphDefinition;
-	readonly mutateDefinition: (updater: (definition: GraphDefinition) => GraphDefinition) => void;
+	readonly graphStore: ProxyStore;
+	readonly context: AppContext;
 }
 
-export function GraphSession({ initialGraphState, context, tab, graphDefinition, mutateDefinition }: Props) {
-	const graphStore = useMemo(() => new ProxyStore(), []);
+export function GraphSession({ initialGraphState, initialDefinition, initialContent, tab, graphStore, context }: Props) {
+	const { graphDefinition, mutateDefinition } = useGraphDefinition(initialDefinition, initialContent, graphStore, tab.bagPath, context);
 
-	// Apply auto-layout to initial state if no positions saved
 	const layoutAppliedState = useMemo(() => {
 		const needsLayout = Object.keys(initialGraphState.positions).length === 0 && graphDefinition.nodes.length > 0;
 
-		return needsLayout ? { ...initialGraphState, positions: computeAutoLayout(graphDefinition.nodes, graphDefinition.edges) } : initialGraphState;
+		return needsLayout
+			? { ...initialGraphState, positions: computeAutoLayout(graphDefinition.nodes, graphDefinition.edges) }
+			: initialGraphState;
 	}, [initialGraphState, graphDefinition.nodes, graphDefinition.edges]);
 
 	const { graph } = useGraphState(layoutAppliedState, graphStore, tab.id, context);
 
-	const { history, pushHistory, undo, redo } = useHistory(tab.id, context);
+	const historyProxy = useMemo<History>(() => createHistory(graphStore), [graphStore]);
+	const history = useSnapshot(historyProxy);
 
-	// Sync tab name from graph definition
 	useEffect(() => {
 		context.tabNames.set(tab.id, graphDefinition.name);
 	}, [context.tabNames, tab.id, graphDefinition.name]);
 
-	// Register rename callback so TabBar can rename this graph
+	const onSave = useCallback(() => {
+		mutateDefinition.flush();
+	}, [mutateDefinition]);
+
 	useEffect(() => {
-		context.renameCallbacks.set(tab.id, (name: string) => {
+		const rename = (name: string) => {
 			mutateDefinition((definition) => ({
 				...definition,
 				name,
 			}));
-		});
-
-		return () => {
-			context.renameCallbacks.delete(tab.id);
 		};
-	}, [context.renameCallbacks, tab.id, mutateDefinition]);
 
-	useEffect(() => {
-		context.undoCallbacks.set(tab.id, undo);
-		context.redoCallbacks.set(tab.id, redo);
-
-		return () => {
-			context.undoCallbacks.delete(tab.id);
-			context.redoCallbacks.delete(tab.id);
-		};
-	}, [context.undoCallbacks, context.redoCallbacks, tab.id, undo, redo]);
-
-	useEffect(() => {
-		context.importCallbacks.set(tab.id, async () => {
+		const importBagCommand = async () => {
 			const imported = await importBag(context.main);
 
 			if (!imported) return;
 
-			const previousDefinition = structuredClone(graphDefinition);
+			const previousDefinition: GraphDefinition = structuredClone({
+				id: graphDefinition.id,
+				name: graphDefinition.name,
+				nodes: graphDefinition.nodes as GraphDefinition["nodes"],
+				edges: graphDefinition.edges as GraphDefinition["edges"],
+			});
 			const previousPositions = structuredClone(graph.positions);
 			const merged = mergeImportedBag({
 				currentDefinition: previousDefinition,
@@ -82,32 +79,48 @@ export function GraphSession({ initialGraphState, context, tab, graphDefinition,
 			const nextDefinition = structuredClone(merged.definition);
 			const nextPositions = structuredClone(merged.positions);
 
-			mutateDefinition(() => nextDefinition);
+			history.mutate(graphDefinition, () => {
+				mutateDefinition(() => nextDefinition);
+			});
+
 			graphStore.mutate(graph, (proxy) => {
 				proxy.positions = nextPositions;
 			});
+		};
 
-			pushHistory({
-				label: `Import ${imported.definition.name}`,
-				undo: () => {
-					mutateDefinition(() => previousDefinition);
-					graphStore.mutate(graph, (proxy) => {
-						proxy.positions = structuredClone(previousPositions);
-					});
-				},
-				redo: () => {
-					mutateDefinition(() => nextDefinition);
-					graphStore.mutate(graph, (proxy) => {
-						proxy.positions = structuredClone(nextPositions);
-					});
-				},
-			});
+		context.appStore.mutate(context.activeCommands, (proxy) => {
+			proxy.undo = () => history.undo();
+			proxy.redo = () => history.redo();
+			proxy.canUndo = history.canUndo;
+			proxy.canRedo = history.canRedo;
+			proxy.rename = rename;
+			proxy.importBag = importBagCommand;
+			proxy.save = onSave;
 		});
 
 		return () => {
-			context.importCallbacks.delete(tab.id);
+			context.appStore.mutate(context.activeCommands, (proxy) => {
+				proxy.undo = null;
+				proxy.redo = null;
+				proxy.canUndo = false;
+				proxy.canRedo = false;
+				proxy.rename = null;
+				proxy.importBag = null;
+				proxy.save = null;
+			});
 		};
-	}, [context.importCallbacks, context.main, tab.id, graphDefinition, graph.positions, graph, graphStore, mutateDefinition, pushHistory]);
+	}, [
+		context.appStore,
+		context.activeCommands,
+		context.main,
+		history,
+		mutateDefinition,
+		graphDefinition,
+		graph,
+		graph.positions,
+		graphStore,
+		onSave,
+	]);
 
 	const graphContext: GraphContext = useMemo(
 		() => ({
@@ -119,11 +132,9 @@ export function GraphSession({ initialGraphState, context, tab, graphDefinition,
 			bagPath: tab.bagPath,
 			bagId: tab.id,
 			history,
-			pushHistory,
-			undo,
-			redo,
+			onSave,
 		}),
-		[context, graph, graphStore, graphDefinition, mutateDefinition, tab.bagPath, tab.id, history, pushHistory, undo, redo],
+		[context, graph, graphStore, graphDefinition, mutateDefinition, tab.bagPath, tab.id, history, onSave],
 	);
 
 	return (

@@ -1,3 +1,7 @@
+import { Input } from "@buffered-audio/design-system";
+import { cn } from "../../../../../utils/cn";
+import { humanizeFieldName, paramLabelClass } from "./utils/labels";
+
 export interface StringParameter {
 	readonly kind: "string";
 	readonly name: string;
@@ -14,17 +18,14 @@ export function StringRow({
 	readonly onParameterChange?: (name: string, value: unknown) => void;
 }) {
 	return (
-		<div className={`flex flex-col gap-1 ${dimmed ? "opacity-40" : ""}`}>
-			<span className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${dimmed ? "text-chrome-text-dim" : "text-chrome-text-secondary"}`}>
-				{param.name}
-			</span>
-			<input
-				key={param.value}
+		<div className={cn("flex flex-col", dimmed && "opacity-40")}>
+			<span className={cn(paramLabelClass(true), "mb-1")}>{humanizeFieldName(param.name)}</span>
+			<Input
 				type="text"
+				key={param.value}
 				defaultValue={param.value}
-				onBlur={onParameterChange ? (ev) => onParameterChange(param.name, ev.target.value) : undefined}
-				onKeyDown={(ev) => { if (ev.key === "Enter") ev.currentTarget.blur(); }}
-				className="w-full bg-chrome-base px-2 py-1.5 font-technical text-[length:var(--text-sm)] text-chrome-text outline-none"
+				onChange={onParameterChange ? (next) => onParameterChange(param.name, next) : undefined}
+				className="w-full"
 			/>
 		</div>
 	);

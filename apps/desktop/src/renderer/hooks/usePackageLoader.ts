@@ -18,7 +18,6 @@ export function usePackageLoader(
 		let cancelled = false;
 
 		async function loadAll(): Promise<void> {
-			// Sort: built-in packages first
 			const indices = app.packages
 				.map((entry, index) => ({ entry, index }))
 				.filter(({ entry }) => entry.status === "pending")

@@ -1,36 +1,45 @@
-import { useEffect, useState } from "react";
-import { useGraphDefinition } from "../../../hooks/useGraphDefinition";
+import { useEffect, useMemo, useState } from "react";
+import { loadGraphDefinition } from "../../../hooks/useGraphDefinition";
 import type { AppContext } from "../../../models/Context";
+import { ProxyStore } from "../../../models/ProxyStore/ProxyStore";
 import type { TabEntry } from "../../../models/State/App";
 import type { GraphState } from "../../../models/State/Graph";
 import { loadGraphState } from "../../../models/State/Graph";
+import type { GraphDefinitionState } from "../../../models/State/GraphDefinition";
 import { GraphSession } from "./Session";
 
 interface Props {
-	readonly context: AppContext;
 	readonly tab: TabEntry;
+	readonly context: AppContext;
 }
 
-export function GraphView({ context, tab }: Props) {
-	const [initialGraphState, setInitialGraphState] = useState<Omit<GraphState, "_key"> | null>(null);
+interface InitialLoad {
+	readonly initialGraphState: Omit<GraphState, "_key">;
+	readonly initialDefinition: Omit<GraphDefinitionState, "_key">;
+	readonly initialContent: string;
+}
+
+export function GraphView({ tab, context }: Props) {
+	const graphStore = useMemo(() => new ProxyStore(), []);
+	const [initial, setInitial] = useState<InitialLoad | null>(null);
 	const [loadError, setLoadError] = useState<string | null>(null);
 
-	const { graphDefinition, mutateDefinition, isLoading: definitionLoading, error: definitionError } = useGraphDefinition(tab.bagPath, context);
-
-	// Load GraphState (separate from definition)
 	useEffect(() => {
 		const state = { cancelled: false };
 
 		void (async () => {
 			try {
-				const graphState = await loadGraphState(context.main, context.userDataPath, tab.id);
+				const [graphState, { definition, content }] = await Promise.all([
+					loadGraphState(context.main, context.userDataPath, tab.id),
+					loadGraphDefinition(tab.bagPath, context.main),
+				]);
 
 				if (!state.cancelled) {
-					setInitialGraphState(graphState);
+					setInitial({ initialGraphState: graphState, initialDefinition: definition, initialContent: content });
 				}
-			} catch (graphStateError: unknown) {
+			} catch (error: unknown) {
 				if (!state.cancelled) {
-					setLoadError(graphStateError instanceof Error ? graphStateError.message : String(graphStateError));
+					setLoadError(error instanceof Error ? error.message : String(error));
 				}
 			}
 		})();
@@ -38,25 +47,24 @@ export function GraphView({ context, tab }: Props) {
 		return () => {
 			state.cancelled = true;
 		};
-	}, [context.main, context.userDataPath, tab.id]);
+	}, [context.main, context.userDataPath, tab.bagPath, tab.id]);
 
-	if (loadError ?? definitionError) {
-		const message = loadError ?? (definitionError instanceof Error ? definitionError.message : String(definitionError));
-
-		return <div className="flex flex-1 items-center justify-center bg-chrome-base text-red-400 font-technical">Failed to load graph: {message}</div>;
+	if (loadError) {
+		return <div className="flex flex-1 items-center justify-center bg-surface text-accent-primary type-label">Failed to load graph: {loadError}</div>;
 	}
 
-	if (!initialGraphState || definitionLoading || !graphDefinition) {
-		return <div className="flex flex-1 items-center justify-center bg-chrome-base text-chrome-text-secondary font-technical uppercase tracking-[0.06em]">Loading graph...</div>;
+	if (!initial) {
+		return <div className="flex flex-1 items-center justify-center bg-surface text-text-secondary type-label">Loading graph...</div>;
 	}
 
 	return (
 		<GraphSession
-			initialGraphState={initialGraphState}
-			context={context}
+			initialGraphState={initial.initialGraphState}
+			initialDefinition={initial.initialDefinition}
+			initialContent={initial.initialContent}
 			tab={tab}
-			graphDefinition={graphDefinition}
-			mutateDefinition={mutateDefinition}
+			graphStore={graphStore}
+			context={context}
 		/>
 	);
 }

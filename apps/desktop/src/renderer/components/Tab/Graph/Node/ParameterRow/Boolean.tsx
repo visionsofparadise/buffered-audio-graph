@@ -1,4 +1,7 @@
 import { Toggle } from "@buffered-audio/design-system";
+import { cn } from "../../../../../utils/cn";
+import { humanizeFieldName, paramLabelClass } from "./utils/labels";
+
 export interface BooleanParameter {
 	readonly kind: "boolean";
 	readonly name: string;
@@ -15,14 +18,15 @@ export function BooleanRow({
 	readonly onParameterChange?: (name: string, value: unknown) => void;
 }) {
 	return (
-		<div className={`flex items-center justify-between gap-3 ${dimmed ? "opacity-40" : ""}`}>
-			<span className={`font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] ${dimmed ? "text-chrome-text-dim" : "text-chrome-text-secondary"}`}>
-				{param.name}
-			</span>
-			<Toggle
-				value={param.value}
-				onChange={onParameterChange ? (toggled) => onParameterChange(param.name, toggled) : undefined}
-			/>
+		<div className={cn("flex items-center justify-between gap-3", dimmed && "opacity-40")}>
+			<span className={paramLabelClass(true)}>{humanizeFieldName(param.name)}</span>
+			<div className="shrink-0">
+				<Toggle
+					value={param.value}
+					label={param.value ? "ON" : "OFF"}
+					onChange={onParameterChange ? (toggled) => onParameterChange(param.name, toggled) : undefined}
+				/>
+			</div>
 		</div>
 	);
 }

@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Knob } from "@buffered-audio/design-system";
+import { cn } from "../../../../../utils/cn";
+import { humanizeFieldName, paramLabelClass } from "./utils/labels";
+
 export interface NumberParameter {
 	readonly kind: "number";
 	readonly name: string;
@@ -16,6 +19,13 @@ function snapToStep(value: number, step: number): number {
 	return Math.round(value / step) * step;
 }
 
+/** Format a number param for its on-node readout — step decides precision. */
+function formatParamValue(value: number, step: number): string {
+	const decimals = (step.toString().split(".")[1] ?? "").length;
+
+	return value.toFixed(decimals);
+}
+
 export function NumberRow({
 	param,
 	dimmed,
@@ -28,7 +38,7 @@ export function NumberRow({
 	readonly onParameterChange?: (name: string, value: unknown) => void;
 }) {
 	const range = param.max - param.min;
-	const normalize = (raw: number) => (raw - param.min) / range;
+	const normalize = (raw: number) => (range === 0 ? 0 : (raw - param.min) / range);
 	const denormalize = (normalized: number) => param.min + normalized * range;
 
 	const [localValue, setLocalValue] = useState(param.value);
@@ -39,20 +49,16 @@ export function NumberRow({
 	}, [param.value]);
 
 	const normalized = normalize(localValue);
-	const displayValue = draggingRef.current ? localValue : param.value;
 
 	return (
-		<div className={`flex items-center justify-between gap-3 ${dimmed ? "opacity-40" : ""}`}>
-			<span className="font-technical text-[length:var(--text-xs)] uppercase tracking-[0.06em] text-chrome-text-secondary">
-				{param.name}
-			</span>
-			<div className="flex shrink-0 items-center gap-2">
-				<span className="font-technical text-[length:var(--text-xs)] tabular-nums text-chrome-text">
-					{displayValue}{param.unit ? ` ${param.unit}` : ""}
+		<div className={cn("flex items-center justify-between gap-3", dimmed && "opacity-40")}>
+			<span className={paramLabelClass(true)}>{humanizeFieldName(param.name)}</span>
+			<div className="flex shrink-0 flex-col items-center gap-1">
+				<span className="type-value w-12 text-center text-label text-text-secondary">
+					{formatParamValue(localValue, param.step)}
 				</span>
 				<Knob
 					value={normalized}
-					label=""
 					size={32}
 					hideValue
 					disabled={disabled}
@@ -68,6 +74,9 @@ export function NumberRow({
 						onParameterChange?.(param.name, committed);
 					}}
 				/>
+				{param.unit !== "" && (
+					<span className="type-label text-text-secondary">{param.unit}</span>
+				)}
 			</div>
 		</div>
 	);
