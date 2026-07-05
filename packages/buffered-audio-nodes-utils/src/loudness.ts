@@ -265,13 +265,6 @@ export class LoudnessAccumulator {
 		this.blocks3s.push(this.outputBuffer, frames);
 	}
 
-	// Per-frame K-weighted channel-summed squares from the most recent push, valid over indices [0, frames)
-	// of that push and overwritten on the next push. For consumers persisting the raw squared-sum stream
-	// (e.g. loudnessTarget's kw² proxy) without a second K-filter pass.
-	peekLastSquaredSums(): Float64Array {
-		return this.outputBuffer;
-	}
-
 	finalize(): LoudnessAccumulatorResult {
 		if (this.cachedResult !== undefined) return this.cachedResult;
 
@@ -305,65 +298,5 @@ export class LoudnessAccumulator {
 		this.cachedResult = { integrated, momentary, shortTerm, range };
 
 		return this.cachedResult;
-	}
-}
-
-export interface PreWeightedLoudnessResult {
-	integrated: number;
-	range: number;
-}
-
-// Integrated LUFS + LRA from a stream of PRE-K-weighted, channel-summed per-frame squared values
-// (i.e. what `KWeightedSquaredSum.push` writes). Shares BS.1770 gating + LRA with `LoudnessAccumulator`
-// but skips the K-filter — for consumers that already hold the squared-sum stream and want to apply a
-// per-frame scale (e.g. loudnessTarget's `g²·kw²` proxy) without re-running the biquads.
-export class PreWeightedLoudnessAccumulator {
-	private readonly blockSize400: number;
-	private readonly blockSize3s: number;
-	private readonly blocks400: BlockSumAccumulator;
-	private readonly blocks3s: BlockSumAccumulator;
-	private finalized = false;
-
-	constructor(sampleRate: number) {
-		this.blockSize400 = Math.round(BLOCK_DURATION_SECONDS * sampleRate);
-		this.blockSize3s = Math.round(SHORT_TERM_BLOCK_DURATION_SECONDS * sampleRate);
-
-		const blockStep = Math.round(BLOCK_STEP_SECONDS * sampleRate);
-
-		this.blocks400 = new BlockSumAccumulator(this.blockSize400, blockStep);
-		this.blocks3s = new BlockSumAccumulator(this.blockSize3s, blockStep);
-	}
-
-	// `squaredSums[i]` = pre-K-weighted channel-summed squared value at frame i (needs length >= frames).
-	push(squaredSums: Float64Array, frames: number): void {
-		if (this.finalized) {
-			throw new Error("PreWeightedLoudnessAccumulator: push() called after finalize()");
-		}
-
-		if (frames <= 0) return;
-
-		this.blocks400.push(squaredSums, frames);
-		this.blocks3s.push(squaredSums, frames);
-	}
-
-	finalize(): PreWeightedLoudnessResult {
-		this.finalized = true;
-
-		const closed400 = this.blocks400.finalize();
-		const closed3s = this.blocks3s.finalize();
-		const blockSize3s = this.blockSize3s;
-
-		const shortTerm: Array<number> = new Array<number>(closed3s.length);
-
-		for (let index = 0; index < closed3s.length; index++) {
-			const sum = closed3s[index] ?? 0;
-
-			shortTerm[index] = LUFS_OFFSET + 10 * Math.log10(Math.max(sum / blockSize3s, POWER_FLOOR));
-		}
-
-		return {
-			integrated: applyBs1770Gating(closed400, this.blockSize400),
-			range: computeLraFromShortTerm(shortTerm),
-		};
 	}
 }
