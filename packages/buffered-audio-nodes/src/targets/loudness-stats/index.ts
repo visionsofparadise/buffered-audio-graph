@@ -1,6 +1,6 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, WHOLE_FILE, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { AmplitudeHistogramAccumulator, LoudnessAccumulator, TruePeakAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
@@ -158,36 +158,13 @@ export class LoudnessStatsNode extends TargetNode<LoudnessStatsProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Measure integrated loudness, true peak, and loudness range per EBU R128, plus an amplitude-distribution histogram";
 	static override readonly schema = schema;
+	static override readonly streamClass = LoudnessStatsStream;
 
 	static override is(value: unknown): value is LoudnessStatsNode {
 		return TargetNode.is(value) && value.type[2] === "loudness-stats";
 	}
 
 	override readonly type = ["buffered-audio-node", "target", "loudness-stats"] as const;
-
-	private cachedStats?: LoudnessStats;
-
-	constructor(properties: LoudnessStatsProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	get stats(): LoudnessStats | undefined {
-		const last = this.streams[this.streams.length - 1];
-
-		return last instanceof LoudnessStatsStream ? last.stats : this.cachedStats;
-	}
-
-	override _teardown(): void {
-		const last = this.streams[this.streams.length - 1];
-
-		if (last instanceof LoudnessStatsStream && last.stats) {
-			this.cachedStats = last.stats;
-		}
-	}
-
-	override createStream(): LoudnessStatsStream {
-		return new LoudnessStatsStream(this.properties);
-	}
 
 	override clone(overrides?: Partial<LoudnessStatsProperties>): LoudnessStatsNode {
 		return new LoudnessStatsNode({ ...this.properties, previousProperties: this.properties, ...overrides });

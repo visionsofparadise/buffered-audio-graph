@@ -1,71 +1,57 @@
-import {
-	type BufferedAudioNode,
-	type BufferedTransformStream,
-	CompositeNode,
-	SourceNode,
-	TransformNode,
-} from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../package-metadata";
+import { type BufferedAudioNode, type Composition, SourceNode, TargetNode, TransformNode } from "@buffered-audio/core";
 
-export class ChainNode extends CompositeNode {
-	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
-	readonly type = ["buffered-audio-node", "transform", "composite", "chain"] as const;
-
-	private readonly _head: BufferedAudioNode;
-	private readonly _tail: BufferedAudioNode;
-
-	constructor(head: BufferedAudioNode, tail: BufferedAudioNode) {
-		super();
-
-		this._head = head;
-		this._tail = tail;
-	}
-
-	override get head(): BufferedAudioNode {
-		return this._head;
-	}
-
-	override get tail(): BufferedAudioNode {
-		return this._tail;
-	}
-
-	createStream(): BufferedTransformStream {
-		throw new Error("ChainNode does not create streams");
-	}
-
-	clone(): ChainNode {
-		throw new Error("ChainNode does not support cloning");
-	}
+export interface Chain extends Composition {
+	to(child: BufferedAudioNode | Composition): void;
 }
 
-export function chain(...nodes: Array<BufferedAudioNode | CompositeNode>): ChainNode {
-	if (nodes.length < 2) {
+function resolveHead(item: BufferedAudioNode | Composition): BufferedAudioNode {
+	return "head" in item ? item.head : item;
+}
+
+function resolveTail(item: BufferedAudioNode | Composition): BufferedAudioNode {
+	return "tail" in item ? item.tail : item;
+}
+
+function connect(tail: BufferedAudioNode, head: BufferedAudioNode): void {
+	if (tail instanceof SourceNode || tail instanceof TransformNode) {
+		tail.to(head);
+
+		return;
+	}
+
+	throw new Error("Cannot connect downstream from a TargetNode");
+}
+
+export function chain(...items: Array<BufferedAudioNode | Composition>): Chain {
+	if (items.length < 2) {
 		throw new Error("chain() requires at least 2 nodes");
 	}
 
-	const [first, ...rest] = nodes;
+	const [first, ...rest] = items;
 
 	if (!first) {
 		throw new Error("chain() requires at least 2 nodes");
 	}
 
-	let previous: BufferedAudioNode | CompositeNode = first;
+	let previous: BufferedAudioNode | Composition = first;
 
-	for (const node of rest) {
-		const resolvedTail = previous instanceof CompositeNode ? previous.tail : previous;
-		const resolvedHead = node instanceof CompositeNode ? node.head : node;
-
-		if (!(resolvedTail instanceof SourceNode) && !(resolvedTail instanceof TransformNode)) {
-			throw new Error("Cannot connect downstream from a TargetNode");
-		}
-
-		(resolvedTail as SourceNode | TransformNode).to(resolvedHead);
-		previous = node;
+	for (const item of rest) {
+		connect(resolveTail(previous), resolveHead(item));
+		previous = item;
 	}
 
-	const resolvedHead = first instanceof CompositeNode ? first.head : first;
-	const resolvedTail = previous instanceof CompositeNode ? previous.tail : previous;
+	const head = resolveHead(first);
+	const tail = resolveTail(previous);
 
-	return new ChainNode(resolvedHead, resolvedTail);
+	return {
+		head,
+		tail,
+		to(child: BufferedAudioNode | Composition): void {
+			if (tail instanceof TargetNode) {
+				throw new Error("Cannot connect downstream from a TargetNode");
+			}
+
+			connect(tail, resolveHead(child));
+		},
+	};
 }

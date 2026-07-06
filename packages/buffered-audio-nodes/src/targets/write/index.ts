@@ -255,11 +255,8 @@ export class WriteNode extends TargetNode<WriteProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Write audio to a file";
 	static override readonly schema = schema;
+	static override readonly streamClass = WriteStream;
 	override readonly type = ["buffered-audio-node", "target", "write"] as const;
-
-	override createStream(): WriteStream {
-		return new WriteStream(this.properties);
-	}
 
 	clone(overrides?: Partial<WriteProperties>): WriteNode {
 		return new WriteNode({ ...this.properties, previousProperties: this.properties, ...overrides });

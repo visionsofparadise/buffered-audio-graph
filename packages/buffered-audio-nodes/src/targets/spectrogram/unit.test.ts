@@ -19,7 +19,7 @@ describe("Spectrogram", () => {
 			const source = read(testVoice);
 			const target = spectrogram(tempOut);
 			source.to(target);
-			await source.render();
+			await source.createRenderJob().render();
 
 			const fileStat = await stat(tempOut);
 			expect(fileStat.size).toBeGreaterThan(0);

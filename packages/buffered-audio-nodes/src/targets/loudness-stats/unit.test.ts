@@ -11,11 +11,7 @@ const testVoice = audio.testVoice;
 const TEST_SAMPLE_RATE = 48_000;
 
 async function runStats(channels: ReadonlyArray<Float32Array>, sampleRate: number, options?: { bucketCount?: number; outputPath?: string }): Promise<NonNullable<LoudnessStatsStream["stats"]>> {
-	const stream = new LoudnessStatsStream({
-		bucketCount: options?.bucketCount ?? 1024,
-		outputPath: options?.outputPath ?? "",
-		bufferSize: Infinity,
-	});
+	const stream = new LoudnessStatsStream(loudnessStats({ bucketCount: options?.bucketCount ?? 1024, outputPath: options?.outputPath ?? "" }));
 	const chunk: Block = { samples: channels.map((channel) => new Float32Array(channel)), offset: 0, sampleRate, bitDepth: 32 };
 	const input = new ReadableStream<Block>({
 		start(controller) {
@@ -27,7 +23,6 @@ async function runStats(channels: ReadonlyArray<Float32Array>, sampleRate: numbe
 		executionProviders: ["cpu"],
 		memoryLimit: Number.POSITIVE_INFINITY,
 		highWaterMark: 1,
-		visited: new Set(),
 	};
 
 	await stream.setup(input, context);
@@ -68,13 +63,21 @@ describe("loudness-stats", () => {
 
 		source.to(target);
 
-		await source.render();
+		const job = source.createRenderJob();
 
-		expect(target.stats).toBeDefined();
-		expect(target.stats!.integrated).toBeGreaterThan(-70);
-		expect(target.stats!.integrated).toBeLessThan(0);
-		expect(target.stats!.amplitude).toBeDefined();
-		expect(target.stats!.amplitude.totalSamples).toBeGreaterThan(0);
+		await job.render();
+
+		const targetStream = job.streams.get(target)?.[0];
+
+		if (!(targetStream instanceof LoudnessStatsStream)) throw new Error("expected a LoudnessStatsStream for the target node");
+
+		const stats = targetStream.stats;
+
+		expect(stats).toBeDefined();
+		expect(stats!.integrated).toBeGreaterThan(-70);
+		expect(stats!.integrated).toBeLessThan(0);
+		expect(stats!.amplitude).toBeDefined();
+		expect(stats!.amplitude.totalSamples).toBeGreaterThan(0);
 	}, 240_000);
 
 	it("uniform [-0.5, 0.5) input gives median ≈ 0.25 and percentile(95) ≈ 0.475", async () => {
@@ -167,11 +170,7 @@ describe("loudness-stats", () => {
 	// and well-formed stats, not process memory (queries are flaky and
 	// platform-specific).
 	it("streams a 1+ minute signal in many small chunks without throwing", async () => {
-		const stream = new LoudnessStatsStream({
-			bucketCount: 1024,
-			outputPath: "",
-			bufferSize: Infinity,
-		});
+		const stream = new LoudnessStatsStream(loudnessStats({ bucketCount: 1024, outputPath: "" }));
 		const totalFrames = TEST_SAMPLE_RATE * 70;
 		const chunkFrames = 4096;
 		const chunkCount = Math.ceil(totalFrames / chunkFrames);
@@ -198,7 +197,6 @@ describe("loudness-stats", () => {
 			executionProviders: ["cpu"],
 			memoryLimit: Number.POSITIVE_INFINITY,
 			highWaterMark: 1,
-			visited: new Set(),
 		};
 
 		await stream.setup(input, context);

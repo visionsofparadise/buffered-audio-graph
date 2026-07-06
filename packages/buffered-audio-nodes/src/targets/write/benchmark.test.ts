@@ -23,7 +23,7 @@ describe("write benchmark", () => {
 			source.to(target);
 
 			const start = performance.now();
-			await source.render();
+			await source.createRenderJob().render();
 			const totalMs = performance.now() - start;
 
 			const result = { name: "write", totalMs, samplesPerSecond: 0, realTimeMultiplier: 0 };

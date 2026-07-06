@@ -1,30 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { read, ReadNode } from ".";
+import { ReadFfmpegNode } from "./ffmpeg";
+import { ReadWavNode } from "./wav";
+import { read } from ".";
 
-describe("ReadNode", () => {
-	it("creates ReadWavStream for .wav files", () => {
-		const node = new ReadNode({ path: "test.wav", ffmpegPath: "", ffprobePath: "" });
-		const node2 = read("file.wav");
+describe("read", () => {
+	it("returns a ReadWavNode for .wav files", () => {
+		const node = read("file.wav");
 
-		expect(node).toBeInstanceOf(ReadNode);
-		expect(node2).toBeInstanceOf(ReadNode);
+		expect(node).toBeInstanceOf(ReadWavNode);
 	});
 
-	it("throws for non-WAV files without ffmpeg paths", async () => {
-		const node = new ReadNode({ path: "test.mp3", ffmpegPath: "", ffprobePath: "" });
+	it("returns a ReadFfmpegNode for non-WAV files with ffmpeg paths", () => {
+		const node = read("file.mp3", { ffmpegPath: "/usr/bin/ffmpeg", ffprobePath: "/usr/bin/ffprobe" });
 
-		await expect(node.getMetadata()).rejects.toThrow("Non-WAV file requires ffmpegPath and ffprobePath");
+		expect(node).toBeInstanceOf(ReadFfmpegNode);
 	});
 
-	it("throws for non-WAV files when only ffmpegPath is set", async () => {
-		const node = new ReadNode({ path: "test.flac", ffmpegPath: "/usr/bin/ffmpeg", ffprobePath: "" });
-
-		await expect(node.getMetadata()).rejects.toThrow("Non-WAV file requires ffmpegPath and ffprobePath");
+	it("throws for non-WAV files without ffmpeg paths", () => {
+		expect(() => read("test.mp3")).toThrow("Non-WAV file requires ffmpegPath and ffprobePath");
 	});
 
-	it("throws for non-WAV files when only ffprobePath is set", async () => {
-		const node = new ReadNode({ path: "test.ogg", ffmpegPath: "", ffprobePath: "/usr/bin/ffprobe" });
+	it("throws for non-WAV files when only ffmpegPath is set", () => {
+		expect(() => read("test.flac", { ffmpegPath: "/usr/bin/ffmpeg" })).toThrow("Non-WAV file requires ffmpegPath and ffprobePath");
+	});
 
-		await expect(node.getMetadata()).rejects.toThrow("Non-WAV file requires ffmpegPath and ffprobePath");
+	it("throws for non-WAV files when only ffprobePath is set", () => {
+		expect(() => read("test.ogg", { ffprobePath: "/usr/bin/ffprobe" })).toThrow("Non-WAV file requires ffmpegPath and ffprobePath");
 	});
 });

@@ -1,6 +1,6 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, WHOLE_FILE, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { updateMinMax, writeMinMaxPoint } from "./utils/minmax";
 
@@ -149,20 +149,13 @@ export class WaveformNode extends TargetNode<WaveformProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Generate waveform visualization data";
 	static override readonly schema = schema;
+	static override readonly streamClass = WaveformStream;
 
 	static override is(value: unknown): value is WaveformNode {
 		return TargetNode.is(value) && value.type[2] === "waveform";
 	}
 
 	override readonly type = ["buffered-audio-node", "target", "waveform"] as const;
-
-	constructor(properties: WaveformProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): WaveformStream {
-		return new WaveformStream(this.properties);
-	}
 
 	override clone(overrides?: Partial<WaveformProperties>): WaveformNode {
 		return new WaveformNode({ ...this.properties, previousProperties: this.properties, ...overrides });

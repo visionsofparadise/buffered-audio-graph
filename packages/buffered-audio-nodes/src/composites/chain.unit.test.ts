@@ -1,36 +1,44 @@
 import { describe, expect, it } from "vitest";
-import type { BlockBuffer } from "@buffered-audio/core";
-import { BufferedSourceStream, SourceNode, type Block, type SourceMetadata } from "@buffered-audio/core";
-import { BufferedTransformStream, TransformNode } from "@buffered-audio/core";
-import { BufferedTargetStream, TargetNode } from "@buffered-audio/core";
-import { chain, ChainNode } from "./chain";
+import {
+	type BufferedAudioNode,
+	BufferedSourceStream,
+	BufferedTargetStream,
+	UnbufferedTransformStream,
+	SourceNode,
+	TargetNode,
+	TransformNode,
+	type Block,
+	type SourceMetadata,
+} from "@buffered-audio/core";
+import { chain } from "./chain";
 
 class MockSourceStream extends BufferedSourceStream {
+	private index = 0;
+
 	override async getMetadata(): Promise<SourceMetadata> {
 		return this.properties.meta as SourceMetadata;
 	}
 
 	override async _read(): Promise<Block | undefined> {
 		const chunks = this.properties.chunks as Array<Block>;
-		const index = this.properties.chunkIndex as number;
-		const chunk = chunks[index];
+		const chunk = chunks[this.index];
+
 		if (chunk) {
-			(this.properties as Record<string, unknown>).chunkIndex = index + 1;
+			this.index += 1;
+
 			return chunk;
 		}
+
 		return undefined;
 	}
 }
 
 class MockSource extends SourceNode {
+	static override readonly streamClass = MockSourceStream;
 	readonly type = ["buffered-audio-node", "source", "mock"] as const;
 
 	constructor(chunks: Array<Block> = [], meta: SourceMetadata = { sampleRate: 44100, channels: 1 }) {
-		super({ chunks, meta, chunkIndex: 0 } as never);
-	}
-
-	protected override createStream(): MockSourceStream {
-		return new MockSourceStream(this.properties);
+		super({ chunks, meta } as never);
 	}
 
 	clone(): MockSource {
@@ -38,28 +46,16 @@ class MockSource extends SourceNode {
 	}
 }
 
-class MockTransformStream extends BufferedTransformStream {
-	readonly processedChunks: Array<Block> = [];
-
-	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
-		await super._buffer(chunk, buffer);
-		this.processedChunks.push(chunk);
+class MockTransformStream extends UnbufferedTransformStream {
+	// eslint-disable-next-line @typescript-eslint/require-await
+	override async transform(block: Block, enqueue: (block: Block) => void): Promise<void> {
+		enqueue(block);
 	}
 }
 
 class MockTransform extends TransformNode {
+	static override readonly streamClass = MockTransformStream;
 	readonly type = ["buffered-audio-node", "transform", "mock"] as const;
-
-	private _lastStream?: MockTransformStream;
-
-	get processedChunks(): Array<Block> {
-		return this._lastStream?.processedChunks ?? [];
-	}
-
-	override createStream(): MockTransformStream {
-		this._lastStream = new MockTransformStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-		return this._lastStream;
-	}
 
 	clone(): MockTransform {
 		return new MockTransform();
@@ -70,28 +66,20 @@ class MockTargetStream extends BufferedTargetStream {
 	readonly receivedChunks: Array<Block> = [];
 	closed = false;
 
+	// eslint-disable-next-line @typescript-eslint/require-await
 	override async _write(chunk: Block): Promise<void> {
 		this.receivedChunks.push(chunk);
 	}
 
+	// eslint-disable-next-line @typescript-eslint/require-await
 	override async _close(): Promise<void> {
 		this.closed = true;
 	}
 }
 
 class MockTarget extends TargetNode {
+	static override readonly streamClass = MockTargetStream;
 	readonly type = ["buffered-audio-node", "target", "mock"] as const;
-
-	private _lastStream?: MockTargetStream;
-
-	get lastCreatedStream(): MockTargetStream | undefined {
-		return this._lastStream;
-	}
-
-	override createStream(): MockTargetStream {
-		this._lastStream = new MockTargetStream(this.properties as unknown as Record<string, unknown>);
-		return this._lastStream;
-	}
 
 	clone(): MockTarget {
 		return new MockTarget();
@@ -100,6 +88,7 @@ class MockTarget extends TargetNode {
 
 function createChunk(value: number, offset: number, duration: number): Block {
 	const samples = new Float32Array(duration).fill(value);
+
 	return { samples: [samples], offset, sampleRate: 44100, bitDepth: 32 };
 }
 
@@ -110,7 +99,6 @@ describe("chain()", () => {
 
 		const c = chain(source, target);
 
-		expect(c).toBeInstanceOf(ChainNode);
 		expect(c.head).toBe(source);
 		expect(c.tail).toBe(target);
 	});
@@ -136,6 +124,17 @@ describe("chain()", () => {
 		expect(c.tail).toBe(t2);
 	});
 
+	it("wires each junction: source → transform → target", () => {
+		const source = new MockSource();
+		const transform = new MockTransform();
+		const target = new MockTarget();
+
+		chain(source, transform, target);
+
+		expect(source.children).toContain(transform as BufferedAudioNode);
+		expect(transform.children).toContain(target as BufferedAudioNode);
+	});
+
 	it(".to() delegation: chain(a, b).to(c) connects b to c", () => {
 		const source = new MockSource();
 		const transform = new MockTransform();
@@ -144,7 +143,7 @@ describe("chain()", () => {
 		const c = chain(source, transform);
 		c.to(target);
 
-		expect(transform.children).toContain(target);
+		expect(transform.children).toContain(target as BufferedAudioNode);
 	});
 
 	it("nested chains: chain(source, chain(t1, t2), target)", () => {
@@ -159,38 +158,28 @@ describe("chain()", () => {
 		expect(outer.head).toBe(source);
 		expect(outer.tail).toBe(target);
 
-		expect(source.children).toContain(t1);
-		expect(t2.children).toContain(target);
+		expect(source.children).toContain(t1 as BufferedAudioNode);
+		expect(t1.children).toContain(t2 as BufferedAudioNode);
+		expect(t2.children).toContain(target as BufferedAudioNode);
 	});
 
-	it("render() delegation: chain(source, transform, target).render() flows chunks", async () => {
+	it("renders via createRenderJob when the head is a source", async () => {
 		const chunks = [createChunk(1.0, 0, 100)];
-		const source = new MockSource(chunks, { sampleRate: 44100, channels: 1 });
+		const source = new MockSource(chunks, { sampleRate: 44100, channels: 1, durationFrames: 100 });
 		const transform = new MockTransform();
 		const target = new MockTarget();
 
 		const c = chain(source, transform, target);
-		await c.render();
+		const job = source.createRenderJob();
 
-		expect(transform.processedChunks).toHaveLength(1);
-		expect(target.lastCreatedStream?.receivedChunks).toHaveLength(1);
-		expect(target.lastCreatedStream?.closed).toBe(true);
-	});
+		await job.render();
 
-	it("fan-out from chain: c.to(target1); c.to(target2)", async () => {
-		const chunks = [createChunk(0.5, 0, 100)];
-		const source = new MockSource(chunks, { sampleRate: 44100, channels: 1 });
-		const transform = new MockTransform();
-		const target1 = new MockTarget();
-		const target2 = new MockTarget();
+		const targetStream = job.streams.get(c.tail)?.[0];
 
-		const c = chain(source, transform);
-		c.to(target1);
-		c.to(target2);
-		await c.render();
+		if (!(targetStream instanceof MockTargetStream)) throw new Error("expected a MockTargetStream for the tail node");
 
-		expect(target1.lastCreatedStream?.receivedChunks).toHaveLength(1);
-		expect(target2.lastCreatedStream?.receivedChunks).toHaveLength(1);
+		expect(targetStream.receivedChunks).toHaveLength(1);
+		expect(targetStream.closed).toBe(true);
 	});
 
 	it("throws with fewer than 2 arguments", () => {
@@ -215,32 +204,6 @@ describe("chain()", () => {
 
 		const c = chain(source, target);
 
-		expect(() => c.to(target2)).toThrow("Cannot connect downstream from a target node; this composite is a complete pipeline");
-	});
-
-	it("throws on setup() when chain head is a SourceNode", async () => {
-		const source = new MockSource();
-		const transform = new MockTransform();
-
-		const c = chain(source, transform);
-
-		const fakeReadable = new ReadableStream<Block>();
-		const fakeContext = {
-			executionProviders: ["cpu"] as const,
-			memoryLimit: 256 * 1024 * 1024,
-			highWaterMark: 1,
-			visited: new Set(),
-		};
-
-		await expect(c.setup(fakeReadable, fakeContext)).rejects.toThrow("Cannot setup a composite whose head is a source node; use render() for complete pipelines");
-	});
-
-	it("throws on render() when chain head is not a SourceNode", async () => {
-		const t1 = new MockTransform();
-		const t2 = new MockTransform();
-
-		const c = chain(t1, t2);
-
-		await expect(c.render()).rejects.toThrow("Cannot render a composite whose head is not a source node");
+		expect(() => c.to(target2)).toThrow("Cannot connect downstream from a TargetNode");
 	});
 });

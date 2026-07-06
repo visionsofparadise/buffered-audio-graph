@@ -262,11 +262,8 @@ export class ReadFfmpegNode extends SourceNode<ReadFfmpegProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Read audio from a file using FFmpeg";
 	static override readonly schema = ffmpegSchema;
+	static override readonly streamClass = ReadFfmpegStream;
 	override readonly type = ["buffered-audio-node", "source", "read-ffmpeg"] as const;
-
-	protected override createStream(): ReadFfmpegStream {
-		return new ReadFfmpegStream(this.properties);
-	}
 
 	clone(overrides?: Partial<ReadFfmpegProperties>): ReadFfmpegNode {
 		return new ReadFfmpegNode({ ...this.properties, previousProperties: this.properties, ...overrides });

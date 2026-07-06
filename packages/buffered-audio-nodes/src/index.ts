@@ -1,6 +1,7 @@
 /* eslint-disable barrel-files/avoid-barrel-files */
-export { read, ReadNode, type ReadProperties } from "./sources/read";
-export { ReadWavNode, readWav, readSample, ReadWavStream, wavSchema, type ReadWavProperties } from "./sources/read/wav";
+export { read } from "./sources/read";
+export { ReadWavNode, readWav, ReadWavStream, wavSchema, type ReadWavProperties } from "./sources/read/wav";
+export { readSample } from "./sources/read/wav/utils/wav-format";
 export { ReadFfmpegNode, readFfmpeg, ReadFfmpegStream, ffmpegSchema, type ReadFfmpegProperties } from "./sources/read/ffmpeg";
 
 export { loudnessStats, LoudnessStatsNode, LoudnessStatsStream, type LoudnessStats } from "./targets/loudness-stats";
@@ -36,5 +37,4 @@ export { htdemucs, HtdemucsNode, HtdemucsStream, type HtdemucsProperties, type S
 export { kimVocal2, KimVocal2Node, KimVocal2Stream, type KimVocal2Properties } from "./transforms/kim-vocal-2";
 export { vst3, Vst3Node, Vst3Stream, type Vst3Properties } from "./transforms/vst3";
 
-export { chain, ChainNode } from "./composites/chain";
-export { CompositeNode } from "@buffered-audio/core";
+export { chain, type Chain } from "./composites/chain";

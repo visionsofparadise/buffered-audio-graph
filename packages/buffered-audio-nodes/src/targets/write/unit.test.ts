@@ -19,7 +19,7 @@ describe("WriteNode", () => {
 			const source = read(testVoice);
 			const target = write(tempOut, { bitDepth: "32f" });
 			source.to(target);
-			await source.render();
+			await source.createRenderJob().render();
 
 			const result = await readWavSamples(tempOut);
 
@@ -48,7 +48,7 @@ describe("WriteNode", () => {
 			const source = read(testVoice);
 			const target = write(tempOut, { bitDepth: "16" });
 			source.to(target);
-			await source.render();
+			await source.createRenderJob().render();
 
 			const result = await readWavSamples(tempOut);
 
@@ -76,7 +76,7 @@ describe("WriteNode", () => {
 			const source = read(testVoice);
 			const target = write(tempOut, { bitDepth: "32f" });
 			source.to(target);
-			await source.render();
+			await source.createRenderJob().render();
 
 			const result = await readWavSamples(tempOut);
 

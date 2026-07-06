@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, WHOLE_FILE, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { detectFftBackend, getFftAddon, createFftWorkspace, hanningWindow, type FftWorkspace } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { computeSpectrogramFrames } from "./utils/frames";
@@ -273,20 +273,13 @@ export class SpectrogramNode extends TargetNode<SpectrogramProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Generate spectrogram visualization data";
 	static override readonly schema = schema;
+	static override readonly streamClass = SpectrogramStream;
 
 	static override is(value: unknown): value is SpectrogramNode {
 		return TargetNode.is(value) && value.type[2] === "spectrogram";
 	}
 
 	override readonly type = ["buffered-audio-node", "target", "spectrogram"] as const;
-
-	constructor(properties: SpectrogramProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): SpectrogramStream {
-		return new SpectrogramStream(this.properties);
-	}
 
 	override clone(overrides?: Partial<SpectrogramProperties>): SpectrogramNode {
 		return new SpectrogramNode({ ...this.properties, previousProperties: this.properties, ...overrides });

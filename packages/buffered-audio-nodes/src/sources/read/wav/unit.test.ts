@@ -3,7 +3,7 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ReadWavNode, readWav } from ".";
+import { ReadWavNode, ReadWavStream, readWav } from ".";
 import { read } from "..";
 import { write } from "../../../targets/write";
 import { readToBuffer, readWavSamples } from "../../../utils/read-to-buffer";
@@ -26,7 +26,7 @@ describe("ReadWavNode", () => {
 
 	it("reads WAV file metadata correctly", async () => {
 		const node = readWav(testVoice);
-		const meta = await node.getMetadata();
+		const meta = await new ReadWavStream(node).getMetadata();
 
 		expect(meta.sampleRate).toBeGreaterThan(0);
 		expect(meta.channels).toBeGreaterThan(0);
@@ -40,7 +40,7 @@ describe("ReadWavNode", () => {
 			const source = readWav(testVoice);
 			const target = write(tempOut, { bitDepth: "32f" });
 			source.to(target);
-			await source.render();
+			await source.createRenderJob().render();
 
 			const result = await readWavSamples(tempOut);
 			const expected = await readWavSamples(testVoice);
@@ -71,7 +71,7 @@ describe("ReadWavStream", () => {
 			const source = read(testVoice);
 			const target = write(tempOut, { bitDepth: "32f" });
 			source.to(target);
-			await source.render();
+			await source.createRenderJob().render();
 
 			const result = await readWavSamples(tempOut);
 
@@ -94,7 +94,7 @@ describe("ReadWavStream", () => {
 				const source = read(testVoice, { channels: [0] });
 				const target = write(monoOutPath, { bitDepth: "32f" });
 				source.to(target);
-				await source.render();
+				await source.createRenderJob().render();
 
 				const result = await readWavSamples(monoOutPath);
 				expect(result.channels).toBe(1);
@@ -110,7 +110,7 @@ describe("ReadWavStream", () => {
 				const source = read(testVoice, { channels: [0] });
 				const target = write(monoOutPath, { bitDepth: "32f" });
 				source.to(target);
-				await source.render();
+				await source.createRenderJob().render();
 
 				const result = await readWavSamples(monoOutPath);
 				expect(result.channels).toBe(1);
@@ -136,15 +136,15 @@ describe("ReadWavStream", () => {
 		}
 	}, 240_000);
 
-	it("getMetadata returns metadata without side effects on the node", async () => {
-		const source = read(testVoice);
-		const meta = await source.getMetadata();
+	it("getMetadata returns stable metadata across repeated probes", async () => {
+		const source = readWav(testVoice);
+		const meta = await new ReadWavStream(source).getMetadata();
 
 		expect(meta.sampleRate).toBeGreaterThan(0);
 		expect(meta.channels).toBeGreaterThan(0);
 		expect(meta.durationFrames).toBeGreaterThan(0);
 
-		const meta2 = await source.getMetadata();
+		const meta2 = await new ReadWavStream(source).getMetadata();
 		expect(meta2.sampleRate).toBe(meta.sampleRate);
 		expect(meta2.channels).toBe(meta.channels);
 		expect(meta2.durationFrames).toBe(meta.durationFrames);

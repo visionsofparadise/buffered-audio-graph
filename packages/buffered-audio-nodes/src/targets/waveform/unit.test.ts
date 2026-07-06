@@ -19,7 +19,7 @@ describe("Waveform", () => {
 			const source = read(testVoice);
 			const target = waveform(tempOut);
 			source.to(target);
-			await source.render();
+			await source.createRenderJob().render();
 
 			const fileStat = await stat(tempOut);
 			expect(fileStat.size).toBeGreaterThan(0);
