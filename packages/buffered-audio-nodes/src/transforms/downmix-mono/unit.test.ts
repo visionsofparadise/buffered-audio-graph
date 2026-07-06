@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { BlockBuffer } from "@buffered-audio/core";
-import { downmixMono, DownmixMonoNode } from ".";
+import type { Block } from "@buffered-audio/core";
+import { downmixMono, DownmixMonoNode, DownmixMonoStream } from ".";
 
-function makeChunk(channelValues: Array<number>, frames = 256) {
+function makeChunk(channelValues: Array<number>, frames = 256): Block {
 	return {
 		samples: channelValues.map((val) => new Float32Array(frames).fill(val)),
 		offset: 0,
@@ -11,16 +11,17 @@ function makeChunk(channelValues: Array<number>, frames = 256) {
 	};
 }
 
-async function applyDownmix(chunk: ReturnType<typeof makeChunk>) {
-	const node = downmixMono();
-	const stream = node.createStream();
-	const buffer = new BlockBuffer();
-	try {
-		await stream._buffer(chunk, buffer);
-		return stream._unbuffer(chunk);
-	} finally {
-		await buffer.close();
-	}
+function applyDownmix(chunk: Block): Block {
+	const stream = new DownmixMonoStream(downmixMono());
+	let result: Block | undefined;
+
+	stream.transform(chunk, (block) => {
+		result = block;
+	});
+
+	if (!result) throw new Error("transform enqueued nothing");
+
+	return result;
 }
 
 describe("DownmixMonoNode", () => {
@@ -28,36 +29,31 @@ describe("DownmixMonoNode", () => {
 		expect(DownmixMonoNode.nodeName).toBe("Downmix Mono");
 	});
 
-	it("passes mono input unchanged", async () => {
-		const chunk = makeChunk([0.5]);
-		const output = await applyDownmix(chunk);
+	it("passes mono input unchanged", () => {
+		const output = applyDownmix(makeChunk([0.5]));
 		expect(output.samples.length).toBe(1);
 		expect(output.samples[0]![0]).toBeCloseTo(0.5, 5);
 	});
 
-	it("averages stereo to mono", async () => {
-		const chunk = makeChunk([0.8, 0.4]);
-		const output = await applyDownmix(chunk);
+	it("averages stereo to mono", () => {
+		const output = applyDownmix(makeChunk([0.8, 0.4]));
 		expect(output.samples.length).toBe(1);
 		expect(output.samples[0]![0]).toBeCloseTo(0.6, 5);
 	});
 
-	it("averages 4 channels to mono", async () => {
-		const chunk = makeChunk([0.4, 0.8, 0.2, 0.6]);
-		const output = await applyDownmix(chunk);
+	it("averages 4 channels to mono", () => {
+		const output = applyDownmix(makeChunk([0.4, 0.8, 0.2, 0.6]));
 		expect(output.samples.length).toBe(1);
 		expect(output.samples[0]![0]).toBeCloseTo(0.5, 5);
 	});
 
-	it("preserves frame count", async () => {
-		const chunk = makeChunk([0.5, 0.5], 1024);
-		const output = await applyDownmix(chunk);
+	it("preserves frame count", () => {
+		const output = applyDownmix(makeChunk([0.5, 0.5], 1024));
 		expect(output.samples[0]!.length).toBe(1024);
 	});
 
-	it("handles channels with different signs correctly", async () => {
-		const chunk = makeChunk([0.5, -0.5]);
-		const output = await applyDownmix(chunk);
+	it("handles channels with different signs correctly", () => {
+		const output = applyDownmix(makeChunk([0.5, -0.5]));
 		expect(output.samples[0]![0]).toBeCloseTo(0.0, 5);
 	});
 });

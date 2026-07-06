@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type BufferedAudioNode, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 const cutRegionSchema = z.object({
@@ -15,17 +15,17 @@ export type CutRegion = z.infer<typeof cutRegionSchema>;
 
 export interface CutProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class CutStream extends BufferedTransformStream<CutProperties> {
+export class CutStream extends UnbufferedTransformStream<CutProperties> {
 	private sortedRegions: Array<CutRegion>;
 	private removedFrames = 0;
 
-	constructor(properties: CutProperties) {
-		super(properties);
+	constructor(node: BufferedAudioNode) {
+		super(node);
 
 		this.sortedRegions = [...this.properties.regions].sort((left, right) => left.start - right.start);
 	}
 
-	override _unbuffer(chunk: Block): Block | undefined {
+	override transform(chunk: Block, enqueue: (block: Block) => void): void {
 		const sampleRate = chunk.sampleRate;
 		const chunkFrames = chunk.samples[0]?.length ?? 0;
 		const chunkStartSec = chunk.offset / sampleRate;
@@ -52,7 +52,7 @@ export class CutStream extends BufferedTransformStream<CutProperties> {
 			keepRanges.push({ start: cursor, end: chunkFrames });
 		}
 
-		if (keepRanges.length === 0) return undefined;
+		if (keepRanges.length === 0) return;
 
 		const totalKept = keepRanges.reduce((sum, range) => sum + (range.end - range.start), 0);
 
@@ -62,7 +62,9 @@ export class CutStream extends BufferedTransformStream<CutProperties> {
 		this.removedFrames += removedFrames;
 
 		if (totalKept === chunkFrames) {
-			return { samples: chunk.samples, offset: adjustedOffset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+			enqueue({ samples: chunk.samples, offset: adjustedOffset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+
+			return;
 		}
 
 		const channels = chunk.samples.length;
@@ -87,7 +89,7 @@ export class CutStream extends BufferedTransformStream<CutProperties> {
 			output.push(out);
 		}
 
-		return { samples: output, offset: adjustedOffset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		enqueue({ samples: output, offset: adjustedOffset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
 	}
 }
 
@@ -97,15 +99,12 @@ export class CutNode extends TransformNode<CutProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Remove a region of audio";
 	static override readonly schema = schema;
+	static override readonly streamClass = CutStream;
 	static override is(value: unknown): value is CutNode {
 		return TransformNode.is(value) && value.type[2] === "cut";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "cut"] as const;
-
-	override createStream(): CutStream {
-		return new CutStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<CutProperties>): CutNode {
 		return new CutNode({ ...this.properties, previousProperties: this.properties, ...overrides });

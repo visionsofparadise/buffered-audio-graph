@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -8,8 +8,8 @@ export const schema = z.object({
 
 export interface DuplicateChannelsProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class DuplicateChannelsStream extends BufferedTransformStream<DuplicateChannelsProperties> {
-	override _unbuffer(chunk: Block): Block {
+export class DuplicateChannelsStream extends UnbufferedTransformStream<DuplicateChannelsProperties> {
+	override transform(chunk: Block, enqueue: (block: Block) => void): void {
 		const inputChannels = chunk.samples.length;
 
 		if (inputChannels !== 1) {
@@ -24,7 +24,7 @@ export class DuplicateChannelsStream extends BufferedTransformStream<DuplicateCh
 			samples.push(Float32Array.from(source));
 		}
 
-		return { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		enqueue({ samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
 	}
 }
 
@@ -34,15 +34,12 @@ export class DuplicateChannelsNode extends TransformNode<DuplicateChannelsProper
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Duplicate a mono signal into multiple identical output channels; requires exactly 1 input channel, throws otherwise";
 	static override readonly schema = schema;
+	static override readonly streamClass = DuplicateChannelsStream;
 	static override is(value: unknown): value is DuplicateChannelsNode {
 		return TransformNode.is(value) && value.type[2] === "duplicate-channels";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "duplicate-channels"] as const;
-
-	override createStream(): DuplicateChannelsStream {
-		return new DuplicateChannelsStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<DuplicateChannelsProperties>): DuplicateChannelsNode {
 		return new DuplicateChannelsNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -50,7 +47,5 @@ export class DuplicateChannelsNode extends TransformNode<DuplicateChannelsProper
 }
 
 export function duplicateChannels(options?: { channels?: number; id?: string }): DuplicateChannelsNode {
-	const parsed = schema.parse(options ?? {});
-
-	return new DuplicateChannelsNode({ ...parsed, id: options?.id });
+	return new DuplicateChannelsNode(options ?? {});
 }

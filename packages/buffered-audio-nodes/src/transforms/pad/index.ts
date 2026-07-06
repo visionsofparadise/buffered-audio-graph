@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
-
-const CHUNK_FRAMES = 44100;
+import { CHUNK_FRAMES } from "./utils/chunk-frames";
 
 export const schema = z.object({
 	before: z.number().min(0).multipleOf(0.001).default(0).describe("Before"),
@@ -11,14 +10,14 @@ export const schema = z.object({
 
 export interface PadProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class PadStream extends BufferedTransformStream<PadProperties> {
+export class PadStream extends UnbufferedTransformStream<PadProperties> {
 	private seenChunk = false;
 	private capturedSampleRate = 44100;
 	private capturedBitDepth = 32;
 	private capturedChannels = 0;
 	private outputOffset = 0;
 
-	override _unbuffer(chunk: Block): Block {
+	override transform(chunk: Block, enqueue: (block: Block) => void): void {
 		const frames = chunk.samples[0]?.length ?? 0;
 
 		if (!this.seenChunk) {
@@ -41,7 +40,9 @@ export class PadStream extends BufferedTransformStream<PadProperties> {
 
 				this.outputOffset += leading + frames;
 
-				return { samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+				enqueue({ samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+
+				return;
 			}
 		}
 
@@ -49,17 +50,16 @@ export class PadStream extends BufferedTransformStream<PadProperties> {
 
 		this.outputOffset += frames;
 
-		return { samples: chunk.samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		enqueue({ samples: chunk.samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
 	}
 
-	override _flush(): Array<Block> | undefined {
-		if (!this.seenChunk) return undefined;
+	override flush(enqueue: (block: Block) => void): void {
+		if (!this.seenChunk) return;
 
 		const trailing = Math.round(this.properties.after * this.capturedSampleRate);
 
-		if (trailing === 0) return undefined;
+		if (trailing === 0) return;
 
-		const chunks: Array<Block> = [];
 		let remaining = trailing;
 
 		while (remaining > 0) {
@@ -68,11 +68,9 @@ export class PadStream extends BufferedTransformStream<PadProperties> {
 			const offset = this.outputOffset;
 
 			this.outputOffset += take;
-			chunks.push({ samples, offset, sampleRate: this.capturedSampleRate, bitDepth: this.capturedBitDepth });
+			enqueue({ samples, offset, sampleRate: this.capturedSampleRate, bitDepth: this.capturedBitDepth });
 			remaining -= take;
 		}
-
-		return chunks;
 	}
 }
 
@@ -82,19 +80,12 @@ export class PadNode extends TransformNode<PadProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Add silence to start or end of audio";
 	static override readonly schema = schema;
+	static override readonly streamClass = PadStream;
 	static override is(value: unknown): value is PadNode {
 		return TransformNode.is(value) && value.type[2] === "pad";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "pad"] as const;
-
-	constructor(properties: PadProperties) {
-		super({ bufferSize: 0, latency: 0, ...properties });
-	}
-
-	override createStream(): PadStream {
-		return new PadStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<PadProperties>): PadNode {
 		return new PadNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -102,7 +93,5 @@ export class PadNode extends TransformNode<PadProperties> {
 }
 
 export function pad(options: { before?: number; after?: number; id?: string }): PadNode {
-	const parsed = schema.parse(options);
-
-	return new PadNode({ ...parsed, id: options.id });
+	return new PadNode(options);
 }

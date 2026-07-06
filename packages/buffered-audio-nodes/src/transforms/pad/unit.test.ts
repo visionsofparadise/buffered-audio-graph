@@ -5,7 +5,7 @@ import { pad, PadStream } from ".";
 const SAMPLE_RATE = 44100;
 
 function context(): StreamContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, visited: new Set() };
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
 }
 
 function readableFrom(chunks: Array<Block>): ReadableStream<Block> {
@@ -58,7 +58,7 @@ function concatChannel(chunks: Array<Block>, channel: number): Float32Array {
 
 async function runPad(properties: Parameters<typeof pad>[0], input: Array<Block>, channel = 0): Promise<Float32Array> {
 	const node = pad(properties);
-	const stream = node.createStream() as PadStream;
+	const stream = new PadStream(node);
 	const output = await stream._setup(readableFrom(input), context());
 
 	return concatChannel(await drain(output), channel);
@@ -181,7 +181,7 @@ describe("pad", () => {
 		const input: Block = { samples: [left, right], offset: 0, sampleRate: SAMPLE_RATE, bitDepth: 32 };
 
 		const node = pad({ before, after: 0 });
-		const stream = node.createStream() as PadStream;
+		const stream = new PadStream(node);
 		const chunks = await drain(await stream._setup(readableFrom([input]), context()));
 
 		const outLeft = concatChannel(chunks, 0);

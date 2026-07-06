@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -8,13 +8,17 @@ export const schema = z.object({
 
 export interface GainProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class GainStream extends BufferedTransformStream<GainProperties> {
-	override _unbuffer(chunk: Block): Block {
+export class GainStream extends UnbufferedTransformStream<GainProperties> {
+	override transform(block: Block, enqueue: (block: Block) => void): void {
 		const linear = Math.pow(10, this.properties.gain / 20);
 
-		if (linear === 1) return chunk;
+		if (linear === 1) {
+			enqueue(block);
 
-		const samples = chunk.samples.map((channel) => {
+			return;
+		}
+
+		const samples = block.samples.map((channel) => {
 			const output = new Float32Array(channel.length);
 
 			for (let index = 0; index < channel.length; index++) {
@@ -24,7 +28,7 @@ export class GainStream extends BufferedTransformStream<GainProperties> {
 			return output;
 		});
 
-		return { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
 	}
 }
 
@@ -34,15 +38,12 @@ export class GainNode extends TransformNode<GainProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Adjust signal level by a fixed amount in dB";
 	static override readonly schema = schema;
+	static override readonly streamClass = GainStream;
 	static override is(value: unknown): value is GainNode {
 		return TransformNode.is(value) && value.type[2] === "gain";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "gain"] as const;
-
-	override createStream(): GainStream {
-		return new GainStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<GainProperties>): GainNode {
 		return new GainNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -50,7 +51,5 @@ export class GainNode extends TransformNode<GainProperties> {
 }
 
 export function gain(options?: { gain?: number; id?: string }): GainNode {
-	const parsed = schema.parse(options ?? {});
-
-	return new GainNode({ ...parsed, id: options?.id });
+	return new GainNode(options ?? {});
 }

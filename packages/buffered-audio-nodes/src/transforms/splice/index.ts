@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { readWavSamples } from "../../utils/read-to-buffer";
 
@@ -12,7 +12,7 @@ export interface SpliceProperties extends z.infer<typeof schema>, TransformNodeP
 	readonly channels?: ReadonlyArray<number>;
 }
 
-export class SpliceStream extends BufferedTransformStream<SpliceProperties> {
+export class SpliceStream extends UnbufferedTransformStream<SpliceProperties> {
 	private insertSamples!: Array<Float32Array>;
 	private insertSampleRate = 0;
 	private insertLength = 0;
@@ -38,12 +38,12 @@ export class SpliceStream extends BufferedTransformStream<SpliceProperties> {
 		return super._setup(input, context);
 	}
 
-	override _unbuffer(chunk: Block): Block {
+	override transform(chunk: Block, enqueue: (block: Block) => void): void {
 		if (!this.sampleRateChecked) {
 			this.sampleRateChecked = true;
 
-			if (this.sampleRate !== undefined && this.insertSampleRate !== this.sampleRate) {
-				throw new Error(`Splice: insert file sample rate ${this.insertSampleRate} does not match stream sample rate ${this.sampleRate}`);
+			if (this.insertSampleRate !== chunk.sampleRate) {
+				throw new Error(`Splice: insert file sample rate ${this.insertSampleRate} does not match stream sample rate ${chunk.sampleRate}`);
 			}
 		}
 
@@ -53,7 +53,9 @@ export class SpliceStream extends BufferedTransformStream<SpliceProperties> {
 		const insertEnd = this.properties.insertAt + this.insertLength;
 
 		if (chunkEnd <= this.properties.insertAt || chunkStart >= insertEnd) {
-			return chunk;
+			enqueue(chunk);
+
+			return;
 		}
 
 		const samples = chunk.samples.map((channel) => new Float32Array(channel));
@@ -101,7 +103,7 @@ export class SpliceStream extends BufferedTransformStream<SpliceProperties> {
 			}
 		}
 
-		return { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		enqueue({ samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
 	}
 }
 
@@ -111,15 +113,12 @@ export class SpliceNode extends TransformNode<SpliceProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Replace a region of audio with processed content";
 	static override readonly schema = schema;
+	static override readonly streamClass = SpliceStream;
 	static override is(value: unknown): value is SpliceNode {
 		return TransformNode.is(value) && value.type[2] === "splice";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "splice"] as const;
-
-	override createStream(): SpliceStream {
-		return new SpliceStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<SpliceProperties>): SpliceNode {
 		return new SpliceNode({ ...this.properties, previousProperties: this.properties, ...overrides });

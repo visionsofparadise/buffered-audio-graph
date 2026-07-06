@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -12,14 +12,10 @@ export const schema = z.object({
 
 export interface DitherProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class DitherStream extends BufferedTransformStream<DitherProperties> {
+export class DitherStream extends UnbufferedTransformStream<DitherProperties> {
 	private lastError: Array<number> = [];
 
-	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
-		await buffer.write(chunk.samples, chunk.sampleRate, this.properties.bitDepth);
-	}
-
-	override _unbuffer(chunk: Block): Block {
+	override transform(chunk: Block, enqueue: (block: Block) => void): void {
 		const { bitDepth, noiseShaping } = this.properties;
 		const quantizationLevels = Math.pow(2, bitDepth - 1);
 		const lsb = 1 / quantizationLevels;
@@ -53,7 +49,7 @@ export class DitherStream extends BufferedTransformStream<DitherProperties> {
 			return output;
 		});
 
-		return { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: this.properties.bitDepth };
+		enqueue({ samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: this.properties.bitDepth });
 	}
 }
 
@@ -63,15 +59,12 @@ export class DitherNode extends TransformNode<DitherProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Add shaped noise to reduce quantization distortion";
 	static override readonly schema = schema;
+	static override readonly streamClass = DitherStream;
 	static override is(value: unknown): value is DitherNode {
 		return TransformNode.is(value) && value.type[2] === "dither";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "dither"] as const;
-
-	override createStream(): DitherStream {
-		return new DitherStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<DitherProperties>): DitherNode {
 		return new DitherNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -85,7 +78,5 @@ export function dither(
 		id?: string;
 	},
 ): DitherNode {
-	const parsed = schema.parse({ bitDepth, noiseShaping: options?.noiseShaping });
-
-	return new DitherNode({ ...parsed, id: options?.id });
+	return new DitherNode({ bitDepth, noiseShaping: options?.noiseShaping, id: options?.id });
 }

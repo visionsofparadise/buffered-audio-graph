@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -9,21 +9,25 @@ export const schema = z.object({
 
 export interface PhaseProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class PhaseStream extends BufferedTransformStream<PhaseProperties> {
+export class PhaseStream extends UnbufferedTransformStream<PhaseProperties> {
 	private allpassState: Array<number> = [];
 
-	override _unbuffer(chunk: Block): Block {
+	override transform(chunk: Block, enqueue: (block: Block) => void): void {
 		const { invert, angle } = this.properties;
 
 		if (angle !== undefined) {
-			return this.applyPhaseRotation(chunk, angle);
+			enqueue(this.applyPhaseRotation(chunk, angle));
+
+			return;
 		}
 
 		if (invert) {
-			return this.applyInvert(chunk);
+			enqueue(this.applyInvert(chunk));
+
+			return;
 		}
 
-		return chunk;
+		enqueue(chunk);
 	}
 
 	private applyInvert(chunk: Block): Block {
@@ -75,15 +79,12 @@ export class PhaseNode extends TransformNode<PhaseProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Invert or rotate signal phase";
 	static override readonly schema = schema;
+	static override readonly streamClass = PhaseStream;
 	static override is(value: unknown): value is PhaseNode {
 		return TransformNode.is(value) && value.type[2] === "phase";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "phase"] as const;
-
-	override createStream(): PhaseStream {
-		return new PhaseStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<PhaseProperties>): PhaseNode {
 		return new PhaseNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -91,11 +92,7 @@ export class PhaseNode extends TransformNode<PhaseProperties> {
 }
 
 export function phase(options?: { invert?: boolean; angle?: number; id?: string }): PhaseNode {
-	return new PhaseNode({
-		invert: options?.invert ?? true,
-		angle: options?.angle,
-		id: options?.id,
-	});
+	return new PhaseNode(options ?? {});
 }
 
 export function invert(options?: { id?: string }): PhaseNode {

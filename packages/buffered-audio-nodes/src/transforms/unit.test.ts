@@ -3,7 +3,7 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BufferedAudioNodeProperties, type BlockBuffer, type StreamContext } from "@buffered-audio/core";
+import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type BufferedAudioNodeProperties, type StreamContext } from "@buffered-audio/core";
 import { read } from "../sources/read";
 import { write } from "../targets/write";
 import { readWavSamples } from "../utils/read-to-buffer";
@@ -11,16 +11,17 @@ import { audio } from "../utils/test-binaries";
 
 const testVoice = audio.testVoice;
 
+class PassthroughStream extends UnbufferedTransformStream {
+	override transform(block: Block, enqueue: (block: Block) => void): void {
+		enqueue(block);
+	}
+}
+
 class PassthroughTransform extends TransformNode {
 	static override readonly nodeName = "Passthrough";
 	static override readonly packageName = "test";
+	static override readonly streamClass = PassthroughStream;
 	override readonly type = ["buffered-audio-node", "transform", "passthrough"] as const;
-	get bufferSize(): number { return 0; }
-	get latency(): number { return 0; }
-
-	override createStream(): BufferedTransformStream {
-		return new BufferedTransformStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	clone(overrides?: Partial<BufferedAudioNodeProperties>): PassthroughTransform {
 		return new PassthroughTransform({ ...this.properties, ...overrides });
@@ -28,65 +29,61 @@ class PassthroughTransform extends TransformNode {
 }
 
 class ErrorStream extends BufferedTransformStream {
-	override async _process(_buffer: BlockBuffer): Promise<void> {
-		throw new Error("Intentional _process error");
+	override async transform(_buffered: BlockBuffer, _enqueue: (block: Block) => void): Promise<void> {
+		await Promise.resolve();
+
+		throw new Error("Intentional transform error");
 	}
 }
 
 class ErrorTransform extends TransformNode {
 	static override readonly nodeName = "Error";
 	static override readonly packageName = "test";
+	static override readonly streamClass = ErrorStream;
 	override readonly type = ["buffered-audio-node", "transform", "error"] as const;
-	get bufferSize(): number { return WHOLE_FILE; }
-	get latency(): number { return 0; }
-
-	override createStream(): ErrorStream {
-		return new ErrorStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	clone(overrides?: Partial<BufferedAudioNodeProperties>): ErrorTransform {
 		return new ErrorTransform({ ...this.properties, ...overrides });
 	}
 }
 
-class ScaleStream extends BufferedTransformStream {
-	private readonly factor: number;
-
-	constructor(factor: number, properties: Record<string, unknown>) {
-		super({ ...properties, bufferSize: 0, overlap: 0 });
-		this.factor = factor;
+class ScaleStream extends UnbufferedTransformStream {
+	constructor(
+		node: BufferedAudioNode,
+		private readonly factor: number,
+	) {
+		super(node);
 	}
 
-	override _unbuffer(chunk: Block): Block {
-		const scaled = chunk.samples.map((channel) => {
+	override transform(block: Block, enqueue: (chunk: Block) => void): void {
+		const scaled = block.samples.map((channel) => {
 			const out = new Float32Array(channel.length);
 			for (let i = 0; i < channel.length; i++) {
 				out[i] = channel[i]! * this.factor;
 			}
 			return out;
 		});
-		return { ...chunk, samples: scaled };
+		enqueue({ ...block, samples: scaled });
 	}
 }
 
-class CompositeStream extends BufferedTransformStream {
+class CompositeStream extends UnbufferedTransformStream {
 	override async _setup(input: ReadableStream<Block>, _context: StreamContext): Promise<ReadableStream<Block>> {
-		const first = new ScaleStream(2, {});
-		const second = new ScaleStream(0.5, {});
+		const first = new ScaleStream(this.node, 2);
+		const second = new ScaleStream(this.node, 0.5);
 		return input.pipeThrough(first.createTransformStream()).pipeThrough(second.createTransformStream());
+	}
+
+	override transform(block: Block, enqueue: (chunk: Block) => void): void {
+		enqueue(block);
 	}
 }
 
 class CompositeTransform extends TransformNode {
 	static override readonly nodeName = "Composite";
 	static override readonly packageName = "test";
+	static override readonly streamClass = CompositeStream;
 	override readonly type = ["buffered-audio-node", "transform", "composite"] as const;
-	get bufferSize(): number { return 0; }
-	get latency(): number { return 0; }
-
-	override createStream(): CompositeStream {
-		return new CompositeStream({ ...this.properties, bufferSize: 0, overlap: 0 });
-	}
 
 	clone(overrides?: Partial<BufferedAudioNodeProperties>): CompositeTransform {
 		return new CompositeTransform({ ...this.properties, ...overrides });
@@ -106,13 +103,13 @@ describe("TransformNode lifecycle", () => {
 			source.to(transform);
 			transform.to(target);
 
-			await source.render();
+			await source.createRenderJob().render();
 
 			const result1 = await readWavSamples(tempOut);
 			expect(result1.sampleRate).toBe(original.sampleRate);
 			expect(result1.durationFrames).toBe(original.durationFrames);
 
-			await source.render();
+			await source.createRenderJob().render();
 
 			const result2 = await readWavSamples(tempOut);
 			expect(result2.sampleRate).toBe(original.sampleRate);
@@ -130,7 +127,7 @@ describe("TransformNode lifecycle", () => {
 		}
 	}, 240_000);
 
-	it("propagates errors from _process without hanging", async () => {
+	it("propagates errors from transform without hanging", async () => {
 		const tempOut = join(tmpdir(), `ban-error-${randomBytes(8).toString("hex")}.wav`);
 
 		try {
@@ -141,7 +138,7 @@ describe("TransformNode lifecycle", () => {
 			source.to(transform);
 			transform.to(target);
 
-			await expect(source.render()).rejects.toThrow("Intentional _process error");
+			await expect(source.createRenderJob().render()).rejects.toThrow("Intentional transform error");
 		} finally {
 			await unlink(tempOut).catch(() => undefined);
 		}
@@ -160,7 +157,7 @@ describe("Composite stream via _setup()", () => {
 
 			source.to(composite);
 			composite.to(target);
-			await source.render();
+			await source.createRenderJob().render();
 
 			const result = await readWavSamples(tempOut);
 			expect(result.sampleRate).toBe(original.sampleRate);
