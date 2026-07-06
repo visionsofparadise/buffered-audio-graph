@@ -20,6 +20,8 @@ export interface ReadFfmpegProperties extends z.infer<typeof ffmpegSchema>, Sour
 
 const DEFAULT_CHUNK_SIZE = 44100;
 
+const TEARDOWN_KILL_GRACE_MS = 2000;
+
 interface ProbeResult {
 	readonly sampleRate: number;
 	readonly channels: number;
@@ -127,12 +129,27 @@ export class ReadFfmpegStream<P extends ReadFfmpegProperties = ReadFfmpegPropert
 		const proc = this.ffmpegProcess;
 
 		if (proc) {
-			proc.kill();
+			if (proc.exitCode === null && !proc.killed) {
+				proc.kill("SIGTERM");
 
-			await new Promise<void>((resolve) => {
-				proc.on("close", () => resolve());
-				if (proc.exitCode !== null) resolve();
-			});
+				await new Promise<void>((resolve) => {
+					if (proc.exitCode !== null) {
+						resolve();
+
+						return;
+					}
+
+					const timer = setTimeout(() => {
+						proc.kill("SIGKILL");
+						resolve();
+					}, TEARDOWN_KILL_GRACE_MS);
+
+					proc.on("close", () => {
+						clearTimeout(timer);
+						resolve();
+					});
+				});
+			}
 
 			this.ffmpegProcess = undefined;
 		}
