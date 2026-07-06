@@ -79,7 +79,7 @@ async function runNormalize(input: Float32Array, sampleRate: number, target: num
 
 		source.to(node);
 		node.to(target_);
-		await source.render();
+		await source.createRenderJob().render();
 
 		const result = await readBack32f(outputPath);
 
@@ -158,7 +158,7 @@ describe("LoudnessNormalize", () => {
 		// ESM namespace exports can't be patched in vitest (`Cannot redefine property: spawn`), so drive
 		// the stream directly. The schema has no `ffmpegPath`, so adding a subprocess would be visible in review.
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
-		const stream = new LoudnessNormalizeStream({ target: -16, bufferSize: Infinity, overlap: 0 });
+		const stream = new LoudnessNormalizeStream(loudnessNormalize({ target: -16 }));
 		const transformStream = stream.createTransformStream();
 		const writer = transformStream.writable.getWriter();
 		const reader = transformStream.readable.getReader();

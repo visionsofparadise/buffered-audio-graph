@@ -111,7 +111,7 @@ interface RunStreamResult {
  */
 async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: number, properties: TargetRunOptions): Promise<RunStreamResult> {
 	const channelCount = channels.length;
-	const stream = new LoudnessTargetStream({
+	const stream = new LoudnessTargetStream(loudnessTarget({
 		targetLufs: properties.targetLufs,
 		pivot: properties.pivot,
 		floor: properties.floor,
@@ -122,9 +122,7 @@ async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: numb
 		tolerance: properties.tolerance ?? 0.5,
 		peakTolerance: properties.peakTolerance ?? 0.1,
 		maxAttempts: properties.maxAttempts ?? 10,
-		bufferSize: Infinity,
-		overlap: 0,
-	});
+	}));
 	const transformStream = stream.createTransformStream();
 	const writer = transformStream.writable.getWriter();
 	const reader = transformStream.readable.getReader();
@@ -751,15 +749,13 @@ async function runProcessAndMeasureArrayBuffers(frames: number, sampleRate: numb
 	await buffer.write([samples], sampleRate, 32);
 	await buffer.flushWrites();
 
-	const stream = new LoudnessTargetStream({
+	const stream = new LoudnessTargetStream(loudnessTarget({
 		targetLufs: -20,
 		smoothing: 1,
 		tolerance: 0.5,
 		peakTolerance: 0.1,
 		maxAttempts: 10,
-		bufferSize: Infinity,
-		overlap: 0,
-	});
+	}));
 
 	let peakBytes = baselineBytes;
 	const samplePeak = (): void => {
@@ -770,11 +766,13 @@ async function runProcessAndMeasureArrayBuffers(frames: number, sampleRate: numb
 	const samplerHandle: ReturnType<typeof setInterval> = setInterval(samplePeak, HEAP_SAMPLE_INTERVAL_MS);
 
 	try {
-		// Drive the learn pass directly. `_process` is `protected` on
-		// `BufferedTransformStream`, so the cast through `unknown` is
-		// the only escape hatch — same pattern `runStream` uses to
-		// reach `winningB` / `winningLimitDb` for diagnostic assertions.
-		await (stream as unknown as { _process(buffer: BlockBuffer): Promise<void> })._process(buffer);
+		// Drive the learn pass directly. `finalize` is `private` on the
+		// stream, so the cast through `unknown` is the only escape hatch —
+		// same pattern `runStream` uses to reach `winningB` /
+		// `winningLimitDb` for diagnostic assertions. This exercises the
+		// measurement + iteration pass (the memory-heavy half of
+		// `transform`) without the subsequent apply-drain.
+		await (stream as unknown as { finalize(buffer: BlockBuffer): Promise<void> }).finalize(buffer);
 	} finally {
 		clearInterval(samplerHandle);
 	}

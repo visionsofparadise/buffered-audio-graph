@@ -160,7 +160,7 @@ function makeSynthetic(frames: number, sampleRate: number, seed = 1): Float32Arr
 	return out;
 }
 
-// WHOLE-FILE drive (bufferSize: Infinity, overlap: 0, accumulate-at-flush); DETERMINISTIC — identical input ⇒ identical output.
+// WHOLE-FILE drive (blockSize: WHOLE_FILE, accumulate-at-flush); DETERMINISTIC — identical input ⇒ identical output.
 async function runStream(
 	channels: ReadonlyArray<Float32Array>,
 	sampleRate: number,
@@ -168,14 +168,7 @@ async function runStream(
 ): Promise<Array<Float32Array>> {
 	const channelCount = channels.length;
 	const frameSize = properties.frameSize ?? 2048;
-	const stream = new CrestReduceStream({
-		smoothing: properties.smoothing ?? 100,
-		frameSize,
-		vkfftAddonPath: "",
-		fftwAddonPath: "",
-		bufferSize: Infinity,
-		overlap: 0,
-	});
+	const stream = new CrestReduceStream(crestReduce({ smoothing: properties.smoothing ?? 100, frameSize }));
 
 	const transformStream = stream.createTransformStream();
 	const writer = transformStream.writable.getWriter();

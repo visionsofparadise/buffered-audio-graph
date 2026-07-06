@@ -13,45 +13,40 @@ export const schema = z.object({
 export interface TrimProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class TrimStream extends BufferedTransformStream<TrimProperties> {
+	override blockSize = WHOLE_FILE;
+
 	private firstAbove = Infinity;
 	private lastAbove = -1;
 	private scanOffset = 0;
-	private startFrame = 0;
-	private endFrame = 0;
 
-	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
-		await super._buffer(chunk, buffer);
+	override prepare(block: Block): Block {
+		const chunkFrames = block.samples[0]?.length ?? 0;
 
-		const chunkFrames = chunk.samples[0]?.length ?? 0;
-
-		if (chunkFrames === 0) return;
+		if (chunkFrames === 0) return block;
 
 		const threshold = this.properties.threshold;
-		const localFirst = findFirstAbove(chunk.samples, chunkFrames, threshold);
+		const localFirst = findFirstAbove(block.samples, chunkFrames, threshold);
 
 		if (localFirst < chunkFrames) {
 			const abs = this.scanOffset + localFirst;
 
 			if (abs < this.firstAbove) this.firstAbove = abs;
-			this.lastAbove = Math.max(this.lastAbove, this.scanOffset + findLastAbove(chunk.samples, chunkFrames, threshold));
+			this.lastAbove = Math.max(this.lastAbove, this.scanOffset + findLastAbove(block.samples, chunkFrames, threshold));
 		}
 
 		this.scanOffset += chunkFrames;
+
+		return block;
 	}
 
-	override async _process(buffer: BlockBuffer): Promise<void> {
-		const frames = buffer.frames;
-		const channels = buffer.channels;
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+		const frames = buffered.frames;
+		const channels = buffered.channels;
 
 		if (channels === 0 || frames === 0) return;
+		if (this.firstAbove >= frames) return;
 
-		if (this.firstAbove >= frames) {
-			await buffer.clear();
-
-			return;
-		}
-
-		const sr = buffer.sampleRate ?? 44100;
+		const sr = buffered.sampleRate ?? 44100;
 		const marginFrames = Math.round(this.properties.margin * sr);
 
 		let startFrame = 0;
@@ -60,38 +55,33 @@ export class TrimStream extends BufferedTransformStream<TrimProperties> {
 		if (this.properties.start) startFrame = Math.max(0, this.firstAbove - marginFrames);
 		if (this.properties.end) endFrame = Math.min(frames, this.lastAbove + 1 + marginFrames);
 
-		if (startFrame >= endFrame) {
-			await buffer.clear();
+		if (startFrame >= endFrame) return;
 
-			return;
+		for await (const block of buffered.iterate(44100)) {
+			const blockFrames = block.samples[0]?.length ?? 0;
+			const chunkStart = block.offset;
+			const chunkEnd = chunkStart + blockFrames;
+			const overlapStart = Math.max(chunkStart, startFrame);
+			const overlapEnd = Math.min(chunkEnd, endFrame);
+
+			if (overlapEnd <= overlapStart) continue;
+
+			if (overlapStart === chunkStart && overlapEnd === chunkEnd) {
+				enqueue({ samples: block.samples, offset: chunkStart - startFrame, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+
+				continue;
+			}
+
+			const sliceStart = overlapStart - chunkStart;
+			const sliceEnd = overlapEnd - chunkStart;
+
+			enqueue({
+				samples: block.samples.map((channel) => channel.subarray(sliceStart, sliceEnd)),
+				offset: overlapStart - startFrame,
+				sampleRate: block.sampleRate,
+				bitDepth: block.bitDepth,
+			});
 		}
-
-		this.startFrame = startFrame;
-		this.endFrame = endFrame;
-	}
-
-	override _unbuffer(chunk: Block): Block | undefined {
-		const frames = chunk.samples[0]?.length ?? 0;
-		const chunkStart = chunk.offset;
-		const chunkEnd = chunkStart + frames;
-		const overlapStart = Math.max(chunkStart, this.startFrame);
-		const overlapEnd = Math.min(chunkEnd, this.endFrame);
-
-		if (overlapEnd <= overlapStart) return undefined;
-
-		if (overlapStart === chunkStart && overlapEnd === chunkEnd) {
-			return { samples: chunk.samples, offset: chunkStart - this.startFrame, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
-		}
-
-		const sliceStart = overlapStart - chunkStart;
-		const sliceEnd = overlapEnd - chunkStart;
-
-		return {
-			samples: chunk.samples.map((channel) => channel.subarray(sliceStart, sliceEnd)),
-			offset: overlapStart - this.startFrame,
-			sampleRate: chunk.sampleRate,
-			bitDepth: chunk.bitDepth,
-		};
 	}
 }
 
@@ -101,19 +91,12 @@ export class TrimNode extends TransformNode<TrimProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Remove silence from start and end";
 	static override readonly schema = schema;
+	static override readonly streamClass = TrimStream;
 	static override is(value: unknown): value is TrimNode {
 		return TransformNode.is(value) && value.type[2] === "trim";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "trim"] as const;
-
-	constructor(properties: TrimProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): TrimStream {
-		return new TrimStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<TrimProperties>): TrimNode {
 		return new TrimNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -121,7 +104,5 @@ export class TrimNode extends TransformNode<TrimProperties> {
 }
 
 export function trim(options?: { threshold?: number; margin?: number; start?: boolean; end?: boolean; id?: string }): TrimNode {
-	const parsed = schema.parse(options ?? {});
-
-	return new TrimNode({ ...parsed, id: options?.id });
+	return new TrimNode(options ?? {});
 }

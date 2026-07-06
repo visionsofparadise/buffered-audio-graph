@@ -5,7 +5,7 @@ import { trim, TrimStream } from ".";
 const SAMPLE_RATE = 44100;
 
 function context(): StreamContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, visited: new Set() };
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
 }
 
 function readableFrom(chunks: Array<Block>): ReadableStream<Block> {
@@ -58,7 +58,7 @@ function concatChannel(chunks: Array<Block>, channel: number): Float32Array {
 
 async function runTrim(properties: Parameters<typeof trim>[0], input: Array<Block>, channel = 0): Promise<Float32Array> {
 	const node = trim(properties);
-	const stream = node.createStream() as TrimStream;
+	const stream = new TrimStream(node);
 	const output = await stream._setup(readableFrom(input), context());
 
 	return concatChannel(await drain(output), channel);

@@ -10,49 +10,45 @@ export const schema = z.object({
 export interface LoudnessNormalizeProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNormalizeProperties> {
-	private gain = 1;
+	override blockSize = WHOLE_FILE;
+
 	private accumulator?: IntegratedLufsAccumulator;
 
-	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
-		await super._buffer(chunk, buffer);
+	override prepare(block: Block): Block {
+		const frames = block.samples[0]?.length ?? 0;
+		const channelCount = block.samples.length;
 
-		const frames = chunk.samples[0]?.length ?? 0;
-		const channelCount = chunk.samples.length;
+		if (frames === 0 || channelCount === 0) return block;
 
-		if (frames === 0 || channelCount === 0) return;
+		this.accumulator ??= new IntegratedLufsAccumulator(block.sampleRate, channelCount);
+		this.accumulator.push(block.samples, frames);
 
-		this.accumulator ??= new IntegratedLufsAccumulator(chunk.sampleRate, channelCount);
-		this.accumulator.push(chunk.samples, frames);
+		return block;
 	}
 
-	override _process(_buffer: BlockBuffer): void {
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
 		const integrated = this.accumulator === undefined ? -Infinity : this.accumulator.finalize();
+		const gain = Number.isFinite(integrated) ? Math.pow(10, (this.properties.target - integrated) / 20) : 1;
 
-		if (!Number.isFinite(integrated)) {
-			this.gain = 1;
+		for await (const block of buffered.iterate(44100)) {
+			if (gain === 1) {
+				enqueue(block);
 
-			return;
-		}
-
-		this.gain = Math.pow(10, (this.properties.target - integrated) / 20);
-	}
-
-	override _unbuffer(chunk: Block): Block {
-		const gain = this.gain;
-
-		if (gain === 1) return chunk;
-
-		const samples = chunk.samples.map((channel) => {
-			const output = new Float32Array(channel.length);
-
-			for (let index = 0; index < channel.length; index++) {
-				output[index] = (channel[index] ?? 0) * gain;
+				continue;
 			}
 
-			return output;
-		});
+			const samples = block.samples.map((channel) => {
+				const output = new Float32Array(channel.length);
 
-		return { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+				for (let index = 0; index < channel.length; index++) {
+					output[index] = (channel[index] ?? 0) * gain;
+				}
+
+				return output;
+			});
+
+			enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+		}
 	}
 }
 
@@ -62,19 +58,12 @@ export class LoudnessNormalizeNode extends TransformNode<LoudnessNormalizeProper
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics";
 	static override readonly schema = schema;
+	static override readonly streamClass = LoudnessNormalizeStream;
 	static override is(value: unknown): value is LoudnessNormalizeNode {
 		return TransformNode.is(value) && value.type[2] === "loudness-normalize";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "loudness-normalize"] as const;
-
-	constructor(properties: LoudnessNormalizeProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): LoudnessNormalizeStream {
-		return new LoudnessNormalizeStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<LoudnessNormalizeProperties>): LoudnessNormalizeNode {
 		return new LoudnessNormalizeNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -82,7 +71,5 @@ export class LoudnessNormalizeNode extends TransformNode<LoudnessNormalizeProper
 }
 
 export function loudnessNormalize(options?: { target?: number; id?: string }): LoudnessNormalizeNode {
-	const parsed = schema.parse(options ?? {});
-
-	return new LoudnessNormalizeNode({ ...parsed, id: options?.id });
+	return new LoudnessNormalizeNode(options ?? {});
 }

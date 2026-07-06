@@ -3,13 +3,10 @@ import { BufferedTransformStream, type BlockBuffer, TransformNode, WHOLE_FILE, t
 import { initFftBackend, linearToDb, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { LATTICE_ORDER } from "./utils/lattice";
+import { isPowerOfTwo } from "./utils/power-of-two";
 import { groupDelayLambda } from "./utils/search";
-import { exactHoldHalfWidthFrames, smoothControlTrajectory, trajectoryFrameRate, type ControlTrajectory } from "./utils/trajectory";
+import { exactHoldHalfWidthFrames, smoothControlTrajectory, trajectoryFrameRate } from "./utils/trajectory";
 import { LatticeApplyState, streamLatticeTrajectory, TruePeakArgmaxAccumulator } from "./utils/windowed";
-
-function isPowerOfTwo(value: number): boolean {
-	return value > 0 && (value & (value - 1)) === 0;
-}
 
 export const schema = z.object({
 	smoothing: z
@@ -40,13 +37,11 @@ export const schema = z.object({
 export interface CrestReduceProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class CrestReduceStream extends BufferedTransformStream<CrestReduceProperties> {
+	override blockSize = WHOLE_FILE;
+
 	private fftBackend?: FftBackend;
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
 	private truePeakAccumulator?: TruePeakArgmaxAccumulator;
-	private smoothedTrajectory?: ControlTrajectory;
-	private applyOrder = LATTICE_ORDER;
-	private applyHopSize = 0;
-	private applyState?: LatticeApplyState;
 
 	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		const fft = initFftBackend(context.executionProviders, this.properties);
@@ -61,58 +56,69 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 		return this.properties.frameSize / 4;
 	}
 
-	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
-		await super._buffer(chunk, buffer);
+	override prepare(block: Block): Block {
+		const frames = block.samples[0]?.length ?? 0;
 
-		const frames = chunk.samples[0]?.length ?? 0;
+		if (frames === 0 || block.samples.length === 0) return block;
 
-		if (frames === 0 || chunk.samples.length === 0) return;
+		this.truePeakAccumulator ??= new TruePeakArgmaxAccumulator(block.samples.length, block.sampleRate);
+		this.truePeakAccumulator.push(block.samples, frames);
 
-		this.truePeakAccumulator ??= new TruePeakArgmaxAccumulator(chunk.samples.length, chunk.sampleRate);
-		this.truePeakAccumulator.push(chunk.samples, frames);
+		return block;
 	}
 
-	override async _process(buffer: BlockBuffer): Promise<void> {
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
 		const { frameSize, smoothing } = this.properties;
-		const channelCount = buffer.channels;
-		const totalFrames = buffer.frames;
+		const channelCount = buffered.channels;
+		const totalFrames = buffered.frames;
 
 		if (channelCount === 0 || totalFrames === 0) return;
 
-		const sampleRate = buffer.sampleRate ?? this.sampleRate ?? 48000;
+		const sampleRate = buffered.sampleRate ?? this.sampleRate ?? 48000;
 		const order = LATTICE_ORDER;
 		const hopSize = this.hopSize;
 
 		const { db: inputTpDb, peakInputSample } = this.truePeakAccumulator?.finalize() ?? { db: linearToDb(0), peakInputSample: 0 };
 
 		const lambda = groupDelayLambda(sampleRate, order);
-		const { trajectory, frameCount } = await streamLatticeTrajectory(buffer, frameSize, hopSize, this.fftBackend, this.fftAddonOptions, {
+		const { trajectory, frameCount } = await streamLatticeTrajectory(buffered, frameSize, hopSize, this.fftBackend, this.fftAddonOptions, {
 			globalTruePeakDb: inputTpDb,
 			peakInputSample,
 			sampleRate,
 			lambda,
 		});
 
-		if (frameCount === 0) return;
+		if (frameCount === 0) {
+			for await (const block of buffered.iterate(44100)) {
+				enqueue(block);
+			}
 
-		this.smoothedTrajectory = smoothControlTrajectory(trajectory, smoothing, trajectoryFrameRate(sampleRate, hopSize), exactHoldHalfWidthFrames(sampleRate, hopSize), hopSize);
-		this.applyOrder = order;
-		this.applyHopSize = hopSize;
-	}
+			return;
+		}
 
-	override _unbuffer(chunk: Block): Block | undefined {
-		const trajectory = this.smoothedTrajectory;
-		const frames = chunk.samples[0]?.length ?? 0;
-		const channelCount = chunk.samples.length;
+		const smoothedTrajectory = smoothControlTrajectory(trajectory, smoothing, trajectoryFrameRate(sampleRate, hopSize), exactHoldHalfWidthFrames(sampleRate, hopSize), hopSize);
 
-		if (trajectory === undefined || frames === 0 || channelCount === 0) return chunk;
+		await buffered.reset();
 
-		this.applyState ??= new LatticeApplyState(trajectory, this.applyOrder, this.applyHopSize, channelCount);
+		let applyState: LatticeApplyState | undefined;
 
-		const transformed = this.applyState.apply(chunk.samples, frames);
-		const samples = chunk.samples.map((inputChannel, ch) => transformed[ch] ?? inputChannel);
+		for await (const block of buffered.iterate(44100)) {
+			const frames = block.samples[0]?.length ?? 0;
+			const blockChannelCount = block.samples.length;
 
-		return { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+			if (frames === 0 || blockChannelCount === 0) {
+				enqueue(block);
+
+				continue;
+			}
+
+			applyState ??= new LatticeApplyState(smoothedTrajectory, order, hopSize, blockChannelCount);
+
+			const transformed = applyState.apply(block.samples, frames);
+			const samples = block.samples.map((inputChannel, ch) => transformed[ch] ?? inputChannel);
+
+			enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+		}
 	}
 }
 
@@ -122,19 +128,12 @@ export class CrestReduceNode extends TransformNode<CrestReduceProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor";
 	static override readonly schema = schema;
+	static override readonly streamClass = CrestReduceStream;
 	static override is(value: unknown): value is CrestReduceNode {
 		return TransformNode.is(value) && value.type[2] === "crest-reduce";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "crest-reduce"] as const;
-
-	constructor(properties: CrestReduceProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): CrestReduceStream {
-		return new CrestReduceStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<CrestReduceProperties>): CrestReduceNode {
 		return new CrestReduceNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -142,7 +141,5 @@ export class CrestReduceNode extends TransformNode<CrestReduceProperties> {
 }
 
 export function crestReduce(options?: { smoothing?: number; frameSize?: number; vkfftAddonPath?: string; fftwAddonPath?: string; id?: string }): CrestReduceNode {
-	const parsed = schema.parse(options ?? {});
-
-	return new CrestReduceNode({ ...parsed, id: options?.id });
+	return new CrestReduceNode(options ?? {});
 }

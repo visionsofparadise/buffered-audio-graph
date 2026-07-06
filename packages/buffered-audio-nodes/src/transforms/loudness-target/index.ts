@@ -28,11 +28,12 @@ export const schema = z.object({
 export interface LoudnessTargetProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTargetProperties> {
+	override blockSize = WHOLE_FILE;
+
 	private winningSmoothedEnvelopeBuffer: BlockBuffer | null = null;
 	private winningB: number | null = null;
 	private winningLimitDb: number | null = null;
 	private winningPeakGainDb: number | null = null;
-	private unbufferCursorsReady = false;
 
 	private measurementAccumulator?: SourceMeasurementAccumulator;
 	private capturedDetectionEnvelope: BlockBuffer | null = null;
@@ -45,34 +46,39 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		iteration: 0,
 	};
 
-	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
-		await super._buffer(chunk, buffer);
+	override async prepare(block: Block): Promise<Block> {
+		const frames = block.samples[0]?.length ?? 0;
+		const channelCount = block.samples.length;
 
-		const frames = chunk.samples[0]?.length ?? 0;
-		const channelCount = chunk.samples.length;
-
-		if (frames === 0 || channelCount === 0) return;
+		if (frames === 0 || channelCount === 0) return block;
 
 		const tPush0 = Date.now();
 
 		if (this.measurementAccumulator === undefined) {
 			this.capturedDetectionEnvelope = new BlockBuffer();
 			this.measurementAccumulator = new SourceMeasurementAccumulator(
-				chunk.sampleRate,
+				block.sampleRate,
 				channelCount,
 				this.properties.limitPercentile,
-				windowSamplesFromMs(this.properties.smoothing, chunk.sampleRate),
+				windowSamplesFromMs(this.properties.smoothing, block.sampleRate),
 				this.capturedDetectionEnvelope,
-				chunk.bitDepth,
+				block.bitDepth,
 			);
 		}
 
-		await this.measurementAccumulator.push(chunk.samples, frames);
+		await this.measurementAccumulator.push(block.samples, frames);
 
 		this.learnTimingMs.sourceMeasurement += Date.now() - tPush0;
+
+		return block;
 	}
 
-	override async _process(buffer: BlockBuffer): Promise<void> {
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+		await this.finalize(buffered);
+		await this.emitApplied(buffered, enqueue);
+	}
+
+	private async finalize(buffer: BlockBuffer): Promise<void> {
 		const frames = buffer.frames;
 		const channelCount = buffer.channels;
 		const sampleRate = buffer.sampleRate ?? this.sampleRate ?? 44100;
@@ -314,51 +320,57 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			this.winningSmoothedEnvelopeBuffer = null;
 		}
 
-		// Non-null only when _process never ran (upstream error); the normal path hands ownership to iterateForTargets.
+		// Non-null only when finalize never ran (upstream error); the normal path hands ownership to iterateForTargets.
 		if (this.capturedDetectionEnvelope !== null) {
 			await this.capturedDetectionEnvelope.close();
 			this.capturedDetectionEnvelope = null;
 		}
 	}
 
-	override async _unbuffer(chunk: Block): Promise<Block> {
+	private async emitApplied(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
 		const envelopeBuffer = this.winningSmoothedEnvelopeBuffer;
 
+		await buffered.reset();
+
 		if (envelopeBuffer === null || envelopeBuffer.frames === 0) {
-			return chunk;
+			for await (const block of buffered.iterate(44100)) {
+				enqueue(block);
+			}
+
+			return;
 		}
 
-		const tStart = Date.now();
-		const chunkFrames = chunk.samples[0]?.length ?? 0;
+		await envelopeBuffer.reset();
 
-		if (chunkFrames === 0) {
+		for await (const block of buffered.iterate(44100)) {
+			const tStart = Date.now();
+			const chunkFrames = block.samples[0]?.length ?? 0;
+
+			if (chunkFrames === 0) {
+				this.unbufferElapsedMs += Date.now() - tStart;
+				enqueue(block);
+
+				continue;
+			}
+
+			const envelopeChunk = await envelopeBuffer.read(chunkFrames);
+			const envelopeSlice = envelopeChunk.samples[0];
+
+			if (envelopeSlice?.length !== chunkFrames) {
+				throw new Error(
+					`loudnessTarget emitApplied: envelope BlockBuffer returned ${envelopeSlice?.length ?? 0} samples; expected ${chunkFrames}`,
+				);
+			}
+
+			const transformed = applyBaseRateChunk({
+				chunkSamples: block.samples,
+				smoothedGain: envelopeSlice,
+			});
+
 			this.unbufferElapsedMs += Date.now() - tStart;
 
-			return chunk;
+			enqueue({ samples: transformed, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
 		}
-
-		if (!this.unbufferCursorsReady) {
-			await envelopeBuffer.reset();
-			this.unbufferCursorsReady = true;
-		}
-
-		const envelopeChunk = await envelopeBuffer.read(chunkFrames);
-		const envelopeSlice = envelopeChunk.samples[0];
-
-		if (envelopeSlice?.length !== chunkFrames) {
-			throw new Error(
-				`loudnessTarget _unbuffer: envelope BlockBuffer returned ${envelopeSlice?.length ?? 0} samples; expected ${chunkFrames}`,
-			);
-		}
-
-		const transformed = applyBaseRateChunk({
-			chunkSamples: chunk.samples,
-			smoothedGain: envelopeSlice,
-		});
-
-		this.unbufferElapsedMs += Date.now() - tStart;
-
-		return { samples: transformed, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 }
 
@@ -368,19 +380,12 @@ export class LoudnessTargetNode extends TransformNode<LoudnessTargetProperties> 
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.";
 	static override readonly schema = schema;
+	static override readonly streamClass = LoudnessTargetStream;
 	static override is(value: unknown): value is LoudnessTargetNode {
 		return TransformNode.is(value) && value.type[2] === "loudness-target";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "loudness-target"] as const;
-
-	constructor(properties: LoudnessTargetProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): LoudnessTargetStream {
-		return new LoudnessTargetStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<LoudnessTargetProperties>): LoudnessTargetNode {
 		return new LoudnessTargetNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -388,7 +393,5 @@ export class LoudnessTargetNode extends TransformNode<LoudnessTargetProperties> 
 }
 
 export function loudnessTarget(options: { targetLufs?: number; pivot?: number; floor?: number; targetTp?: number; limitPercentile?: number; limitDb?: number; smoothing?: number; tolerance?: number; peakTolerance?: number; maxAttempts?: number; id?: string }): LoudnessTargetNode {
-	const parsed = schema.parse(options);
-
-	return new LoudnessTargetNode({ ...parsed, id: options.id });
+	return new LoudnessTargetNode(options);
 }

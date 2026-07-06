@@ -50,11 +50,7 @@ interface StreamRunOptions {
 
 async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: number, options: StreamRunOptions): Promise<Array<Float32Array>> {
 	const channelCount = channels.length;
-	const stream = new TruePeakNormalizeStream({
-		target: options.target,
-		bufferSize: Infinity,
-		overlap: 0,
-	});
+	const stream = new TruePeakNormalizeStream(truePeakNormalize({ target: options.target }));
 	const transformStream = stream.createTransformStream();
 	const writer = transformStream.writable.getWriter();
 	const reader = transformStream.readable.getReader();
@@ -277,7 +273,7 @@ describe("truePeakNormalize - apply", () => {
 		// The apply pass is a uniform per-sample multiply; the only thing
 		// that could differ between single-chunk and multi-chunk is the
 		// measurement pass — but the buffer is fully buffered before
-		// `_process` runs (WHOLE_FILE bufferSize), so both runs see the
+		// `transform` runs (WHOLE_FILE blockSize), so both runs see the
 		// same source. Outputs must be sample-identical.
 		const target = -1;
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.5);

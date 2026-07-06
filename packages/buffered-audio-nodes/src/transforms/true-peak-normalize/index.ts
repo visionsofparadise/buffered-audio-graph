@@ -10,60 +10,63 @@ export const schema = z.object({
 export interface TruePeakNormalizeProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNormalizeProperties> {
-	private gain = 1;
+	override blockSize = WHOLE_FILE;
+
 	private accumulator?: TruePeakAccumulator;
 
-	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
-		await super._buffer(chunk, buffer);
+	override prepare(block: Block): Block {
+		const frames = block.samples[0]?.length ?? 0;
+		const channelCount = block.samples.length;
 
-		const frames = chunk.samples[0]?.length ?? 0;
-		const channelCount = chunk.samples.length;
+		if (frames === 0 || channelCount === 0) return block;
 
-		if (frames === 0 || channelCount === 0) return;
+		this.accumulator ??= new TruePeakAccumulator(block.sampleRate, channelCount);
+		this.accumulator.push(block.samples, frames);
 
-		this.accumulator ??= new TruePeakAccumulator(chunk.sampleRate, channelCount);
-		this.accumulator.push(chunk.samples, frames);
+		return block;
 	}
 
-	override _process(_buffer: BlockBuffer): void {
-		if (this.accumulator === undefined) {
-			this.gain = 1;
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+		const gain = this.resolveGain();
 
-			return;
+		for await (const block of buffered.iterate(44100)) {
+			if (gain === 1) {
+				enqueue(block);
+
+				continue;
+			}
+
+			const samples = block.samples.map((channel) => {
+				const output = new Float32Array(channel.length);
+
+				for (let index = 0; index < channel.length; index++) {
+					output[index] = (channel[index] ?? 0) * gain;
+				}
+
+				return output;
+			});
+
+			enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
 		}
+	}
+
+	private resolveGain(): number {
+		if (this.accumulator === undefined) return 1;
 
 		const sourcePeakLinear = this.accumulator.finalize();
 
 		if (sourcePeakLinear <= 0) {
-			this.gain = 1;
 			this.log("true peak measured", { sourceTpDb: -Infinity, targetDb: this.properties.target, gain: 1 });
 
-			return;
+			return 1;
 		}
 
 		const sourcePeakDb = 20 * Math.log10(sourcePeakLinear);
+		const gain = Math.pow(10, (this.properties.target - sourcePeakDb) / 20);
 
-		this.gain = Math.pow(10, (this.properties.target - sourcePeakDb) / 20);
+		this.log("true peak measured", { sourceTpDb: sourcePeakDb, targetDb: this.properties.target, gain });
 
-		this.log("true peak measured", { sourceTpDb: sourcePeakDb, targetDb: this.properties.target, gain: this.gain });
-	}
-
-	override _unbuffer(chunk: Block): Block {
-		const gain = this.gain;
-
-		if (gain === 1) return chunk;
-
-		const samples = chunk.samples.map((channel) => {
-			const output = new Float32Array(channel.length);
-
-			for (let index = 0; index < channel.length; index++) {
-				output[index] = (channel[index] ?? 0) * gain;
-			}
-
-			return output;
-		});
-
-		return { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		return gain;
 	}
 }
 
@@ -73,19 +76,12 @@ export class TruePeakNormalizeNode extends TransformNode<TruePeakNormalizeProper
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single linear gain to hit a target dBTP";
 	static override readonly schema = schema;
+	static override readonly streamClass = TruePeakNormalizeStream;
 	static override is(value: unknown): value is TruePeakNormalizeNode {
 		return TransformNode.is(value) && value.type[2] === "true-peak-normalize";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "true-peak-normalize"] as const;
-
-	constructor(properties: TruePeakNormalizeProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): TruePeakNormalizeStream {
-		return new TruePeakNormalizeStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<TruePeakNormalizeProperties>): TruePeakNormalizeNode {
 		return new TruePeakNormalizeNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -93,7 +89,5 @@ export class TruePeakNormalizeNode extends TransformNode<TruePeakNormalizeProper
 }
 
 export function truePeakNormalize(options?: { target?: number; id?: string }): TruePeakNormalizeNode {
-	const parsed = schema.parse(options ?? {});
-
-	return new TruePeakNormalizeNode({ ...parsed, id: options?.id });
+	return new TruePeakNormalizeNode(options ?? {});
 }

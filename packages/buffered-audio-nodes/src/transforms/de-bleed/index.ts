@@ -173,6 +173,8 @@ async function readSequentialPadded(
 }
 
 export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
+	override blockSize = WHOLE_FILE;
+
 	private fftBackend?: FftBackend;
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
 	private dfttFftBackend?: FftBackend;
@@ -346,8 +348,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		return seedsByChannel;
 	}
 
-	override async _process(buffer: BlockBuffer): Promise<void> {
-		const { frames: totalFrames, channels, sampleRate, bitDepth } = buffer;
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+		const { frames: totalFrames, channels, sampleRate, bitDepth } = buffered;
 		const { fftSize, hopSize, reductionStrength, artifactSmoothing, adaptationSpeed } = this.properties;
 		const { chunkFrames, numBins, referenceBuffers } = this;
 		const refCount = referenceBuffers.length;
@@ -390,11 +392,11 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		const warmupFrames = Math.max(0, Math.floor((warmupSamples - fftSize) / hopSize) + 1);
 
 		const _twarm = _profStart();
-		const seedsByChannel = await this.warmupSeedsAllChannels(buffer, channels, warmupFrames, fftSize, hopSize);
+		const seedsByChannel = await this.warmupSeedsAllChannels(buffered, channels, warmupFrames, fftSize, hopSize);
 
 		_profAdd("warmup", _twarm);
 
-		await buffer.reset();
+		await buffered.reset();
 		for (const refBuffer of referenceBuffers) await refBuffer.reset();
 
 		const kalmanStatesByCh: Array<Array<KalmanState>> = seedsByChannel.map((seeds) => seeds.map((seed) => createKalmanState(numBins, seed)));
@@ -416,7 +418,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		const targetReader = new WindowReader(channels, windowSamples);
 		const refReaders: Array<WindowReader> = referenceBuffers.map(() => new WindowReader(1, windowSamples));
 
-		await targetReader.preload(buffer, edgePadSamples);
+		await targetReader.preload(buffered, edgePadSamples);
 		for (let refIndex = 0; refIndex < refCount; refIndex++) {
 			await refReaders[refIndex]!.preload(referenceBuffers[refIndex]!, edgePadSamples);
 		}
@@ -448,7 +450,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 					if (stepSamples > 0) {
 						const _tadvance = _profStart();
 
-						await targetReader.advance(buffer, stepSamples);
+						await targetReader.advance(buffered, stepSamples);
 						for (let refIndex = 0; refIndex < refCount; refIndex++) {
 							await refReaders[refIndex]!.advance(referenceBuffers[refIndex]!, stepSamples);
 						}
@@ -667,18 +669,10 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 				await outputBuffer.write(zeroSamples, sampleRate, bitDepth);
 			}
 
-			await buffer.clear();
 			await outputBuffer.reset();
 
-			for (;;) {
-				const chunk = await outputBuffer.read(STREAM_COPY_FRAMES);
-				const chunkFramesRead = chunk.samples[0]?.length ?? 0;
-
-				if (chunkFramesRead === 0) break;
-
-				await buffer.write(chunk.samples, sampleRate, bitDepth);
-
-				if (chunkFramesRead < STREAM_COPY_FRAMES) break;
+			for await (const block of outputBuffer.iterate(STREAM_COPY_FRAMES)) {
+				enqueue(block);
 			}
 		} finally {
 			await outputBuffer.close();
@@ -710,19 +704,12 @@ export class DeBleedNode extends TransformNode<DeBleedProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reduction. Stages 1+2 are MEF Meyer-Elshamy-Fingscheidt 2020; Stage 3 is Lukin-Todd 2D NLM+DFTT post-filter.";
 	static override readonly schema = schema;
+	static override readonly streamClass = DeBleedStream;
 	static override is(value: unknown): value is DeBleedNode {
 		return TransformNode.is(value) && value.type[2] === "de-bleed";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "de-bleed"] as const;
-
-	constructor(properties: DeBleedProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): DeBleedStream {
-		return new DeBleedStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<DeBleedProperties>): DeBleedNode {
 		return new DeBleedNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -745,16 +732,5 @@ export function deBleed(
 ): DeBleedNode {
 	const referencesArray = typeof references === "string" ? [references] : [...references];
 
-	return new DeBleedNode({
-		references: referencesArray,
-		reductionStrength: options?.reductionStrength ?? 5,
-		artifactSmoothing: options?.artifactSmoothing ?? 5,
-		adaptationSpeed: options?.adaptationSpeed ?? 3,
-		fftSize: options?.fftSize ?? 4096,
-		hopSize: options?.hopSize ?? 1024,
-		vkfftAddonPath: options?.vkfftAddonPath ?? "",
-		fftwAddonPath: options?.fftwAddonPath ?? "",
-		dfttBackend: options?.dfttBackend ?? "",
-		id: options?.id,
-	});
+	return new DeBleedNode({ ...options, references: referencesArray });
 }
