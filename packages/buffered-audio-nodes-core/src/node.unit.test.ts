@@ -23,8 +23,6 @@ class MockSourceStream extends BufferedSourceStream {
 		}
 		return undefined;
 	}
-
-	override async _flush(): Promise<void> {}
 }
 
 class MockSource extends SourceNode {
@@ -177,7 +175,7 @@ describe("BufferedAudioNode", () => {
 		let tornDown = false;
 
 		class TeardownStream extends BufferedStream {
-			override _teardown(): void {
+			override _destroy(): void {
 				tornDown = true;
 			}
 		}

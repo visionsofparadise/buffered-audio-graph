@@ -255,7 +255,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		this.events.emit("finished", { framesDone: this.framesProcessed });
 	}
 
-	override async _teardown(): Promise<void> {
+	override async _destroy(): Promise<void> {
 		const child = this.child;
 
 		if (!child) return;

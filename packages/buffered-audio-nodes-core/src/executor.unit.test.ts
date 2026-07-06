@@ -23,8 +23,6 @@ class MockSourceStream extends BufferedSourceStream {
 		}
 		return undefined;
 	}
-
-	override async _flush(): Promise<void> {}
 }
 
 class MockSource extends SourceNode {
@@ -430,8 +428,6 @@ class PathSourceStream extends BufferedSourceStream {
 		(this.properties as Record<string, unknown>).done = true;
 		return createChunk(1.0, 0, 10);
 	}
-
-	override async _flush(): Promise<void> {}
 }
 
 class PathSource extends SourceNode {

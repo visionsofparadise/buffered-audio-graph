@@ -290,7 +290,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		}
 	}
 
-	override async _teardown(): Promise<void> {
+	override async _destroy(): Promise<void> {
 		if (this.winningSmoothedEnvelopeBuffer !== null) {
 			const total = this.learnTimingMs.sourceMeasurement + this.learnTimingMs.detection + this.learnTimingMs.iteration + this.unbufferElapsedMs;
 			const bRepr = this.winningB === null ? "n/a" : this.winningB.toFixed(4);

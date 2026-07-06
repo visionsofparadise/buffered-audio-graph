@@ -218,16 +218,9 @@ export class ReadWavStream<P extends ReadWavProperties = ReadWavProperties> exte
 		};
 	}
 
-	override async _flush(): Promise<void> {
+	override async _destroy(): Promise<void> {
 		if (this.fileHandle) {
-			await this.fileHandle.close();
-			this.fileHandle = undefined;
-		}
-	}
-
-	override _teardown(): void {
-		if (this.fileHandle) {
-			this.fileHandle.close().catch(() => undefined);
+			await this.fileHandle.close().catch(() => undefined);
 			this.fileHandle = undefined;
 		}
 	}

@@ -252,7 +252,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		}
 	}
 
-	override async _teardown(): Promise<void> {
+	override async _destroy(): Promise<void> {
 		for (const buffer of this.referenceBuffers) {
 			await buffer.close();
 		}

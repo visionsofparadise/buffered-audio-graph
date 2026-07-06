@@ -4,6 +4,15 @@ import { BufferedStream } from "./stream";
 import { TargetNode } from "./target";
 import { teeReadable } from "./utils/tee-readable";
 
+declare global {
+	// Node ≥ 20 Web Streams fire transformer cancel(reason); the bundled DOM lib omits it.
+	// Declaration-merge requires the type params to match DOM's Transformer<I = any, O = any> exactly.
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+	interface Transformer<I = any, O = any> {
+		cancel?: (reason?: unknown) => void | PromiseLike<void>;
+	}
+}
+
 export const WHOLE_FILE = Infinity;
 
 export interface TransformNodeProperties extends BufferedAudioNodeProperties {
@@ -64,6 +73,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		return new TransformStream<Block, Block>({
 			transform: (chunk, controller) => this.handleTransform(chunk, controller),
 			flush: (controller) => this.handleFlush(controller),
+			cancel: () => this.destroy(),
 		});
 	}
 
@@ -132,6 +142,11 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 	}
 
 	private async handleFlush(controller: TransformStreamDefaultController<Block>): Promise<void> {
+		await this.finalizeFlush(controller);
+		await this.destroy();
+	}
+
+	private async finalizeFlush(controller: TransformStreamDefaultController<Block>): Promise<void> {
 		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames, { force: true });
 
 		if (!this.chunkBuffer || this.chunkBuffer.frames === 0) {
@@ -273,9 +288,9 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		}
 	}
 
-	override async teardown(): Promise<void> {
+	override async destroy(): Promise<void> {
 		try {
-			await super.teardown();
+			await super.destroy();
 		} finally {
 			if (this.chunkBuffer) {
 				await this.chunkBuffer.close();

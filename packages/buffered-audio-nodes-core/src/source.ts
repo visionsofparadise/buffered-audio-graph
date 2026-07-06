@@ -25,7 +25,6 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 	abstract getMetadata(): Promise<SourceMetadata>;
 
 	abstract _read(): Promise<Block | undefined>;
-	abstract _flush(): Promise<void>;
 
 	setup(context: StreamContext): Promise<ReadableStream<Block>> {
 		return this._setup(context);
@@ -46,6 +45,7 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 					if (done) return;
 					if (signal?.aborted) {
 						done = true;
+						await this.destroy();
 						controller.close();
 
 						return;
@@ -62,8 +62,8 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 						if (!chunk) {
 							done = true;
 							this.emitProgress("read", this.framesRead, sourceTotalFrames, { force: true });
-							await this._flush();
 							this.events.emit("finished", { framesDone: this.framesRead });
+							await this.destroy();
 							controller.close();
 
 							return;
@@ -74,11 +74,13 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 						this.emitProgress("read", this.framesRead, sourceTotalFrames);
 					} catch (error) {
 						done = true;
+						await this.destroy();
 						controller.error(error);
 					}
 				},
-				cancel: () => {
+				cancel: async () => {
 					done = true;
+					await this.destroy();
 				},
 			},
 			{ highWaterMark },

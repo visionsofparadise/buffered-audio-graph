@@ -130,7 +130,7 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 		await this._teardown();
 
 		for (const stream of this.streams) {
-			await stream.teardown();
+			await stream.destroy();
 		}
 
 		this.streams.length = 0;

@@ -113,7 +113,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 		await buffer.write(outputChannels, sr, bd);
 	}
 
-	override _teardown(): void {
+	override _destroy(): void {
 		this.session?.dispose();
 		this.session = undefined;
 		this.dfnStates = [];

@@ -91,7 +91,7 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			}
 		}
 
-		await stream._teardown();
+		await stream._destroy();
 		await buffer.close();
 	}, 30_000);
 
@@ -122,7 +122,7 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			expect(after.samples[0]![i]).toBeCloseTo(before[i]!, 6);
 		}
 
-		await stream._teardown();
+		await stream._destroy();
 		await buffer.close();
 	}, 30_000);
 });
@@ -158,7 +158,7 @@ describe("Vst3Stream init-crash retry", () => {
 
 		expect(await readCount(counter)).toBe(3); // 2 crashed spawns + 1 success
 
-		await stream._teardown();
+		await stream._destroy();
 		await buffer.close();
 	}, 30_000);
 

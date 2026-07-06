@@ -43,6 +43,10 @@ export abstract class BufferedTargetStream<P extends TargetNodeProperties = Targ
 
 				this.emitProgress("write", this.framesWritten, this.sourceTotalFrames, { force: true });
 				this.events.emit("finished", { framesDone: this.framesWritten });
+				await this.destroy();
+			},
+			abort: async () => {
+				await this.destroy();
 			},
 		});
 	}

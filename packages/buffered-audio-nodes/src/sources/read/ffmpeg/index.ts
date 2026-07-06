@@ -123,7 +123,7 @@ export class ReadFfmpegStream<P extends ReadFfmpegProperties = ReadFfmpegPropert
 		};
 	}
 
-	override async _flush(): Promise<void> {
+	override async _destroy(): Promise<void> {
 		const proc = this.ffmpegProcess;
 
 		if (proc) {
@@ -134,16 +134,6 @@ export class ReadFfmpegStream<P extends ReadFfmpegProperties = ReadFfmpegPropert
 				if (proc.exitCode !== null) resolve();
 			});
 
-			this.ffmpegProcess = undefined;
-		}
-
-		this.stdout = undefined;
-		this.remainder = undefined;
-	}
-
-	override _teardown(): void {
-		if (this.ffmpegProcess) {
-			this.ffmpegProcess.kill();
 			this.ffmpegProcess = undefined;
 		}
 

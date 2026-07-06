@@ -92,7 +92,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 		await processStreamingThroughVstHost(handle, buffer, channels, sampleRate, bd);
 	}
 
-	override async _teardown(): Promise<void> {
+	override async _destroy(): Promise<void> {
 		const cleanup = this.stagesJsonCleanup;
 
 		this.stagesJsonPath = undefined;

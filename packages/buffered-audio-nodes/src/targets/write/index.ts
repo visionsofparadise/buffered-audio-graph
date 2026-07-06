@@ -169,7 +169,7 @@ export class WriteStream extends BufferedTargetStream<WriteProperties> {
 		}
 	}
 
-	override async _teardown(): Promise<void> {
+	override async _destroy(): Promise<void> {
 		if (this.ffmpegProcess) {
 			this.ffmpegProcess.kill();
 			this.ffmpegProcess = undefined;

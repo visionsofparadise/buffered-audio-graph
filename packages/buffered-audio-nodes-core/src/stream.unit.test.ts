@@ -154,8 +154,6 @@ class LifeSourceStream extends BufferedSourceStream {
 
 		return chunk;
 	}
-
-	override async _flush(): Promise<void> {}
 }
 
 class LifeSource extends SourceNode {
@@ -327,5 +325,191 @@ describe("onEvent aggregation", () => {
 		await source.render();
 
 		expect(listenerCount).toBe(0);
+	});
+});
+
+function destroyContext(): StreamContext {
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, visited: new Set() };
+}
+
+async function drainReadable(readable: ReadableStream<Block>): Promise<void> {
+	const reader = readable.getReader();
+
+	for (;;) {
+		const { done } = await reader.read();
+
+		if (done) break;
+	}
+}
+
+class CountingSourceStream extends BufferedSourceStream {
+	destroyCount = 0;
+	private index = 0;
+
+	constructor(
+		private readonly chunks: Array<Block>,
+		private readonly throwAt?: number,
+	) {
+		super({} as never);
+	}
+
+	override async getMetadata(): Promise<SourceMetadata> {
+		return { sampleRate: 44100, channels: 1, durationFrames: 200 };
+	}
+
+	override async _read(): Promise<Block | undefined> {
+		if (this.throwAt !== undefined && this.index === this.throwAt) throw new Error("read boom");
+
+		const chunk = this.chunks[this.index];
+
+		if (!chunk) return undefined;
+		this.index += 1;
+
+		return chunk;
+	}
+
+	override _destroy(): void {
+		this.destroyCount += 1;
+	}
+}
+
+class CountingTargetStream extends BufferedTargetStream {
+	destroyCount = 0;
+
+	constructor() {
+		super({} as never);
+	}
+
+	override async _write(): Promise<void> {}
+
+	override async _close(): Promise<void> {}
+
+	override _destroy(): void {
+		this.destroyCount += 1;
+	}
+}
+
+class CountingTransformStream extends BufferedTransformStream {
+	destroyCount = 0;
+
+	override _destroy(): void | Promise<void> {
+		this.destroyCount += 1;
+
+		return super._destroy();
+	}
+}
+
+describe("BufferedStream.destroy idempotency", () => {
+	it("runs _destroy exactly once across repeated destroy() calls", async () => {
+		const stream = new CountingSourceStream([chunk(1, 0, 10)]);
+
+		await stream.destroy();
+		await stream.destroy();
+		await stream.destroy();
+
+		expect(stream.destroyCount).toBe(1);
+	});
+});
+
+describe("source stream-scoped destroy", () => {
+	it("graceful end-of-read invokes destroy once", async () => {
+		const stream = new CountingSourceStream([chunk(1, 0, 100), chunk(2, 100, 100)]);
+		const readable = await stream._setup(destroyContext());
+
+		await drainReadable(readable);
+
+		expect(stream.destroyCount).toBe(1);
+	});
+
+	it("read error invokes destroy once and surfaces the error", async () => {
+		const stream = new CountingSourceStream([chunk(1, 0, 100)], 0);
+		const readable = await stream._setup(destroyContext());
+
+		await expect(drainReadable(readable)).rejects.toThrow("read boom");
+		expect(stream.destroyCount).toBe(1);
+	});
+
+	it("consumer cancel invokes destroy once", async () => {
+		const stream = new CountingSourceStream([chunk(1, 0, 100), chunk(2, 100, 100)]);
+		const readable = await stream._setup(destroyContext());
+		const reader = readable.getReader();
+
+		await reader.read();
+		await reader.cancel("stop");
+
+		expect(stream.destroyCount).toBe(1);
+	});
+});
+
+function readableOf(chunks: Array<Block>): ReadableStream<Block> {
+	let index = 0;
+
+	return new ReadableStream<Block>({
+		pull(controller) {
+			const value = chunks[index];
+
+			if (value) {
+				index += 1;
+				controller.enqueue(value);
+			} else {
+				controller.close();
+			}
+		},
+	});
+}
+
+describe("target stream-scoped destroy", () => {
+	it("graceful close invokes destroy once", async () => {
+		const target = new CountingTargetStream();
+
+		await target._setup(readableOf([chunk(1, 0, 100), chunk(2, 100, 100)]), destroyContext());
+
+		expect(target.destroyCount).toBe(1);
+	});
+
+	it("upstream error aborts the sink and invokes destroy once", async () => {
+		const target = new CountingTargetStream();
+		const erroring = new ReadableStream<Block>({
+			pull(controller) {
+				controller.error(new Error("upstream boom"));
+			},
+		});
+
+		await expect(target._setup(erroring, destroyContext())).rejects.toThrow("upstream boom");
+		expect(target.destroyCount).toBe(1);
+	});
+});
+
+describe("transform stream-scoped destroy", () => {
+	it("graceful flush invokes destroy once", async () => {
+		const stream = new CountingTransformStream({ bufferSize: 0 });
+		const input = new ReadableStream<Block>({
+			start(controller) {
+				controller.enqueue(chunk(1, 0, 10));
+				controller.close();
+			},
+		});
+
+		await drainReadable(await stream._setup(input, destroyContext()));
+
+		expect(stream.destroyCount).toBe(1);
+	});
+
+	it("downstream cancel invokes transformer cancel → destroy once", async () => {
+		const stream = new CountingTransformStream({ bufferSize: 0 });
+		const input = new ReadableStream<Block>({
+			pull(controller) {
+				controller.enqueue(chunk(1, 0, 10));
+			},
+		});
+
+		const output = await stream._setup(input, destroyContext());
+		const reader = output.getReader();
+
+		await reader.read();
+		await reader.cancel("stop");
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		expect(stream.destroyCount).toBe(1);
 	});
 });

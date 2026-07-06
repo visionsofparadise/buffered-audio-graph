@@ -20,8 +20,6 @@ class MockSourceStream extends BufferedSourceStream {
 		}
 		return undefined;
 	}
-
-	override async _flush(): Promise<void> {}
 }
 
 class MockSource extends SourceNode {

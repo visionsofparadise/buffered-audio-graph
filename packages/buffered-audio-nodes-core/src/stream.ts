@@ -36,6 +36,8 @@ export abstract class BufferedStream<P extends BufferedAudioNodeProperties = Buf
 
 	quantumFraction = DEFAULT_PROGRESS_QUANTUM;
 
+	private destroyed = false;
+
 	private readonly lastBoundaryByPhase = new Map<StreamPhase, number>();
 
 	constructor(properties: P) {
@@ -70,11 +72,14 @@ export abstract class BufferedStream<P extends BufferedAudioNodeProperties = Buf
 		this.emitProgress("process", framesDone, framesTotal);
 	}
 
-	async teardown(): Promise<void> {
-		await this._teardown();
+	async destroy(): Promise<void> {
+		if (this.destroyed) return;
+		this.destroyed = true;
+
+		await this._destroy();
 	}
 
-	_teardown(): Promise<void> | void {
+	_destroy(): Promise<void> | void {
 		return;
 	}
 }

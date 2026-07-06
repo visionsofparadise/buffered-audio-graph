@@ -803,7 +803,7 @@ async function runProcessAndMeasureArrayBuffers(frames: number, sampleRate: numb
 	void winningEnvelopeBuffer?.frames;
 	void stream;
 
-	await (stream as unknown as { _teardown(): Promise<void> })._teardown();
+	await (stream as unknown as { _destroy(): Promise<void> })._destroy();
 	await buffer.close();
 
 	return { peakArrayBuffersBytes: peakBytes, postProcessRetainedBytes, winningEnvelopeLength };
@@ -863,7 +863,7 @@ describe("LoudnessTarget memory regression", () => {
 		//      backward pass.
 		//   4. `winningSmoothedEnvelopeBuffer` (`smoothedEnv` while
 		//      `_process` runs) at BASE rate (~10 MB ceiling) — the
-		//      survivor. Closed in `_teardown`.
+		//      survivor. Closed in `_destroy`.
 		// Plus a transient `iirForwardOrder` ChunkBuffer (~10 MB)
 		// allocated INSIDE `applyBackwardPassOverChunkBuffer` for the
 		// reverse-then-clamp path; coexists with detection / forward /
@@ -916,7 +916,7 @@ describe("LoudnessTarget memory regression", () => {
 		expect(peakBoundBytes).toBeLessThan(prePhase3Bound);
 
 		// Retained bound: only the winning-envelope buffer survives
-		// `_process` (closed in `_teardown`, not before) post the
+		// `_process` (closed in `_destroy`, not before) post the
 		// 2026-05-13 base-rate-downstream rewrite — the upsampled-
 		// source cache no longer exists. Plus the source-channel
 		// in-memory ChunkBuffer copy and per-chunk scratch reclaimed
