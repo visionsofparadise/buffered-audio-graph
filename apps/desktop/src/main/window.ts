@@ -3,7 +3,7 @@ import path from "path";
 import { JobManager } from "../shared/utilities/JobManager";
 import { ASYNC_MAIN_IPCS } from "../shared/ipc/asyncMainIpcs";
 import type { Logger } from "../shared/models/Logger";
-import { createModuleRegistry } from "../shared/models/ModuleRegistry";
+import { createNodeRegistry } from "../shared/models/NodeRegistry";
 import { FileWatcherManager } from "./FileWatcherManager";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
@@ -37,10 +37,10 @@ export const createWindow = (logger: Logger): BrowserWindow => {
 	const windowId = crypto.randomUUID();
 	const fileWatcherManager = new FileWatcherManager(browserWindow);
 	const jobManager = new JobManager();
-	const moduleRegistry = createModuleRegistry();
+	const nodeRegistry = createNodeRegistry();
 
 	for (const AsyncMainIpc of ASYNC_MAIN_IPCS) {
-		new AsyncMainIpc().register({ browserWindow, fileWatcherManager, jobManager, logger, moduleRegistry, windowId });
+		new AsyncMainIpc().register({ browserWindow, fileWatcherManager, jobManager, logger, nodeRegistry: nodeRegistry, windowId });
 	}
 
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;

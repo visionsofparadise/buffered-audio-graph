@@ -11,7 +11,7 @@ import {
 import { Download, Plus, Redo2, Square, Trash2, Undo2 } from "lucide-react";
 import type { Snapshot } from "valtio/vanilla";
 import type { AppState } from "../../../models/State/App";
-import { PackageModuleList } from "./PackageModuleList";
+import { PackageNodeList } from "./PackageNodeList";
 
 export type ContextMenuAction = "delete" | "render" | "abort" | "undo" | "redo";
 
@@ -101,7 +101,7 @@ export function GraphContextMenu({
 								<span className="flex-1">Add Node</span>
 							</DropdownMenuSubTrigger>
 							<DropdownMenuSubContent className="max-h-[calc(100vh-100px)] w-80 overflow-y-auto">
-								<PackageModuleList app={app} onSelect={onAddNode} />
+								<PackageNodeList app={app} onSelect={onAddNode} />
 							</DropdownMenuSubContent>
 						</DropdownMenuSub>
 						<DropdownMenuItem disabled={!canUndo} onSelect={() => onAction("undo")}>

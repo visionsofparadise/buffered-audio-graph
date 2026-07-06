@@ -1,6 +1,6 @@
 import { Button } from "@buffered-audio/design-system";
 import { useCallback, useEffect, useState } from "react";
-import type { ModuleJsonSchema } from "../../shared/ipc/Package/loadModules/Renderer";
+import type { NodeJsonSchema } from "../../shared/ipc/Package/loadNodes/Renderer";
 import type { AppContext } from "../models/Context";
 import { resnapshot } from "../models/ProxyStore/resnapshot";
 
@@ -19,8 +19,8 @@ function extractBinaries(context: AppContext): Array<BinaryInfo> {
 	const binaryNames = new Set<string>();
 
 	for (const entry of context.app.packages) {
-		for (const mod of entry.modules) {
-			const schema = mod.schema as ModuleJsonSchema | null;
+		for (const node of entry.nodes) {
+			const schema = node.schema as NodeJsonSchema | null;
 
 			if (!schema?.properties) continue;
 
@@ -127,7 +127,7 @@ export const BinaryManager = resnapshot<Props>(({ isOpen, onClose, context }: Pr
 				</div>
 
 				<div className="flex-1 overflow-y-auto px-4 py-3">
-					{binaries.length === 0 && <p className="text-dimmed text-xs">No binary dependencies declared by installed modules.</p>}
+					{binaries.length === 0 && <p className="text-dimmed text-xs">No binary dependencies declared by installed nodes.</p>}
 
 					<ul className="flex flex-col gap-2">
 						{binaries.map((binary) => {

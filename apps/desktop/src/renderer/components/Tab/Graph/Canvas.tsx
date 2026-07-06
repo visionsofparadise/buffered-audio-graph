@@ -19,7 +19,7 @@ import type { GraphContext } from "../../../models/Context";
 import { resnapshot } from "../../../models/ProxyStore/resnapshot";
 import { computeAutoLayout } from "../../../utils/autoLayout";
 import { buildDefaultArrayItem, buildParameters, type Parameter } from "./Node/utils/buildParameters";
-import { lookupModule, schemaPropertyAtPath } from "./Node/utils/moduleLookup";
+import { lookupNode, schemaPropertyAtPath } from "./Node/utils/nodeLookup";
 import { EdgeContainer } from "./EdgeContainer";
 import { GraphContextMenu, type ContextMenuAction, type ContextMenuPosition } from "./GraphContextMenu";
 import { useGraphMutations } from "./hooks/useGraphMutations";
@@ -59,7 +59,7 @@ function buildReactFlowNodes(
 
 	return context.graphDefinition.nodes.map((graphNode) => {
 		const packageVersion = typeof graphNode.packageVersion === "string" ? graphNode.packageVersion : "";
-		const { category, moduleDescription, schema, unresolvedReason } = lookupModule(
+		const { category, nodeDescription: nodeDescription, schema, unresolvedReason } = lookupNode(
 			graphNode.packageName,
 			packageVersion,
 			graphNode.nodeName,
@@ -89,7 +89,7 @@ function buildReactFlowNodes(
 				parameters,
 				unresolvedReason,
 				nodeId: graphNode.id,
-				description: moduleDescription,
+				description: nodeDescription,
 				progress,
 			},
 		};
@@ -140,7 +140,7 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 			if (!graphNode) return;
 
 			const packageVersion = typeof graphNode.packageVersion === "string" ? graphNode.packageVersion : "";
-			const { schema } = lookupModule(
+			const { schema } = lookupNode(
 				graphNode.packageName,
 				packageVersion,
 				graphNode.nodeName,
@@ -178,7 +178,7 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 						if (!graphNode) return;
 
 						const packageVersion = typeof graphNode.packageVersion === "string" ? graphNode.packageVersion : "";
-						const { schema } = lookupModule(
+						const { schema } = lookupNode(
 							graphNode.packageName,
 							packageVersion,
 							graphNode.nodeName,

@@ -6,7 +6,7 @@ import {
 } from "@buffered-audio/design-system";
 import type { Snapshot } from "valtio/vanilla";
 import type { AppState } from "../../../../models/State/App";
-import { PackageModuleList } from "../PackageModuleList";
+import { PackageNodeList } from "../PackageNodeList";
 
 /**
  * TopLeftOverlay — Add-Node trigger.
@@ -16,7 +16,7 @@ import { PackageModuleList } from "../PackageModuleList";
  * transparent button, `px-4 py-2 text-body`, title-case label, 16px leading
  * icon, white hover-inversion (`hover:bg-text-primary hover:text-surface`),
  * plus the active-inversion while the node menu is open. The node list itself
- * is the desktop's package-registry-driven `PackageModuleList`.
+ * is the desktop's package-registry-driven `PackageNodeList`.
  */
 
 interface Props {
@@ -42,7 +42,7 @@ export function TopLeftOverlay({ app, onAddNode }: Props) {
 					align="start"
 					className="max-h-[calc(100vh-120px)] w-80 overflow-y-auto"
 				>
-					<PackageModuleList app={app} onSelect={onAddNode} />
+					<PackageNodeList app={app} onSelect={onAddNode} />
 				</DropdownMenuContent>
 			</DropdownMenu>
 		</div>

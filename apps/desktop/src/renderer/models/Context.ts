@@ -27,7 +27,7 @@ export interface AppContext {
 	readonly newBagTab: () => Promise<void>;
 	readonly renameTab: (tabId: string, newName: string) => void;
 	readonly importBagIntoActiveTab: () => Promise<void>;
-	readonly setModuleManagerOpen: (open: boolean) => void;
+	readonly setPackageManagerOpen: (open: boolean) => void;
 	readonly setBinaryManagerOpen: (open: boolean) => void;
 }
 

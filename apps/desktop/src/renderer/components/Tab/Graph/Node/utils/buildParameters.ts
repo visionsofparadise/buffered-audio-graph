@@ -1,5 +1,5 @@
 import type { GraphNode } from "@buffered-audio/core";
-import type { ModuleJsonSchema, ModuleJsonSchemaProperty } from "../../../../../../shared/ipc/Package/loadModules/Renderer";
+import type { NodeJsonSchema, NodeJsonSchemaProperty } from "../../../../../../shared/ipc/Package/loadNodes/Renderer";
 import type { BooleanParameter } from "../ParameterRow/Boolean";
 import type { EnumParameter } from "../ParameterRow/Enum";
 import type { FileParameter } from "../ParameterRow/File";
@@ -21,7 +21,7 @@ export interface ArrayParameter {
 	readonly kind: "array";
 	readonly name: string;
 	/** Schema for each object row — used when adding new rows. */
-	readonly itemSchema: Readonly<Record<string, ModuleJsonSchemaProperty>>;
+	readonly itemSchema: Readonly<Record<string, NodeJsonSchemaProperty>>;
 	/** Current rows. Each row is a plain object with field name -> leaf parameter. */
 	readonly rows: ReadonlyArray<ArrayRow>;
 }
@@ -38,7 +38,7 @@ export type Parameter = LeafParameter | ObjectParameter | ArrayParameter;
 
 function buildLeafParameter(
 	name: string,
-	prop: ModuleJsonSchemaProperty,
+	prop: NodeJsonSchemaProperty,
 	currentValue: unknown,
 	binaryDefaults: Record<string, string>,
 ): LeafParameter | null {
@@ -103,7 +103,7 @@ function buildLeafParameter(
 }
 
 function buildObjectChildren(
-	properties: Readonly<Record<string, ModuleJsonSchemaProperty>>,
+	properties: Readonly<Record<string, NodeJsonSchemaProperty>>,
 	currentValue: unknown,
 	binaryDefaults: Record<string, string>,
 ): ReadonlyArray<Parameter> {
@@ -123,7 +123,7 @@ function buildObjectChildren(
 }
 
 function buildArrayRow(
-	itemProperties: Readonly<Record<string, ModuleJsonSchemaProperty>>,
+	itemProperties: Readonly<Record<string, NodeJsonSchemaProperty>>,
 	rowValue: unknown,
 	binaryDefaults: Record<string, string>,
 ): ArrayRow {
@@ -144,7 +144,7 @@ function buildArrayRow(
 
 function buildSingleParameter(
 	name: string,
-	prop: ModuleJsonSchemaProperty,
+	prop: NodeJsonSchemaProperty,
 	currentValue: unknown,
 	binaryDefaults: Record<string, string>,
 ): Parameter | null {
@@ -178,12 +178,12 @@ function buildSingleParameter(
 	return buildLeafParameter(name, prop, currentValue, binaryDefaults);
 }
 
-export function buildParameters(graphNode: GraphNode, moduleSchema: ModuleJsonSchema | null, binaryDefaults: Record<string, string>): Array<Parameter> {
-	if (!moduleSchema?.properties) return [];
+export function buildParameters(graphNode: GraphNode, nodeSchema: NodeJsonSchema | null, binaryDefaults: Record<string, string>): Array<Parameter> {
+	if (!nodeSchema?.properties) return [];
 
 	const parameters: Array<Parameter> = [];
 
-	for (const [propertyName, prop] of Object.entries(moduleSchema.properties)) {
+	for (const [propertyName, prop] of Object.entries(nodeSchema.properties)) {
 		const currentValue = graphNode.parameters?.[propertyName] ?? prop.default;
 		const param = buildSingleParameter(propertyName, prop, currentValue, binaryDefaults);
 
@@ -194,7 +194,7 @@ export function buildParameters(graphNode: GraphNode, moduleSchema: ModuleJsonSc
 }
 
 /** Build a default plain-JSON value for an array item from schema defaults. */
-export function buildDefaultArrayItem(itemProperties: Readonly<Record<string, ModuleJsonSchemaProperty>>): Record<string, unknown> {
+export function buildDefaultArrayItem(itemProperties: Readonly<Record<string, NodeJsonSchemaProperty>>): Record<string, unknown> {
 	const result: Record<string, unknown> = {};
 
 	for (const [fieldName, fieldProp] of Object.entries(itemProperties)) {

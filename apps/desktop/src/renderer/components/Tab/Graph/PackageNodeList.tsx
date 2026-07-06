@@ -4,9 +4,9 @@ import {
 	DropdownMenuLabel,
 } from "@buffered-audio/design-system";
 import type { Snapshot } from "valtio/vanilla";
-import type { AppState, ModulePackageState } from "../../../models/State/App";
+import type { AppState, NodePackageState } from "../../../models/State/App";
 
-type ReadyPackage = Snapshot<ModulePackageState> & {
+type ReadyPackage = Snapshot<NodePackageState> & {
 	readonly status: "ready";
 	readonly version: string;
 };
@@ -20,19 +20,19 @@ interface Props {
 	readonly onSelect: (packageName: string, packageVersion: string, nodeName: string) => void;
 }
 
-export function PackageModuleList({ app, onSelect }: Props) {
+export function PackageNodeList({ app, onSelect }: Props) {
 	const latestReadyPackages = Array.from(
 		app.packages
 			.filter(
 				(
-					modulePackage,
-				): modulePackage is ReadyPackage => modulePackage.status === "ready" && modulePackage.version !== null,
+					nodePackage,
+				): nodePackage is ReadyPackage => nodePackage.status === "ready" && nodePackage.version !== null,
 			)
-			.reduce((packagesByName, modulePackage) => {
-				const current = packagesByName.get(modulePackage.name);
+			.reduce((packagesByName, nodePackage) => {
+				const current = packagesByName.get(nodePackage.name);
 
-				if (!current || compareVersions(modulePackage.version, current.version) > 0) {
-					packagesByName.set(modulePackage.name, modulePackage);
+				if (!current || compareVersions(nodePackage.version, current.version) > 0) {
+					packagesByName.set(nodePackage.name, nodePackage);
 				}
 
 				return packagesByName;
@@ -46,19 +46,19 @@ export function PackageModuleList({ app, onSelect }: Props) {
 
 	return (
 		<>
-			{latestReadyPackages.map((modulePackage) => (
-				<DropdownMenuGroup key={modulePackage.name}>
-					<DropdownMenuLabel>{modulePackage.name}</DropdownMenuLabel>
-					{modulePackage.modules.map((mod) => (
+			{latestReadyPackages.map((nodePackage) => (
+				<DropdownMenuGroup key={nodePackage.name}>
+					<DropdownMenuLabel>{nodePackage.name}</DropdownMenuLabel>
+					{nodePackage.nodes.map((node) => (
 						<DropdownMenuItem
-							key={mod.moduleName}
+							key={node.nodeName}
 							className="flex-col items-start gap-0.5"
-							onSelect={() => onSelect(modulePackage.name, modulePackage.version, mod.moduleName)}
+							onSelect={() => onSelect(nodePackage.name, nodePackage.version, node.nodeName)}
 						>
-							<span>{mod.moduleName}</span>
-							{mod.moduleDescription !== "" && (
+							<span>{node.nodeName}</span>
+							{node.nodeDescription !== "" && (
 								<span className="line-clamp-3 whitespace-normal text-xs normal-case leading-snug tracking-normal opacity-60">
-									{mod.moduleDescription}
+									{node.nodeDescription}
 								</span>
 							)}
 						</DropdownMenuItem>

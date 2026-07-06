@@ -3,7 +3,7 @@ import type { Snapshot } from "valtio/vanilla";
 import { packageNameFromSpec, packageSpecFromNameAndVersion } from "../../shared/utilities/packageSpec";
 import type { Main } from "../models/Main";
 import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
-import type { AppState, ModulePackageState } from "../models/State/App";
+import type { AppState, NodePackageState } from "../models/State/App";
 
 export function comparePackageVersions(left: string, right: string): number {
 	return left.localeCompare(right, undefined, {
@@ -20,7 +20,7 @@ export function mutatePackageAt(
 	appStore: ProxyStore,
 	app: Snapshot<AppState>,
 	index: number,
-	callback: (entry: ModulePackageState) => void,
+	callback: (entry: NodePackageState) => void,
 ): void {
 	appStore.mutate(app, (proxy) => {
 		const entry = proxy.packages[index];
@@ -36,23 +36,23 @@ export function ensurePackageState(
 	appStore: ProxyStore,
 	requestedSpec: string,
 	options?: { readonly isBuiltIn?: boolean },
-): { index: number; entry: ModulePackageState } {
+): { index: number; entry: NodePackageState } {
 	const existingIndex = app.packages.findIndex((entry) => entry.requestedSpec === requestedSpec);
 
 	if (existingIndex !== -1) {
 		return {
 			index: existingIndex,
-			entry: app.packages[existingIndex] as ModulePackageState,
+			entry: app.packages[existingIndex] as NodePackageState,
 		};
 	}
 
-	const newEntry: ModulePackageState = {
+	const newEntry: NodePackageState = {
 		requestedSpec,
 		name: packageNameFromSpec(requestedSpec),
 		version: null,
 		status: "pending",
 		error: null,
-		modules: [],
+		nodes: [],
 		isBuiltIn: options?.isBuiltIn ?? false,
 	};
 
@@ -64,7 +64,7 @@ export function ensurePackageState(
 }
 
 export async function runPackagePipeline(
-	entry: Snapshot<ModulePackageState>,
+	entry: Snapshot<NodePackageState>,
 	index: number,
 	app: Snapshot<AppState>,
 	appStore: ProxyStore,
@@ -73,7 +73,7 @@ export async function runPackagePipeline(
 	mutatePackageAt(appStore, app, index, (target) => {
 		target.status = "installing";
 		target.error = null;
-		target.modules = [];
+		target.nodes = [];
 		target.version = null;
 	});
 
@@ -85,7 +85,7 @@ export async function runPackagePipeline(
 		target.status = "loading";
 	});
 
-	const modules = await main.loadPackageModules({
+	const nodes = await main.loadPackageNodes({
 		loadEntryPath: install.loadEntryPath,
 		packageName: install.packageName,
 		packageVersion: install.packageVersion,
@@ -96,7 +96,7 @@ export async function runPackagePipeline(
 		target.version = install.packageVersion;
 		target.status = "ready";
 		target.error = null;
-		target.modules = [...modules];
+		target.nodes = [...nodes];
 	});
 }
 

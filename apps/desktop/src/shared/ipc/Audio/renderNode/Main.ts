@@ -4,24 +4,24 @@ import type { BrowserWindow } from "electron";
 import type { NodeIdentity, SourceNode, StreamEvent, TransformNode } from "@buffered-audio/core";
 import { ReadNode, WriteNode } from "@buffered-audio/nodes";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
-import { resolvePackageModules, type ModuleClass, type ModuleRegistryMap } from "../../../models/ModuleRegistry";
+import { resolvePackageNodes, type NodeClass, type NodeRegistryMap } from "../../../models/NodeRegistry";
 import type { AudioProgressPayload } from "../../../utilities/emitToRenderer";
 import { RENDER_NODE_ACTION, type RenderNodeInput, type RenderNodeIpcParameters, type RenderNodeIpcReturn } from "./Renderer";
 
-function resolveModule(registry: ModuleRegistryMap, packageName: string, packageVersion: string, nodeName: string): ModuleClass {
-	const packageModules = resolvePackageModules(registry, packageName, packageVersion);
+function resolveNode(registry: NodeRegistryMap, packageName: string, packageVersion: string, nodeName: string): NodeClass {
+	const packageNodes = resolvePackageNodes(registry, packageName, packageVersion);
 
-	if (!packageModules) {
-		throw new Error(`Package "${packageName}@${packageVersion}" not found in module registry`);
+	if (!packageNodes) {
+		throw new Error(`Package "${packageName}@${packageVersion}" not found in node registry`);
 	}
 
-	const ModuleConstructor = packageModules.get(nodeName);
+	const NodeConstructor = packageNodes.get(nodeName);
 
-	if (!ModuleConstructor) {
-		throw new Error(`Module "${nodeName}" not found in package "${packageName}@${packageVersion}"`);
+	if (!NodeConstructor) {
+		throw new Error(`Node "${nodeName}" not found in package "${packageName}@${packageVersion}"`);
 	}
 
-	return ModuleConstructor;
+	return NodeConstructor;
 }
 
 async function renderWithProgress(
@@ -29,12 +29,12 @@ async function renderWithProgress(
 	signal: AbortSignal,
 	jobId: string,
 	nodeId: string,
-	renderedModuleName: string,
+	renderedNodeName: string,
 	browserWindow: BrowserWindow,
 ): Promise<void> {
 	const onEvent = (identity: NodeIdentity, event: StreamEvent): void => {
 		if (event.kind !== "progress") return;
-		if (identity.moduleName !== renderedModuleName) return;
+		if (identity.nodeName !== renderedNodeName) return;
 
 		const payload: AudioProgressPayload = {
 			jobId,
@@ -54,7 +54,7 @@ export class RenderNodeMainIpc extends AsyncMainIpc<RenderNodeIpcParameters, Ren
 	action = RENDER_NODE_ACTION;
 
 	async handler(input: RenderNodeInput, dependencies: IpcHandlerDependencies): Promise<RenderNodeIpcReturn> {
-		const { browserWindow, jobManager, moduleRegistry } = dependencies;
+		const { browserWindow, jobManager, nodeRegistry } = dependencies;
 		const {
 			jobId,
 			nodeId,
@@ -74,27 +74,27 @@ export class RenderNodeMainIpc extends AsyncMainIpc<RenderNodeIpcParameters, Ren
 		await mkdir(dirname(outputPath), { recursive: true });
 
 		if (isSourceNode) {
-			const SourceConstructor = resolveModule(moduleRegistry, packageName, packageVersion, nodeName);
+			const SourceConstructor = resolveNode(nodeRegistry, packageName, packageVersion, nodeName);
 			const sourceInstance = new SourceConstructor(parameters) as SourceNode;
 			const writeInstance = new WriteNode({ path: outputPath, bitDepth: "32f" });
 
 			sourceInstance.to(writeInstance);
 
-			await renderWithProgress(sourceInstance as ReadNode, signal, jobId, nodeId, SourceConstructor.moduleName, browserWindow);
+			await renderWithProgress(sourceInstance as ReadNode, signal, jobId, nodeId, SourceConstructor.nodeName, browserWindow);
 		} else {
 			if (!inputPath) {
 				throw new Error(`No input path provided for transform node "${nodeId}"`);
 			}
 
 			const readInstance = new ReadNode({ path: inputPath, ffmpegPath: "", ffprobePath: "" });
-			const TransformConstructor = resolveModule(moduleRegistry, packageName, packageVersion, nodeName);
+			const TransformConstructor = resolveNode(nodeRegistry, packageName, packageVersion, nodeName);
 			const transformInstance = new TransformConstructor(parameters) as TransformNode;
 			const writeInstance = new WriteNode({ path: outputPath, bitDepth: "32f" });
 
 			readInstance.to(transformInstance);
 			transformInstance.to(writeInstance);
 
-			await renderWithProgress(readInstance, signal, jobId, nodeId, TransformConstructor.moduleName, browserWindow);
+			await renderWithProgress(readInstance, signal, jobId, nodeId, TransformConstructor.nodeName, browserWindow);
 		}
 
 		return undefined;

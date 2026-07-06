@@ -89,7 +89,7 @@ export const TitleBar = resnapshot<Props>(({ context }: Props) => {
 			kind: "action",
 			label: "Package Manager",
 			icon: Blocks,
-			onClick: () => context.setModuleManagerOpen(true),
+			onClick: () => context.setPackageManagerOpen(true),
 		},
 		{
 			kind: "action",

@@ -15,7 +15,7 @@ import type { ActiveCommands } from "../models/State/ActiveCommands";
 import { useAppState, type AppState } from "../models/State/App";
 import { BinaryManager } from "./BinaryManager";
 import { LoadingScreen } from "./LoadingScreen";
-import { ModuleManager } from "./ModuleManager";
+import { PackageManager } from "./PackageManager";
 import { TabContent } from "./Tab";
 import { AppTabBar } from "./TabBar";
 import { TitleBar } from "./TitleBar";
@@ -42,7 +42,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 	const hasUnresolvedPackages = app.packages.some((entry) => entry.status !== "ready" && entry.status !== "error");
 
 	const [hasPassedLoading, setHasPassedLoading] = useState(false);
-	const [moduleManagerOpen, setModuleManagerOpen] = useState(false);
+	const [packageManagerOpen, setPackageManagerOpen] = useState(false);
 	const [binaryManagerOpen, setBinaryManagerOpen] = useState(false);
 
 	const callbacks = useAppCallbacks(app, appStore, main, logger, setHasPassedLoading);
@@ -73,7 +73,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 			importBagIntoActiveTab: async () => {
 				await activeCommands.importBag?.();
 			},
-			setModuleManagerOpen,
+			setPackageManagerOpen,
 			setBinaryManagerOpen,
 		}),
 		[app, appStore, logger, mainEvents, queryClient, userDataPath, windowId, activeCommands, callbacks],
@@ -97,9 +97,9 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 			<TitleBar context={context} />
 			<AppTabBar context={context} />
 			<TabContent context={context} />
-			<ModuleManager
-				isOpen={moduleManagerOpen}
-				onClose={() => setModuleManagerOpen(false)}
+			<PackageManager
+				isOpen={packageManagerOpen}
+				onClose={() => setPackageManagerOpen(false)}
 				context={context}
 			/>
 			<BinaryManager

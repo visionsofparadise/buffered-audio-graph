@@ -12,8 +12,8 @@ import { UnwatchFileMainIpc } from "./FileSystem/unwatchFile/Main";
 import { WatchFileMainIpc } from "./FileSystem/watchFile/Main";
 import { WriteFileMainIpc } from "./FileSystem/writeFile/Main";
 import { InstallPackageMainIpc } from "./Package/install/Main";
-import { LoadPackageModulesMainIpc } from "./Package/loadModules/Main";
-import { UnloadPackageModulesMainIpc } from "./Package/unloadModules/Main";
+import { LoadPackageNodesMainIpc } from "./Package/loadNodes/Main";
+import { UnloadPackageNodesMainIpc } from "./Package/unloadNodes/Main";
 import { GetAllDisplaysMainIpc } from "./System/getAllDisplays/Main";
 import { GetAppVersionMainIpc } from "./System/getAppVersion/Main";
 import { GetUserDataPathMainIpc } from "./System/getUserDataPath/Main";
@@ -37,8 +37,8 @@ export const ASYNC_MAIN_IPCS = [
 	WatchFileMainIpc,
 	WriteFileMainIpc,
 	InstallPackageMainIpc,
-	LoadPackageModulesMainIpc,
-	UnloadPackageModulesMainIpc,
+	LoadPackageNodesMainIpc,
+	UnloadPackageNodesMainIpc,
 	ShowOpenDialogMainIpc,
 	ShowSaveDialogMainIpc,
 	GetAllDisplaysMainIpc,

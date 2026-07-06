@@ -2,14 +2,14 @@ import type { BrowserWindow } from "electron";
 import type { FileWatcherManager } from "../../main/FileWatcherManager";
 import type { JobManager } from "../utilities/JobManager";
 import { Logger } from "./Logger";
-import type { ModuleRegistryMap } from "./ModuleRegistry";
+import type { NodeRegistryMap } from "./NodeRegistry";
 
 export interface IpcHandlerDependencies {
 	readonly browserWindow: BrowserWindow;
 	readonly fileWatcherManager: FileWatcherManager;
 	readonly jobManager: JobManager;
 	readonly logger: Logger;
-	readonly moduleRegistry: ModuleRegistryMap;
+	readonly nodeRegistry: NodeRegistryMap;
 	readonly windowId: string;
 }
 

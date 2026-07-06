@@ -23,20 +23,20 @@ const WindowBoundsSchema = z.object({
 	height: z.number(),
 });
 
-const LoadedModuleInfoSchema = z.object({
-	moduleName: z.string(),
-	moduleDescription: z.string(),
+const LoadedNodeInfoSchema = z.object({
+	nodeName: z.string(),
+	nodeDescription: z.string(),
 	schema: z.unknown(),
 	category: z.enum(["source", "transform", "target"]),
 });
 
-const ModulePackageStateSchema = z.object({
+const NodePackageStateSchema = z.object({
 	requestedSpec: z.string(),
 	name: z.string(),
 	version: z.string().nullable().default(null),
 	status: z.enum(["pending", "installing", "loading", "ready", "error"]).default("pending"),
 	error: z.string().nullable().default(null),
-	modules: z.array(LoadedModuleInfoSchema).default([]),
+	nodes: z.array(LoadedNodeInfoSchema).default([]),
 	isBuiltIn: z.boolean().default(false),
 });
 
@@ -45,14 +45,14 @@ export const AppStateSchema = z.object({
 	activeTabId: z.string().nullable().default(null),
 	windowBounds: WindowBoundsSchema.optional(),
 	recentFiles: z.array(RecentFileSchema).default([]),
-	packages: z.array(ModulePackageStateSchema).default([]),
+	packages: z.array(NodePackageStateSchema).default([]),
 	binaries: z.record(z.string(), z.string()).default({}),
 });
 
 export type TabEntry = z.infer<typeof TabEntrySchema>;
 export type RecentFile = z.infer<typeof RecentFileSchema>;
 export type WindowBounds = z.infer<typeof WindowBoundsSchema>;
-export type ModulePackageState = z.infer<typeof ModulePackageStateSchema>;
+export type NodePackageState = z.infer<typeof NodePackageStateSchema>;
 export type AppState = z.infer<typeof AppStateSchema> & State;
 
 const SavedStateSchema = AppStateSchema.pick({
@@ -70,32 +70,32 @@ const SavedStateSchema = AppStateSchema.pick({
 const BUILT_IN_PACKAGE_NAME = "@buffered-audio/nodes";
 const BUILT_IN_PACKAGE_SPEC = "@buffered-audio/nodes@latest";
 
-const BUILT_IN_PACKAGE_ENTRY: ModulePackageState = {
+const BUILT_IN_PACKAGE_ENTRY: NodePackageState = {
 	requestedSpec: BUILT_IN_PACKAGE_SPEC,
 	name: BUILT_IN_PACKAGE_NAME,
 	version: null,
 	status: "pending",
 	error: null,
-	modules: [],
+	nodes: [],
 	isBuiltIn: true,
 };
 
-function resetPackageLifecycle(entry: ModulePackageState): ModulePackageState {
+function resetPackageLifecycle(entry: NodePackageState): NodePackageState {
 	return entry.status === "ready"
 		? entry
 		: {
 				...entry,
 				status: "pending",
 				error: null,
-				modules: [],
+				nodes: [],
 				version: null,
 			};
 }
 
-function loadSavedPackages(savedPackages: Array<unknown> | undefined): Array<ModulePackageState> {
+function loadSavedPackages(savedPackages: Array<unknown> | undefined): Array<NodePackageState> {
 	const parsed = (savedPackages ?? [])
-		.map((entry) => ModulePackageStateSchema.safeParse(entry))
-		.filter((result): result is { success: true; data: ModulePackageState } => result.success)
+		.map((entry) => NodePackageStateSchema.safeParse(entry))
+		.filter((result): result is { success: true; data: NodePackageState } => result.success)
 		.map((result) => resetPackageLifecycle(result.data));
 
 	if (parsed.length === 0) {

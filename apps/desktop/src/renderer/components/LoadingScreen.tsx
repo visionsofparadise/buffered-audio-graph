@@ -1,14 +1,14 @@
 import type { Snapshot } from "valtio/vanilla";
 import { Button } from "@buffered-audio/design-system";
-import type { ModulePackageState } from "../models/State/App";
+import type { NodePackageState } from "../models/State/App";
 
 interface Props {
-	readonly packages: Snapshot<Array<ModulePackageState>>;
+	readonly packages: Snapshot<Array<NodePackageState>>;
 	readonly isLoading: boolean;
 	readonly onContinue: () => void;
 }
 
-function statusText(status: ModulePackageState["status"]): string {
+function statusText(status: NodePackageState["status"]): string {
 	switch (status) {
 		case "installing":
 			return "Installing";

@@ -10,7 +10,7 @@ import type { Parameter } from "./utils/buildParameters";
  * Per-node render staleness, derived by `useNodeStates`. It is a content-hash
  * computation only — it no longer paints the node. The redesign moved render
  * progress to global toasts; the type is retained because `Canvas.tsx`,
- * `useNodeStates.ts`, and `moduleLookup.ts` still reference it.
+ * `useNodeStates.ts`, and `nodeLookup.ts` still reference it.
  */
 export type NodeState = "rendered" | "stale" | "processing" | "pending" | "error" | "bypassed";
 export type NodeCategory = "source" | "transform" | "target";
@@ -30,7 +30,7 @@ export interface NodeContainerData {
 	readonly bypassed: boolean;
 	readonly parameters: ReadonlyArray<Parameter>;
 	/**
-	 * Non-null when the node's module could not be resolved (package/version
+	 * Non-null when the node class could not be resolved (package/version
 	 * not installed, or the node is absent from the package). The body renders
 	 * this reason in place of the parameter controls.
 	 */
@@ -110,7 +110,7 @@ export function NodeContainer({ data, selected }: NodeProps) {
 							className="mt-0.5 shrink-0 text-accent-primary"
 						/>
 						<div className="flex flex-col gap-1">
-							<span className="type-label text-xs text-accent-primary">Module unavailable</span>
+							<span className="type-label text-xs text-accent-primary">Node unavailable</span>
 							<span className="text-xs leading-snug text-text-secondary">{nodeData.unresolvedReason}</span>
 						</div>
 					</div>

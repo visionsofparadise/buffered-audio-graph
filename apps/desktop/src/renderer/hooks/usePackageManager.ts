@@ -56,7 +56,7 @@ export function usePackageManager(context: AppContext): PackageManager {
 				return;
 			}
 
-			await main.unloadPackageModules({
+			await main.unloadPackageNodes({
 				packageName: entry.name,
 				packageVersion: entry.version,
 			});
@@ -85,7 +85,7 @@ export function usePackageManager(context: AppContext): PackageManager {
 			}
 
 			if (entry.version) {
-				await main.unloadPackageModules({
+				await main.unloadPackageNodes({
 					packageName: entry.name,
 					packageVersion: entry.version,
 				});
@@ -96,7 +96,7 @@ export function usePackageManager(context: AppContext): PackageManager {
 			mutatePackageAt(appStore, app, index, (target) => {
 				target.status = "pending";
 				target.error = null;
-				target.modules = [];
+				target.nodes = [];
 				target.version = null;
 			});
 
@@ -106,7 +106,7 @@ export function usePackageManager(context: AppContext): PackageManager {
 						...entry,
 						status: "pending",
 						error: null,
-						modules: [],
+						nodes: [],
 						version: null,
 					},
 					index,

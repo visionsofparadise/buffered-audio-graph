@@ -10,7 +10,7 @@ interface Props {
 	readonly context: AppContext;
 }
 
-export const ModuleManager = resnapshot<Props>(({ isOpen, onClose, context }: Props) => {
+export const PackageManager = resnapshot<Props>(({ isOpen, onClose, context }: Props) => {
 	const { app } = context;
 	const { addPackage, removePackage, updatePackage } = usePackageManager(context);
 
@@ -77,7 +77,7 @@ export const ModuleManager = resnapshot<Props>(({ isOpen, onClose, context }: Pr
 		>
 			<div className="bg-elevated w-[640px] max-h-[80vh] flex flex-col overflow-hidden rounded-xs border border-border">
 				<div className="flex items-center justify-between px-4 py-3 border-b border-border">
-					<h2 className="type-label text-body text-text-primary">Module Manager</h2>
+					<h2 className="type-label text-body text-text-primary">Package Manager</h2>
 					<Button variant="ghost" size="sm" onClick={onClose}>
 						Close
 					</Button>
@@ -91,7 +91,7 @@ export const ModuleManager = resnapshot<Props>(({ isOpen, onClose, context }: Pr
 							return (
 								<li key={entry.requestedSpec} className="bg-surface p-2 rounded-xs">
 									<div className="flex items-center gap-2">
-										{entry.modules.length > 0 && (
+										{entry.nodes.length > 0 && (
 											<button
 												type="button"
 												className="text-text-secondary hover:text-text-primary text-xs"
@@ -128,7 +128,7 @@ export const ModuleManager = resnapshot<Props>(({ isOpen, onClose, context }: Pr
 										)}
 
 										<span className="type-value text-xs text-dimmed">
-											{entry.modules.length} modules
+											{entry.nodes.length} nodes
 										</span>
 
 										<div className="flex items-center gap-1">
@@ -159,16 +159,16 @@ export const ModuleManager = resnapshot<Props>(({ isOpen, onClose, context }: Pr
 										<div className="text-xs text-accent-primary mt-1">{entry.error}</div>
 									)}
 
-									{isExpanded && entry.modules.length > 0 && (
+									{isExpanded && entry.nodes.length > 0 && (
 										<ul className="mt-2 ml-4 flex flex-col gap-1">
-											{entry.modules.map((mod) => (
-												<li key={mod.moduleName} className="flex flex-col">
+											{entry.nodes.map((node) => (
+												<li key={node.nodeName} className="flex flex-col">
 													<span className="type-label text-xs text-text-primary">
-														{mod.moduleName}
+														{node.nodeName}
 													</span>
-													{mod.moduleDescription && (
+													{node.nodeDescription && (
 														<span className="text-xs text-text-secondary">
-															{mod.moduleDescription}
+															{node.nodeDescription}
 														</span>
 													)}
 												</li>

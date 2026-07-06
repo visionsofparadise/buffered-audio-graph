@@ -13,8 +13,8 @@ import { UnwatchFileRendererIpc } from "./FileSystem/unwatchFile/Renderer";
 import { WatchFileRendererIpc } from "./FileSystem/watchFile/Renderer";
 import { WriteFileRendererIpc } from "./FileSystem/writeFile/Renderer";
 import { InstallPackageRendererIpc } from "./Package/install/Renderer";
-import { LoadPackageModulesRendererIpc } from "./Package/loadModules/Renderer";
-import { UnloadPackageModulesRendererIpc } from "./Package/unloadModules/Renderer";
+import { LoadPackageNodesRendererIpc } from "./Package/loadNodes/Renderer";
+import { UnloadPackageNodesRendererIpc } from "./Package/unloadNodes/Renderer";
 import { GetAllDisplaysRendererIpc } from "./System/getAllDisplays/Renderer";
 import { GetAppVersionRendererIpc } from "./System/getAppVersion/Renderer";
 import { GetUserDataPathRendererIpc } from "./System/getUserDataPath/Renderer";
@@ -38,8 +38,8 @@ export const ASYNC_RENDERER_IPCS = [
 	WatchFileRendererIpc,
 	WriteFileRendererIpc,
 	InstallPackageRendererIpc,
-	LoadPackageModulesRendererIpc,
-	UnloadPackageModulesRendererIpc,
+	LoadPackageNodesRendererIpc,
+	UnloadPackageNodesRendererIpc,
 	ShowOpenDialogRendererIpc,
 	ShowSaveDialogRendererIpc,
 	GetAllDisplaysRendererIpc,
