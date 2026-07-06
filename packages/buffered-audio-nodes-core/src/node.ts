@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEFAULT_PROGRESS_QUANTUM, type BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload } from "./stream";
+import type { BufferedStream } from "./stream";
 
 export interface Block {
 	readonly samples: Array<Float32Array>;
@@ -16,37 +16,12 @@ export interface NodeIdentity {
 	readonly type: ReadonlyArray<string>;
 }
 
-export type StreamEvent =
-	| { kind: "started" }
-	| ({ kind: "finished" } & FinishedPayload)
-	| ({ kind: "progress" } & ProgressPayload)
-	| ({ kind: "log" } & LogPayload);
-
-export function wireStreamEvents(stream: BufferedStream, identity: NodeIdentity, onEvent: (node: NodeIdentity, event: StreamEvent) => void): void {
-	stream.events.on("started", () => onEvent(identity, { kind: "started" }));
-	stream.events.on("finished", (payload) => onEvent(identity, { kind: "finished", ...payload }));
-	stream.events.on("progress", (payload) => onEvent(identity, { kind: "progress", ...payload }));
-	stream.events.on("log", (payload) => onEvent(identity, { kind: "log", ...payload }));
-}
-
-export function wireStream(node: BufferedAudioNode, stream: BufferedStream, context: StreamContext): void {
-	stream.quantumFraction = context.progressQuantum ?? DEFAULT_PROGRESS_QUANTUM;
-
-	if (!context.onEvent) return;
-
-	const identity: NodeIdentity = { nodeName: (node.constructor as typeof BufferedAudioNode).nodeName, id: node.id, type: node.type };
-
-	wireStreamEvents(stream, identity, context.onEvent);
-}
-
 export interface StreamContext {
 	readonly executionProviders: ReadonlyArray<ExecutionProvider>;
 	readonly memoryLimit: number;
 	readonly durationFrames?: number;
 	readonly highWaterMark: number;
 	readonly signal?: AbortSignal;
-	readonly visited: Set<BufferedAudioNode>;
-	readonly onEvent?: (node: NodeIdentity, event: StreamEvent) => void;
 	readonly progressQuantum?: number;
 }
 
@@ -56,7 +31,6 @@ export interface RenderOptions {
 	readonly memoryLimit?: number;
 	readonly signal?: AbortSignal;
 	readonly executionProviders?: ReadonlyArray<ExecutionProvider>;
-	readonly onEvent?: (node: NodeIdentity, event: StreamEvent) => void;
 	readonly progressQuantum?: number;
 }
 
@@ -64,12 +38,15 @@ export interface BufferedAudioNodeProperties {
 	readonly id?: string;
 	readonly bypass?: boolean;
 	readonly previousProperties?: BufferedAudioNodeProperties;
-	readonly bufferSize?: number;
-	readonly latency?: number;
 	readonly children?: ReadonlyArray<BufferedAudioNode>;
 }
 
 export type BufferedAudioNodeInput<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> = P;
+
+export interface Composition {
+	readonly head: BufferedAudioNode;
+	readonly tail: BufferedAudioNode;
+}
 
 export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> {
 	static readonly packageName: string;
@@ -77,6 +54,7 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 	static readonly nodeName: string;
 	static readonly nodeDescription: string = "";
 	static readonly schema: z.ZodType = z.object({});
+	static readonly streamClass: new (node: BufferedAudioNode) => BufferedStream;
 
 	abstract readonly type: ReadonlyArray<string>;
 
@@ -90,57 +68,31 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 		return this.properties.id;
 	}
 
-	get bufferSize(): number {
-		return this.properties.bufferSize ?? 0;
-	}
-	get latency(): number {
-		return this.properties.latency ?? 0;
-	}
-
 	get isBypassed(): boolean {
 		return this.properties.bypass === true;
 	}
 
 	get children(): ReadonlyArray<BufferedAudioNode> {
-		const raw = this.properties.children ?? [];
-		const resolved: Array<BufferedAudioNode> = [];
-
-		for (const child of raw) {
-			if (child.isBypassed) {
-				resolved.push(...child.children);
-			} else {
-				resolved.push(child);
-			}
-		}
-
-		return resolved;
+		return this.properties.children ?? [];
 	}
 
-	readonly streams: Array<BufferedStream> = [];
-
 	constructor(properties?: P) {
-		this.properties = {
-			...properties,
-		} as P;
+		const ctor = this.constructor as typeof BufferedAudioNode;
+
+		let parsed: unknown;
+
+		try {
+			parsed = ctor.schema.parse(properties ?? {});
+		} catch (error) {
+			if (error instanceof z.ZodError) {
+				throw new Error(`Invalid parameters for node "${ctor.nodeName}": ${error.message}`);
+			}
+
+			throw error;
+		}
+
+		this.properties = { ...properties, ...(parsed as Record<string, unknown>) } as P;
 	}
 
 	abstract clone(overrides?: Partial<BufferedAudioNodeProperties>): BufferedAudioNode;
-
-	async teardown(): Promise<void> {
-		await this._teardown();
-
-		for (const stream of this.streams) {
-			await stream.destroy();
-		}
-
-		this.streams.length = 0;
-
-		for (const child of this.children) {
-			await child.teardown();
-		}
-	}
-
-	_teardown(): Promise<void> | void {
-		return;
-	}
 }

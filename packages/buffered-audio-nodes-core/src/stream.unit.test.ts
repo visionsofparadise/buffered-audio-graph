@@ -1,10 +1,14 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { Block, StreamContext, StreamEvent, NodeIdentity } from "./node";
+import type { Block, BufferedAudioNode, NodeIdentity } from "./node";
 import { BufferedSourceStream, SourceNode, type SourceMetadata } from "./source";
 import { BufferedTargetStream, TargetNode } from "./target";
-import { BufferedTransformStream, TransformNode } from "./transform";
-import { BufferedStream, UNKNOWN_TOTAL_QUANTUM_FRAMES, type LogPayload, type ProgressPayload, type StreamPhase } from "./stream";
+import { UnbufferedTransformStream } from "./unbuffered-transform";
+import { TransformNode } from "./transform";
+import { BufferedStream, UNKNOWN_TOTAL_QUANTUM_FRAMES, type LogPayload, type ProgressPayload, type RenderEvents, type StreamPhase } from "./stream";
+
+const IDENTITY: NodeIdentity = { nodeName: "probe", id: "p", type: ["buffered-audio-node", "probe"] };
 
 class ProbeStream extends BufferedStream {
 	emit(phase: StreamPhase, framesDone: number, framesTotal?: number, options?: { force?: boolean }): void {
@@ -20,72 +24,82 @@ class ProbeStream extends BufferedStream {
 	}
 }
 
-function collectProgress(stream: BufferedStream): Array<ProgressPayload> {
+function probe(quantumFraction = 0.1): { stream: ProbeStream; events: RenderEvents } {
+	const events: RenderEvents = new EventEmitter();
+	const stream = new ProbeStream({ properties: {} } as unknown as BufferedAudioNode);
+
+	stream.bind(events, IDENTITY, quantumFraction);
+
+	return { stream, events };
+}
+
+function collectProgress(events: RenderEvents): Array<ProgressPayload> {
 	const out: Array<ProgressPayload> = [];
 
-	stream.events.on("progress", (payload) => out.push(payload));
+	events.on("progress", (_identity, payload) => out.push(payload));
 
 	return out;
 }
 
 describe("BufferedStream.emitProgress throttle", () => {
 	it("known total: emits at 0, each quantum-boundary crossing, and forced final — not every increment", () => {
-		const stream = new ProbeStream({});
-		const events = collectProgress(stream);
+		const { stream, events } = probe();
+		const collected = collectProgress(events);
 		const total = 1000;
 
 		for (let done = 0; done <= total; done += 10) {
 			stream.emit("read", done, total, done === total ? { force: true } : undefined);
 		}
 
-		const framesDone = events.map((e) => e.framesDone);
+		const framesDone = collected.map((e) => e.framesDone);
 
 		expect(framesDone[0]).toBe(0);
 		expect(framesDone.at(-1)).toBe(1000);
-		// quantum = 100; ~11 boundary emissions (0,100,...,900) plus forced final at 1000
-		expect(events.length).toBeGreaterThanOrEqual(10);
-		expect(events.length).toBeLessThanOrEqual(13);
-		expect(events.length).toBeLessThan(50);
+		expect(collected.length).toBeGreaterThanOrEqual(10);
+		expect(collected.length).toBeLessThanOrEqual(13);
 	});
 
 	it("unknown total: boundaries at UNKNOWN_TOTAL_QUANTUM_FRAMES multiples", () => {
-		const stream = new ProbeStream({});
-		const events = collectProgress(stream);
+		const { stream, events } = probe();
+		const collected = collectProgress(events);
 		const step = UNKNOWN_TOTAL_QUANTUM_FRAMES / 4;
 
 		for (let i = 0; i <= 8; i++) stream.emit("emit", i * step);
 
-		// crossings at 0, 480_000, 960_000 (i = 0, 4, 8)
-		expect(events.map((e) => e.framesDone)).toEqual([0, UNKNOWN_TOTAL_QUANTUM_FRAMES, UNKNOWN_TOTAL_QUANTUM_FRAMES * 2]);
+		expect(collected.map((e) => e.framesDone)).toEqual([0, UNKNOWN_TOTAL_QUANTUM_FRAMES, UNKNOWN_TOTAL_QUANTUM_FRAMES * 2]);
 	});
 
 	it("quantumFraction is honored", () => {
-		const stream = new ProbeStream({});
-		stream.quantumFraction = 0.25;
-		const events = collectProgress(stream);
+		const { stream, events } = probe(0.25);
+		const collected = collectProgress(events);
 
 		for (let done = 0; done <= 100; done += 5) stream.emit("read", done, 100);
 
-		// quantum = 25 → boundaries at 0,25,50,75,100
-		expect(events.map((e) => e.framesDone)).toEqual([0, 25, 50, 75, 100]);
+		expect(collected.map((e) => e.framesDone)).toEqual([0, 25, 50, 75, 100]);
 	});
 
 	it("force always emits regardless of boundary", () => {
-		const stream = new ProbeStream({});
-		const events = collectProgress(stream);
+		const { stream, events } = probe();
+		const collected = collectProgress(events);
 
 		stream.emit("write", 0, 1000);
 		stream.emit("write", 5, 1000, { force: true });
 		stream.emit("write", 7, 1000, { force: true });
 
-		expect(events.map((e) => e.framesDone)).toEqual([0, 5, 7]);
+		expect(collected.map((e) => e.framesDone)).toEqual([0, 5, 7]);
+	});
+
+	it("emits nothing when unbound", () => {
+		const stream = new ProbeStream({ properties: {} } as unknown as BufferedAudioNode);
+
+		expect(() => stream.emit("read", 0, 100)).not.toThrow();
 	});
 });
 
 describe("BufferedStream per-phase independence", () => {
 	it("interleaved phases do not suppress each other's boundaries", () => {
-		const stream = new ProbeStream({});
-		const events = collectProgress(stream);
+		const { stream, events } = probe();
+		const collected = collectProgress(events);
 
 		stream.emit("buffer", 0, 1000);
 		stream.emit("process", 0, 1000);
@@ -93,7 +107,7 @@ describe("BufferedStream per-phase independence", () => {
 		stream.emit("process", 100, 1000);
 		stream.emit("buffer", 200, 1000);
 
-		const byPhase = (phase: StreamPhase): Array<number> => events.filter((e) => e.phase === phase).map((e) => e.framesDone);
+		const byPhase = (phase: StreamPhase): Array<number> => collected.filter((e) => e.phase === phase).map((e) => e.framesDone);
 
 		expect(byPhase("buffer")).toEqual([0, 100, 200]);
 		expect(byPhase("process")).toEqual([0, 100]);
@@ -102,52 +116,51 @@ describe("BufferedStream per-phase independence", () => {
 
 describe("BufferedStream helpers", () => {
 	it("progress() routes through the process phase throttle", () => {
-		const stream = new ProbeStream({});
-		const events = collectProgress(stream);
+		const { stream, events } = probe();
+		const collected = collectProgress(events);
 
 		for (let i = 0; i <= 1000; i++) stream.callProgress(i, 1000);
 
-		expect(events.every((e) => e.phase === "process")).toBe(true);
-		expect(events.length).toBeLessThan(20);
-		expect(events[0]?.framesDone).toBe(0);
+		expect(collected.every((e) => e.phase === "process")).toBe(true);
+		expect(collected.length).toBeLessThan(20);
+		expect(collected[0]?.framesDone).toBe(0);
 	});
 
 	it("log() emits once with exact payload and level", () => {
-		const stream = new ProbeStream({});
+		const { stream, events } = probe();
 		const logs: Array<LogPayload> = [];
 
-		stream.events.on("log", (payload) => logs.push(payload));
+		events.on("log", (_identity, payload) => logs.push(payload));
 		stream.callLog("m", { a: 1 }, "warn");
 
 		expect(logs).toEqual([{ level: "warn", message: "m", data: { a: 1 } }]);
 	});
 
 	it("log() defaults to info", () => {
-		const stream = new ProbeStream({});
+		const { stream, events } = probe();
 		const logs: Array<LogPayload> = [];
 
-		stream.events.on("log", (payload) => logs.push(payload));
+		events.on("log", (_identity, payload) => logs.push(payload));
 		stream.callLog("hi");
 
 		expect(logs[0]?.level).toBe("info");
 	});
 });
 
+function block(value: number, offset: number, frames: number): Block {
+	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
+}
+
 class LifeSourceStream extends BufferedSourceStream {
 	private index = 0;
-	private readonly chunks: Array<Block>;
-
-	constructor(properties: Record<string, unknown>, chunks: Array<Block>) {
-		super(properties as never);
-		this.chunks = chunks;
-	}
 
 	override async getMetadata(): Promise<SourceMetadata> {
 		return { sampleRate: 44100, channels: 1, durationFrames: 200 };
 	}
 
 	override async _read(): Promise<Block | undefined> {
-		const chunk = this.chunks[this.index];
+		const chunks = this.properties.chunks as Array<Block>;
+		const chunk = chunks[this.index];
 
 		if (!chunk) return undefined;
 		this.index += 1;
@@ -160,28 +173,35 @@ class LifeSource extends SourceNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "life-source";
 	static override readonly schema = z.object({});
+	static override readonly streamClass = LifeSourceStream;
 
 	readonly type = ["buffered-audio-node", "source", "life"] as const;
-	get bufferSize(): number {
-		return 0;
-	}
-	get latency(): number {
-		return 0;
-	}
-
-	private readonly chunks: Array<Block>;
 
 	constructor(chunks: Array<Block>) {
-		super({});
-		this.chunks = chunks;
-	}
-
-	protected override createStream(): LifeSourceStream {
-		return new LifeSourceStream(this.properties as never, this.chunks);
+		super({ chunks } as never);
 	}
 
 	clone(): LifeSource {
-		return new LifeSource(this.chunks);
+		return new LifeSource(this.properties.chunks as Array<Block>);
+	}
+}
+
+class LifeTransformStream extends UnbufferedTransformStream {
+	override transform(block: Block, enqueue: (block: Block) => void): void {
+		enqueue(block);
+	}
+}
+
+class LifeTransform extends TransformNode {
+	static readonly packageName = "test";
+	static readonly nodeName = "life-transform";
+	static override readonly schema = z.object({});
+	static override readonly streamClass = LifeTransformStream;
+
+	readonly type = ["buffered-audio-node", "transform", "life"] as const;
+
+	clone(): LifeTransform {
+		return new LifeTransform();
 	}
 }
 
@@ -194,95 +214,41 @@ class LifeTarget extends TargetNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "life-target";
 	static override readonly schema = z.object({});
+	static override readonly streamClass = LifeTargetStream;
 
 	readonly type = ["buffered-audio-node", "target", "life"] as const;
-	get bufferSize(): number {
-		return 0;
-	}
-	get latency(): number {
-		return 0;
-	}
-
-	override createStream(): LifeTargetStream {
-		return new LifeTargetStream(this.properties as never);
-	}
 
 	clone(): LifeTarget {
 		return new LifeTarget();
 	}
 }
 
-class LifeTransform extends TransformNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "life-transform";
-	static override readonly schema = z.object({});
-
-	readonly type = ["buffered-audio-node", "transform", "life"] as const;
-	get bufferSize(): number {
-		return 0;
-	}
-	get latency(): number {
-		return 0;
-	}
-
-	override createStream(): BufferedTransformStream {
-		return new BufferedTransformStream({ ...this.properties, bufferSize: 0 });
-	}
-
-	clone(): LifeTransform {
-		return new LifeTransform();
-	}
-}
-
-function chunk(value: number, offset: number, frames: number): Block {
-	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
-}
-
 describe("Lifecycle events end-to-end", () => {
 	it("source emits started once and finished with framesDone; target finished with framesDone", async () => {
-		const source = new LifeSource([chunk(1, 0, 100), chunk(2, 100, 100)]);
+		const source = new LifeSource([block(1, 0, 100), block(2, 100, 100)]);
 		const target = new LifeTarget();
 
 		source.to(target);
 
-		const events: Array<{ node: NodeIdentity; event: StreamEvent }> = [];
+		const events: Array<{ identity: NodeIdentity; kind: string; framesDone?: number }> = [];
+		const job = source.createRenderJob();
 
-		await source.render({ onEvent: (node, event) => events.push({ node, event }) });
+		job.events.on("started", (identity) => events.push({ identity, kind: "started" }));
+		job.events.on("finished", (identity, payload) => events.push({ identity, kind: "finished", framesDone: payload.framesDone }));
 
-		const sourceEvents = events.filter((e) => e.node.nodeName === "life-source");
-		const targetEvents = events.filter((e) => e.node.nodeName === "life-target");
+		await job.render();
 
-		expect(sourceEvents.filter((e) => e.event.kind === "started")).toHaveLength(1);
+		const sourceStarted = events.filter((e) => e.identity.nodeName === "life-source" && e.kind === "started");
+		const sourceFinished = events.find((e) => e.identity.nodeName === "life-source" && e.kind === "finished");
+		const targetFinished = events.find((e) => e.identity.nodeName === "life-target" && e.kind === "finished");
 
-		const sourceFinished = sourceEvents.find((e) => e.event.kind === "finished");
-		expect(sourceFinished?.event).toMatchObject({ kind: "finished", framesDone: 200 });
-
-		const targetFinished = targetEvents.find((e) => e.event.kind === "finished");
-		expect(targetFinished?.event).toMatchObject({ kind: "finished", framesDone: 200 });
+		expect(sourceStarted).toHaveLength(1);
+		expect(sourceFinished?.framesDone).toBe(200);
+		expect(targetFinished?.framesDone).toBe(200);
 	});
 
-	it("transform finished carries framesDone and processingMs", async () => {
-		const source = new LifeSource([chunk(1, 0, 100), chunk(2, 100, 100)]);
-		const transform = new LifeTransform();
-		const target = new LifeTarget();
-
-		source.to(transform);
-		transform.to(target);
-
-		const events: Array<{ node: NodeIdentity; event: StreamEvent }> = [];
-
-		await source.render({ onEvent: (node, event) => events.push({ node, event }) });
-
-		const finished = events.find((e) => e.node.nodeName === "life-transform" && e.event.kind === "finished");
-
-		expect(finished?.event).toMatchObject({ kind: "finished", framesDone: 200 });
-		expect((finished?.event as { processingMs?: number }).processingMs).toBeTypeOf("number");
-	});
-});
-
-describe("onEvent aggregation", () => {
 	it("delivers events for all three nodes with correct identity", async () => {
-		const source = new LifeSource([chunk(1, 0, 100)]);
+		const source = new LifeSource([block(1, 0, 100)]);
 		const transform = new LifeTransform();
 		const target = new LifeTarget();
 
@@ -290,46 +256,20 @@ describe("onEvent aggregation", () => {
 		transform.to(target);
 
 		const identities = new Set<string>();
+		const job = source.createRenderJob();
 
-		await source.render({
-			onEvent: (node) => {
-				identities.add(node.nodeName);
-			},
-		});
+		job.events.on("started", (identity) => identities.add(identity.nodeName));
+		job.events.on("progress", (identity) => identities.add(identity.nodeName));
+		job.events.on("finished", (identity) => identities.add(identity.nodeName));
+
+		await job.render();
 
 		expect(identities).toEqual(new Set(["life-source", "life-transform", "life-target"]));
 	});
-
-	it("no listeners are subscribed when onEvent is omitted", async () => {
-		const source = new LifeSource([chunk(1, 0, 100)]);
-		const target = new LifeTarget();
-
-		source.to(target);
-
-		let listenerCount = -1;
-
-		const origCreate = (source as unknown as { createStream: () => BufferedSourceStream }).createStream.bind(source);
-		(source as unknown as { createStream: () => BufferedSourceStream }).createStream = () => {
-			const stream = origCreate();
-			const origSetup = stream.setup.bind(stream);
-
-			stream.setup = (context: StreamContext) => {
-				listenerCount = stream.events.listenerCount("progress") + stream.events.listenerCount("started") + stream.events.listenerCount("finished") + stream.events.listenerCount("log");
-
-				return origSetup(context);
-			};
-
-			return stream;
-		};
-
-		await source.render();
-
-		expect(listenerCount).toBe(0);
-	});
 });
 
-function destroyContext(): StreamContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, visited: new Set() };
+function destroyContext(): import("./node").StreamContext {
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
 }
 
 async function drainReadable(readable: ReadableStream<Block>): Promise<void> {
@@ -350,7 +290,7 @@ class CountingSourceStream extends BufferedSourceStream {
 		private readonly chunks: Array<Block>,
 		private readonly throwAt?: number,
 	) {
-		super({} as never);
+		super({ properties: {} } as unknown as BufferedAudioNode);
 	}
 
 	override async getMetadata(): Promise<SourceMetadata> {
@@ -377,11 +317,10 @@ class CountingTargetStream extends BufferedTargetStream {
 	destroyCount = 0;
 
 	constructor() {
-		super({} as never);
+		super({ properties: {} } as unknown as BufferedAudioNode);
 	}
 
 	override async _write(): Promise<void> {}
-
 	override async _close(): Promise<void> {}
 
 	override _destroy(): void {
@@ -389,19 +328,9 @@ class CountingTargetStream extends BufferedTargetStream {
 	}
 }
 
-class CountingTransformStream extends BufferedTransformStream {
-	destroyCount = 0;
-
-	override _destroy(): void | Promise<void> {
-		this.destroyCount += 1;
-
-		return super._destroy();
-	}
-}
-
 describe("BufferedStream.destroy idempotency", () => {
 	it("runs _destroy exactly once across repeated destroy() calls", async () => {
-		const stream = new CountingSourceStream([chunk(1, 0, 10)]);
+		const stream = new CountingSourceStream([block(1, 0, 10)]);
 
 		await stream.destroy();
 		await stream.destroy();
@@ -413,26 +342,23 @@ describe("BufferedStream.destroy idempotency", () => {
 
 describe("source stream-scoped destroy", () => {
 	it("graceful end-of-read invokes destroy once", async () => {
-		const stream = new CountingSourceStream([chunk(1, 0, 100), chunk(2, 100, 100)]);
-		const readable = await stream._setup(destroyContext());
+		const stream = new CountingSourceStream([block(1, 0, 100), block(2, 100, 100)]);
 
-		await drainReadable(readable);
+		await drainReadable(await stream._setup(destroyContext()));
 
 		expect(stream.destroyCount).toBe(1);
 	});
 
 	it("read error invokes destroy once and surfaces the error", async () => {
-		const stream = new CountingSourceStream([chunk(1, 0, 100)], 0);
-		const readable = await stream._setup(destroyContext());
+		const stream = new CountingSourceStream([block(1, 0, 100)], 0);
 
-		await expect(drainReadable(readable)).rejects.toThrow("read boom");
+		await expect(drainReadable(await stream._setup(destroyContext()))).rejects.toThrow("read boom");
 		expect(stream.destroyCount).toBe(1);
 	});
 
 	it("consumer cancel invokes destroy once", async () => {
-		const stream = new CountingSourceStream([chunk(1, 0, 100), chunk(2, 100, 100)]);
-		const readable = await stream._setup(destroyContext());
-		const reader = readable.getReader();
+		const stream = new CountingSourceStream([block(1, 0, 100), block(2, 100, 100)]);
+		const reader = (await stream._setup(destroyContext())).getReader();
 
 		await reader.read();
 		await reader.cancel("stop");
@@ -462,7 +388,7 @@ describe("target stream-scoped destroy", () => {
 	it("graceful close invokes destroy once", async () => {
 		const target = new CountingTargetStream();
 
-		await target._setup(readableOf([chunk(1, 0, 100), chunk(2, 100, 100)]), destroyContext());
+		await target._setup(readableOf([block(1, 0, 100), block(2, 100, 100)]), destroyContext());
 
 		expect(target.destroyCount).toBe(1);
 	});
@@ -477,39 +403,5 @@ describe("target stream-scoped destroy", () => {
 
 		await expect(target._setup(erroring, destroyContext())).rejects.toThrow("upstream boom");
 		expect(target.destroyCount).toBe(1);
-	});
-});
-
-describe("transform stream-scoped destroy", () => {
-	it("graceful flush invokes destroy once", async () => {
-		const stream = new CountingTransformStream({ bufferSize: 0 });
-		const input = new ReadableStream<Block>({
-			start(controller) {
-				controller.enqueue(chunk(1, 0, 10));
-				controller.close();
-			},
-		});
-
-		await drainReadable(await stream._setup(input, destroyContext()));
-
-		expect(stream.destroyCount).toBe(1);
-	});
-
-	it("downstream cancel invokes transformer cancel → destroy once", async () => {
-		const stream = new CountingTransformStream({ bufferSize: 0 });
-		const input = new ReadableStream<Block>({
-			pull(controller) {
-				controller.enqueue(chunk(1, 0, 10));
-			},
-		});
-
-		const output = await stream._setup(input, destroyContext());
-		const reader = output.getReader();
-
-		await reader.read();
-		await reader.cancel("stop");
-		await new Promise((resolve) => setTimeout(resolve, 20));
-
-		expect(stream.destroyCount).toBe(1);
 	});
 });

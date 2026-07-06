@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import type { BufferedAudioNode, RenderOptions } from "./node";
+import type { RenderJob } from "./render-job";
 import { SourceNode } from "./source";
 import { TransformNode } from "./transform";
 
@@ -153,15 +154,11 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 
 		if (!NodeClass) throw new Error(`Unknown node: "${nodeDef.nodeName}" in package "${nodeDef.packageName}"`);
 
-		const ctor = NodeClass as unknown as typeof BufferedAudioNode;
-		const parameters = ctor.schema.parse(nodeDef.parameters ?? {}) as Record<string, unknown>;
-		const instance = new NodeClass(parameters);
-
-		instance.properties = { ...instance.properties, id: nodeDef.id };
-
-		if (nodeDef.options?.bypass) {
-			instance.properties = { ...instance.properties, bypass: nodeDef.options.bypass };
-		}
+		const instance = new NodeClass({
+			...(nodeDef.parameters ?? {}),
+			id: nodeDef.id,
+			...(nodeDef.options?.bypass !== undefined ? { bypass: nodeDef.options.bypass } : {}),
+		});
 
 		nodeMap.set(nodeDef.id, instance);
 	}
@@ -204,13 +201,11 @@ export interface RenderGraphOptions extends RenderOptions {
 	parameters?: Record<string, string>;
 }
 
-export async function renderGraph(definition: GraphDefinition, registry: NodeRegistry, options?: RenderGraphOptions): Promise<Array<SourceNode>> {
+export function createRenderJobs(definition: GraphDefinition, registry: NodeRegistry, options?: RenderGraphOptions): Array<RenderJob> {
 	const substituted = substituteParameters(definition, options?.parameters ?? {});
 	const sources = unpack(substituted, registry);
 
 	const { parameters: _parameters, ...renderOptions } = options ?? {};
 
-	await Promise.all(sources.map((source) => source.render(renderOptions)));
-
-	return sources;
+	return sources.map((source) => source.createRenderJob(renderOptions));
 }

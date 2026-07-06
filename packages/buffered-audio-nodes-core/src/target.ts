@@ -1,4 +1,4 @@
-import { BufferedAudioNode, wireStream, type Block, type BufferedAudioNodeProperties, type StreamContext } from "./node";
+import { BufferedAudioNode, type Block, type BufferedAudioNodeProperties, type StreamContext } from "./node";
 import { BufferedStream } from "./stream";
 
 export interface TargetNodeProperties extends BufferedAudioNodeProperties {}
@@ -29,7 +29,7 @@ export abstract class BufferedTargetStream<P extends TargetNodeProperties = Targ
 			write: async (chunk) => {
 				if (!this.hasStarted) {
 					this.hasStarted = true;
-					this.events.emit("started");
+					this.emitStarted();
 				}
 
 				await this._write(chunk);
@@ -42,7 +42,7 @@ export abstract class BufferedTargetStream<P extends TargetNodeProperties = Targ
 				await this._close();
 
 				this.emitProgress("write", this.framesWritten, this.sourceTotalFrames, { force: true });
-				this.events.emit("finished", { framesDone: this.framesWritten });
+				this.emitFinished({ framesDone: this.framesWritten });
 				await this.destroy();
 			},
 			abort: async () => {
@@ -55,17 +55,5 @@ export abstract class BufferedTargetStream<P extends TargetNodeProperties = Targ
 export abstract class TargetNode<P extends TargetNodeProperties = TargetNodeProperties> extends BufferedAudioNode<P> {
 	static override is(value: unknown): value is TargetNode {
 		return BufferedAudioNode.is(value) && value.type[1] === "target";
-	}
-
-	abstract createStream(): BufferedTargetStream<P>;
-
-	setup(readable: ReadableStream<Block>, context: StreamContext): Promise<Array<Promise<void>>> {
-		const stream = this.createStream();
-
-		this.streams.push(stream);
-
-		wireStream(this, stream, context);
-
-		return Promise.resolve([stream.setup(readable, context)]);
 	}
 }

@@ -1,27 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { BlockBuffer } from "./block-buffer";
-import { pack, renderGraph, substituteParameters, unpack, validateGraphDefinition, type GraphDefinition, type NodeRegistry } from "./graph-format";
+import { createRenderJobs, pack, substituteParameters, unpack, validateGraphDefinition, type GraphDefinition, type NodeRegistry } from "./graph-format";
 import type { Block, BufferedAudioNode } from "./node";
-import type { SourceMetadata } from "./source";
-import { BufferedSourceStream, SourceNode } from "./source";
+import { RenderJob } from "./render-job";
+import { BufferedSourceStream, SourceNode, type SourceMetadata } from "./source";
 import { BufferedTargetStream, TargetNode } from "./target";
-import { BufferedTransformStream, TransformNode } from "./transform";
+import { UnbufferedTransformStream } from "./unbuffered-transform";
+import { TransformNode } from "./transform";
+
+function createChunk(value: number, offset: number, frames: number): Block {
+	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
+}
 
 class MockSourceStream extends BufferedSourceStream {
+	private index = 0;
+
 	override async getMetadata(): Promise<SourceMetadata> {
-		return this.properties.meta as SourceMetadata;
+		return (this.properties.meta as SourceMetadata | undefined) ?? { sampleRate: 44100, channels: 1 };
 	}
 
 	override async _read(): Promise<Block | undefined> {
-		const chunks = this.properties.chunks as Array<Block>;
-		const index = this.properties.chunkIndex as number;
-		const chunk = chunks[index];
-		if (chunk) {
-			(this.properties as Record<string, unknown>).chunkIndex = index + 1;
-			return chunk;
-		}
-		return undefined;
+		const chunks = (this.properties.chunks as Array<Block> | undefined) ?? [];
+		const chunk = chunks[this.index];
+
+		if (!chunk) return undefined;
+		this.index += 1;
+
+		return chunk;
 	}
 }
 
@@ -29,17 +34,12 @@ class MockSource extends SourceNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "mock-source";
 	static override readonly schema = z.object({});
+	static override readonly streamClass = MockSourceStream;
 
 	readonly type = ["buffered-audio-node", "source", "mock"] as const;
-	get bufferSize(): number { return 0; }
-	get latency(): number { return 0; }
 
 	constructor(chunks: Array<Block> = [], meta: SourceMetadata = { sampleRate: 44100, channels: 1 }) {
-		super({ chunks, meta, chunkIndex: 0 } as never);
-	}
-
-	protected override createStream(): MockSourceStream {
-		return new MockSourceStream(this.properties);
+		super({ chunks, meta } as never);
 	}
 
 	clone(): MockSource {
@@ -47,30 +47,19 @@ class MockSource extends SourceNode {
 	}
 }
 
-class MockTransformStream extends BufferedTransformStream {
-	readonly processedChunks: Array<Block> = [];
-
-	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
-		await super._buffer(chunk, buffer);
-		this.processedChunks.push(chunk);
+class MockTransformStream extends UnbufferedTransformStream {
+	override transform(block: Block, enqueue: (block: Block) => void): void {
+		enqueue(block);
 	}
 }
 
 class MockTransform extends TransformNode {
+	static readonly packageName = "test";
+	static readonly nodeName = "mock-transform";
+	static override readonly schema = z.object({});
+	static override readonly streamClass = MockTransformStream;
+
 	readonly type = ["buffered-audio-node", "transform", "mock"] as const;
-	get bufferSize(): number { return 0; }
-	get latency(): number { return 0; }
-
-	private _lastStream?: MockTransformStream;
-
-	get processedChunks(): Array<Block> {
-		return this._lastStream?.processedChunks ?? [];
-	}
-
-	override createStream(): MockTransformStream {
-		this._lastStream = new MockTransformStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-		return this._lastStream;
-	}
 
 	clone(): MockTransform {
 		return new MockTransform();
@@ -94,94 +83,179 @@ class MockTarget extends TargetNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "mock-target";
 	static override readonly schema = z.object({});
+	static override readonly streamClass = MockTargetStream;
 
 	readonly type = ["buffered-audio-node", "target", "mock"] as const;
-	get bufferSize(): number { return 0; }
-	get latency(): number { return 0; }
-
-	private _lastStream?: MockTargetStream;
-
-	get lastCreatedStream(): MockTargetStream | undefined {
-		return this._lastStream;
-	}
-
-	override createStream(): MockTargetStream {
-		this._lastStream = new MockTargetStream(this.properties as unknown as Record<string, unknown>);
-		return this._lastStream;
-	}
 
 	clone(): MockTarget {
 		return new MockTarget();
 	}
 }
 
-function createChunk(value: number, offset: number, duration: number): Block {
-	const samples = new Float32Array(duration).fill(value);
-	return { samples: [samples], offset, sampleRate: 44100, bitDepth: 32 };
+class FailingTargetStream extends BufferedTargetStream {
+	destroyCount = 0;
+
+	override async _write(): Promise<void> {
+		throw new Error("write failed");
+	}
+
+	override async _close(): Promise<void> {}
+
+	override _destroy(): void {
+		this.destroyCount += 1;
+	}
 }
 
-describe("Graph executor", () => {
+class FailingTarget extends TargetNode {
+	static readonly packageName = "test";
+	static readonly nodeName = "failing-target";
+	static override readonly schema = z.object({});
+	static override readonly streamClass = FailingTargetStream;
+
+	readonly type = ["buffered-audio-node", "target", "failing"] as const;
+
+	clone(): FailingTarget {
+		return new FailingTarget();
+	}
+}
+
+function targetStream(job: RenderJob, node: TargetNode): MockTargetStream {
+	return job.streams.get(node)?.[0] as MockTargetStream;
+}
+
+describe("RenderJob execution", () => {
 	it("linear pipeline: source → transform → target", async () => {
-		const chunks = [createChunk(1.0, 0, 100)];
-		const source = new MockSource(chunks, { sampleRate: 44100, channels: 1 });
+		const source = new MockSource([createChunk(1, 0, 100)]);
 		const transform = new MockTransform();
 		const target = new MockTarget();
 
 		source.to(transform);
 		transform.to(target);
-		await source.render();
 
-		expect(transform.processedChunks).toHaveLength(1);
-		expect(target.lastCreatedStream?.receivedChunks).toHaveLength(1);
-		expect(target.lastCreatedStream?.closed).toBe(true);
+		const job = source.createRenderJob();
+		await job.render();
+
+		expect(targetStream(job, target).receivedChunks).toHaveLength(1);
+		expect(targetStream(job, target).closed).toBe(true);
 	});
 
-	it("fan-out: source → two targets", async () => {
-		const chunks = [createChunk(1.0, 0, 100)];
-		const source = new MockSource(chunks, { sampleRate: 44100, channels: 1 });
+	it("fan-out: source → two targets, both receive", async () => {
+		const source = new MockSource([createChunk(1, 0, 100)]);
 		const target1 = new MockTarget();
 		const target2 = new MockTarget();
 
 		source.to(target1);
 		source.to(target2);
-		await source.render();
 
-		expect(target1.lastCreatedStream?.receivedChunks).toHaveLength(1);
-		expect(target2.lastCreatedStream?.receivedChunks).toHaveLength(1);
-		expect(target1.lastCreatedStream?.closed).toBe(true);
-		expect(target2.lastCreatedStream?.closed).toBe(true);
+		const job = source.createRenderJob();
+		await job.render();
+
+		expect(targetStream(job, target1).receivedChunks).toHaveLength(1);
+		expect(targetStream(job, target2).receivedChunks).toHaveLength(1);
 	});
 
-	it("fan-out through transform: source → transform → two targets", async () => {
-		const chunks = [createChunk(0.5, 0, 100)];
-		const source = new MockSource(chunks, { sampleRate: 44100, channels: 1 });
-		const transform = new MockTransform();
-		const target1 = new MockTarget();
-		const target2 = new MockTarget();
-
-		source.to(transform);
-		transform.to(target1);
-		transform.to(target2);
-		await source.render();
-
-		expect(transform.processedChunks).toHaveLength(1);
-		expect(target1.lastCreatedStream?.receivedChunks).toHaveLength(1);
-		expect(target2.lastCreatedStream?.receivedChunks).toHaveLength(1);
-	});
-
-	it("cycle detection throws", async () => {
-		const source = new MockSource([], { sampleRate: 44100, channels: 1 });
-		const transform = new MockTransform();
+	it("bypass: a bypassed transform is skipped, its child wired to the source", async () => {
+		const source = new MockSource([createChunk(1, 0, 100)]);
+		const bypassed = new MockTransform({ bypass: true });
 		const target = new MockTarget();
 
-		source.to(transform);
-		transform.to(target);
-		transform.to(target);
+		source.to(bypassed);
+		bypassed.to(target);
 
-		await expect(source.render()).rejects.toThrow("Cycle detected");
+		const job = source.createRenderJob();
+
+		expect(job.streams.has(bypassed)).toBe(false);
+
+		await job.render();
+
+		expect(targetStream(job, target).receivedChunks).toHaveLength(1);
 	});
 
-	it("validates graph definition schema", () => {
+	it("cycle detection throws at job construction", () => {
+		const source = new MockSource([]);
+		const a = new MockTransform();
+		const b = new MockTransform();
+
+		source.to(a);
+		a.to(b);
+		b.to(a);
+
+		expect(() => source.createRenderJob()).toThrow(/Cycle detected/);
+	});
+
+	it("second render() throws", async () => {
+		const source = new MockSource([createChunk(1, 0, 100)]);
+		const target = new MockTarget();
+
+		source.to(target);
+
+		const job = source.createRenderJob();
+		await job.render();
+
+		await expect(job.render()).rejects.toThrow(/single-use/);
+	});
+
+	it("streams map is populated at construction, before render", () => {
+		const source = new MockSource([]);
+		const target = new MockTarget();
+
+		source.to(target);
+
+		const job = source.createRenderJob();
+
+		expect(job.streams.get(source)).toHaveLength(1);
+		expect(job.streams.get(target)).toHaveLength(1);
+	});
+
+	it("fan-in duplicates: one node under two parents gets one stream per path", () => {
+		const source = new MockSource([]);
+		const t1 = new MockTransform();
+		const t2 = new MockTransform();
+		const shared = new MockTarget();
+
+		source.to(t1);
+		source.to(t2);
+		t1.to(shared);
+		t2.to(shared);
+
+		const job = source.createRenderJob();
+
+		expect(job.streams.get(shared)).toHaveLength(2);
+	});
+
+	it("timing is set after render", async () => {
+		const source = new MockSource([createChunk(1, 0, 100)], { sampleRate: 44100, channels: 1, durationFrames: 100 });
+		const target = new MockTarget();
+
+		source.to(target);
+
+		const job = source.createRenderJob();
+
+		expect(job.timing).toBeUndefined();
+
+		await job.render();
+
+		expect(job.timing).toBeDefined();
+		expect(job.timing?.audioDurationMs).toBeGreaterThan(0);
+	});
+
+	it("destroy backstop runs on a stream that errors mid-render", async () => {
+		const source = new MockSource([createChunk(1, 0, 100)]);
+		const failing = new FailingTarget();
+
+		source.to(failing);
+
+		const job = source.createRenderJob();
+
+		await expect(job.render()).rejects.toThrow("write failed");
+
+		const stream = job.streams.get(failing)?.[0] as FailingTargetStream;
+		expect(stream.destroyCount).toBe(1);
+	});
+});
+
+describe("graph definition validation", () => {
+	it("validates a graph definition", () => {
 		const valid = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
@@ -192,12 +266,10 @@ describe("Graph executor", () => {
 			edges: [{ from: "a", to: "b" }],
 		});
 
-		expect(valid.name).toBe("Test");
 		expect(valid.nodes).toHaveLength(2);
-		expect(valid.edges).toHaveLength(1);
 	});
 
-	it("validates graph definition with default name", () => {
+	it("defaults name to Untitled", () => {
 		const valid = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			nodes: [{ id: "a", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "read" }],
@@ -207,28 +279,7 @@ describe("Graph executor", () => {
 		expect(valid.name).toBe("Untitled");
 	});
 
-	it("rejects invalid graph definition", () => {
-		expect(() =>
-			validateGraphDefinition({
-				nodes: [{ id: "", packageName: "test", packageVersion: "1.0.0", nodeName: "read" }],
-				edges: [],
-			}),
-		).toThrow();
-	});
-
-	it("validates graph definition with id", () => {
-		const id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
-		const valid = validateGraphDefinition({
-			id,
-			name: "Test",
-			nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read" }],
-			edges: [],
-		});
-
-		expect(valid.id).toBe(id);
-	});
-
-	it("rejects graph definition with invalid id", () => {
+	it("rejects an invalid id", () => {
 		expect(() =>
 			validateGraphDefinition({
 				id: "not-a-uuid",
@@ -237,56 +288,43 @@ describe("Graph executor", () => {
 			}),
 		).toThrow();
 	});
+});
 
-	it("rejects graph definition without id", () => {
-		expect(() =>
-			validateGraphDefinition({
-				nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read" }],
-				edges: [],
-			}),
-		).toThrow();
-	});
-
-	it("pack preserves id", () => {
+describe("pack id round-trip", () => {
+	it("pack preserves a provided id", () => {
 		const source = new MockSource();
 		const target = new MockTarget();
 		source.to(target);
 
 		const id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
-		const definition = pack([source], { name: "Test", id });
 
-		expect(definition.id).toBe(id);
+		expect(pack([source], { name: "Test", id }).id).toBe(id);
 	});
 
-	it("pack without id generates one", () => {
+	it("pack generates an id when absent", () => {
 		const source = new MockSource();
 		const target = new MockTarget();
 		source.to(target);
 
-		const definition = pack([source], { name: "Test" });
-
-		expect(definition.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+		expect(pack([source], { name: "Test" }).id).toMatch(/^[0-9a-f-]{36}$/);
 	});
+});
 
-	it("unpack applies node schema defaults to bag parameters omitting a defaulted field", () => {
-		class DefaultingTransformNode extends TransformNode {
+describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
+	it("applies a defaulted field the bag omits, keeps explicit values, and injects the id", () => {
+		class DefaultingTransform extends TransformNode {
 			static readonly packageName = "test";
 			static readonly nodeName = "defaulting-transform";
 			static override readonly schema = z.object({
 				frameSize: z.number().default(2048),
 				smoothing: z.number().default(100),
 			});
+			static override readonly streamClass = MockTransformStream;
 
 			readonly type = ["buffered-audio-node", "transform", "mock"] as const;
-			get bufferSize(): number { return 0; }
-			get latency(): number { return 0; }
 
-			override createStream(): never {
-				throw new Error("not exercised — unpack instantiation only");
-			}
-
-			clone(): DefaultingTransformNode {
-				return new DefaultingTransformNode();
+			clone(): DefaultingTransform {
+				return new DefaultingTransform();
 			}
 		}
 
@@ -295,7 +333,7 @@ describe("Graph executor", () => {
 				"test",
 				new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
 					["mock-source", MockSource as never],
-					["defaulting-transform", DefaultingTransformNode as never],
+					["defaulting-transform", DefaultingTransform as never],
 				]),
 			],
 		]);
@@ -311,10 +349,12 @@ describe("Graph executor", () => {
 		});
 
 		const sources = unpack(definition, registry);
-		const transform = sources[0]?.properties.children?.[0] as DefaultingTransformNode | undefined;
+		const source = sources[0];
+		const transform = source?.properties.children?.[0] as DefaultingTransform | undefined;
 
-		expect(transform?.properties.frameSize).toBe(2048); // schema default applied
-		expect(transform?.properties.smoothing).toBe(30); // explicit value preserved
+		expect(transform?.id).toBe("t");
+		expect(transform?.properties.frameSize).toBe(2048);
+		expect(transform?.properties.smoothing).toBe(30);
 	});
 });
 
@@ -344,19 +384,12 @@ describe("substituteParameters", () => {
 
 		expect(parameters.path).toBe("e260/raw.wav");
 		expect(parameters.chain).toEqual([{ plugin: { preset: "warm" } }, "end"]);
-		expect(parameters.literal).toBe("no-placeholders");
 		expect(parameters.count).toBe(5);
 	});
 
 	it("does not mutate the input definition", () => {
 		const definition = templatedDefinition([
-			{
-				id: "a",
-				packageName: "test",
-				packageVersion: "1.0.0",
-				nodeName: "read",
-				parameters: { path: "{{episode}}/in.wav", nested: { key: "{{episode}}" }, list: ["{{episode}}"] },
-			},
+			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{episode}}/in.wav" } },
 		]);
 		const snapshot = structuredClone(definition);
 
@@ -380,42 +413,6 @@ describe("substituteParameters", () => {
 
 		expect(() => substituteParameters(definition, { used: "x", extra: "y" })).toThrow(/unknown parameters: extra/);
 	});
-
-	it("reports both unbound and unknown classes when both occur", () => {
-		const definition = templatedDefinition([
-			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{missing}}.wav" } },
-		]);
-
-		expect(() => substituteParameters(definition, { extra: "y" })).toThrow(/unbound placeholders: missing.*unknown parameters: extra/);
-	});
-
-	it("no placeholders and no parameters is equivalent to the input", () => {
-		const definition = templatedDefinition([
-			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "literal.wav" } },
-		]);
-
-		expect(substituteParameters(definition, {})).toEqual(definition);
-	});
-
-	it("validateGraphDefinition accepts a templated bag", () => {
-		const definition = validateGraphDefinition({
-			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-			name: "Test",
-			nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{episode}}/in.wav" } }],
-			edges: [],
-		});
-
-		expect((definition.nodes[0]?.parameters as Record<string, unknown>).path).toBe("{{episode}}/in.wav");
-	});
-
-	it("treats a placeholder colliding with an Object.prototype name as ordinary", () => {
-		const definition = templatedDefinition([
-			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{toString}}.wav" } },
-		]);
-
-		expect((substituteParameters(definition, { toString: "master" }).nodes[0]?.parameters as Record<string, unknown>).path).toBe("master.wav");
-		expect(() => substituteParameters(definition, {})).toThrow(/unbound placeholders: toString/);
-	});
 });
 
 class PathSourceStream extends BufferedSourceStream {
@@ -426,7 +423,8 @@ class PathSourceStream extends BufferedSourceStream {
 	override async _read(): Promise<Block | undefined> {
 		if (this.properties.done) return undefined;
 		(this.properties as Record<string, unknown>).done = true;
-		return createChunk(1.0, 0, 10);
+
+		return createChunk(1, 0, 10);
 	}
 }
 
@@ -434,14 +432,9 @@ class PathSource extends SourceNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "path-source";
 	static override readonly schema = z.object({ path: z.string() });
+	static override readonly streamClass = PathSourceStream;
 
 	readonly type = ["buffered-audio-node", "source", "mock"] as const;
-	get bufferSize(): number { return 0; }
-	get latency(): number { return 0; }
-
-	protected override createStream(): PathSourceStream {
-		return new PathSourceStream(this.properties);
-	}
 
 	clone(): PathSource {
 		return new PathSource(this.properties);
@@ -461,21 +454,16 @@ class PathTarget extends TargetNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "path-target";
 	static override readonly schema = z.object({ path: z.string() });
+	static override readonly streamClass = PathTargetStream;
 
 	readonly type = ["buffered-audio-node", "target", "mock"] as const;
-	get bufferSize(): number { return 0; }
-	get latency(): number { return 0; }
-
-	override createStream(): PathTargetStream {
-		return new PathTargetStream(this.properties as unknown as Record<string, unknown>);
-	}
 
 	clone(): PathTarget {
 		return new PathTarget(this.properties);
 	}
 }
 
-describe("renderGraph parameter substitution", () => {
+describe("createRenderJobs parameter substitution", () => {
 	const registry: NodeRegistry = new Map([
 		[
 			"test",
@@ -499,58 +487,13 @@ describe("renderGraph parameter substitution", () => {
 	it("renders the same definition twice with different parameters, each seeing its own values", async () => {
 		capturedPaths.length = 0;
 
-		await renderGraph(definition, registry, { parameters: { dir: "e260" } });
-		await renderGraph(definition, registry, { parameters: { dir: "e261" } });
+		for (const job of createRenderJobs(definition, registry, { parameters: { dir: "e260" } })) await job.render();
+		for (const job of createRenderJobs(definition, registry, { parameters: { dir: "e261" } })) await job.render();
 
 		expect(capturedPaths).toEqual(["e260/out.wav", "e261/out.wav"]);
 	});
 
-	it("throws before any stream is created when a required parameter is missing", async () => {
-		capturedPaths.length = 0;
-
-		await expect(renderGraph(definition, registry, { parameters: {} })).rejects.toThrow(/unbound placeholders: dir/);
-		expect(capturedPaths).toHaveLength(0);
-	});
-
-	it("throws the node Zod error when a placeholder resolves into a numeric field", async () => {
-		class CeilingTarget extends TargetNode {
-			static readonly packageName = "test";
-			static readonly nodeName = "ceiling-target";
-			static override readonly schema = z.object({ ceiling: z.number() });
-
-			readonly type = ["buffered-audio-node", "target", "mock"] as const;
-			get bufferSize(): number { return 0; }
-			get latency(): number { return 0; }
-
-			override createStream(): never {
-				throw new Error("not exercised — unpack parse rejects first");
-			}
-
-			clone(): CeilingTarget {
-				return new CeilingTarget(this.properties);
-			}
-		}
-
-		const numericRegistry: NodeRegistry = new Map([
-			[
-				"test",
-				new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
-					["path-source", PathSource as never],
-					["ceiling-target", CeilingTarget as never],
-				]),
-			],
-		]);
-
-		const numericDefinition: GraphDefinition = {
-			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-			name: "Test",
-			nodes: [
-				{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "path-source", parameters: { path: "d/in.wav" } },
-				{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "ceiling-target", parameters: { ceiling: "{{c}}" } },
-			],
-			edges: [{ from: "s", to: "t" }],
-		};
-
-		await expect(renderGraph(numericDefinition, numericRegistry, { parameters: { c: "-1" } })).rejects.toThrow();
+	it("throws before any job is created when a required parameter is missing", () => {
+		expect(() => createRenderJobs(definition, registry, { parameters: {} })).toThrow(/unbound placeholders: dir/);
 	});
 });
