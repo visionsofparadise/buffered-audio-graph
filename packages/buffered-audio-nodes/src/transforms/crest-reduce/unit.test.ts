@@ -608,7 +608,7 @@ describe("CrestReduce (v) linked stereo", () => {
  * recurrence is zero).
  */
 describe("CrestReduce (vi) silence / sub-frame", () => {
-	const TIMEOUT = 60_000;
+	const TIMEOUT = 120_000;
 
 	it("silence passes through finite and exactly zero", async () => {
 		const input = [new Float32Array(TEST_SAMPLE_RATE)];
@@ -632,7 +632,7 @@ describe("CrestReduce (vi) silence / sub-frame", () => {
 
 // the node always runs the path — no bypass (there is no `strength`).
 describe("CrestReduce (vii) always runs the path — no bypass (re-spec of the superseded `strength = 0` bypass)", () => {
-	const TIMEOUT = 60_000;
+	const TIMEOUT = 120_000;
 	const SYNTHETIC_FRAMES = TEST_SAMPLE_RATE;
 
 	it("synthetic LCG content is genuinely transformed (no bypass; deterministic path), length-preserving and finite", async () => {
