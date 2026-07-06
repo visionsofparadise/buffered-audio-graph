@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import { gain, GainNode } from ".";
 
 function makeStereoChunk(leftValue: number, rightValue: number, frames = 512): { samples: [Float32Array, Float32Array]; offset: number; sampleRate: number; bitDepth: number } {
@@ -22,7 +22,7 @@ describe("GainNode", () => {
 	it("passes signal unchanged at 0 dB", async () => {
 		const node = gain({ gain: 0 });
 		const stream = node.createStream();
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 		const chunk = makeStereoChunk(0.5, -0.5);
 
 		try {
@@ -41,7 +41,7 @@ describe("GainNode", () => {
 	it("amplifies signal by 6 dB (~factor 2)", async () => {
 		const node = gain({ gain: 6 });
 		const stream = node.createStream();
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 		const chunk = makeStereoChunk(0.25, 0.25);
 
 		try {
@@ -57,7 +57,7 @@ describe("GainNode", () => {
 	it("attenuates signal by 6 dB", async () => {
 		const node = gain({ gain: -6 });
 		const stream = node.createStream();
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 		const chunk = makeStereoChunk(0.5, 0.5);
 
 		try {
@@ -73,7 +73,7 @@ describe("GainNode", () => {
 	it("processes all channels equally", async () => {
 		const node = gain({ gain: 6 });
 		const stream = node.createStream();
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 		const chunk = makeStereoChunk(0.1, 0.2);
 
 		try {

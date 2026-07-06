@@ -1,4 +1,4 @@
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { measureSource } from "./measurement";
 
@@ -23,14 +23,14 @@ const HALF_WIDTH = 48;
  * `afterEach` hook below drains and closes them so the test suite
  * does not leak `%TEMP%\chunk-buffer-*.bin` files.
  */
-const buffersToClose: ChunkBuffer[] = [];
+const buffersToClose: BlockBuffer[] = [];
 
 /**
- * Wrap per-channel synthetic arrays in a `ChunkBuffer`. Mirrors
+ * Wrap per-channel synthetic arrays in a `BlockBuffer`. Mirrors
  * the helper from `iterate.unit.test.ts`.
  */
-async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Promise<ChunkBuffer> {
-	const buffer = new ChunkBuffer();
+async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Promise<BlockBuffer> {
+	const buffer = new BlockBuffer();
 
 	await buffer.write(channels.map((channel) => new Float32Array(channel)), SAMPLE_RATE, 32);
 	await buffer.flushWrites();

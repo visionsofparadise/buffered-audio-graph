@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 const CHUNK_FRAMES = 44100;
@@ -18,7 +18,7 @@ export class PadStream extends BufferedTransformStream<PadProperties> {
 	private capturedChannels = 0;
 	private outputOffset = 0;
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		const frames = chunk.samples[0]?.length ?? 0;
 
 		if (!this.seenChunk) {
@@ -52,14 +52,14 @@ export class PadStream extends BufferedTransformStream<PadProperties> {
 		return { samples: chunk.samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 
-	override _flush(): Array<AudioChunk> | undefined {
+	override _flush(): Array<Block> | undefined {
 		if (!this.seenChunk) return undefined;
 
 		const trailing = Math.round(this.properties.after * this.capturedSampleRate);
 
 		if (trailing === 0) return undefined;
 
-		const chunks: Array<AudioChunk> = [];
+		const chunks: Array<Block> = [];
 		let remaining = trailing;
 
 		while (remaining > 0) {

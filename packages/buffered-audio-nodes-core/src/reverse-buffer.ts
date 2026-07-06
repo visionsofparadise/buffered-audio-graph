@@ -1,9 +1,9 @@
-import { ChunkBuffer } from "./chunk-buffer";
+import { BlockBuffer } from "./block-buffer";
 
 const STRIPE_BYTES = 10 * 1024 * 1024;
 
-export async function reverseBuffer(source: ChunkBuffer, dest?: ChunkBuffer): Promise<ChunkBuffer> {
-	const out = dest ?? new ChunkBuffer();
+export async function reverseBuffer(source: BlockBuffer, dest?: BlockBuffer): Promise<BlockBuffer> {
+	const out = dest ?? new BlockBuffer();
 	const channels = source.channels;
 	const totalFrames = source.frames;
 

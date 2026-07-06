@@ -1,7 +1,7 @@
 /* eslint-disable no-console -- the node logs an iteration summary by design; tests run with vitest, console output is fine in CI. */
 import { describe, expect, it } from "vitest";
 import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
-import { type AudioChunk, ChunkBuffer } from "@buffered-audio/core";
+import { type Block, BlockBuffer } from "@buffered-audio/core";
 import { loudnessTarget, LoudnessTargetStream } from ".";
 
 const TEST_SAMPLE_RATE = 48_000;
@@ -145,7 +145,7 @@ async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: numb
 
 	for (const channel of channels) samples.push(channel);
 
-	const chunk: AudioChunk = { samples, offset: 0, sampleRate, bitDepth: 32 };
+	const chunk: Block = { samples, offset: 0, sampleRate, bitDepth: 32 };
 
 	await writer.write(chunk);
 	await writer.close();
@@ -746,7 +746,7 @@ async function runProcessAndMeasureArrayBuffers(frames: number, sampleRate: numb
 	winningEnvelopeLength: number;
 }> {
 	const samples = makeSynthetic(frames, sampleRate, 17);
-	const buffer = new ChunkBuffer();
+	const buffer = new BlockBuffer();
 
 	await buffer.write([samples], sampleRate, 32);
 	await buffer.flushWrites();
@@ -774,7 +774,7 @@ async function runProcessAndMeasureArrayBuffers(frames: number, sampleRate: numb
 		// `BufferedTransformStream`, so the cast through `unknown` is
 		// the only escape hatch — same pattern `runStream` uses to
 		// reach `winningB` / `winningLimitDb` for diagnostic assertions.
-		await (stream as unknown as { _process(buffer: ChunkBuffer): Promise<void> })._process(buffer);
+		await (stream as unknown as { _process(buffer: BlockBuffer): Promise<void> })._process(buffer);
 	} finally {
 		clearInterval(samplerHandle);
 	}

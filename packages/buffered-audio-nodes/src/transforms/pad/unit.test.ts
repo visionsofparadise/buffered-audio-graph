@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { AudioChunk, StreamContext } from "@buffered-audio/core";
+import type { Block, StreamContext } from "@buffered-audio/core";
 import { pad, PadStream } from ".";
 
 const SAMPLE_RATE = 44100;
@@ -8,10 +8,10 @@ function context(): StreamContext {
 	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, visited: new Set() };
 }
 
-function readableFrom(chunks: Array<AudioChunk>): ReadableStream<AudioChunk> {
+function readableFrom(chunks: Array<Block>): ReadableStream<Block> {
 	let index = 0;
 
-	return new ReadableStream<AudioChunk>({
+	return new ReadableStream<Block>({
 		pull: (controller) => {
 			const chunk = chunks[index];
 
@@ -25,8 +25,8 @@ function readableFrom(chunks: Array<AudioChunk>): ReadableStream<AudioChunk> {
 	});
 }
 
-async function drain(readable: ReadableStream<AudioChunk>): Promise<Array<AudioChunk>> {
-	const out: Array<AudioChunk> = [];
+async function drain(readable: ReadableStream<Block>): Promise<Array<Block>> {
+	const out: Array<Block> = [];
 	const reader = readable.getReader();
 
 	for (;;) {
@@ -39,7 +39,7 @@ async function drain(readable: ReadableStream<AudioChunk>): Promise<Array<AudioC
 	return out;
 }
 
-function concatChannel(chunks: Array<AudioChunk>, channel: number): Float32Array {
+function concatChannel(chunks: Array<Block>, channel: number): Float32Array {
 	const total = chunks.reduce((sum, c) => sum + (c.samples[channel]?.length ?? 0), 0);
 	const out = new Float32Array(total);
 	let offset = 0;
@@ -56,7 +56,7 @@ function concatChannel(chunks: Array<AudioChunk>, channel: number): Float32Array
 	return out;
 }
 
-async function runPad(properties: Parameters<typeof pad>[0], input: Array<AudioChunk>, channel = 0): Promise<Float32Array> {
+async function runPad(properties: Parameters<typeof pad>[0], input: Array<Block>, channel = 0): Promise<Float32Array> {
 	const node = pad(properties);
 	const stream = node.createStream() as PadStream;
 	const output = await stream._setup(readableFrom(input), context());
@@ -64,7 +64,7 @@ async function runPad(properties: Parameters<typeof pad>[0], input: Array<AudioC
 	return concatChannel(await drain(output), channel);
 }
 
-function makeRamp(frames: number, offset = 0, step = 0.0001): AudioChunk {
+function makeRamp(frames: number, offset = 0, step = 0.0001): Block {
 	const channel = new Float32Array(frames);
 
 	for (let i = 0; i < frames; i++) channel[i] = 0.1 + i * step;
@@ -72,10 +72,10 @@ function makeRamp(frames: number, offset = 0, step = 0.0001): AudioChunk {
 	return { samples: [channel], offset, sampleRate: SAMPLE_RATE, bitDepth: 32 };
 }
 
-function splitChunk(chunk: AudioChunk, parts: number): Array<AudioChunk> {
+function splitChunk(chunk: Block, parts: number): Array<Block> {
 	const frames = chunk.samples[0]?.length ?? 0;
 	const size = Math.ceil(frames / parts);
-	const out: Array<AudioChunk> = [];
+	const out: Array<Block> = [];
 
 	for (let start = 0; start < frames; start += size) {
 		const end = Math.min(start + size, frames);
@@ -178,7 +178,7 @@ describe("pad", () => {
 			right[i] = -0.2 - i * 0.0001;
 		}
 
-		const input: AudioChunk = { samples: [left, right], offset: 0, sampleRate: SAMPLE_RATE, bitDepth: 32 };
+		const input: Block = { samples: [left, right], offset: 0, sampleRate: SAMPLE_RATE, bitDepth: 32 };
 
 		const node = pad({ before, after: 0 });
 		const stream = node.createStream() as PadStream;

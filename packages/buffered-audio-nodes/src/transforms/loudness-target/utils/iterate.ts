@@ -1,4 +1,4 @@
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import { BidirectionalIir, LoudnessAccumulator, SlidingWindowMinStream, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { applyBaseRateChunk } from "./apply";
 import { type Anchors, gainDbAt } from "./curve";
@@ -77,7 +77,7 @@ export interface IterationAttempt {
 }
 
 export interface IterateResult {
-	bestSmoothedEnvelopeBuffer: ChunkBuffer;
+	bestSmoothedEnvelopeBuffer: BlockBuffer;
 	bestB: number;
 	bestLimitDb: number;
 	bestPeakGainDb: number;
@@ -93,7 +93,7 @@ export interface IterateResult {
 }
 
 export interface IterateForTargetsArgs {
-	buffer: ChunkBuffer;
+	buffer: BlockBuffer;
 	sampleRate: number;
 	anchorBase: { floorDb: number | null; pivotDb: number };
 	smoothingMs: number;
@@ -108,7 +108,7 @@ export interface IterateForTargetsArgs {
 	peakTolerance: number;
 	seedB?: number | undefined;
 	// Pre-built base-rate detection envelope (ownership transfers; closed by this call). Must be bit-identical to buildBaseRateDetectionCache output for the same buffer/halfWidth.
-	detectionEnvelope?: ChunkBuffer | undefined;
+	detectionEnvelope?: BlockBuffer | undefined;
 }
 
 export async function iterateForTargets(args: IterateForTargetsArgs): Promise<IterateResult> {
@@ -136,7 +136,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		if (args.detectionEnvelope !== undefined) await args.detectionEnvelope.close();
 
 		return {
-			bestSmoothedEnvelopeBuffer: new ChunkBuffer(),
+			bestSmoothedEnvelopeBuffer: new BlockBuffer(),
 			bestB: 0,
 			bestLimitDb: sourcePeakDb,
 			bestPeakGainDb: 0,
@@ -174,14 +174,14 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 	});
 	const detectionCacheBuildMs = args.detectionEnvelope !== undefined ? 0 : Date.now() - tCacheBuild0;
 
-	const forwardEnvelopeBuffer = new ChunkBuffer();
-	const minHeldEnvelopeBuffer = new ChunkBuffer();
+	const forwardEnvelopeBuffer = new BlockBuffer();
+	const minHeldEnvelopeBuffer = new BlockBuffer();
 	// activeRef / winningRef ping-pong: swapped by pointer on a best-attempt update (no envelope copy).
-	const activeBufferA = new ChunkBuffer();
-	const activeBufferB = new ChunkBuffer();
+	const activeBufferA = new BlockBuffer();
+	const activeBufferB = new BlockBuffer();
 
-	let activeRef: ChunkBuffer = activeBufferA;
-	let winningRef: ChunkBuffer = activeBufferB;
+	let activeRef: BlockBuffer = activeBufferA;
+	let winningRef: BlockBuffer = activeBufferB;
 	let winningPopulated = false;
 
 	try {
@@ -343,13 +343,13 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 }
 
 export interface StreamCurveAndForwardIirArgs {
-	detectionEnvelope: ChunkBuffer;
+	detectionEnvelope: BlockBuffer;
 	anchors: Anchors;
 	iir: BidirectionalIir;
 	// Must match the detection-cache slider's halfWidth (identical span on both ends is the brick-wall exactness invariant).
 	halfWidth: number;
-	forwardEnvelopeBuffer: ChunkBuffer;
-	minHeldEnvelopeBuffer: ChunkBuffer;
+	forwardEnvelopeBuffer: BlockBuffer;
+	minHeldEnvelopeBuffer: BlockBuffer;
 }
 
 export async function streamCurveAndForwardIir(
@@ -418,10 +418,10 @@ export async function streamCurveAndForwardIir(
 }
 
 export interface MeasureAttemptArgs {
-	source: ChunkBuffer;
+	source: BlockBuffer;
 	sampleRate: number;
 	channelCount: number;
-	gSmoothed: ChunkBuffer;
+	gSmoothed: BlockBuffer;
 }
 
 export interface MeasureAttemptResult {
@@ -455,7 +455,7 @@ export async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<Me
 
 		if (envelopeSlice?.length !== chunkFrames) {
 			throw new Error(
-				`measureAttemptOutput: envelope ChunkBuffer returned ${envelopeSlice?.length ?? 0} samples; expected ${chunkFrames}`,
+				`measureAttemptOutput: envelope BlockBuffer returned ${envelopeSlice?.length ?? 0} samples; expected ${chunkFrames}`,
 			);
 		}
 

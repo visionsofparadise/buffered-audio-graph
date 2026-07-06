@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { interleave } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
@@ -33,7 +33,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	private inputChannels = 0;
 	private hasStartedEvent = false;
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		this.streamContext = context;
 		this._sourceTotalFrames = context.durationFrames;
 
@@ -54,14 +54,14 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		return ["-f", "f32le", "-ar", String(outRate), "-ac", String(this.inputChannels), "pipe:1"];
 	}
 
-	override createTransformStream(): TransformStream<AudioChunk, AudioChunk> {
-		return new TransformStream<AudioChunk, AudioChunk>({
+	override createTransformStream(): TransformStream<Block, Block> {
+		return new TransformStream<Block, Block>({
 			transform: (chunk, controller) => this.handleChunk(chunk, controller),
 			flush: (controller) => this.handleFlushStream(controller),
 		});
 	}
 
-	private spawnChild(sampleRate: number, channels: number, controller: TransformStreamDefaultController<AudioChunk>): void {
+	private spawnChild(sampleRate: number, channels: number, controller: TransformStreamDefaultController<Block>): void {
 		if (!this.streamContext) throw new Error("FfmpegStream.spawnChild called before _setup()");
 
 		this.inputSampleRate = sampleRate;
@@ -105,7 +105,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		});
 	}
 
-	private handleStdoutBytes(bytes: Buffer, controller: TransformStreamDefaultController<AudioChunk>): void {
+	private handleStdoutBytes(bytes: Buffer, controller: TransformStreamDefaultController<Block>): void {
 		const merged = this.stdoutStash.length > 0 ? Buffer.concat([this.stdoutStash, bytes]) : bytes;
 		const frameBytes = this.inputChannels * 4;
 
@@ -159,7 +159,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		const outRate = this.properties.outputSampleRate ?? this.inputSampleRate;
 
-		const audioChunk: AudioChunk = {
+		const audioChunk: Block = {
 			samples,
 			offset: this.outputOffset,
 			sampleRate: outRate,
@@ -173,7 +173,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		this.stdoutStash = merged.subarray(completeBytes);
 	}
 
-	private async handleChunk(chunk: AudioChunk, controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
+	private async handleChunk(chunk: Block, controller: TransformStreamDefaultController<Block>): Promise<void> {
 		const channels = chunk.samples.length;
 		const frames = chunk.samples[0]?.length ?? 0;
 
@@ -214,7 +214,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		this.emitProgress("buffer", this.framesProcessed, this._sourceTotalFrames);
 	}
 
-	private async handleFlushStream(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
+	private async handleFlushStream(controller: TransformStreamDefaultController<Block>): Promise<void> {
 		const child = this.child;
 
 		if (!child) {

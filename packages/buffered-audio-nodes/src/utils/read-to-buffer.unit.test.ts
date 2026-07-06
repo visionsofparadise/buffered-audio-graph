@@ -13,7 +13,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 
 describe("readToBuffer", () => {
-	it("loads a mono WAV file into a ChunkBuffer", async () => {
+	it("loads a mono WAV file into a BlockBuffer", async () => {
 		const sampleRate = 44100;
 		const numSamples = 100;
 		const wav = new WaveFile();
@@ -43,7 +43,7 @@ describe("readToBuffer", () => {
 		await result.buffer.close();
 	});
 
-	it("loads a stereo WAV file into a ChunkBuffer", async () => {
+	it("loads a stereo WAV file into a BlockBuffer", async () => {
 		const sampleRate = 48000;
 		const numSamples = 50;
 		const wav = new WaveFile();

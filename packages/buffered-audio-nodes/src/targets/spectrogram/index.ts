@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, WHOLE_FILE, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { detectFftBackend, getFftAddon, createFftWorkspace, hanningWindow, type FftWorkspace } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { computeSpectrogramFrames } from "./utils/frames";
@@ -57,7 +57,7 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramPropertie
 
 	private initialized = false;
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<void> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<void> {
 		this.linearBins = this.properties.fftSize / 2 + 1;
 		this.windowCoefficients = hanningWindow(this.properties.fftSize);
 		this.workspace = createFftWorkspace(this.properties.fftSize);
@@ -77,7 +77,7 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramPropertie
 		return super._setup(input, context);
 	}
 
-	private async initialize(chunk: AudioChunk): Promise<void> {
+	private async initialize(chunk: Block): Promise<void> {
 		if (this.initialized) return;
 		this.initialized = true;
 
@@ -120,7 +120,7 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramPropertie
 		await this.fileHandle.write(header, 0, HEADER_SIZE, 0);
 	}
 
-	override async _write(chunk: AudioChunk): Promise<void> {
+	override async _write(chunk: Block): Promise<void> {
 		await this.initialize(chunk);
 
 		const frames = chunk.samples[0]?.length ?? 0;

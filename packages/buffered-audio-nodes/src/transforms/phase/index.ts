@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -12,7 +12,7 @@ export interface PhaseProperties extends z.infer<typeof schema>, TransformNodePr
 export class PhaseStream extends BufferedTransformStream<PhaseProperties> {
 	private allpassState: Array<number> = [];
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		const { invert, angle } = this.properties;
 
 		if (angle !== undefined) {
@@ -26,7 +26,7 @@ export class PhaseStream extends BufferedTransformStream<PhaseProperties> {
 		return chunk;
 	}
 
-	private applyInvert(chunk: AudioChunk): AudioChunk {
+	private applyInvert(chunk: Block): Block {
 		const samples = chunk.samples.map((channel) => {
 			const output = new Float32Array(channel.length);
 
@@ -40,7 +40,7 @@ export class PhaseStream extends BufferedTransformStream<PhaseProperties> {
 		return { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 
-	private applyPhaseRotation(chunk: AudioChunk, angle: number): AudioChunk {
+	private applyPhaseRotation(chunk: Block, angle: number): Block {
 		const radians = (angle * Math.PI) / 180;
 		const coefficient = Math.tan((radians - Math.PI) / 4);
 

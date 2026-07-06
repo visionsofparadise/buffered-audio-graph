@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { readWavSamples } from "../../utils/read-to-buffer";
 
@@ -18,7 +18,7 @@ export class SpliceStream extends BufferedTransformStream<SpliceProperties> {
 	private insertLength = 0;
 	private sampleRateChecked = false;
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		const { samples, sampleRate } = await readWavSamples(this.properties.insertPath);
 
 		const targetChannels = this.properties.channels;
@@ -38,7 +38,7 @@ export class SpliceStream extends BufferedTransformStream<SpliceProperties> {
 		return super._setup(input, context);
 	}
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		if (!this.sampleRateChecked) {
 			this.sampleRateChecked = true;
 

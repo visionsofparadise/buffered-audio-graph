@@ -1,4 +1,4 @@
-import type { ChunkBuffer } from "@buffered-audio/core";
+import type { BlockBuffer } from "@buffered-audio/core";
 import { TruePeakUpsampler, linearToDb, stft, type FftBackend } from "@buffered-audio/utils";
 import { isBindingPeak } from "./binding";
 import { designDispersionAllpass, schroederTargetToDelay } from "./dispersion";
@@ -69,7 +69,7 @@ export class TruePeakArgmaxAccumulator {
 }
 
 // Streaming whole-signal 4× true peak; retained for the binding.ts measureWholeSignalTruePeakDb caller.
-export async function measureBufferTruePeakDb(buffer: ChunkBuffer, sampleRate: number): Promise<number> {
+export async function measureBufferTruePeakDb(buffer: BlockBuffer, sampleRate: number): Promise<number> {
 	const channelCount = buffer.channels;
 	const totalFrames = buffer.frames;
 
@@ -108,7 +108,7 @@ export interface ItemSevenSearchParams {
 }
 
 export async function streamLatticeTrajectory(
-	buffer: ChunkBuffer,
+	buffer: BlockBuffer,
 	frameSize: number,
 	hopSize: number,
 	backend?: FftBackend,

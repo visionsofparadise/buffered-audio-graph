@@ -1,9 +1,9 @@
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import { SlidingWindowMaxStream, TruePeakUpsampler, linearToDb } from "@buffered-audio/utils";
 import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./iterate";
 
 export interface BuildBaseRateDetectionCacheArgs {
-	buffer: ChunkBuffer;
+	buffer: BlockBuffer;
 	sampleRate: number;
 	channelCount: number;
 	frames: number;
@@ -12,10 +12,10 @@ export interface BuildBaseRateDetectionCacheArgs {
 
 export async function buildBaseRateDetectionCache(
 	args: BuildBaseRateDetectionCacheArgs,
-): Promise<ChunkBuffer> {
+): Promise<BlockBuffer> {
 	const { buffer, sampleRate, channelCount, frames, halfWidth } = args;
 
-	const detectionEnvelope = new ChunkBuffer();
+	const detectionEnvelope = new BlockBuffer();
 
 	if (frames === 0 || channelCount === 0) {
 		return detectionEnvelope;

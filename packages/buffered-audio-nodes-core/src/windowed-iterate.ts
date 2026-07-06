@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- per-channel scratch indexed in lockstep with buffer.channels */
-import type { ChunkBuffer } from "./chunk-buffer";
+import type { BlockBuffer } from "./block-buffer";
 
 export interface WindowedIterateOptions {
 	readonly windowSize: number;
@@ -7,7 +7,7 @@ export interface WindowedIterateOptions {
 }
 
 export async function windowedIterate(
-	buffer: ChunkBuffer,
+	buffer: BlockBuffer,
 	options: WindowedIterateOptions,
 	onWindow: (window: Array<Float32Array>, windowIndex: number) => void | Promise<void>,
 ): Promise<void> {

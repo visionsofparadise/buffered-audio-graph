@@ -1,4 +1,4 @@
-import type { BufferedAudioNode, AudioChunk, RenderOptions, StreamContext } from "./node";
+import type { BufferedAudioNode, Block, RenderOptions, StreamContext } from "./node";
 import { SourceNode } from "./source";
 import { TransformNode } from "./transform";
 
@@ -18,7 +18,7 @@ export abstract class CompositeNode extends TransformNode {
 		return [this.head];
 	}
 
-	override async setup(readable: ReadableStream<AudioChunk>, context: StreamContext): Promise<Array<Promise<void>>> {
+	override async setup(readable: ReadableStream<Block>, context: StreamContext): Promise<Array<Promise<void>>> {
 		if (!TransformNode.is(this.head)) {
 			throw new Error("Cannot setup a composite whose head is a source node; use render() for complete pipelines");
 		}

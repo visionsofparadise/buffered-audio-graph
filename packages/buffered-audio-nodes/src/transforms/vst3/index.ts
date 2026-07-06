@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
 
@@ -41,7 +41,7 @@ export interface Vst3Properties extends TransformNodeProperties {
 }
 
 export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends BufferedTransformStream<P> {
-	override _process(_buffer: ChunkBuffer): void {
+	override _process(_buffer: BlockBuffer): void {
 		// Bypass: leave buffer contents untouched.
 	}
 }
@@ -51,7 +51,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 	private stagesJsonPath?: string;
 	private stagesJsonCleanup?: () => Promise<void>;
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		this.streamContext = context;
 
 		const { path, cleanup } = await writeStagesJson(this.properties.stages);
@@ -62,7 +62,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 		return super._setup(input, context);
 	}
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
+	override async _process(buffer: BlockBuffer): Promise<void> {
 		if (!this.streamContext) throw new Error("Vst3Stream._process called before setup()");
 		if (!this.stagesJsonPath) throw new Error("Vst3Stream._process called without a stages JSON file");
 

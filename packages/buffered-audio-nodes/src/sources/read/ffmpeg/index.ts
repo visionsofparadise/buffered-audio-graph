@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { z } from "zod";
-import { BufferedSourceStream, SourceNode, type AudioChunk, type SourceMetadata, type SourceNodeProperties } from "@buffered-audio/core";
+import { BufferedSourceStream, SourceNode, type Block, type SourceMetadata, type SourceNodeProperties } from "@buffered-audio/core";
 import { deinterleaveBuffer } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../../package-metadata";
 
@@ -83,7 +83,7 @@ export class ReadFfmpegStream<P extends ReadFfmpegProperties = ReadFfmpegPropert
 		proc.stderr.resume();
 	}
 
-	override async _read(): Promise<AudioChunk | undefined> {
+	override async _read(): Promise<Block | undefined> {
 		await this.ensureInitialized();
 
 		const bytesPerFrame = this.outputChannels * 4;

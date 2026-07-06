@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ChunkBuffer } from "@buffered-audio/core";
+import type { BlockBuffer } from "@buffered-audio/core";
 import { deinterleaveBuffer, interleave } from "@buffered-audio/utils";
 import { waitForDrain } from "../../../utils/ffmpeg";
 
@@ -187,7 +187,7 @@ export async function writeStagesJson(stages: ReadonlyArray<VstStage>): Promise<
 
 export async function processStreamingThroughVstHost(
 	handle: VstHostHandle,
-	buffer: ChunkBuffer,
+	buffer: BlockBuffer,
 	channelCount: number,
 	sampleRate: number,
 	bitDepth: number | undefined,
@@ -234,7 +234,7 @@ export async function processStreamingThroughVstHost(
 
 	// Each stdout `data` event may deliver an unaligned byte count (OS pipe boundary is
 	// arbitrary), so a leftover tail is carried between events and only aligned f32le frames
-	// are written. Writes are serialised — `ChunkBuffer.write` is not safe under concurrent callers.
+	// are written. Writes are serialised — `BlockBuffer.write` is not safe under concurrent callers.
 	let outputBytesReceived = 0;
 	let stdoutTail: Buffer = Buffer.alloc(0);
 	let stdoutError: Error | undefined;

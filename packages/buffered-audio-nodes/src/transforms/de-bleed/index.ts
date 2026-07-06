@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight DSP loops with bounds-checked typed array access */
 import { z } from "zod";
-import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { applyDfttSmoothing, applyNlmSmoothing, getFftAddon, initFftBackend, istft, stft, type FftBackend, type StftOutput, type StftResult } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { readToBuffer } from "../../utils/read-to-buffer";
@@ -75,7 +75,7 @@ class WindowReader {
 		return this.scratch;
 	}
 
-	async preload(buffer: ChunkBuffer, edgePadSamples: number): Promise<void> {
+	async preload(buffer: BlockBuffer, edgePadSamples: number): Promise<void> {
 		for (let ch = 0; ch < this.channels; ch++) this.scratch[ch]!.fill(0);
 
 		this.virtualCursor = 0;
@@ -89,7 +89,7 @@ class WindowReader {
 		this.virtualCursor = this.windowSamples;
 	}
 
-	async advance(buffer: ChunkBuffer, step: number): Promise<void> {
+	async advance(buffer: BlockBuffer, step: number): Promise<void> {
 		if (step <= 0) return;
 
 		const keep = this.windowSamples - step;
@@ -105,7 +105,7 @@ class WindowReader {
 		this.virtualCursor += step;
 	}
 
-	private async readInto(buffer: ChunkBuffer, writeOffset: number, length: number): Promise<void> {
+	private async readInto(buffer: BlockBuffer, writeOffset: number, length: number): Promise<void> {
 		if (this.bufferDrained) return;
 
 		let remaining = length;
@@ -135,7 +135,7 @@ class WindowReader {
 }
 
 async function readSequentialPadded(
-	chunkBuffer: ChunkBuffer,
+	chunkBuffer: BlockBuffer,
 	channelIndex: number,
 	frames: number,
 	out: Float32Array,
@@ -177,11 +177,11 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
 	private dfttFftBackend?: FftBackend;
 	private dfttFftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
-	private referenceBuffers: Array<ChunkBuffer> = [];
+	private referenceBuffers: Array<BlockBuffer> = [];
 	private chunkFrames!: number;
 	private numBins!: number;
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		const fft = initFftBackend(context.executionProviders, this.properties);
 
 		this.fftBackend = fft.backend;
@@ -224,7 +224,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 			}
 		}
 
-		const openedBuffers: Array<ChunkBuffer> = [];
+		const openedBuffers: Array<BlockBuffer> = [];
 
 		try {
 			for (const refPath of this.properties.references) {
@@ -261,7 +261,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 	}
 
 	private async warmupSeedsAllChannels(
-		buffer: ChunkBuffer,
+		buffer: BlockBuffer,
 		channels: number,
 		warmupFrames: number,
 		fftSize: number,
@@ -346,7 +346,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		return seedsByChannel;
 	}
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
+	override async _process(buffer: BlockBuffer): Promise<void> {
 		const { frames: totalFrames, channels, sampleRate, bitDepth } = buffer;
 		const { fftSize, hopSize, reductionStrength, artifactSmoothing, adaptationSpeed } = this.properties;
 		const { chunkFrames, numBins, referenceBuffers } = this;
@@ -429,7 +429,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		const msadFrameReals = new Array<Float32Array>(refCount + 1);
 		const msadFrameImags = new Array<Float32Array>(refCount + 1);
 
-		const outputBuffer = new ChunkBuffer();
+		const outputBuffer = new BlockBuffer();
 
 		try {
 			let prevWinStart = 0;

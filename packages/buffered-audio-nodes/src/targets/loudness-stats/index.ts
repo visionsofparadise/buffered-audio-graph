@@ -1,6 +1,6 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, WHOLE_FILE, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { AmplitudeHistogramAccumulator, LoudnessAccumulator, TruePeakAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
@@ -40,7 +40,7 @@ export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsPrope
 		return this._stats;
 	}
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<void> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<void> {
 		if (this.properties.outputPath !== "") {
 			this.fileHandle = await open(this.properties.outputPath, "w");
 		}
@@ -48,7 +48,7 @@ export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsPrope
 		return super._setup(input, context);
 	}
 
-	private ensureInit(chunk: AudioChunk): void {
+	private ensureInit(chunk: Block): void {
 		if (this.statsInitialized) return;
 		this.statsInitialized = true;
 		this.channels = chunk.samples.length;
@@ -60,7 +60,7 @@ export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsPrope
 	}
 
 	// eslint-disable-next-line @typescript-eslint/require-await
-	override async _write(chunk: AudioChunk): Promise<void> {
+	override async _write(chunk: Block): Promise<void> {
 		this.ensureInit(chunk);
 
 		const frames = chunk.samples[0]?.length ?? 0;

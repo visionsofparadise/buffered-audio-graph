@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
 import { TruePeakAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
@@ -13,7 +13,7 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 	private gain = 1;
 	private accumulator?: TruePeakAccumulator;
 
-	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
 		await super._buffer(chunk, buffer);
 
 		const frames = chunk.samples[0]?.length ?? 0;
@@ -25,7 +25,7 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 		this.accumulator.push(chunk.samples, frames);
 	}
 
-	override _process(_buffer: ChunkBuffer): void {
+	override _process(_buffer: BlockBuffer): void {
 		if (this.accumulator === undefined) {
 			this.gain = 1;
 
@@ -48,7 +48,7 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 		this.log("true peak measured", { sourceTpDb: sourcePeakDb, targetDb: this.properties.target, gain: this.gain });
 	}
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		const gain = this.gain;
 
 		if (gain === 1) return chunk;

@@ -1,6 +1,6 @@
 import { open, stat, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedSourceStream, SourceNode, type AudioChunk, type SourceMetadata, type SourceNodeProperties } from "@buffered-audio/core";
+import { BufferedSourceStream, SourceNode, type Block, type SourceMetadata, type SourceNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../../package-metadata";
 
 export const wavSchema = z.object({
@@ -151,7 +151,7 @@ export class ReadWavStream<P extends ReadWavProperties = ReadWavProperties> exte
 
 	}
 
-	override async _read(): Promise<AudioChunk | undefined> {
+	override async _read(): Promise<Block | undefined> {
 		await this.ensureInitialized();
 
 		const fh = this.fileHandle;

@@ -1,4 +1,4 @@
-import type { ChunkBuffer } from "@buffered-audio/core";
+import type { BlockBuffer } from "@buffered-audio/core";
 import { peakPriorityAmount } from "./lattice";
 import { measureFrameTruePeakDb } from "./objective";
 import { measureBufferTruePeakDb } from "./windowed";
@@ -19,7 +19,7 @@ export interface WindowBinding {
 }
 
 // The gate's single global TP measurement; composes the one streaming-measure impl (no resident whole-signal array).
-export async function measureWholeSignalTruePeakDb(buffer: ChunkBuffer, sampleRate: number): Promise<number> {
+export async function measureWholeSignalTruePeakDb(buffer: BlockBuffer, sampleRate: number): Promise<number> {
 	return measureBufferTruePeakDb(buffer, sampleRate);
 }
 

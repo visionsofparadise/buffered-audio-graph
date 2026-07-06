@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -15,11 +15,11 @@ export interface DitherProperties extends z.infer<typeof schema>, TransformNodeP
 export class DitherStream extends BufferedTransformStream<DitherProperties> {
 	private lastError: Array<number> = [];
 
-	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
 		await buffer.write(chunk.samples, chunk.sampleRate, this.properties.bitDepth);
 	}
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		const { bitDepth, noiseShaping } = this.properties;
 		const quantizationLevels = Math.pow(2, bitDepth - 1);
 		const lsb = 1 / quantizationLevels;

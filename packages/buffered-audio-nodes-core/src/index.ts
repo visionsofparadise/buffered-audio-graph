@@ -1,8 +1,8 @@
 /* eslint-disable barrel-files/avoid-barrel-files */
-export type { AudioChunk, ExecutionProvider, NodeIdentity, RenderOptions, StreamContext, StreamEvent } from "./node";
+export type { Block, ExecutionProvider, NodeIdentity, RenderOptions, StreamContext, StreamEvent } from "./node";
 export type { FileInputMeta, NodeSchema } from "./schema";
 
-export { ChunkBuffer, ReverseChunkReader } from "./chunk-buffer";
+export { BlockBuffer, ReverseBlockReader } from "./block-buffer";
 export { BufferedAudioNode, type BufferedAudioNodeInput, type BufferedAudioNodeProperties } from "./node";
 export { BufferedSourceStream, SourceNode, type RenderTiming, type SourceMetadata, type SourceNodeProperties } from "./source";
 export { BufferedStream, UNKNOWN_TOTAL_QUANTUM_FRAMES, type FinishedPayload, type LogPayload, type ProgressPayload, type StreamEventMap, type StreamPhase } from "./stream";

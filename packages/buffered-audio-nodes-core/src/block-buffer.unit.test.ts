@@ -3,7 +3,8 @@ import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ChunkBuffer, ReverseChunkReader } from "./chunk-buffer";
+import { BlockBuffer, ReverseBlockReader } from "./block-buffer";
+import type { Block } from "./node";
 
 // Builds a per-channel ramp with DISTINCT per-channel values so a mistaken channel swap or a
 // deinterleave error is caught: channel `ch` holds ch * 1000 + frame at each frame.
@@ -21,8 +22,8 @@ function makeRamp(frames: number, channels: number): Array<Float32Array> {
 }
 
 // Writes a ramp as an interleaved float32 temp file (frame * channels + ch layout, matching the
-// on-disk forward layout) so a ReverseChunkReader can be constructed directly, independent of any
-// ChunkBuffer internals. Returns the path; caller unlinks.
+// on-disk forward layout) so a ReverseBlockReader can be constructed directly, independent of any
+// BlockBuffer internals. Returns the path; caller unlinks.
 async function writeInterleavedRamp(frames: number, channels: number): Promise<string> {
 	const interleaved = new Float32Array(frames * channels);
 
@@ -54,9 +55,9 @@ function concatChunks(chunks: Array<Array<Float32Array>>, channels: number): Arr
 	return out;
 }
 
-describe("ChunkBuffer", () => {
+describe("BlockBuffer", () => {
 	it("write + read round-trips data sequentially after a flush", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write([new Float32Array([1, 2, 3, 4, 5, 6, 7, 8])], 44100, 32);
 		await buffer.flushWrites();
@@ -76,7 +77,7 @@ describe("ChunkBuffer", () => {
 	});
 
 	it("read signals end-of-buffer with a short chunk", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write([new Float32Array([10, 20, 30])], 44100, 32);
 		await buffer.flushWrites();
@@ -89,7 +90,7 @@ describe("ChunkBuffer", () => {
 	});
 
 	it("clear drops all data and resets state", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write([new Float32Array([1, 2, 3])], 44100, 32);
 		await buffer.clear();
@@ -107,7 +108,7 @@ describe("ChunkBuffer", () => {
 	});
 
 	it("reset rewinds the reader so subsequent reads start from byte 0", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write([new Float32Array([1, 2, 3, 4])], 44100, 32);
 		await buffer.flushWrites();
@@ -126,7 +127,7 @@ describe("ChunkBuffer", () => {
 	});
 
 	it("reset rewinds the writer so subsequent writes overwrite from byte 0", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write([new Float32Array([1, 2, 3, 4])], 44100, 32);
 		await buffer.reset();
@@ -142,7 +143,7 @@ describe("ChunkBuffer", () => {
 	});
 
 	it("crosses the file-backing threshold transparently", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 		const chunkSize = 200_000;
 		const totalChunks = 80;
 
@@ -165,7 +166,7 @@ describe("ChunkBuffer", () => {
 	});
 
 	it("throws on channel-count mismatch after the channel count is locked", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write([new Float32Array([1, 2])], 44100, 32);
 
@@ -173,13 +174,67 @@ describe("ChunkBuffer", () => {
 
 		await buffer.close();
 	});
+
+	it("iterate yields every read including the trailing short block, then stops", async () => {
+		const buffer = new BlockBuffer();
+
+		// 250 frames read 100 at a time => 100, 100, 50 (trailing short), then done.
+		await buffer.write([new Float32Array(Array.from({ length: 250 }, (_v, i) => i))], 44100, 32);
+		await buffer.flushWrites();
+
+		const lengths: Array<number> = [];
+		let expectedOffset = 0;
+
+		for await (const block of buffer.iterate(100)) {
+			const got = block.samples[0]?.length ?? 0;
+
+			expect(block.offset).toBe(expectedOffset);
+			expectedOffset += got;
+			lengths.push(got);
+		}
+
+		expect(lengths).toEqual([100, 100, 50]);
+
+		await buffer.close();
+	});
+
+	it("iterate over an exact multiple yields only full blocks", async () => {
+		const buffer = new BlockBuffer();
+
+		await buffer.write([new Float32Array(200)], 44100, 32);
+		await buffer.flushWrites();
+
+		const lengths: Array<number> = [];
+
+		for await (const block of buffer.iterate(50)) {
+			lengths.push(block.samples[0]?.length ?? 0);
+		}
+
+		expect(lengths).toEqual([50, 50, 50, 50]);
+
+		await buffer.close();
+	});
+
+	it("iterate over an empty buffer yields nothing", async () => {
+		const buffer = new BlockBuffer();
+
+		const blocks: Array<Block> = [];
+
+		for await (const block of buffer.iterate(64)) {
+			blocks.push(block);
+		}
+
+		expect(blocks.length).toBe(0);
+
+		await buffer.close();
+	});
 });
 
-describe("ReverseChunkReader", () => {
+describe("ReverseBlockReader", () => {
 	it("returns the exact mirror of a full forward read (multichannel deinterleave + reversal)", async () => {
 		const frames = 500;
 		const channels = 3;
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write(makeRamp(frames, channels), 44100, 32);
 		await buffer.flushWrites();
@@ -212,7 +267,7 @@ describe("ReverseChunkReader", () => {
 		const frames = 250;
 		const channels = 2;
 		const readSize = 60;
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write(makeRamp(frames, channels), 44100, 32);
 
@@ -250,12 +305,12 @@ describe("ReverseChunkReader", () => {
 		const frames = 4096;
 		const channels = 2;
 		// Direct construction over a hand-written interleaved file so a tiny stripe can be injected,
-		// independent of any ChunkBuffer internals.
+		// independent of any BlockBuffer internals.
 		const path = await writeInterleavedRamp(frames, channels);
 
 		// Stripe of 300 bytes holds under 38 frames (300 / 8), far smaller than the 4096-frame buffer;
 		// read 100 frames at a time — misaligned to the stripe, so single reads span several stripes.
-		const reader = new ReverseChunkReader(path, { frames, channels, sampleRate: 44100, bitDepth: 32 }, 300);
+		const reader = new ReverseBlockReader(path, { frames, channels, sampleRate: 44100, bitDepth: 32 }, 300);
 		const chunks: Array<Array<Float32Array>> = [];
 
 		try {
@@ -281,7 +336,7 @@ describe("ReverseChunkReader", () => {
 	it("openReverseReader() auto-flushes pending writes", async () => {
 		const frames = 128;
 		const channels = 1;
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		// No manual flushWrites — the factory must flush.
 		await buffer.write(makeRamp(frames, channels), 44100, 32);
@@ -300,7 +355,7 @@ describe("ReverseChunkReader", () => {
 	});
 
 	it("empty / never-written buffer yields an empty chunk and closes cleanly", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 		const reader = await buffer.openReverseReader();
 
 		expect(reader.frames).toBe(0);
@@ -314,7 +369,7 @@ describe("ReverseChunkReader", () => {
 	});
 
 	it("read after close throws; close is idempotent", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write(makeRamp(32, 1), 44100, 32);
 
@@ -328,7 +383,7 @@ describe("ReverseChunkReader", () => {
 	});
 
 	it("parent clear() with an open reader succeeds (Windows EBUSY guard) and closes the reader", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write(makeRamp(64, 1), 44100, 32);
 
@@ -344,7 +399,7 @@ describe("ReverseChunkReader", () => {
 	});
 
 	it("parent close() with an open reader succeeds and closes the reader", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write(makeRamp(64, 1), 44100, 32);
 
@@ -357,7 +412,7 @@ describe("ReverseChunkReader", () => {
 	it("two concurrent readers advance independently", async () => {
 		const frames = 300;
 		const channels = 1;
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write(makeRamp(frames, channels), 44100, 32);
 
@@ -394,7 +449,7 @@ describe("ReverseChunkReader", () => {
 	it("a reverse reader draining a buffer does not disturb an in-progress forward read session", async () => {
 		const frames = 400;
 		const channels = 1;
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write(makeRamp(frames, channels), 44100, 32);
 		await buffer.flushWrites();
@@ -431,7 +486,7 @@ describe("ReverseChunkReader", () => {
 	it("close() mid-drain settles the in-flight read without hanging or an unhandled rejection", async () => {
 		const frames = 200_000;
 		const channels = 2;
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.write(makeRamp(frames, channels), 44100, 32);
 		await buffer.flushWrites();
@@ -466,7 +521,7 @@ describe("ReverseChunkReader", () => {
 		const realFrames = 100;
 		const claimedFrames = 4096;
 		const path = await writeInterleavedRamp(realFrames, channels);
-		const reader = new ReverseChunkReader(path, { frames: claimedFrames, channels, sampleRate: 44100, bitDepth: 32 });
+		const reader = new ReverseBlockReader(path, { frames: claimedFrames, channels, sampleRate: 44100, bitDepth: 32 });
 
 		try {
 			await expect(reader.read(claimedFrames)).rejects.toThrow(/EOF|end of reverse stream/);
@@ -474,5 +529,53 @@ describe("ReverseChunkReader", () => {
 			await reader.close();
 			await unlink(path).catch(() => undefined);
 		}
+	});
+
+	it("iterate yields the reversed stream in blocks including a trailing short block", async () => {
+		const frames = 250;
+		const channels = 1;
+		const readSize = 60;
+		const buffer = new BlockBuffer();
+
+		await buffer.write(makeRamp(frames, channels), 44100, 32);
+
+		const reader = await buffer.openReverseReader();
+		const lengths: Array<number> = [];
+		const collected: Array<number> = [];
+		let expectedOffset = 0;
+
+		for await (const block of reader.iterate(readSize)) {
+			const got = block.samples[0]?.length ?? 0;
+
+			expect(block.offset).toBe(expectedOffset);
+			expectedOffset += got;
+			lengths.push(got);
+
+			for (const value of block.samples[0] ?? []) collected.push(value);
+		}
+
+		// 250 / 60 => 60, 60, 60, 60, 10 (trailing short).
+		expect(lengths).toEqual([60, 60, 60, 60, 10]);
+		// Reverse-time order: source frame 249 down to 0.
+		expect(collected).toEqual(Array.from({ length: frames }, (_v, i) => frames - 1 - i));
+
+		await reader.close();
+		await buffer.close();
+	});
+
+	it("iterate over an empty reverse reader yields nothing", async () => {
+		const buffer = new BlockBuffer();
+		const reader = await buffer.openReverseReader();
+
+		const blocks: Array<Block> = [];
+
+		for await (const block of reader.iterate(64)) {
+			blocks.push(block);
+		}
+
+		expect(blocks.length).toBe(0);
+
+		await reader.close();
+		await buffer.close();
 	});
 });

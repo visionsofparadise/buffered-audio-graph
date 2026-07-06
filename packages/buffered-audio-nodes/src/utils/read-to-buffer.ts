@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type * as Wavefile from "wavefile";
 import wavefileExports from "wavefile/dist/wavefile";
-import { ChunkBuffer, type SourceMetadata } from "@buffered-audio/core";
+import { BlockBuffer, type SourceMetadata } from "@buffered-audio/core";
 
 // Import wavefile's CJS entry by explicit path so every runtime resolves it identically and tsup `noExternal` bundles it into dist/; do NOT switch to a bare import or `createRequire` (unbundlable → leaves `wavefile` unresolved in dependency-less pacote extracts).
 const { WaveFile } = wavefileExports as typeof Wavefile;
@@ -39,13 +39,13 @@ export async function readWavSamples(path: string): Promise<WavSamples> {
 }
 
 export interface ReadToBufferResult {
-	readonly buffer: ChunkBuffer;
+	readonly buffer: BlockBuffer;
 	readonly context: SourceMetadata;
 }
 
 export async function readToBuffer(path: string): Promise<ReadToBufferResult> {
 	const { samples, sampleRate, channels, durationFrames } = await readWavSamples(path);
-	const buffer = new ChunkBuffer();
+	const buffer = new BlockBuffer();
 
 	await buffer.write(samples, sampleRate);
 	await buffer.flushWrites();

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -12,7 +12,7 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeProperties
 	private peak = 0;
 	private scale = 1;
 
-	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
 		await super._buffer(chunk, buffer);
 
 		for (let ch = 0; ch < chunk.samples.length; ch++) {
@@ -26,13 +26,13 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeProperties
 		}
 	}
 
-	override _process(_buffer: ChunkBuffer): void {
+	override _process(_buffer: BlockBuffer): void {
 		const raw = this.peak === 0 ? 1 : this.properties.ceiling / this.peak;
 
 		this.scale = Number.isFinite(raw) ? raw : 1;
 	}
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		if (this.scale === 1) return chunk;
 
 		const scaledSamples = chunk.samples.map((channel) => {

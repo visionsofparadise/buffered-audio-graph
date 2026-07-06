@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -9,7 +9,7 @@ export const schema = z.object({
 export interface PanProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class PanStream extends BufferedTransformStream<PanProperties> {
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		const { pan } = this.properties;
 		const channels = chunk.samples.length;
 

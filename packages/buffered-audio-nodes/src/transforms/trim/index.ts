@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, type ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, type BlockBuffer, TransformNode, WHOLE_FILE, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { findFirstAbove, findLastAbove } from "./utils/silence";
 
@@ -19,7 +19,7 @@ export class TrimStream extends BufferedTransformStream<TrimProperties> {
 	private startFrame = 0;
 	private endFrame = 0;
 
-	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
 		await super._buffer(chunk, buffer);
 
 		const chunkFrames = chunk.samples[0]?.length ?? 0;
@@ -39,7 +39,7 @@ export class TrimStream extends BufferedTransformStream<TrimProperties> {
 		this.scanOffset += chunkFrames;
 	}
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
+	override async _process(buffer: BlockBuffer): Promise<void> {
 		const frames = buffer.frames;
 		const channels = buffer.channels;
 
@@ -70,7 +70,7 @@ export class TrimStream extends BufferedTransformStream<TrimProperties> {
 		this.endFrame = endFrame;
 	}
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk | undefined {
+	override _unbuffer(chunk: Block): Block | undefined {
 		const frames = chunk.samples[0]?.length ?? 0;
 		const chunkStart = chunk.offset;
 		const chunkEnd = chunkStart + frames;

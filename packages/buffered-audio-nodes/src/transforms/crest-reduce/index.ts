@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, type ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, type BlockBuffer, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { initFftBackend, linearToDb, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { LATTICE_ORDER } from "./utils/lattice";
@@ -48,7 +48,7 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 	private applyHopSize = 0;
 	private applyState?: LatticeApplyState;
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		const fft = initFftBackend(context.executionProviders, this.properties);
 
 		this.fftBackend = fft.backend;
@@ -61,7 +61,7 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 		return this.properties.frameSize / 4;
 	}
 
-	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
 		await super._buffer(chunk, buffer);
 
 		const frames = chunk.samples[0]?.length ?? 0;
@@ -72,7 +72,7 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 		this.truePeakAccumulator.push(chunk.samples, frames);
 	}
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
+	override async _process(buffer: BlockBuffer): Promise<void> {
 		const { frameSize, smoothing } = this.properties;
 		const channelCount = buffer.channels;
 		const totalFrames = buffer.frames;
@@ -100,7 +100,7 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 		this.applyHopSize = hopSize;
 	}
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk | undefined {
+	override _unbuffer(chunk: Block): Block | undefined {
 		const trajectory = this.smoothedTrajectory;
 		const frames = chunk.samples[0]?.length ?? 0;
 		const channelCount = chunk.samples.length;

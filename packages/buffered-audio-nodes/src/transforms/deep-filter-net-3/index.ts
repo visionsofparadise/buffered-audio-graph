@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type AudioChunk, type ChunkBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { FfmpegStream } from "../ffmpeg";
@@ -37,7 +37,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 	private session?: OnnxSession;
 	private dfnStates: Array<DfnState> = [];
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		// CPU-only: DML rejects DFN3 ops; see design-onnx-providers.
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
 
@@ -68,7 +68,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 		return downResample._setup(inferenced, context);
 	}
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
+	override async _process(buffer: BlockBuffer): Promise<void> {
 		if (!this.session) throw new Error("deep-filter-net-3: stream not set up");
 
 		// Guard: caller-declared sampleRate mismatch → throw before garbage; see design-transforms DFN3 failure mode.

@@ -1,4 +1,4 @@
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { iterateForTargets } from "./iterate";
@@ -8,18 +8,18 @@ const DURATION_SECONDS = 8;
 const FRAME_COUNT = SAMPLE_RATE * DURATION_SECONDS;
 
 /**
- * Per-file registry of `ChunkBuffer`s that must be closed at the end
+ * Per-file registry of `BlockBuffer`s that must be closed at the end
  * of each test. `makeBufferFromChannels` pushes inputs; tests push the
  * `iterateForTargets` result's `bestSmoothedEnvelopeBuffer` via
  * `trackResultBuffers`. Drained by the `afterEach` hook below.
  */
-const buffersToClose: Array<ChunkBuffer> = [];
+const buffersToClose: Array<BlockBuffer> = [];
 
 /**
- * Wrap per-channel synthetic arrays in a `ChunkBuffer`.
+ * Wrap per-channel synthetic arrays in a `BlockBuffer`.
  */
-async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Promise<ChunkBuffer> {
-	const buffer = new ChunkBuffer();
+async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Promise<BlockBuffer> {
+	const buffer = new BlockBuffer();
 
 	await buffer.write(channels.map((channel) => new Float32Array(channel)), SAMPLE_RATE, 32);
 	await buffer.flushWrites();
@@ -39,7 +39,7 @@ async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Pr
  * rewrite there is no upsampled-source cache to track.
  */
 function trackResultBuffers(result: {
-	bestSmoothedEnvelopeBuffer: ChunkBuffer;
+	bestSmoothedEnvelopeBuffer: BlockBuffer;
 }): void {
 	buffersToClose.push(result.bestSmoothedEnvelopeBuffer);
 }

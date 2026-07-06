@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { bandpass, MixedRadixFft, ResampleStream } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
@@ -50,13 +50,13 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 		this.fftInstance = new MixedRadixFft(N_FFT);
 	}
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: filterOnnxProviders(context.executionProviders) }, (message, data) => this.log(message, data));
 
 		return super._setup(input, context);
 	}
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
+	override async _process(buffer: BlockBuffer): Promise<void> {
 		const originalFrames = buffer.frames;
 		const channels = buffer.channels;
 
@@ -85,7 +85,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 			};
 		}
 
-		const output = new ChunkBuffer();
+		const output = new BlockBuffer();
 
 		try {
 			await this.runMainPass({
@@ -121,8 +121,8 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 	}
 
 	private async runMainPass(args: {
-		readonly buffer: ChunkBuffer;
-		readonly output: ChunkBuffer;
+		readonly buffer: BlockBuffer;
+		readonly output: BlockBuffer;
 		readonly channels: number;
 		readonly originalFrames: number;
 		readonly sourceRate: number;
@@ -240,7 +240,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 		readonly outAccumRight: Float32Array;
 		readonly sumWeight: Float32Array;
 		readonly pair: StreamPair | undefined;
-		readonly output: ChunkBuffer;
+		readonly output: BlockBuffer;
 		readonly channels: number;
 		readonly sourceRate: number;
 		readonly bitDepth: number | undefined;
@@ -290,7 +290,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 // === Helpers ===
 
 async function pullNextChunkAt441(args: {
-	readonly buffer: ChunkBuffer;
+	readonly buffer: BlockBuffer;
 	readonly pair: StreamPair | undefined;
 	readonly channels: number;
 	readonly frames: number;
@@ -322,7 +322,7 @@ async function pullNextChunkAt441(args: {
 
 // Resampler always spawned channels:2; mono duplicated to right so the segment loop sees stable stereo.
 async function pumpSourceToResampleIn(args: {
-	readonly buffer: ChunkBuffer;
+	readonly buffer: BlockBuffer;
 	readonly resampleIn: ResampleStream;
 	readonly channels: number;
 	readonly chunkFrames: number;
@@ -348,7 +348,7 @@ async function pumpSourceToResampleIn(args: {
 
 async function drainResampleOutToBuffer(args: {
 	readonly resampleOut: ResampleStream;
-	readonly output: ChunkBuffer;
+	readonly output: BlockBuffer;
 	readonly channels: number;
 	readonly sourceRate: number;
 	readonly bitDepth: number | undefined;
@@ -370,7 +370,7 @@ async function drainResampleOutToBuffer(args: {
 async function commitResampledFrames(args: {
 	readonly chunk: ReadonlyArray<Float32Array>;
 	readonly channels: number;
-	readonly output: ChunkBuffer;
+	readonly output: BlockBuffer;
 	readonly sourceRate: number;
 	readonly bitDepth: number | undefined;
 	readonly originalFrames: number;
@@ -409,7 +409,7 @@ function buildWriteChannels(left: Float32Array, right: Float32Array, channels: n
 	return out;
 }
 
-async function padTail(output: ChunkBuffer, channels: number, originalFrames: number, written: number, sourceRate: number, bitDepth: number | undefined): Promise<void> {
+async function padTail(output: BlockBuffer, channels: number, originalFrames: number, written: number, sourceRate: number, bitDepth: number | undefined): Promise<void> {
 	if (written >= originalFrames) return;
 
 	const missing = originalFrames - written;

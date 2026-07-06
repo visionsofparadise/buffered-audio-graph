@@ -2,7 +2,7 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { type AudioChunk, type StreamContext } from "@buffered-audio/core";
+import { type Block, type StreamContext } from "@buffered-audio/core";
 import { loudnessStats, LoudnessStatsStream } from ".";
 import { read } from "../../sources/read";
 import { audio } from "../../utils/test-binaries";
@@ -16,8 +16,8 @@ async function runStats(channels: ReadonlyArray<Float32Array>, sampleRate: numbe
 		outputPath: options?.outputPath ?? "",
 		bufferSize: Infinity,
 	});
-	const chunk: AudioChunk = { samples: channels.map((channel) => new Float32Array(channel)), offset: 0, sampleRate, bitDepth: 32 };
-	const input = new ReadableStream<AudioChunk>({
+	const chunk: Block = { samples: channels.map((channel) => new Float32Array(channel)), offset: 0, sampleRate, bitDepth: 32 };
+	const input = new ReadableStream<Block>({
 		start(controller) {
 			controller.enqueue(chunk);
 			controller.close();
@@ -175,7 +175,7 @@ describe("loudness-stats", () => {
 		const totalFrames = TEST_SAMPLE_RATE * 70;
 		const chunkFrames = 4096;
 		const chunkCount = Math.ceil(totalFrames / chunkFrames);
-		const input = new ReadableStream<AudioChunk>({
+		const input = new ReadableStream<Block>({
 			start(controller) {
 				let remaining = totalFrames;
 

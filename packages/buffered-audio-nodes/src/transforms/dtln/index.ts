@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { initFftBackend, ResampleStream, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
@@ -54,7 +54,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 	private fftBackend?: FftBackend;
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		const onnxProviders = filterOnnxProviders(context.executionProviders);
 
 		this.session1 = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath1, { executionProviders: onnxProviders }, (message, data) => this.log(message, data));
@@ -69,7 +69,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 		return super._setup(input, context);
 	}
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
+	override async _process(buffer: BlockBuffer): Promise<void> {
 		const originalFrames = buffer.frames;
 		const channels = buffer.channels;
 
@@ -98,7 +98,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 			};
 		}
 
-		const output = new ChunkBuffer();
+		const output = new BlockBuffer();
 
 		try {
 			await this.runMainPass({
@@ -134,8 +134,8 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 	}
 
 	private async runMainPass(args: {
-		readonly buffer: ChunkBuffer;
-		readonly output: ChunkBuffer;
+		readonly buffer: BlockBuffer;
+		readonly output: BlockBuffer;
 		readonly channels: number;
 		readonly originalFrames: number;
 		readonly sourceRate: number;
@@ -356,7 +356,7 @@ async function commitStepBatch(args: {
 	readonly length: number;
 	readonly channels: number;
 	readonly pair: StreamPair | undefined;
-	readonly output: ChunkBuffer;
+	readonly output: BlockBuffer;
 	readonly sourceRate: number;
 	readonly bitDepth: number | undefined;
 	readonly originalFrames: number;
@@ -391,7 +391,7 @@ async function commitStepBatch(args: {
 
 async function drainResampleOutToBuffer(args: {
 	readonly resampleOut: ResampleStream;
-	readonly output: ChunkBuffer;
+	readonly output: BlockBuffer;
 	readonly channels: number;
 	readonly sourceRate: number;
 	readonly bitDepth: number | undefined;
@@ -411,7 +411,7 @@ async function drainResampleOutToBuffer(args: {
 }
 
 async function pullNextChunkAt16k(args: {
-	readonly buffer: ChunkBuffer;
+	readonly buffer: BlockBuffer;
 	readonly pair: StreamPair | undefined;
 	readonly channels: number;
 	readonly frames: number;
@@ -442,7 +442,7 @@ async function pullNextChunkAt16k(args: {
 }
 
 async function pumpSourceToResampleIn(args: {
-	readonly buffer: ChunkBuffer;
+	readonly buffer: BlockBuffer;
 	readonly resampleIn: ResampleStream;
 	readonly channels: number;
 	readonly chunkFrames: number;
@@ -472,7 +472,7 @@ async function pumpSourceToResampleIn(args: {
 async function commitResampledFrames(args: {
 	readonly chunk: ReadonlyArray<Float32Array>;
 	readonly channels: number;
-	readonly output: ChunkBuffer;
+	readonly output: BlockBuffer;
 	readonly sourceRate: number;
 	readonly bitDepth: number | undefined;
 	readonly originalFrames: number;
@@ -501,7 +501,7 @@ async function commitResampledFrames(args: {
 	writerState.written += take;
 }
 
-async function padTail(output: ChunkBuffer, channels: number, originalFrames: number, written: number, sourceRate: number, bitDepth: number | undefined): Promise<void> {
+async function padTail(output: BlockBuffer, channels: number, originalFrames: number, written: number, sourceRate: number, bitDepth: number | undefined): Promise<void> {
 	if (written >= originalFrames) return;
 
 	const missing = originalFrames - written;

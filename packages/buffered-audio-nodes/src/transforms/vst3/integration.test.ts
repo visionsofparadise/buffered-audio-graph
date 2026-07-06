@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { ChunkBuffer, type StreamContext } from "@buffered-audio/core";
+import { BlockBuffer, type StreamContext } from "@buffered-audio/core";
 import { Vst3Stream } from ".";
 import { spawnVstHostReady, VstHostExitedBeforeReadyError } from "./utils/process";
 
@@ -39,8 +39,8 @@ const buildContext = (): StreamContext => ({
 
 const dummyInput = (): ReadableStream => new ReadableStream({ start: (controller) => controller.close() });
 
-const populate = async (channels: Array<Float32Array>, sampleRate = 44100): Promise<ChunkBuffer> => {
-	const buffer = new ChunkBuffer();
+const populate = async (channels: Array<Float32Array>, sampleRate = 44100): Promise<BlockBuffer> => {
+	const buffer = new BlockBuffer();
 
 	await buffer.write(channels, sampleRate, 32);
 	await buffer.flushWrites();

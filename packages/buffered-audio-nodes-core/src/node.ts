@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DEFAULT_PROGRESS_QUANTUM, type BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload } from "./stream";
 
-export interface AudioChunk {
+export interface Block {
 	readonly samples: Array<Float32Array>;
 	readonly offset: number;
 	readonly sampleRate: number;

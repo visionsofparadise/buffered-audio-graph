@@ -5,14 +5,14 @@ import { open, unlink, type FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import type { AudioChunk } from "./node";
+import type { Block } from "./node";
 
 const HIGH_WATER_MARK = 10 * 1024 * 1024;
 const REVERSE_STRIPE_BYTES = 10 * 1024 * 1024;
 
 // ── Shared read core ──────────────────────────────────────────────────────────
-// Direction-agnostic helpers used by both the forward ChunkBuffer.read() and the
-// reverse ReverseChunkReader.read(). The reverse path is structurally identical to
+// Direction-agnostic helpers used by both the forward BlockBuffer.read() and the
+// reverse ReverseBlockReader.read(). The reverse path is structurally identical to
 // forward: its ReverseReadable emits the file's bytes with frames pre-reversed, so
 // the same deinterleave produces reverse-time-order output.
 
@@ -36,7 +36,7 @@ function deinterleave(buf: Buffer, channels: number): Array<Float32Array> {
 	return out;
 }
 
-function buildAudioChunk(samples: Array<Float32Array>, offset: number, sampleRate?: number, bitDepth?: number): AudioChunk {
+function buildBlock(samples: Array<Float32Array>, offset: number, sampleRate?: number, bitDepth?: number): Block {
 	return { samples, offset, sampleRate: sampleRate ?? 0, bitDepth: bitDepth ?? 0 };
 }
 
@@ -105,7 +105,7 @@ async function awaitStreamClose(stream: ReadStream | Readable): Promise<void> {
 }
 
 // `reset()` overwrites the file in place without truncating — bytes past the new write region persist until overwritten.
-export class ChunkBuffer {
+export class BlockBuffer {
 	private _frames = 0;
 	private _channels = 0;
 	private _sampleRate?: number;
@@ -122,7 +122,7 @@ export class ChunkBuffer {
 	private readStreamEnded = false;
 	private framesReadInSession = 0;
 
-	private reverseReaders = new Set<ReverseChunkReader>();
+	private reverseReaders = new Set<ReverseBlockReader>();
 
 	get frames(): number {
 		return this._frames;
@@ -190,11 +190,11 @@ export class ChunkBuffer {
 	// snapshots frames/channels/sampleRate/bitDepth so the reader is stable against later reads on the
 	// source. The reader is registered here and closed by clear()/close() (Windows blocks unlink while a
 	// handle is open — same EBUSY guard the forward read stream uses in endReadStream). See the
-	// ReverseChunkReader class comment for the full borrow contract.
-	async openReverseReader(): Promise<ReverseChunkReader> {
+	// ReverseBlockReader class comment for the full borrow contract.
+	async openReverseReader(): Promise<ReverseBlockReader> {
 		await this.flushWrites();
 
-		const reader = new ReverseChunkReader(
+		const reader = new ReverseBlockReader(
 			this.tempPath,
 			{ frames: this._frames, channels: this._channels, sampleRate: this._sampleRate, bitDepth: this._bitDepth },
 			REVERSE_STRIPE_BYTES,
@@ -207,7 +207,7 @@ export class ChunkBuffer {
 	}
 
 	// Called by a factory-created reader from its close() so it deregisters itself. Idempotent.
-	deregisterReverseReader(reader: ReverseChunkReader): void {
+	deregisterReverseReader(reader: ReverseBlockReader): void {
 		this.reverseReaders.delete(reader);
 	}
 
@@ -222,12 +222,12 @@ export class ChunkBuffer {
 		}
 	}
 
-	async read(frames: number): Promise<AudioChunk> {
+	async read(frames: number): Promise<Block> {
 		const channels = this._channels;
 		const startFrame = this.framesReadInSession;
 
 		if (channels === 0 || frames <= 0 || this._frames === 0) {
-			return buildAudioChunk([], startFrame, this._sampleRate, this._bitDepth);
+			return buildBlock([], startFrame, this._sampleRate, this._bitDepth);
 		}
 
 		const bytesPerFrame = channels * 4;
@@ -235,13 +235,23 @@ export class ChunkBuffer {
 		const buf = await pullBytes(rs, () => rs.destroyed || this.readStreamEnded, frames * bytesPerFrame);
 		const actualFrames = Math.floor(buf.length / bytesPerFrame);
 
-		if (actualFrames <= 0) return buildAudioChunk([], startFrame, this._sampleRate, this._bitDepth);
+		if (actualFrames <= 0) return buildBlock([], startFrame, this._sampleRate, this._bitDepth);
 
 		this.framesReadInSession += actualFrames;
 
 		const out = deinterleave(buf, channels);
 
-		return buildAudioChunk(out, startFrame, this._sampleRate, this._bitDepth);
+		return buildBlock(out, startFrame, this._sampleRate, this._bitDepth);
+	}
+
+	async *iterate(frames: number): AsyncIterableIterator<Block> {
+		for (;;) {
+			const block = await this.read(frames);
+
+			if ((block.samples[0]?.length ?? 0) === 0) return;
+
+			yield block;
+		}
 	}
 
 	async reset(): Promise<void> {
@@ -286,7 +296,7 @@ export class ChunkBuffer {
 			if (this._sampleRate === undefined) {
 				this._sampleRate = sampleRate;
 			} else if (this._sampleRate !== sampleRate) {
-				throw new Error(`ChunkBuffer: sample rate mismatch — expected ${String(this._sampleRate)}, got ${String(sampleRate)}`);
+				throw new Error(`BlockBuffer: sample rate mismatch — expected ${String(this._sampleRate)}, got ${String(sampleRate)}`);
 			}
 		}
 
@@ -294,7 +304,7 @@ export class ChunkBuffer {
 			if (this._bitDepth === undefined) {
 				this._bitDepth = bitDepth;
 			} else if (this._bitDepth !== bitDepth) {
-				throw new Error(`ChunkBuffer: bit depth mismatch — expected ${String(this._bitDepth)}, got ${String(bitDepth)}`);
+				throw new Error(`BlockBuffer: bit depth mismatch — expected ${String(this._bitDepth)}, got ${String(bitDepth)}`);
 			}
 		}
 	}
@@ -303,7 +313,7 @@ export class ChunkBuffer {
 		if (this._channels === 0) {
 			this._channels = target;
 		} else if (this._channels !== target) {
-			throw new Error(`ChunkBuffer: channel count mismatch — buffer has ${String(this._channels)}, write supplied ${String(target)}`);
+			throw new Error(`BlockBuffer: channel count mismatch — buffer has ${String(this._channels)}, write supplied ${String(target)}`);
 		}
 	}
 
@@ -348,7 +358,7 @@ export class ChunkBuffer {
 	private ensureReadStream(): ReadStream {
 		if (this.readStream) return this.readStream;
 		if (!this.tempPath) {
-			throw new Error("ChunkBuffer: cannot read before any data has been written");
+			throw new Error("BlockBuffer: cannot read before any data has been written");
 		}
 
 		const rs = createReadStream(this.tempPath, { highWaterMark: HIGH_WATER_MARK });
@@ -382,7 +392,7 @@ export class ChunkBuffer {
 	}
 }
 
-// A read-only reverse view over a source ChunkBuffer's temp file. It BORROWS, it does not OWN: it holds
+// A read-only reverse view over a source BlockBuffer's temp file. It BORROWS, it does not OWN: it holds
 // its own FileHandle (inside a ReverseReadable), never unlinks the file, and never mutates the source
 // buffer. Its validity ends at the next write/reset/clear/close on the source — the snapshot of
 // frames/channels captured at open no longer describes the file after those operations. There is no
@@ -398,10 +408,10 @@ export class ChunkBuffer {
 //
 // Internally this rides the SAME stream-buffer caching philosophy as the forward path: a ReverseReadable
 // (a module-internal Readable) emits the file's bytes with frames pre-reversed, Node's stream buffer
-// (highWaterMark = windowBytes) is the cache, and pullBytes + deinterleave + buildAudioChunk re-chunk
+// (highWaterMark = windowBytes) is the cache, and pullBytes + deinterleave + buildBlock re-chunk
 // and reconstruct planar samples exactly as forward. The reversal is irreducible (Node has no backward createReadStream);
 // pushing it to the produce side makes everything downstream direction-agnostic.
-export class ReverseChunkReader {
+export class ReverseBlockReader {
 	readonly frames: number;
 	readonly channels: number;
 
@@ -410,7 +420,7 @@ export class ReverseChunkReader {
 	private readonly bitDepth?: number;
 	private readonly bytesPerFrame: number;
 	private readonly windowBytes: number;
-	private readonly parent?: ChunkBuffer;
+	private readonly parent?: BlockBuffer;
 
 	private framesReturned = 0;
 	private closed = false;
@@ -422,7 +432,7 @@ export class ReverseChunkReader {
 		path: string | undefined,
 		meta: { frames: number; channels: number; sampleRate?: number; bitDepth?: number },
 		stripeBytes = REVERSE_STRIPE_BYTES,
-		parent?: ChunkBuffer,
+		parent?: BlockBuffer,
 	) {
 		// A never-written source has no temp file: zero frames, every read is empty, close() is a no-op,
 		// and no ReverseReadable is ever constructed.
@@ -439,16 +449,16 @@ export class ReverseChunkReader {
 		this.parent = parent;
 	}
 
-	async read(frames: number): Promise<AudioChunk> {
+	async read(frames: number): Promise<Block> {
 		if (this.closed) {
-			throw new Error("ReverseChunkReader: read() after close()");
+			throw new Error("ReverseBlockReader: read() after close()");
 		}
 
 		const offset = this.framesReturned;
 		const remaining = this.frames - this.framesReturned;
 
 		if (this.path === undefined || this.channels === 0 || frames <= 0 || remaining <= 0) {
-			return buildAudioChunk([], offset, this.sampleRate, this.bitDepth);
+			return buildBlock([], offset, this.sampleRate, this.bitDepth);
 		}
 
 		// Clamp to frames remaining, so in healthy operation pullBytes is never short. A short return
@@ -462,14 +472,24 @@ export class ReverseChunkReader {
 
 		if (actualFrames < count) {
 			// Short read: the stream failed or truncated. Surface the captured error (or a generic one).
-			throw this.streamError ?? new Error("ReverseChunkReader: unexpected end of reverse stream");
+			throw this.streamError ?? new Error("ReverseBlockReader: unexpected end of reverse stream");
 		}
 
 		this.framesReturned += actualFrames;
 
 		const out = deinterleave(buf, this.channels);
 
-		return buildAudioChunk(out, offset, this.sampleRate, this.bitDepth);
+		return buildBlock(out, offset, this.sampleRate, this.bitDepth);
+	}
+
+	async *iterate(frames: number): AsyncIterableIterator<Block> {
+		for (;;) {
+			const block = await this.read(frames);
+
+			if ((block.samples[0]?.length ?? 0) === 0) return;
+
+			yield block;
+		}
 	}
 
 	async close(): Promise<void> {
@@ -492,7 +512,7 @@ export class ReverseChunkReader {
 	private ensureStream(): ReverseReadable {
 		if (this.stream) return this.stream;
 		if (this.path === undefined) {
-			throw new Error("ReverseChunkReader: no source file");
+			throw new Error("ReverseBlockReader: no source file");
 		}
 
 		const totalBytes = this.frames * this.bytesPerFrame;
@@ -512,7 +532,7 @@ export class ReverseChunkReader {
 
 // A module-internal (NOT exported) Readable that wraps a FileHandle and emits the temp file's contents as
 // an ordinary forward byte stream whose frames happen to be ordered last-to-first. This moves the reversal
-// to the produce side so everything downstream (pullBytes, deinterleave, buildAudioChunk) is
+// to the produce side so everything downstream (pullBytes, deinterleave, buildBlock) is
 // direction-agnostic and shared with the forward path. Backpressure is free: _read is only called when the
 // stream's internal buffer (highWaterMark = windowBytes) drains, so that buffer replaces the old
 // hand-rolled stripe cache one-for-one.

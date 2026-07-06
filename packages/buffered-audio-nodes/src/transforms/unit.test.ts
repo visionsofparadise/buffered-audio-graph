@@ -3,7 +3,7 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type BufferedAudioNodeProperties, type ChunkBuffer, type StreamContext } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BufferedAudioNodeProperties, type BlockBuffer, type StreamContext } from "@buffered-audio/core";
 import { read } from "../sources/read";
 import { write } from "../targets/write";
 import { readWavSamples } from "../utils/read-to-buffer";
@@ -28,7 +28,7 @@ class PassthroughTransform extends TransformNode {
 }
 
 class ErrorStream extends BufferedTransformStream {
-	override async _process(_buffer: ChunkBuffer): Promise<void> {
+	override async _process(_buffer: BlockBuffer): Promise<void> {
 		throw new Error("Intentional _process error");
 	}
 }
@@ -57,7 +57,7 @@ class ScaleStream extends BufferedTransformStream {
 		this.factor = factor;
 	}
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		const scaled = chunk.samples.map((channel) => {
 			const out = new Float32Array(channel.length);
 			for (let i = 0; i < channel.length; i++) {
@@ -70,7 +70,7 @@ class ScaleStream extends BufferedTransformStream {
 }
 
 class CompositeStream extends BufferedTransformStream {
-	override async _setup(input: ReadableStream<AudioChunk>, _context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	override async _setup(input: ReadableStream<Block>, _context: StreamContext): Promise<ReadableStream<Block>> {
 		const first = new ScaleStream(2, {});
 		const second = new ScaleStream(0.5, {});
 		return input.pipeThrough(first.createTransformStream()).pipeThrough(second.createTransformStream());

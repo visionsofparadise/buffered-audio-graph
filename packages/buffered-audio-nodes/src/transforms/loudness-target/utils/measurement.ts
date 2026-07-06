@@ -1,4 +1,4 @@
-import type { ChunkBuffer } from "@buffered-audio/core";
+import type { BlockBuffer } from "@buffered-audio/core";
 import {
 	AmplitudeHistogramAccumulator,
 	LoudnessAccumulator,
@@ -55,7 +55,7 @@ export class SourceMeasurementAccumulator {
 	private readonly detectionHistogram: AmplitudeHistogramAccumulator;
 	private readonly upsamplers: Array<TruePeakUpsampler>;
 	private readonly slidingWindow: SlidingWindowMaxStream;
-	private readonly detectionEnvelope: ChunkBuffer | null;
+	private readonly detectionEnvelope: BlockBuffer | null;
 	private readonly persistBitDepth: number | undefined;
 	private levelsScratch: Float32Array | null = null;
 	private baseScratch: Float32Array | null = null;
@@ -68,7 +68,7 @@ export class SourceMeasurementAccumulator {
 		channelCount: number,
 		limitPercentile: number,
 		halfWidth: number,
-		detectionEnvelope: ChunkBuffer | null = null,
+		detectionEnvelope: BlockBuffer | null = null,
 		persistBitDepth?: number,
 	) {
 		this.limitPercentile = limitPercentile;
@@ -233,7 +233,7 @@ export class SourceMeasurementAccumulator {
 }
 
 // Retained: measurement.unit.test.ts caller + _process fallback when the accumulator was not populated on the way in.
-export async function measureSource(buffer: ChunkBuffer, sampleRate: number, limitPercentile: number, halfWidth: number): Promise<SourceMeasurement> {
+export async function measureSource(buffer: BlockBuffer, sampleRate: number, limitPercentile: number, halfWidth: number): Promise<SourceMeasurement> {
 	const frames = buffer.frames;
 	const channelCount = buffer.channels;
 

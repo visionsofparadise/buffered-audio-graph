@@ -1,13 +1,13 @@
-import type { AudioChunk } from "../node";
+import type { Block } from "../node";
 
-export function teeReadable<T>(readable: ReadableStream<AudioChunk>, items: ReadonlyArray<T>): Array<[ReadableStream<AudioChunk>, T]> {
+export function teeReadable<T>(readable: ReadableStream<Block>, items: ReadonlyArray<T>): Array<[ReadableStream<Block>, T]> {
 	if (items.length === 0) return [];
 
 	const first = items[0] as T;
 
 	if (items.length === 1) return [[readable, first]];
 
-	const pairs: Array<[ReadableStream<AudioChunk>, T]> = [];
+	const pairs: Array<[ReadableStream<Block>, T]> = [];
 
 	let current = readable;
 

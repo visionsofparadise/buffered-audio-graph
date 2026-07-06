@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { AudioChunk, StreamContext } from "./node";
+import type { Block, StreamContext } from "./node";
 import type { ProgressPayload, StreamPhase } from "./stream";
 import { BufferedTransformStream, WHOLE_FILE, type TransformNodeProperties } from "./transform";
 
-function createChunk(value: number, offset: number, frames: number): AudioChunk {
+function createChunk(value: number, offset: number, frames: number): Block {
 	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
 }
 
@@ -11,10 +11,10 @@ function context(): StreamContext {
 	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, visited: new Set() };
 }
 
-function readableFrom(chunks: Array<AudioChunk>): ReadableStream<AudioChunk> {
+function readableFrom(chunks: Array<Block>): ReadableStream<Block> {
 	let index = 0;
 
-	return new ReadableStream<AudioChunk>({
+	return new ReadableStream<Block>({
 		pull: (controller) => {
 			const chunk = chunks[index];
 
@@ -28,8 +28,8 @@ function readableFrom(chunks: Array<AudioChunk>): ReadableStream<AudioChunk> {
 	});
 }
 
-async function drain(readable: ReadableStream<AudioChunk>): Promise<Array<AudioChunk>> {
-	const out: Array<AudioChunk> = [];
+async function drain(readable: ReadableStream<Block>): Promise<Array<Block>> {
+	const out: Array<Block> = [];
 	const reader = readable.getReader();
 
 	for (;;) {
@@ -53,7 +53,7 @@ class FlushingTransformStream extends BufferedTransformStream {
 		this.flushChunkCount = flushChunkCount;
 	}
 
-	override _flush(): Array<AudioChunk> {
+	override _flush(): Array<Block> {
 		this.flushCalls += 1;
 
 		return Array.from({ length: this.flushChunkCount }, (_unused, i) => createChunk(FLUSH_MARKER, i, 4));
@@ -62,10 +62,10 @@ class FlushingTransformStream extends BufferedTransformStream {
 
 async function run(
 	bufferSize: number,
-	chunks: Array<AudioChunk>,
+	chunks: Array<Block>,
 	flushChunkCount = 2,
 	onStream?: (stream: FlushingTransformStream) => void,
-): Promise<{ output: Array<AudioChunk>; stream: FlushingTransformStream }> {
+): Promise<{ output: Array<Block>; stream: FlushingTransformStream }> {
 	const stream = new FlushingTransformStream({ bufferSize }, flushChunkCount);
 
 	onStream?.(stream);
@@ -75,11 +75,11 @@ async function run(
 	return { output: await drain(output), stream };
 }
 
-function isFlushChunk(chunk: AudioChunk): boolean {
+function isFlushChunk(chunk: Block): boolean {
 	return chunk.samples[0]?.[0] === FLUSH_MARKER;
 }
 
-function flushChunksStrictlyLast(output: Array<AudioChunk>): boolean {
+function flushChunksStrictlyLast(output: Array<Block>): boolean {
 	const firstFlush = output.findIndex(isFlushChunk);
 
 	if (firstFlush === -1) return false;
@@ -87,7 +87,7 @@ function flushChunksStrictlyLast(output: Array<AudioChunk>): boolean {
 	return output.slice(0, firstFlush).every((c) => !isFlushChunk(c)) && output.slice(firstFlush).every(isFlushChunk);
 }
 
-function passThroughFrames(output: Array<AudioChunk>): number {
+function passThroughFrames(output: Array<Block>): number {
 	return output.filter((c) => !isFlushChunk(c)).reduce((sum, c) => sum + (c.samples[0]?.length ?? 0), 0);
 }
 
@@ -150,7 +150,7 @@ describe("BufferedTransformStream._flush", () => {
 	});
 });
 
-async function runProgress(bufferSize: number, chunks: Array<AudioChunk>): Promise<Array<ProgressPayload>> {
+async function runProgress(bufferSize: number, chunks: Array<Block>): Promise<Array<ProgressPayload>> {
 	const stream = new BufferedTransformStream({ bufferSize });
 	const events: Array<ProgressPayload> = [];
 

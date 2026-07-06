@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -9,7 +9,7 @@ export const schema = z.object({
 export interface DuplicateChannelsProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class DuplicateChannelsStream extends BufferedTransformStream<DuplicateChannelsProperties> {
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		const inputChannels = chunk.samples.length;
 
 		if (inputChannels !== 1) {

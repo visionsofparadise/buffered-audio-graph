@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ChunkBuffer } from "./chunk-buffer";
+import { BlockBuffer } from "./block-buffer";
 import { windowedIterate } from "./windowed-iterate";
 
 describe("windowedIterate", () => {
 	it("yields windows at hopSize stride covering the buffer", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 		const total = 100;
 		const data = new Float32Array(total);
 		for (let i = 0; i < total; i++) data[i] = i;
@@ -33,7 +33,7 @@ describe("windowedIterate", () => {
 	});
 
 	it("yields a final partial window at end-of-buffer with zero padding", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 		const total = 13;
 		const data = new Float32Array(total);
 		for (let i = 0; i < total; i++) data[i] = i + 1;

@@ -1,4 +1,4 @@
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import { TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
 import { BINDING_DELTA_DB, BINDING_HEADROOM_MIN, classifyWindow, isBindingPeak, measureWholeSignalTruePeakDb } from "./binding";
@@ -340,8 +340,8 @@ describe("the gate on fixtures (high-crest binds; already-limited is all-identit
 });
 
 describe("measureWholeSignalTruePeakDb — streaming whole-signal 4× TP (no materialization)", () => {
-	async function bufferOf(channels: ReadonlyArray<Float32Array>): Promise<ChunkBuffer> {
-		const buffer = new ChunkBuffer();
+	async function bufferOf(channels: ReadonlyArray<Float32Array>): Promise<BlockBuffer> {
+		const buffer = new BlockBuffer();
 
 		await buffer.write(channels as Array<Float32Array>, SAMPLE_RATE, 32);
 		await buffer.flushWrites();
@@ -373,7 +373,7 @@ describe("measureWholeSignalTruePeakDb — streaming whole-signal 4× TP (no mat
 	});
 
 	it("returns the linearToDb silence floor for an empty buffer", async () => {
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 
 		await buffer.flushWrites();
 

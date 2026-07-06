@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
@@ -13,7 +13,7 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 	private gain = 1;
 	private accumulator?: IntegratedLufsAccumulator;
 
-	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
 		await super._buffer(chunk, buffer);
 
 		const frames = chunk.samples[0]?.length ?? 0;
@@ -25,7 +25,7 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 		this.accumulator.push(chunk.samples, frames);
 	}
 
-	override _process(_buffer: ChunkBuffer): void {
+	override _process(_buffer: BlockBuffer): void {
 		const integrated = this.accumulator === undefined ? -Infinity : this.accumulator.finalize();
 
 		if (!Number.isFinite(integrated)) {
@@ -37,7 +37,7 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 		this.gain = Math.pow(10, (this.properties.target - integrated) / 20);
 	}
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		const gain = this.gain;
 
 		if (gain === 1) return chunk;

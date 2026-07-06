@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import { duplicateChannels, DuplicateChannelsNode } from ".";
 
 function makeMonoChunk(value: number, frames = 256) {
@@ -13,7 +13,7 @@ function makeMonoChunk(value: number, frames = 256) {
 
 async function applyDuplicate(node: ReturnType<typeof duplicateChannels>, chunk: { samples: Array<Float32Array>; offset: number; sampleRate: number; bitDepth: number }) {
 	const stream = node.createStream();
-	const buffer = new ChunkBuffer();
+	const buffer = new BlockBuffer();
 	try {
 		await stream._buffer(chunk, buffer);
 		return stream._unbuffer(chunk);
@@ -81,7 +81,7 @@ describe("DuplicateChannelsNode", () => {
 			sampleRate: 48000,
 			bitDepth: 32,
 		};
-		const buffer = new ChunkBuffer();
+		const buffer = new BlockBuffer();
 		try {
 			await stream._buffer(chunk, buffer);
 			expect(() => stream._unbuffer(chunk)).toThrow(/DuplicateChannelsNode requires exactly 1 input channel/);

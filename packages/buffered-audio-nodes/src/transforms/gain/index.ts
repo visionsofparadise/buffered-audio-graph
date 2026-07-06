@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({
@@ -9,7 +9,7 @@ export const schema = z.object({
 export interface GainProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class GainStream extends BufferedTransformStream<GainProperties> {
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
+	override _unbuffer(chunk: Block): Block {
 		const linear = Math.pow(10, this.properties.gain / 20);
 
 		if (linear === 1) return chunk;

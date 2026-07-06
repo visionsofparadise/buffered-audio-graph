@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, ChunkBuffer, TransformNode, WHOLE_FILE, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { applyBaseRateChunk } from "./utils/apply";
 import { windowSamplesFromMs } from "./utils/envelope";
@@ -28,14 +28,14 @@ export const schema = z.object({
 export interface LoudnessTargetProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTargetProperties> {
-	private winningSmoothedEnvelopeBuffer: ChunkBuffer | null = null;
+	private winningSmoothedEnvelopeBuffer: BlockBuffer | null = null;
 	private winningB: number | null = null;
 	private winningLimitDb: number | null = null;
 	private winningPeakGainDb: number | null = null;
 	private unbufferCursorsReady = false;
 
 	private measurementAccumulator?: SourceMeasurementAccumulator;
-	private capturedDetectionEnvelope: ChunkBuffer | null = null;
+	private capturedDetectionEnvelope: BlockBuffer | null = null;
 
 	public unbufferElapsedMs = 0;
 
@@ -45,7 +45,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		iteration: 0,
 	};
 
-	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
 		await super._buffer(chunk, buffer);
 
 		const frames = chunk.samples[0]?.length ?? 0;
@@ -56,7 +56,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		const tPush0 = Date.now();
 
 		if (this.measurementAccumulator === undefined) {
-			this.capturedDetectionEnvelope = new ChunkBuffer();
+			this.capturedDetectionEnvelope = new BlockBuffer();
 			this.measurementAccumulator = new SourceMeasurementAccumulator(
 				chunk.sampleRate,
 				channelCount,
@@ -72,7 +72,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		this.learnTimingMs.sourceMeasurement += Date.now() - tPush0;
 	}
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
+	override async _process(buffer: BlockBuffer): Promise<void> {
 		const frames = buffer.frames;
 		const channelCount = buffer.channels;
 		const sampleRate = buffer.sampleRate ?? this.sampleRate ?? 44100;
@@ -321,7 +321,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		}
 	}
 
-	override async _unbuffer(chunk: AudioChunk): Promise<AudioChunk> {
+	override async _unbuffer(chunk: Block): Promise<Block> {
 		const envelopeBuffer = this.winningSmoothedEnvelopeBuffer;
 
 		if (envelopeBuffer === null || envelopeBuffer.frames === 0) {
@@ -347,7 +347,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		if (envelopeSlice?.length !== chunkFrames) {
 			throw new Error(
-				`loudnessTarget _unbuffer: envelope ChunkBuffer returned ${envelopeSlice?.length ?? 0} samples; expected ${chunkFrames}`,
+				`loudnessTarget _unbuffer: envelope BlockBuffer returned ${envelopeSlice?.length ?? 0} samples; expected ${chunkFrames}`,
 			);
 		}
 

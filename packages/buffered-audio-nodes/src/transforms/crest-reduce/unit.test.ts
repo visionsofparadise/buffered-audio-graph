@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type AudioChunk } from "@buffered-audio/core";
+import { type Block } from "@buffered-audio/core";
 import { TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { readWavSamples } from "../../utils/read-to-buffer";
 import { audio, hasAudioFixtures } from "../../utils/test-binaries";
@@ -193,7 +193,7 @@ async function runStream(
 		}
 	})();
 
-	const chunk: AudioChunk = { samples: channels.map((channel) => channel), offset: 0, sampleRate, bitDepth: 32 };
+	const chunk: Block = { samples: channels.map((channel) => channel), offset: 0, sampleRate, bitDepth: 32 };
 
 	await writer.write(chunk);
 	await writer.close();

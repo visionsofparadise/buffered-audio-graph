@@ -1,5 +1,5 @@
-import { ChunkBuffer } from "./chunk-buffer";
-import { BufferedAudioNode, wireStream, type AudioChunk, type BufferedAudioNodeProperties, type StreamContext } from "./node";
+import { BlockBuffer } from "./block-buffer";
+import { BufferedAudioNode, wireStream, type Block, type BufferedAudioNodeProperties, type StreamContext } from "./node";
 import { BufferedStream } from "./stream";
 import { TargetNode } from "./target";
 import { teeReadable } from "./utils/tee-readable";
@@ -21,7 +21,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 	private framesBuffered = 0;
 	private framesEmitted = 0;
 
-	private chunkBuffer?: ChunkBuffer;
+	private chunkBuffer?: BlockBuffer;
 	private bufferOffset = 0;
 	private inferredChunkSize?: number;
 	private hasStarted = false;
@@ -49,25 +49,25 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		return this.streamChunkSize ?? this.inferredChunkSize ?? 44100;
 	}
 
-	setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.durationFrames;
 
 		return this._setup(input, context);
 	}
 
 	// eslint-disable-next-line @typescript-eslint/require-await
-	async _setup(input: ReadableStream<AudioChunk>, _context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	async _setup(input: ReadableStream<Block>, _context: StreamContext): Promise<ReadableStream<Block>> {
 		return input.pipeThrough(this.createTransformStream());
 	}
 
-	createTransformStream(): TransformStream<AudioChunk, AudioChunk> {
-		return new TransformStream<AudioChunk, AudioChunk>({
+	createTransformStream(): TransformStream<Block, Block> {
+		return new TransformStream<Block, Block>({
 			transform: (chunk, controller) => this.handleTransform(chunk, controller),
 			flush: (controller) => this.handleFlush(controller),
 		});
 	}
 
-	private async handleTransform(chunk: AudioChunk, controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
+	private async handleTransform(chunk: Block, controller: TransformStreamDefaultController<Block>): Promise<void> {
 		if (!this.hasStarted) {
 			this.hasStarted = true;
 
@@ -78,7 +78,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 		this.inferredChunkSize ??= chunkFrames;
 
-		this.chunkBuffer ??= new ChunkBuffer();
+		this.chunkBuffer ??= new BlockBuffer();
 
 		const samplesIn = chunkFrames;
 		const start = performance.now();
@@ -109,7 +109,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 			const space = this.bufferSize - this.chunkBuffer.frames;
 			const take = Math.min(space, chunkFrames - offset);
 
-			const sliced: AudioChunk = {
+			const sliced: Block = {
 				samples: chunk.samples.map((channel) => channel.subarray(offset, offset + take)),
 				offset: chunk.offset + offset,
 				sampleRate: chunk.sampleRate,
@@ -131,7 +131,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 	}
 
-	private async handleFlush(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
+	private async handleFlush(controller: TransformStreamDefaultController<Block>): Promise<void> {
 		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames, { force: true });
 
 		if (!this.chunkBuffer || this.chunkBuffer.frames === 0) {
@@ -164,7 +164,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		this.events.emit("finished", { framesDone: this.framesBuffered, processingMs: this.processingMs });
 	}
 
-	private async emitFlushChunks(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
+	private async emitFlushChunks(controller: TransformStreamDefaultController<Block>): Promise<void> {
 		const chunks = await this._flush();
 
 		if (!chunks) return;
@@ -175,7 +175,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		}
 	}
 
-	private async processAndEmit(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
+	private async processAndEmit(controller: TransformStreamDefaultController<Block>): Promise<void> {
 		if (!this.chunkBuffer) return;
 
 		const samplesBeforeProcess = this.chunkBuffer.frames;
@@ -194,7 +194,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		this.framesProcessed += samplesBeforeProcess;
 	}
 
-	private async emitBuffer(controller: TransformStreamDefaultController<AudioChunk>): Promise<void> {
+	private async emitBuffer(controller: TransformStreamDefaultController<Block>): Promise<void> {
 		if (!this.chunkBuffer) return;
 
 		const buffer = this.chunkBuffer;
@@ -218,7 +218,7 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 
 			if (chunkFrames === 0) break;
 
-			const adjusted: AudioChunk = {
+			const adjusted: Block = {
 				samples: chunk.samples,
 				offset: this.bufferOffset + chunk.offset,
 				sampleRate: chunk.sampleRate,
@@ -284,19 +284,19 @@ export class BufferedTransformStream<P extends TransformNodeProperties = Transfo
 		}
 	}
 
-	_buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> | void {
+	_buffer(chunk: Block, buffer: BlockBuffer): Promise<void> | void {
 		return buffer.write(chunk.samples, chunk.sampleRate, chunk.bitDepth);
 	}
 
-	_process(_buffer: ChunkBuffer): Promise<void> | void {
+	_process(_buffer: BlockBuffer): Promise<void> | void {
 		return;
 	}
 
-	_unbuffer(chunk: AudioChunk): Promise<AudioChunk | undefined> | AudioChunk | undefined {
+	_unbuffer(chunk: Block): Promise<Block | undefined> | Block | undefined {
 		return chunk;
 	}
 
-	_flush(): Promise<Array<AudioChunk> | undefined> | Array<AudioChunk> | undefined {
+	_flush(): Promise<Array<Block> | undefined> | Array<Block> | undefined {
 		return undefined;
 	}
 }
@@ -312,7 +312,7 @@ export abstract class TransformNode<P extends TransformNodeProperties = Transfor
 
 	abstract createStream(): BufferedTransformStream;
 
-	async setup(readable: ReadableStream<AudioChunk>, context: StreamContext): Promise<Array<Promise<void>>> {
+	async setup(readable: ReadableStream<Block>, context: StreamContext): Promise<Array<Promise<void>>> {
 		const stream = this.createStream();
 
 		this.streams.push(stream);
@@ -324,7 +324,7 @@ export abstract class TransformNode<P extends TransformNodeProperties = Transfor
 		return this.setupChildren(output, context);
 	}
 
-	private async setupChildren(readable: ReadableStream<AudioChunk>, context: StreamContext): Promise<Array<Promise<void>>> {
+	private async setupChildren(readable: ReadableStream<Block>, context: StreamContext): Promise<Array<Promise<void>>> {
 		const resolved = this.children;
 		const pairs = teeReadable(readable, resolved);
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { AudioChunk, StreamContext, StreamEvent, NodeIdentity } from "./node";
+import type { Block, StreamContext, StreamEvent, NodeIdentity } from "./node";
 import { BufferedSourceStream, SourceNode, type SourceMetadata } from "./source";
 import { BufferedTargetStream, TargetNode } from "./target";
 import { BufferedTransformStream, TransformNode } from "./transform";
@@ -135,9 +135,9 @@ describe("BufferedStream helpers", () => {
 
 class LifeSourceStream extends BufferedSourceStream {
 	private index = 0;
-	private readonly chunks: Array<AudioChunk>;
+	private readonly chunks: Array<Block>;
 
-	constructor(properties: Record<string, unknown>, chunks: Array<AudioChunk>) {
+	constructor(properties: Record<string, unknown>, chunks: Array<Block>) {
 		super(properties as never);
 		this.chunks = chunks;
 	}
@@ -146,7 +146,7 @@ class LifeSourceStream extends BufferedSourceStream {
 		return { sampleRate: 44100, channels: 1, durationFrames: 200 };
 	}
 
-	override async _read(): Promise<AudioChunk | undefined> {
+	override async _read(): Promise<Block | undefined> {
 		const chunk = this.chunks[this.index];
 
 		if (!chunk) return undefined;
@@ -171,9 +171,9 @@ class LifeSource extends SourceNode {
 		return 0;
 	}
 
-	private readonly chunks: Array<AudioChunk>;
+	private readonly chunks: Array<Block>;
 
-	constructor(chunks: Array<AudioChunk>) {
+	constructor(chunks: Array<Block>) {
 		super({});
 		this.chunks = chunks;
 	}
@@ -236,7 +236,7 @@ class LifeTransform extends TransformNode {
 	}
 }
 
-function chunk(value: number, offset: number, frames: number): AudioChunk {
+function chunk(value: number, offset: number, frames: number): Block {
 	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
 }
 

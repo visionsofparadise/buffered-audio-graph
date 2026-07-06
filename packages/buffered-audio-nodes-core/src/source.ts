@@ -1,4 +1,4 @@
-import { BufferedAudioNode, wireStream, type AudioChunk, type BufferedAudioNodeProperties, type ExecutionProvider, type RenderOptions, type StreamContext } from "./node";
+import { BufferedAudioNode, wireStream, type Block, type BufferedAudioNodeProperties, type ExecutionProvider, type RenderOptions, type StreamContext } from "./node";
 import { BufferedStream } from "./stream";
 import { TargetNode } from "./target";
 import { TransformNode } from "./transform";
@@ -24,15 +24,15 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 
 	abstract getMetadata(): Promise<SourceMetadata>;
 
-	abstract _read(): Promise<AudioChunk | undefined>;
+	abstract _read(): Promise<Block | undefined>;
 	abstract _flush(): Promise<void>;
 
-	setup(context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	setup(context: StreamContext): Promise<ReadableStream<Block>> {
 		return this._setup(context);
 	}
 
 	// eslint-disable-next-line @typescript-eslint/require-await
-	async _setup(context: StreamContext): Promise<ReadableStream<AudioChunk>> {
+	async _setup(context: StreamContext): Promise<ReadableStream<Block>> {
 		let done = false;
 
 		this.framesRead = 0;
@@ -40,7 +40,7 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 
 		const { signal, durationFrames: sourceTotalFrames, highWaterMark } = context;
 
-		return new ReadableStream<AudioChunk>(
+		return new ReadableStream<Block>(
 			{
 				pull: async (controller) => {
 					if (done) return;
@@ -122,7 +122,7 @@ export abstract class SourceNode<P extends SourceNodeProperties = SourceNodeProp
 		await Promise.all(promises);
 	}
 
-	private async setupChildren(readable: ReadableStream<AudioChunk>, context: StreamContext): Promise<Array<Promise<void>>> {
+	private async setupChildren(readable: ReadableStream<Block>, context: StreamContext): Promise<Array<Promise<void>>> {
 		const resolved = this.children;
 		const pairs = teeReadable(readable, resolved);
 

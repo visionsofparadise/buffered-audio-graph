@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, type AudioChunk, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { waitForDrain } from "../../utils/ffmpeg";
 import { getBytesPerSample, writeSample, buildWavHeader, buildRf64Header } from "./utils/wav";
@@ -63,7 +63,7 @@ export class WriteStream extends BufferedTargetStream<WriteProperties> {
 	private useEncoding = false;
 	private initialized = false;
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<void> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<void> {
 		this.bytesWritten = 0;
 		this.initialized = false;
 
@@ -82,7 +82,7 @@ export class WriteStream extends BufferedTargetStream<WriteProperties> {
 		return super._setup(input, context);
 	}
 
-	private async initialize(chunk: AudioChunk): Promise<void> {
+	private async initialize(chunk: Block): Promise<void> {
 		if (this.initialized) return;
 		this.initialized = true;
 
@@ -130,7 +130,7 @@ export class WriteStream extends BufferedTargetStream<WriteProperties> {
 		});
 	}
 
-	override async _write(chunk: AudioChunk): Promise<void> {
+	override async _write(chunk: Block): Promise<void> {
 		await this.initialize(chunk);
 
 		const bytes = this.convertChunk(chunk);
@@ -183,7 +183,7 @@ export class WriteStream extends BufferedTargetStream<WriteProperties> {
 		}
 	}
 
-	private convertChunk(chunk: AudioChunk): Buffer {
+	private convertChunk(chunk: Block): Buffer {
 		const frames = chunk.samples[0]?.length ?? 0;
 		const channels = chunk.samples.length;
 		const bytesPerSample = getBytesPerSample(this.properties.bitDepth);

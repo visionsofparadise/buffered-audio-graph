@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type AudioChunk, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 const cutRegionSchema = z.object({
@@ -25,7 +25,7 @@ export class CutStream extends BufferedTransformStream<CutProperties> {
 		this.sortedRegions = [...this.properties.regions].sort((left, right) => left.start - right.start);
 	}
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk | undefined {
+	override _unbuffer(chunk: Block): Block | undefined {
 		const sampleRate = chunk.sampleRate;
 		const chunkFrames = chunk.samples[0]?.length ?? 0;
 		const chunkStartSec = chunk.offset / sampleRate;

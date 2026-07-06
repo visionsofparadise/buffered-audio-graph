@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, type ChunkBuffer, reverseBuffer, TransformNode, WHOLE_FILE, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, type BlockBuffer, reverseBuffer, TransformNode, WHOLE_FILE, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 const CHUNK_FRAMES = 44100;
@@ -7,7 +7,7 @@ const CHUNK_FRAMES = 44100;
 export const schema = z.object({});
 
 export class ReverseStream extends BufferedTransformStream {
-	override async _process(buffer: ChunkBuffer): Promise<void> {
+	override async _process(buffer: BlockBuffer): Promise<void> {
 		const channels = buffer.channels;
 
 		if (channels === 0 || buffer.frames === 0) return;

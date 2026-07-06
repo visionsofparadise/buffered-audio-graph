@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import { pan, PanNode } from ".";
 
 function makeMonoChunk(value: number, frames = 256): { samples: [Float32Array]; offset: number; sampleRate: number; bitDepth: number } {
@@ -12,7 +12,7 @@ function makeStereoChunk(leftValue: number, rightValue: number, frames = 256): {
 
 async function applyPan(node: ReturnType<typeof pan>, chunk: { samples: Array<Float32Array>; offset: number; sampleRate: number; bitDepth: number }) {
 	const stream = node.createStream();
-	const buffer = new ChunkBuffer();
+	const buffer = new BlockBuffer();
 	try {
 		await stream._buffer(chunk, buffer);
 		return stream._unbuffer(chunk);
@@ -113,7 +113,7 @@ describe("PanNode", () => {
 				sampleRate: 48000,
 				bitDepth: 32,
 			};
-			const buffer = new ChunkBuffer();
+			const buffer = new BlockBuffer();
 			try {
 				await stream._buffer(chunk, buffer);
 				expect(() => stream._unbuffer(chunk)).toThrow(/PanNode supports 1 or 2 channel inputs only/);

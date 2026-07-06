@@ -1,4 +1,4 @@
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import { SlidingWindowMaxStream, TruePeakUpsampler, linearToDb } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
 import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./iterate";
@@ -30,8 +30,8 @@ function makeSineWithNoise(seed: number, frames: number, amplitude: number, freq
 	return channel;
 }
 
-async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Promise<ChunkBuffer> {
-	const buffer = new ChunkBuffer();
+async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Promise<BlockBuffer> {
+	const buffer = new BlockBuffer();
 
 	await buffer.write(channels.map((c) => new Float32Array(c)), SAMPLE_RATE, 32);
 	await buffer.flushWrites();
@@ -40,12 +40,12 @@ async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Pr
 }
 
 /**
- * Read all frames from a single-channel ChunkBuffer into a flat
+ * Read all frames from a single-channel BlockBuffer into a flat
  * `Float32Array`. Used to compare cached output against reference
  * single-pass output computed in test code. Reads at base rate (post
  * `plan-loudness-target-base-rate-downstream`).
  */
-async function readAllSingleChannel(buffer: ChunkBuffer): Promise<Float32Array> {
+async function readAllSingleChannel(buffer: BlockBuffer): Promise<Float32Array> {
 	const totalFrames = buffer.frames;
 	const out = new Float32Array(totalFrames);
 
@@ -71,10 +71,10 @@ async function readAllSingleChannel(buffer: ChunkBuffer): Promise<Float32Array> 
 }
 
 describe("buildBaseRateDetectionCache", () => {
-	it("produces a single base-rate detection ChunkBuffer (no upsampled-source cache)", async () => {
+	it("produces a single base-rate detection BlockBuffer (no upsampled-source cache)", async () => {
 		// Use ~2.5 chunks so we exercise both the steady-state path and
 		// the trailing short chunk. Post the 2026-05-13 base-rate-
-		// downstream rewrite the function returns a SINGLE ChunkBuffer
+		// downstream rewrite the function returns a SINGLE BlockBuffer
 		// (the detection envelope) at base rate — no upsampled-source
 		// cache exists.
 		const frames = Math.floor(CHUNK_FRAMES * 2.5);
@@ -432,8 +432,8 @@ describe("buildBaseRateDetectionCache", () => {
 		});
 
 		// Drive SourceMeasurementAccumulator exactly as measureSource does (CHUNK_FRAMES reads, push, finalize),
-		// writing its detection envelope into a ChunkBuffer for comparison.
-		const accumEnvelope = new ChunkBuffer();
+		// writing its detection envelope into a BlockBuffer for comparison.
+		const accumEnvelope = new BlockBuffer();
 		const accumulator = new SourceMeasurementAccumulator(SAMPLE_RATE, 2, 0.98, halfWidth, accumEnvelope);
 
 		await accumBuffer.reset();

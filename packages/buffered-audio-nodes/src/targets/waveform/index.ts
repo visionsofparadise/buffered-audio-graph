@@ -1,6 +1,6 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, WHOLE_FILE, type AudioChunk, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, WHOLE_FILE, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { updateMinMax, writeMinMaxPoint } from "./utils/minmax";
 
@@ -31,7 +31,7 @@ export class WaveformStream extends BufferedTargetStream<WaveformProperties> {
 
 	private initialized = false;
 
-	override async _setup(input: ReadableStream<AudioChunk>, context: StreamContext): Promise<void> {
+	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<void> {
 		this.writeBufferOffset = 0;
 		this.writeBufferFileOffset = HEADER_SIZE;
 		this.totalPoints = 0;
@@ -43,7 +43,7 @@ export class WaveformStream extends BufferedTargetStream<WaveformProperties> {
 		return super._setup(input, context);
 	}
 
-	private initialize(chunk: AudioChunk): void {
+	private initialize(chunk: Block): void {
 		if (this.initialized) return;
 
 		this.initialized = true;
@@ -58,7 +58,7 @@ export class WaveformStream extends BufferedTargetStream<WaveformProperties> {
 		this.writeBuffer = Buffer.alloc(this.WRITE_BATCH_POINTS * pointByteSize);
 	}
 
-	private async writeHeader(chunk: AudioChunk): Promise<void> {
+	private async writeHeader(chunk: Block): Promise<void> {
 		if (!this.fileHandle) return;
 
 		const header = Buffer.alloc(HEADER_SIZE);
@@ -71,7 +71,7 @@ export class WaveformStream extends BufferedTargetStream<WaveformProperties> {
 		await this.fileHandle.write(header, 0, HEADER_SIZE, 0);
 	}
 
-	override async _write(chunk: AudioChunk): Promise<void> {
+	override async _write(chunk: Block): Promise<void> {
 		if (!this.initialized) {
 			this.initialize(chunk);
 

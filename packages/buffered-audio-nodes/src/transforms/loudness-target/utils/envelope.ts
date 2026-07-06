@@ -1,4 +1,4 @@
-import { ChunkBuffer } from "@buffered-audio/core";
+import { BlockBuffer } from "@buffered-audio/core";
 import type { BidirectionalIir } from "@buffered-audio/utils";
 
 // Sliding-window-min primitive: https://en.wikipedia.org/wiki/Sliding_window_minimum
@@ -8,11 +8,11 @@ export function windowSamplesFromMs(smoothingMs: number, sampleRate: number): nu
 
 // When provided, `minHeldBuffer.frames` MUST equal `sourceBuffer.frames` (read in lockstep; throws on mismatch).
 export async function applyBackwardPassOverChunkBuffer(args: {
-	sourceBuffer: ChunkBuffer;
-	destBuffer: ChunkBuffer;
+	sourceBuffer: BlockBuffer;
+	destBuffer: BlockBuffer;
 	iir: BidirectionalIir;
 	chunkSize: number;
-	minHeldBuffer?: ChunkBuffer;
+	minHeldBuffer?: BlockBuffer;
 }): Promise<void> {
 	const { sourceBuffer, destBuffer, iir, chunkSize, minHeldBuffer } = args;
 	const totalFrames = sourceBuffer.frames;
@@ -35,7 +35,7 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 	// time walking end→start, already in reverse time order — the same cadence (full chunks from the end,
 	// ragged chunk last) and the same values the prior hand-rolled reverse-stripe walk produced, so the
 	// fp sequence fed to the IIR is unchanged and the output stays bit-exact.
-	const filteredReversed = new ChunkBuffer();
+	const filteredReversed = new BlockBuffer();
 
 	try {
 		const backwardState = { value: 0 };

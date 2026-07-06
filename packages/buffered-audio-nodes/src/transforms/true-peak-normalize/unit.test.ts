@@ -1,7 +1,7 @@
 /* eslint-disable no-console -- the node logs a measurement summary by design; tests run with vitest, console output is fine in CI. */
 import { describe, expect, it } from "vitest";
 import { TruePeakAccumulator } from "@buffered-audio/utils";
-import { type AudioChunk } from "@buffered-audio/core";
+import { type Block } from "@buffered-audio/core";
 import { schema, truePeakNormalize, TruePeakNormalizeStream } from ".";
 
 const TEST_SAMPLE_RATE = 48_000;
@@ -78,14 +78,14 @@ async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: numb
 	if (totalFrames === 0) {
 		// Still need a chunk to advance the stream; send empty.
 		const samples: Array<Float32Array> = channels.map(() => new Float32Array(0));
-		const chunk: AudioChunk = { samples, offset: 0, sampleRate, bitDepth: 32 };
+		const chunk: Block = { samples, offset: 0, sampleRate, bitDepth: 32 };
 
 		await writer.write(chunk);
 	} else {
 		while (offset < totalFrames) {
 			const take = Math.min(chunkFrames, totalFrames - offset);
 			const samples: Array<Float32Array> = channels.map((channel) => channel.slice(offset, offset + take));
-			const chunk: AudioChunk = { samples, offset, sampleRate, bitDepth: 32 };
+			const chunk: Block = { samples, offset, sampleRate, bitDepth: 32 };
 
 			await writer.write(chunk);
 			offset += take;

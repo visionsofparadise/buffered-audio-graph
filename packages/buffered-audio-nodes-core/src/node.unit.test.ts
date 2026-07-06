@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ChunkBuffer } from "./chunk-buffer";
-import type { AudioChunk } from "./node";
+import type { BlockBuffer } from "./block-buffer";
+import type { Block } from "./node";
 import type { SourceMetadata } from "./source";
 import { BufferedAudioNode } from "./node";
 import { BufferedSourceStream, SourceNode } from "./source";
@@ -13,8 +13,8 @@ class MockSourceStream extends BufferedSourceStream {
 		return this.properties.meta as SourceMetadata;
 	}
 
-	override async _read(): Promise<AudioChunk | undefined> {
-		const chunks = this.properties.chunks as Array<AudioChunk>;
+	override async _read(): Promise<Block | undefined> {
+		const chunks = this.properties.chunks as Array<Block>;
 		const index = this.properties.chunkIndex as number;
 		const chunk = chunks[index];
 		if (chunk) {
@@ -32,7 +32,7 @@ class MockSource extends SourceNode {
 	get bufferSize(): number { return 0; }
 	get latency(): number { return 0; }
 
-	constructor(chunks: Array<AudioChunk> = [], meta: SourceMetadata = { sampleRate: 44100, channels: 1 }) {
+	constructor(chunks: Array<Block> = [], meta: SourceMetadata = { sampleRate: 44100, channels: 1 }) {
 		super({ chunks, meta, chunkIndex: 0 } as never);
 	}
 
@@ -46,9 +46,9 @@ class MockSource extends SourceNode {
 }
 
 class MockTransformStream extends BufferedTransformStream {
-	readonly processedChunks: Array<AudioChunk> = [];
+	readonly processedChunks: Array<Block> = [];
 
-	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
+	override async _buffer(chunk: Block, buffer: BlockBuffer): Promise<void> {
 		await super._buffer(chunk, buffer);
 		this.processedChunks.push(chunk);
 	}
@@ -61,7 +61,7 @@ class MockTransform extends TransformNode {
 
 	private _lastStream?: MockTransformStream;
 
-	get processedChunks(): Array<AudioChunk> {
+	get processedChunks(): Array<Block> {
 		return this._lastStream?.processedChunks ?? [];
 	}
 
@@ -76,10 +76,10 @@ class MockTransform extends TransformNode {
 }
 
 class MockTargetStream extends BufferedTargetStream {
-	readonly receivedChunks: Array<AudioChunk> = [];
+	readonly receivedChunks: Array<Block> = [];
 	closed = false;
 
-	override async _write(chunk: AudioChunk): Promise<void> {
+	override async _write(chunk: Block): Promise<void> {
 		this.receivedChunks.push(chunk);
 	}
 
@@ -129,7 +129,7 @@ class FailingTarget extends TargetNode {
 	}
 }
 
-function createChunk(value: number, offset: number, duration: number): AudioChunk {
+function createChunk(value: number, offset: number, duration: number): Block {
 	const samples = new Float32Array(duration).fill(value);
 	return { samples: [samples], offset, sampleRate: 44100, bitDepth: 32 };
 }
