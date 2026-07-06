@@ -567,10 +567,10 @@ async function padTail(output: ChunkBuffer, channels: number, originalFrames: nu
 }
 
 export class HtdemucsNode extends TransformNode<HtdemucsProperties> {
-	static override readonly moduleName = "HTDemucs (Stem Separator)";
+	static override readonly nodeName = "HTDemucs (Stem Separator)";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Rebalance stem volumes using HTDemucs source separation";
+	static override readonly nodeDescription = "Rebalance stem volumes using HTDemucs source separation";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is HtdemucsNode {
 		return TransformNode.is(value) && value.type[2] === "htdemucs";

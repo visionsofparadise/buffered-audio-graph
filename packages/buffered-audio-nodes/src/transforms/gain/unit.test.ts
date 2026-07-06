@@ -10,7 +10,7 @@ function makeStereoChunk(leftValue: number, rightValue: number, frames = 512): {
 
 describe("GainNode", () => {
 	it("has correct static metadata", () => {
-		expect(GainNode.moduleName).toBe("Gain");
+		expect(GainNode.nodeName).toBe("Gain");
 		expect(GainNode.schema).toBe(GainNode.schema);
 	});
 

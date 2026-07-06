@@ -234,10 +234,10 @@ export class ReadWavStream<P extends ReadWavProperties = ReadWavProperties> exte
 }
 
 export class ReadWavNode extends SourceNode<ReadWavProperties> {
-	static override readonly moduleName = "Read WAV";
+	static override readonly nodeName = "Read WAV";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Read audio from a WAV file";
+	static override readonly nodeDescription = "Read audio from a WAV file";
 	static override readonly schema = wavSchema;
 	override readonly type = ["buffered-audio-node", "source", "read-wav"] as const;
 

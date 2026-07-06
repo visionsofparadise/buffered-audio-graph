@@ -28,10 +28,10 @@ export class DownmixMonoStream extends BufferedTransformStream {
 }
 
 export class DownmixMonoNode extends TransformNode {
-	static override readonly moduleName = "Downmix Mono";
+	static override readonly nodeName = "Downmix Mono";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Mix all input channels to a single mono channel by averaging";
+	static override readonly nodeDescription = "Mix all input channels to a single mono channel by averaging";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is DownmixMonoNode {
 		return TransformNode.is(value) && value.type[2] === "downmix-mono";

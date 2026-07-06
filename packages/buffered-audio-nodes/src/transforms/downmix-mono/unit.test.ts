@@ -25,7 +25,7 @@ async function applyDownmix(chunk: ReturnType<typeof makeChunk>) {
 
 describe("DownmixMonoNode", () => {
 	it("has correct static metadata", () => {
-		expect(DownmixMonoNode.moduleName).toBe("Downmix Mono");
+		expect(DownmixMonoNode.nodeName).toBe("Downmix Mono");
 	});
 
 	it("passes mono input unchanged", async () => {

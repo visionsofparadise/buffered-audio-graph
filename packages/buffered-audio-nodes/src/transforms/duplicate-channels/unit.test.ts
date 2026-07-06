@@ -24,7 +24,7 @@ async function applyDuplicate(node: ReturnType<typeof duplicateChannels>, chunk:
 
 describe("DuplicateChannelsNode", () => {
 	it("has correct static metadata", () => {
-		expect(DuplicateChannelsNode.moduleName).toBe("Duplicate Channels");
+		expect(DuplicateChannelsNode.nodeName).toBe("Duplicate Channels");
 	});
 
 	it("schema defaults to 2 output channels", () => {

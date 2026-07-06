@@ -70,10 +70,10 @@ export class PhaseStream extends BufferedTransformStream<PhaseProperties> {
 }
 
 export class PhaseNode extends TransformNode<PhaseProperties> {
-	static override readonly moduleName = "Phase";
+	static override readonly nodeName = "Phase";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Invert or rotate signal phase";
+	static override readonly nodeDescription = "Invert or rotate signal phase";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is PhaseNode {
 		return TransformNode.is(value) && value.type[2] === "phase";

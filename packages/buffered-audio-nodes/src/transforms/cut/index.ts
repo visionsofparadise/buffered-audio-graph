@@ -92,10 +92,10 @@ export class CutStream extends BufferedTransformStream<CutProperties> {
 }
 
 export class CutNode extends TransformNode<CutProperties> {
-	static override readonly moduleName = "Cut";
+	static override readonly nodeName = "Cut";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Remove a region of audio";
+	static override readonly nodeDescription = "Remove a region of audio";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is CutNode {
 		return TransformNode.is(value) && value.type[2] === "cut";

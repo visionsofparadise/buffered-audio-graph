@@ -521,9 +521,9 @@ class NormalizeStream extends BufferedTransformStream<NormalizeProperties> {
 }
 
 class NormalizeNode extends TransformNode<NormalizeProperties> {
-	static override readonly moduleName = "Normalize";
+	static override readonly nodeName = "Normalize";
 	static override readonly packageName = "buffered-audio-nodes";
-	static override readonly moduleDescription = "Adjust peak or loudness level to a target ceiling";
+	static override readonly nodeDescription = "Adjust peak or loudness level to a target ceiling";
 	static override readonly schema = schema;
 
 	override readonly type = ["buffered-audio-node", "transform", "normalize"] as const;

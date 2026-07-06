@@ -10,7 +10,7 @@ import { audio } from "../../utils/test-binaries";
 
 const testVoice = audio.testVoice;
 
-describe("WriteModule", () => {
+describe("WriteNode", () => {
 	it("round-trips a WAV file with correct duration and sample rate", async () => {
 		const original = await readWavSamples(testVoice);
 		const tempOut = join(tmpdir(), `ban-write-rt-${randomBytes(8).toString("hex")}.wav`);

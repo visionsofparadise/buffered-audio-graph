@@ -117,10 +117,10 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 }
 
 export class CrestReduceNode extends TransformNode<CrestReduceProperties> {
-	static override readonly moduleName = "Crest Reduce";
+	static override readonly nodeName = "Crest Reduce";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor";
+	static override readonly nodeDescription = "Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is CrestReduceNode {
 		return TransformNode.is(value) && value.type[2] === "crest-reduce";

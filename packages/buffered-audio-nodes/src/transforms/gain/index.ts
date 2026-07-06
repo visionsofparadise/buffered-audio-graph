@@ -29,10 +29,10 @@ export class GainStream extends BufferedTransformStream<GainProperties> {
 }
 
 export class GainNode extends TransformNode<GainProperties> {
-	static override readonly moduleName = "Gain";
+	static override readonly nodeName = "Gain";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Adjust signal level by a fixed amount in dB";
+	static override readonly nodeDescription = "Adjust signal level by a fixed amount in dB";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is GainNode {
 		return TransformNode.is(value) && value.type[2] === "gain";

@@ -144,10 +144,10 @@ export class WaveformStream extends BufferedTargetStream<WaveformProperties> {
 }
 
 export class WaveformNode extends TargetNode<WaveformProperties> {
-	static override readonly moduleName = "Waveform";
+	static override readonly nodeName = "Waveform";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Generate waveform visualization data";
+	static override readonly nodeDescription = "Generate waveform visualization data";
 	static override readonly schema = schema;
 
 	static override is(value: unknown): value is WaveformNode {

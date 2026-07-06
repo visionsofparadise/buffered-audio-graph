@@ -23,7 +23,7 @@ async function applyPan(node: ReturnType<typeof pan>, chunk: { samples: Array<Fl
 
 describe("PanNode", () => {
 	it("has correct static metadata", () => {
-		expect(PanNode.moduleName).toBe("Pan");
+		expect(PanNode.nodeName).toBe("Pan");
 	});
 
 	it("schema defaults to 0 (center)", () => {

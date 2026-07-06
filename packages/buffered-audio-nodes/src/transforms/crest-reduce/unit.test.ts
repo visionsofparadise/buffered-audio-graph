@@ -270,7 +270,7 @@ function pctChangedAndMax(input: Float32Array, output: Float32Array): { pct: num
 
 describe("CrestReduce discoverability", () => {
 	it("exposes the registration statics and recognizes its own instances", () => {
-		expect(CrestReduceNode.moduleName).toBe("Crest Reduce");
+		expect(CrestReduceNode.nodeName).toBe("Crest Reduce");
 
 		const node = crestReduce();
 

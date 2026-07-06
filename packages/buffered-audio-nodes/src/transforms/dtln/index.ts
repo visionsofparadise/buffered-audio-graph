@@ -515,10 +515,10 @@ async function padTail(output: ChunkBuffer, channels: number, originalFrames: nu
 }
 
 export class DtlnNode extends TransformNode<DtlnProperties> {
-	static override readonly moduleName = "DTLN (Denoiser)";
+	static override readonly nodeName = "DTLN (Denoiser)";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Remove background noise from speech using DTLN neural network";
+	static override readonly nodeDescription = "Remove background noise from speech using DTLN neural network";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is DtlnNode {
 		return TransformNode.is(value) && value.type[2] === "dtln";

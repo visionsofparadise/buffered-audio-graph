@@ -275,10 +275,10 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 }
 
 export class FfmpegNode<P extends FfmpegProperties = FfmpegProperties> extends TransformNode<P> {
-	static override readonly moduleName: string = "FFmpeg";
+	static override readonly nodeName: string = "FFmpeg";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription: string = "Process audio through FFmpeg filters";
+	static override readonly nodeDescription: string = "Process audio through FFmpeg filters";
 	static override readonly schema: z.ZodType = schema;
 	static override is(value: unknown): value is FfmpegNode {
 		return TransformNode.is(value) && value.type[2] === "ffmpeg";

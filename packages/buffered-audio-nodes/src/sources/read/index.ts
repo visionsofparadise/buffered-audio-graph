@@ -20,10 +20,10 @@ export interface ReadProperties extends z.infer<typeof schema>, SourceNodeProper
 }
 
 export class ReadNode extends SourceNode<ReadProperties> {
-	static override readonly moduleName = "Read";
+	static override readonly nodeName = "Read";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Read audio from a file";
+	static override readonly nodeDescription = "Read audio from a file";
 	static override readonly schema = schema;
 	override readonly type = ["buffered-audio-node", "source", "read"] as const;
 

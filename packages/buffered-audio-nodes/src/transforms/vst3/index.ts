@@ -109,10 +109,10 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 }
 
 export class Vst3Node<P extends Vst3Properties = Vst3Properties> extends TransformNode<P> {
-	static override readonly moduleName: string = "VST3";
+	static override readonly nodeName: string = "VST3";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription: string = "Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)";
+	static override readonly nodeDescription: string = "Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)";
 	static override readonly schema: z.ZodType = schema;
 	static override is(value: unknown): value is Vst3Node {
 		return TransformNode.is(value) && value.type[2] === "vst3";

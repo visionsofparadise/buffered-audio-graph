@@ -68,10 +68,10 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 }
 
 export class TruePeakNormalizeNode extends TransformNode<TruePeakNormalizeProperties> {
-	static override readonly moduleName = "True Peak Normalize";
+	static override readonly nodeName = "True Peak Normalize";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single linear gain to hit a target dBTP";
+	static override readonly nodeDescription = "Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single linear gain to hit a target dBTP";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is TruePeakNormalizeNode {
 		return TransformNode.is(value) && value.type[2] === "true-peak-normalize";

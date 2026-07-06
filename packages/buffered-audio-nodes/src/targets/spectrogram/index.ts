@@ -268,10 +268,10 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramPropertie
 }
 
 export class SpectrogramNode extends TargetNode<SpectrogramProperties> {
-	static override readonly moduleName = "Spectrogram";
+	static override readonly nodeName = "Spectrogram";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Generate spectrogram visualization data";
+	static override readonly nodeDescription = "Generate spectrogram visualization data";
 	static override readonly schema = schema;
 
 	static override is(value: unknown): value is SpectrogramNode {

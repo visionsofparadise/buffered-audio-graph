@@ -50,10 +50,10 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeProperties
 }
 
 export class NormalizeNode extends TransformNode<NormalizeProperties> {
-	static override readonly moduleName = "Normalize";
+	static override readonly nodeName = "Normalize";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Adjust peak or loudness level to a target ceiling";
+	static override readonly nodeDescription = "Adjust peak or loudness level to a target ceiling";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is NormalizeNode {
 		return TransformNode.is(value) && value.type[2] === "normalize";

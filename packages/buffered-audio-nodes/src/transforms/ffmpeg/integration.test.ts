@@ -69,7 +69,7 @@ describeIfFfmpegFixture("FFmpeg", () => {
 		const finishedFramesDone: Array<number> = [];
 
 		const onEvent = (node: NodeIdentity, event: StreamEvent): void => {
-			if (node.moduleName !== "FFmpeg") return;
+			if (node.nodeName !== "FFmpeg") return;
 
 			if (event.kind === "progress") {
 				progressByPhase.set(event.phase, (progressByPhase.get(event.phase) ?? 0) + 1);

@@ -121,10 +121,10 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 }
 
 export class DeepFilterNet3Node extends TransformNode<DeepFilterNet3Properties> {
-	static override readonly moduleName = "DeepFilterNet3 (Denoiser)";
+	static override readonly nodeName = "DeepFilterNet3 (Denoiser)";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)";
+	static override readonly nodeDescription = "Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)";
 	static override readonly schema = schema;
 
 	static override is(value: unknown): value is DeepFilterNet3Node {

@@ -56,10 +56,10 @@ export class PanStream extends BufferedTransformStream<PanProperties> {
 }
 
 export class PanNode extends TransformNode<PanProperties> {
-	static override readonly moduleName = "Pan";
+	static override readonly nodeName = "Pan";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Position mono signal in stereo field or adjust stereo balance; throws for inputs with more than 2 channels";
+	static override readonly nodeDescription = "Position mono signal in stereo field or adjust stereo balance; throws for inputs with more than 2 channels";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is PanNode {
 		return TransformNode.is(value) && value.type[2] === "pan";

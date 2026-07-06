@@ -29,10 +29,10 @@ export class DuplicateChannelsStream extends BufferedTransformStream<DuplicateCh
 }
 
 export class DuplicateChannelsNode extends TransformNode<DuplicateChannelsProperties> {
-	static override readonly moduleName = "Duplicate Channels";
+	static override readonly nodeName = "Duplicate Channels";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Duplicate a mono signal into multiple identical output channels; requires exactly 1 input channel, throws otherwise";
+	static override readonly nodeDescription = "Duplicate a mono signal into multiple identical output channels; requires exactly 1 input channel, throws otherwise";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is DuplicateChannelsNode {
 		return TransformNode.is(value) && value.type[2] === "duplicate-channels";

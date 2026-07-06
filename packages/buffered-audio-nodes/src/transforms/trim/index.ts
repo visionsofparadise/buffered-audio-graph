@@ -96,10 +96,10 @@ export class TrimStream extends BufferedTransformStream<TrimProperties> {
 }
 
 export class TrimNode extends TransformNode<TrimProperties> {
-	static override readonly moduleName = "Trim";
+	static override readonly nodeName = "Trim";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Remove silence from start and end";
+	static override readonly nodeDescription = "Remove silence from start and end";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is TrimNode {
 		return TransformNode.is(value) && value.type[2] === "trim";

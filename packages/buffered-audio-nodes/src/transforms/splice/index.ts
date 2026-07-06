@@ -106,10 +106,10 @@ export class SpliceStream extends BufferedTransformStream<SpliceProperties> {
 }
 
 export class SpliceNode extends TransformNode<SpliceProperties> {
-	static override readonly moduleName = "Splice";
+	static override readonly nodeName = "Splice";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Replace a region of audio with processed content";
+	static override readonly nodeDescription = "Replace a region of audio with processed content";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is SpliceNode {
 		return TransformNode.is(value) && value.type[2] === "splice";

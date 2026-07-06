@@ -705,10 +705,10 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 }
 
 export class DeBleedNode extends TransformNode<DeBleedProperties> {
-	static override readonly moduleName = "De-Bleed Adaptive";
+	static override readonly nodeName = "De-Bleed Adaptive";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reduction. Stages 1+2 are MEF Meyer-Elshamy-Fingscheidt 2020; Stage 3 is Lukin-Todd 2D NLM+DFTT post-filter.";
+	static override readonly nodeDescription = "Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reduction. Stages 1+2 are MEF Meyer-Elshamy-Fingscheidt 2020; Stage 3 is Lukin-Todd 2D NLM+DFTT post-filter.";
 	static override readonly schema = schema;
 	static override is(value: unknown): value is DeBleedNode {
 		return TransformNode.is(value) && value.type[2] === "de-bleed";

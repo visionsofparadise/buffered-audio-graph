@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderGraph, validateGraphDefinition, SourceNode, type NodeIdentity, type StreamEvent, type NodeRegistry, type BufferedAudioNode } from "@buffered-audio/core";
 
-const labelOf = (node: { moduleName: string; id?: string }): string => (node.id ? `${node.moduleName}#${node.id}` : node.moduleName);
+const labelOf = (node: { nodeName: string; id?: string }): string => (node.id ? `${node.nodeName}#${node.id}` : node.nodeName);
 
 const collect = (value: string, previous: Array<string>): Array<string> => [...previous, value];
 
@@ -95,7 +95,7 @@ function createEventSink(): EventSink {
 
 			if (!timing) continue;
 
-			const label = labelOf({ moduleName: (source.constructor as typeof BufferedAudioNode).moduleName, id: source.id });
+			const label = labelOf({ nodeName: (source.constructor as typeof BufferedAudioNode).nodeName, id: source.id });
 
 			process.stdout.write(`[${label}] total ${(timing.totalMs / 1000).toFixed(1)}s, ${timing.realTimeMultiplier.toFixed(1)}x RT\n`);
 		}
@@ -193,17 +193,17 @@ program
 					const mod = (await import(nodeDef.packageName)) as Record<string, unknown>;
 					const packageMap = new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>();
 
-					// Bag node lookups go by `moduleName` (what `pack()` writes), not
+					// Bag node lookups go by `nodeName` (what `pack()` writes), not
 					// by export binding name. Index every export that has a string
-					// `moduleName`; ignore the rest (factory functions, types, etc.).
+					// `nodeName`; ignore the rest (factory functions, types, etc.).
 					for (const value of Object.values(mod)) {
 						if (typeof value !== "function") continue;
 
-						const ctor = value as { moduleName?: unknown } & (new (options?: Record<string, unknown>) => BufferedAudioNode);
+						const ctor = value as { nodeName?: unknown } & (new (options?: Record<string, unknown>) => BufferedAudioNode);
 
-						if (typeof ctor.moduleName !== "string") continue;
+						if (typeof ctor.nodeName !== "string") continue;
 
-						packageMap.set(ctor.moduleName, ctor);
+						packageMap.set(ctor.nodeName, ctor);
 					}
 
 					registry.set(nodeDef.packageName, packageMap);

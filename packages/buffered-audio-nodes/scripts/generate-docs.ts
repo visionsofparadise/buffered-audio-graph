@@ -10,8 +10,8 @@ import { zodToRows, type Row } from "./zod-rows";
  * fields must be present and non-empty; `schema` must be a Zod schema.
  */
 interface NodeClass {
-	readonly moduleName: string;
-	readonly moduleDescription: string;
+	readonly nodeName: string;
+	readonly nodeDescription: string;
 	readonly schema: z.ZodType;
 }
 
@@ -42,10 +42,10 @@ const README_PATH = resolve(PACKAGE_ROOT, "README.md");
 function isNodeClass(value: unknown): value is NodeClass {
 	if (typeof value !== "function") return false;
 
-	const candidate = value as { moduleName?: unknown; moduleDescription?: unknown; schema?: unknown };
+	const candidate = value as { nodeName?: unknown; nodeDescription?: unknown; schema?: unknown };
 
-	if (typeof candidate.moduleName !== "string" || candidate.moduleName === "") return false;
-	if (typeof candidate.moduleDescription !== "string") return false;
+	if (typeof candidate.nodeName !== "string" || candidate.nodeName === "") return false;
+	if (typeof candidate.nodeDescription !== "string") return false;
 	if (candidate.schema === undefined || candidate.schema === null) return false;
 
 	return true;
@@ -101,7 +101,7 @@ async function discoverNodes(): Promise<Array<DiscoveredNode>> {
 		}
 	}
 
-	discovered.sort((left, right) => left.cls.moduleName.localeCompare(right.cls.moduleName));
+	discovered.sort((left, right) => left.cls.nodeName.localeCompare(right.cls.nodeName));
 
 	return discovered;
 }
@@ -119,9 +119,9 @@ function renderRows(rows: ReadonlyArray<Row>): string {
 function renderNodeSection(node: DiscoveredNode): string {
 	const relativeSource = relative(PACKAGE_ROOT, node.sourcePath).split("\\").join("/");
 	const rows = zodToRows(node.cls.schema);
-	const header = `### ${node.cls.moduleName}
+	const header = `### ${node.cls.nodeName}
 
-${node.cls.moduleDescription}
+${node.cls.nodeDescription}
 
 [Source](./${relativeSource})`;
 

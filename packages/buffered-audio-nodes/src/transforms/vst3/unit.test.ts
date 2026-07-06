@@ -88,8 +88,8 @@ describe("Vst3Node", () => {
 	});
 
 	it("exposes the expected static metadata", () => {
-		expect(Vst3Node.moduleName).toBe("VST3");
-		expect(Vst3Node.moduleDescription).toMatch(/VST3 effect plugins/);
+		expect(Vst3Node.nodeName).toBe("VST3");
+		expect(Vst3Node.nodeDescription).toMatch(/VST3 effect plugins/);
 	});
 
 	it("returns a passthrough stream when bypass is true", () => {

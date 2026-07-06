@@ -423,10 +423,10 @@ async function padTail(output: ChunkBuffer, channels: number, originalFrames: nu
 }
 
 export class KimVocal2Node extends TransformNode<KimVocal2Properties> {
-	static override readonly moduleName = "Kim Vocal 2 (Stem Separator)";
+	static override readonly nodeName = "Kim Vocal 2 (Stem Separator)";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Isolate dialogue from background using MDX-Net vocal separation";
+	static override readonly nodeDescription = "Isolate dialogue from background using MDX-Net vocal separation";
 	static override readonly schema = schema;
 
 	static override is(value: unknown): value is KimVocal2Node {

@@ -153,10 +153,10 @@ export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsPrope
 }
 
 export class LoudnessStatsNode extends TargetNode<LoudnessStatsProperties> {
-	static override readonly moduleName = "Loudness Stats";
+	static override readonly nodeName = "Loudness Stats";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly moduleDescription = "Measure integrated loudness, true peak, and loudness range per EBU R128, plus an amplitude-distribution histogram";
+	static override readonly nodeDescription = "Measure integrated loudness, true peak, and loudness range per EBU R128, plus an amplitude-distribution histogram";
 	static override readonly schema = schema;
 
 	static override is(value: unknown): value is LoudnessStatsNode {
