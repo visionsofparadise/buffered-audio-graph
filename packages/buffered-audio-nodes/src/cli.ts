@@ -1,9 +1,19 @@
 import { Command } from "commander";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { renderGraph, validateGraphDefinition, SourceNode, type NodeIdentity, type StreamEvent, type NodeRegistry, type BufferedAudioNode } from "@buffered-audio/core";
+import { createRenderJobs, validateGraphDefinition, BufferedSourceStream, SourceNode, type NodeIdentity, type ProgressPayload, type FinishedPayload, type LogPayload, type NodeRegistry, type BufferedAudioNode, type RenderEvents, type RenderJob } from "@buffered-audio/core";
 
 const labelOf = (node: { nodeName: string; id?: string }): string => (node.id ? `${node.nodeName}#${node.id}` : node.nodeName);
+
+function sourceLabel(job: RenderJob): string | undefined {
+	for (const [node, streams] of job.streams) {
+		if (streams.some((stream) => stream instanceof BufferedSourceStream)) {
+			return labelOf({ nodeName: (node.constructor as typeof BufferedAudioNode).nodeName, id: node.id });
+		}
+	}
+
+	return undefined;
+}
 
 const collect = (value: string, previous: Array<string>): Array<string> => [...previous, value];
 
@@ -38,48 +48,46 @@ function parseParams(entries: ReadonlyArray<string>): Record<string, string> {
 }
 
 interface EventSink {
-	onEvent: (node: NodeIdentity, event: StreamEvent) => void;
-	printSummary: (sources: ReadonlyArray<SourceNode>) => void;
+	subscribe: (events: RenderEvents) => void;
+	printSummary: (jobs: ReadonlyArray<RenderJob>) => void;
 }
 
 function createEventSink(): EventSink {
 	// Keyed by identity object, not label: id-less same-type nodes share a label but must not collide.
 	const totals = new Map<NodeIdentity, { framesDone: number; processingMs?: number }>();
 
-	const onEvent = (node: NodeIdentity, event: StreamEvent): void => {
-		const label = labelOf(node);
+	const subscribe = (events: RenderEvents): void => {
+		events.on("started", (node: NodeIdentity) => {
+			process.stdout.write(`[${labelOf(node)}] started\n`);
+		});
 
-		switch (event.kind) {
-			case "started":
-				process.stdout.write(`[${label}] started\n`);
-				break;
-			case "progress":
-				if (event.framesTotal !== undefined) {
-					const percent = Math.round((event.framesDone / event.framesTotal) * 100);
+		events.on("progress", (node: NodeIdentity, payload: ProgressPayload) => {
+			const label = labelOf(node);
 
-					process.stdout.write(`[${label}] ${event.phase} ${percent}%\n`);
-				} else {
-					process.stdout.write(`[${label}] ${event.phase} frames=${event.framesDone}\n`);
-				}
+			if (payload.framesTotal !== undefined) {
+				const percent = Math.round((payload.framesDone / payload.framesTotal) * 100);
 
-				break;
-			case "log": {
-				const data = event.data ? Object.entries(event.data).map(([key, value]) => `${key}=${String(value)}`) : [];
-				const parts = [event.message, ...data].join(" ");
-				const prefix = event.level === "warn" ? "warn: " : "";
-
-				process.stdout.write(`${prefix}[${label}] ${parts}\n`);
-				break;
+				process.stdout.write(`[${label}] ${payload.phase} ${percent}%\n`);
+			} else {
+				process.stdout.write(`[${label}] ${payload.phase} frames=${payload.framesDone}\n`);
 			}
+		});
 
-			case "finished":
-				totals.set(node, { framesDone: event.framesDone, processingMs: event.processingMs });
-				process.stdout.write(`[${label}] finished\n`);
-				break;
-		}
+		events.on("log", (node: NodeIdentity, payload: LogPayload) => {
+			const data = payload.data ? Object.entries(payload.data).map(([key, value]) => `${key}=${String(value)}`) : [];
+			const parts = [payload.message, ...data].join(" ");
+			const prefix = payload.level === "warn" ? "warn: " : "";
+
+			process.stdout.write(`${prefix}[${labelOf(node)}] ${parts}\n`);
+		});
+
+		events.on("finished", (node: NodeIdentity, payload: FinishedPayload) => {
+			totals.set(node, { framesDone: payload.framesDone, processingMs: payload.processingMs });
+			process.stdout.write(`[${labelOf(node)}] finished\n`);
+		});
 	};
 
-	const printSummary = (sources: ReadonlyArray<SourceNode>): void => {
+	const printSummary = (jobs: ReadonlyArray<RenderJob>): void => {
 		for (const [node, { framesDone, processingMs }] of totals) {
 			const label = labelOf(node);
 
@@ -90,18 +98,18 @@ function createEventSink(): EventSink {
 			}
 		}
 
-		for (const source of sources) {
-			const timing = source.renderTiming;
+		for (const job of jobs) {
+			const timing = job.timing;
 
 			if (!timing) continue;
 
-			const label = labelOf({ nodeName: (source.constructor as typeof BufferedAudioNode).nodeName, id: source.id });
+			const label = sourceLabel(job) ?? "source";
 
 			process.stdout.write(`[${label}] total ${(timing.totalMs / 1000).toFixed(1)}s, ${timing.realTimeMultiplier.toFixed(1)}x RT\n`);
 		}
 	};
 
-	return { onEvent, printSummary };
+	return { subscribe, printSummary };
 }
 
 const program = new Command();
@@ -149,15 +157,13 @@ program
 
 			const sink = createEventSink();
 
-			const renderOptions = {
-				chunkSize,
-				highWaterMark,
-				onEvent: sink.onEvent,
-			};
+			const job = source.createRenderJob({ chunkSize, highWaterMark });
+
+			sink.subscribe(job.events);
 
 			process.stdout.write(`Processing pipeline: ${pipelinePath}\n`);
-			await source.render(renderOptions);
-			sink.printSummary([source]);
+			await job.render();
+			sink.printSummary([job]);
 			process.stdout.write("Done.\n");
 		} finally {
 			await unregister();
@@ -219,9 +225,13 @@ program
 			process.stdout.write(`Rendering graph: ${definition.name}\n`);
 
 			try {
-				const sources = await renderGraph(definition, registry, { chunkSize, highWaterMark, parameters, onEvent: sink.onEvent });
+				const jobs = createRenderJobs(definition, registry, { chunkSize, highWaterMark, parameters });
 
-				sink.printSummary(sources);
+				for (const job of jobs) sink.subscribe(job.events);
+
+				await Promise.all(jobs.map((job) => job.render()));
+
+				sink.printSummary(jobs);
 				process.stdout.write("Done.\n");
 			} catch (error) {
 				process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);

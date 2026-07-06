@@ -38,7 +38,7 @@ describe("Pipeline integration", () => {
 			const norm = normalize({ ceiling: 1.0 });
 			source.to(norm);
 			norm.to(write(outputPath));
-			await source.render();
+			await source.createRenderJob().render();
 
 			const outputData = await readFile(outputPath);
 			const outputWav = new WaveFile(new Uint8Array(outputData.buffer, outputData.byteOffset, outputData.byteLength));

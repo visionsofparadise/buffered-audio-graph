@@ -2,8 +2,8 @@ import { z } from "zod";
 import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
-import { FfmpegStream } from "../ffmpeg";
-import { createDfnState, DFN3_FFT_SIZE, DFN3_HOP_SIZE, DFN3_SAMPLE_RATE, processDfnBlock, type DfnState } from "./utils/dfn";
+import { ffmpeg, FfmpegStream } from "../ffmpeg";
+import { createDfnState, DFN3_HOP_SIZE, DFN3_SAMPLE_RATE, processDfnBlock, type DfnState } from "./utils/dfn";
 
 const DFN3_BUFFER_SIZE = 100 * DFN3_HOP_SIZE; // = 48000 frames = 1 s blocks at 48 kHz
 
@@ -34,6 +34,8 @@ export const schema = z.object({
 export interface DeepFilterNet3Properties extends z.infer<typeof schema>, TransformNodeProperties {}
 
 export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3Properties> {
+	override blockSize = DFN3_BUFFER_SIZE;
+
 	private session?: OnnxSession;
 	private dfnStates: Array<DfnState> = [];
 
@@ -47,20 +49,16 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 			return super._setup(input, context);
 		}
 
-		const upResample = new FfmpegStream({
+		const upResample = new FfmpegStream(ffmpeg({
 			ffmpegPath: this.properties.ffmpegPath,
 			args: ["-af", `aresample=${DFN3_SAMPLE_RATE}`],
 			outputSampleRate: DFN3_SAMPLE_RATE,
-			bufferSize: 0,
-			overlap: 0,
-		});
-		const downResample = new FfmpegStream({
+		}));
+		const downResample = new FfmpegStream(ffmpeg({
 			ffmpegPath: this.properties.ffmpegPath,
 			args: ["-af", `aresample=${sourceRate}`],
 			outputSampleRate: sourceRate,
-			bufferSize: 0,
-			overlap: 0,
-		});
+		}));
 
 		const upResampled = await upResample._setup(input, context);
 		const inferenced = await super._setup(upResampled, context);
@@ -68,7 +66,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 		return downResample._setup(inferenced, context);
 	}
 
-	override async _process(buffer: BlockBuffer): Promise<void> {
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
 		if (!this.session) throw new Error("deep-filter-net-3: stream not set up");
 
 		// Guard: caller-declared sampleRate mismatch → throw before garbage; see design-transforms DFN3 failure mode.
@@ -77,16 +75,14 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 		}
 
 		const session = this.session;
-		const frames = buffer.frames;
-		const channels = buffer.channels;
-		const sr = buffer.sampleRate;
-		const bd = buffer.bitDepth;
+		const frames = buffered.frames;
+		const channels = buffered.channels;
 
 		if (frames === 0 || channels === 0) return;
 
-		// Single-call read(frames) is safe only because bufferSize bounds the block, not because processDfnBlock streams.
-		await buffer.reset();
-		const chunk = await buffer.read(frames);
+		// Single-call read(frames) is safe only because blockSize bounds the block, not because processDfnBlock streams.
+		await buffered.reset();
+		const chunk = await buffered.read(frames);
 
 		while (this.dfnStates.length < channels) {
 			this.dfnStates.push(createDfnState());
@@ -108,9 +104,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 			outputChannels.push(denoised);
 		}
 
-		// reset() only rewinds read cursors, so clear + rewrite to replace contents.
-		await buffer.clear();
-		await buffer.write(outputChannels, sr, bd);
+		enqueue({ samples: outputChannels, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
 	}
 
 	override _destroy(): void {
@@ -126,21 +120,13 @@ export class DeepFilterNet3Node extends TransformNode<DeepFilterNet3Properties> 
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)";
 	static override readonly schema = schema;
+	static override readonly streamClass = DeepFilterNet3Stream;
 
 	static override is(value: unknown): value is DeepFilterNet3Node {
 		return TransformNode.is(value) && value.type[2] === "deep-filter-net-3";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "deep-filter-net-3"] as const;
-
-	constructor(properties: DeepFilterNet3Properties) {
-		// bufferSize: 100 hops, DFN3_HOP_SIZE-aligned so slicing feeds exact hop multiples. latency: DFN3_FFT_SIZE = 960 = 20 ms STFT-iSTFT latency.
-		super({ bufferSize: DFN3_BUFFER_SIZE, latency: DFN3_FFT_SIZE, ...properties });
-	}
-
-	override createStream(): DeepFilterNet3Stream {
-		return new DeepFilterNet3Stream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<DeepFilterNet3Properties>): DeepFilterNet3Node {
 		return new DeepFilterNet3Node({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -155,12 +141,5 @@ export function deepFilterNet3(options: {
 	attenuation?: number;
 	id?: string;
 }): DeepFilterNet3Node {
-	return new DeepFilterNet3Node({
-		modelPath: options.modelPath,
-		sampleRate: options.sampleRate,
-		ffmpegPath: options.ffmpegPath ?? "",
-		onnxAddonPath: options.onnxAddonPath ?? "",
-		attenuation: options.attenuation ?? 30,
-		id: options.id,
-	});
+	return new DeepFilterNet3Node(options);
 }

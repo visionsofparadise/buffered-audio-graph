@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { appendFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import type { RenderOptions, SourceNode, TransformNode } from "@buffered-audio/core";
+import type { RenderOptions, TransformNode } from "@buffered-audio/core";
 import { read } from "../sources/read";
 import { write } from "../targets/write";
 
@@ -23,15 +23,17 @@ export async function runBenchmark(name: string, transform: TransformNode, input
 		source.to(transform);
 		transform.to(target);
 
-		await source.render(renderOptions);
+		const job = source.createRenderJob(renderOptions);
 
-		const renderTiming = (source as SourceNode).renderTiming;
+		await job.render();
+
+		const timing = job.timing;
 
 		return {
 			name,
-			totalMs: renderTiming?.totalMs ?? 0,
+			totalMs: timing?.totalMs ?? 0,
 			samplesPerSecond: 0,
-			realTimeMultiplier: renderTiming?.realTimeMultiplier ?? 0,
+			realTimeMultiplier: timing?.realTimeMultiplier ?? 0,
 		};
 	} finally {
 		try {

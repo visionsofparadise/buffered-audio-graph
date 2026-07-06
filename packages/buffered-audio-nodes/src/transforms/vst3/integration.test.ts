@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { BlockBuffer, type StreamContext } from "@buffered-audio/core";
-import { Vst3Stream } from ".";
+import { BlockBuffer, type Block, type StreamContext } from "@buffered-audio/core";
+import { vst3, Vst3Stream } from ".";
 import { spawnVstHostReady, VstHostExitedBeforeReadyError } from "./utils/process";
 
 // Stub binary mimics the real `vst-host` CLI shape (node as binary + stub via `extraArgs`);
@@ -34,7 +34,6 @@ const buildContext = (): StreamContext => ({
 	executionProviders: ["cpu"],
 	memoryLimit: 64 * 1024 * 1024,
 	highWaterMark: 1,
-	visited: new Set(),
 });
 
 const dummyInput = (): ReadableStream => new ReadableStream({ start: (controller) => controller.close() });
@@ -48,15 +47,41 @@ const populate = async (channels: Array<Float32Array>, sampleRate = 44100): Prom
 	return buffer;
 };
 
+// Drives the whole-file transform: runs the subprocess over the buffered input and concatenates the
+// enqueued output blocks back into per-channel arrays for round-trip comparison.
+const processWholeFile = async (stream: Vst3Stream, buffer: BlockBuffer): Promise<Array<Float32Array>> => {
+	const blocks: Array<Block> = [];
+
+	await stream.transform(buffer, (block) => blocks.push(block));
+
+	const channels = blocks[0]?.samples.length ?? 0;
+	const totalFrames = blocks.reduce((sum, block) => sum + (block.samples[0]?.length ?? 0), 0);
+	const output: Array<Float32Array> = [];
+
+	for (let ch = 0; ch < channels; ch++) {
+		const channelData = new Float32Array(totalFrames);
+		let offset = 0;
+
+		for (const block of blocks) {
+			const source = block.samples[ch];
+
+			if (source) channelData.set(source, offset);
+			offset += block.samples[0]?.length ?? 0;
+		}
+
+		output.push(channelData);
+	}
+
+	return output;
+};
+
 describe("Vst3Stream subprocess lifecycle", () => {
 	it("spawns the stub binary, receives READY, processes the whole buffer, and tears down cleanly", async () => {
-		const stream = new Vst3Stream({
+		const stream = new Vst3Stream(vst3({
 			vstHostPath: process.execPath,
 			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
 			extraArgs: [stubBinary],
-			bufferSize: Infinity,
-			overlap: 0,
-		});
+		}));
 
 		await stream.setup(dummyInput(), buildContext());
 
@@ -75,16 +100,14 @@ describe("Vst3Stream subprocess lifecycle", () => {
 		const buffer = await populate(samples);
 		const before: Array<Float32Array> = samples.map((channel) => Float32Array.from(channel));
 
-		await stream._process(buffer);
+		const after = await processWholeFile(stream, buffer);
 
-		const after = await buffer.read(buffer.frames);
-
-		expect(after.samples.length).toBe(channels);
-		expect(after.samples[0]!.length).toBe(frames);
+		expect(after.length).toBe(channels);
+		expect(after[0]!.length).toBe(frames);
 
 		for (let ch = 0; ch < channels; ch++) {
 			const original = before[ch]!;
-			const result = after.samples[ch]!;
+			const result = after[ch]!;
 
 			for (let i = 0; i < frames; i++) {
 				expect(result[i]).toBeCloseTo(original[i]!, 6);
@@ -97,13 +120,11 @@ describe("Vst3Stream subprocess lifecycle", () => {
 
 	it("handles a non-block-aligned buffer", async () => {
 		// Whole-file mode has no per-block alignment requirement; any positive frame count must round-trip.
-		const stream = new Vst3Stream({
+		const stream = new Vst3Stream(vst3({
 			vstHostPath: process.execPath,
 			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
 			extraArgs: [stubBinary],
-			bufferSize: Infinity,
-			overlap: 0,
-		});
+		}));
 
 		await stream.setup(dummyInput(), buildContext());
 
@@ -112,14 +133,12 @@ describe("Vst3Stream subprocess lifecycle", () => {
 		const buffer = await populate(samples);
 		const before = Float32Array.from(samples[0]!);
 
-		await stream._process(buffer);
+		const after = await processWholeFile(stream, buffer);
 
-		const after = await buffer.read(buffer.frames);
-
-		expect(after.samples[0]!.length).toBe(frames);
+		expect(after[0]!.length).toBe(frames);
 
 		for (let i = 0; i < frames; i++) {
-			expect(after.samples[0]![i]).toBeCloseTo(before[i]!, 6);
+			expect(after[0]![i]).toBeCloseTo(before[i]!, 6);
 		}
 
 		await stream._destroy();
@@ -131,13 +150,11 @@ describe("Vst3Stream init-crash retry", () => {
 	it("re-spawns past a non-deterministic init crash and processes cleanly", async () => {
 		// Crashes (exit 3221225477 before READY) on the first 2 spawns, succeeds on the 3rd; retry is transparent.
 		const counter = await newCounterFile();
-		const stream = new Vst3Stream({
+		const stream = new Vst3Stream(vst3({
 			vstHostPath: process.execPath,
 			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
 			extraArgs: [crashBinary, "--crash-file", counter, "--crash-count", "2", "--crash-code", "3221225477"],
-			bufferSize: Infinity,
-			overlap: 0,
-		});
+		}));
 
 		await stream.setup(dummyInput(), buildContext());
 
@@ -146,14 +163,12 @@ describe("Vst3Stream init-crash retry", () => {
 		const buffer = await populate(samples);
 		const before = Float32Array.from(samples[0]!);
 
-		await stream._process(buffer);
+		const after = await processWholeFile(stream, buffer);
 
-		const after = await buffer.read(buffer.frames);
-
-		expect(after.samples[0]!.length).toBe(frames);
+		expect(after[0]!.length).toBe(frames);
 
 		for (let i = 0; i < frames; i++) {
-			expect(after.samples[0]![i]).toBeCloseTo(before[i]!, 6);
+			expect(after[0]![i]).toBeCloseTo(before[i]!, 6);
 		}
 
 		expect(await readCount(counter)).toBe(3); // 2 crashed spawns + 1 success

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type BufferedAudioNode, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { bandpass, MixedRadixFft, ResampleStream } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
@@ -42,11 +42,13 @@ interface StreamPair {
 }
 
 export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties> {
+	override blockSize = WHOLE_FILE;
+
 	private session!: OnnxSession;
 	private fftInstance: MixedRadixFft;
 
-	constructor(properties: KimVocal2Properties) {
-		super(properties);
+	constructor(node: BufferedAudioNode) {
+		super(node);
 		this.fftInstance = new MixedRadixFft(N_FFT);
 	}
 
@@ -56,9 +58,9 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 		return super._setup(input, context);
 	}
 
-	override async _process(buffer: BlockBuffer): Promise<void> {
-		const originalFrames = buffer.frames;
-		const channels = buffer.channels;
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+		const originalFrames = buffered.frames;
+		const channels = buffered.channels;
 
 		if (originalFrames === 0 || channels === 0) return;
 
@@ -66,7 +68,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 		const bitDepth = this.bitDepth;
 		const needsResample = sourceRate !== SAMPLE_RATE;
 
-		await buffer.reset();
+		await buffered.reset();
 
 		let pair: StreamPair | undefined;
 
@@ -89,7 +91,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 
 		try {
 			await this.runMainPass({
-				buffer,
+				buffer: buffered,
 				output,
 				channels,
 				originalFrames,
@@ -98,18 +100,10 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 				pair,
 			});
 
-			await buffer.clear();
 			await output.reset();
 
-			for (;;) {
-				const chunk = await output.read(CHUNK_FRAMES);
-				const got = chunk.samples[0]?.length ?? 0;
-
-				if (got === 0) break;
-
-				await buffer.write(chunk.samples, sourceRate, bitDepth);
-
-				if (got < CHUNK_FRAMES) break;
+			for await (const block of output.iterate(CHUNK_FRAMES)) {
+				enqueue(block);
 			}
 		} finally {
 			if (pair) {
@@ -428,6 +422,7 @@ export class KimVocal2Node extends TransformNode<KimVocal2Properties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Isolate dialogue from background using MDX-Net vocal separation";
 	static override readonly schema = schema;
+	static override readonly streamClass = KimVocal2Stream;
 
 	static override is(value: unknown): value is KimVocal2Node {
 		return TransformNode.is(value) && value.type[2] === "kim-vocal-2";
@@ -435,26 +430,11 @@ export class KimVocal2Node extends TransformNode<KimVocal2Properties> {
 
 	override readonly type = ["buffered-audio-node", "transform", "kim-vocal-2"] as const;
 
-	constructor(properties: KimVocal2Properties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): KimVocal2Stream {
-		return new KimVocal2Stream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
-
 	override clone(overrides?: Partial<KimVocal2Properties>): KimVocal2Node {
 		return new KimVocal2Node({ ...this.properties, previousProperties: this.properties, ...overrides });
 	}
 }
 
 export function kimVocal2(options: { modelPath: string; ffmpegPath: string; onnxAddonPath?: string; highPass?: number; lowPass?: number; id?: string }): KimVocal2Node {
-	return new KimVocal2Node({
-		modelPath: options.modelPath,
-		ffmpegPath: options.ffmpegPath,
-		onnxAddonPath: options.onnxAddonPath ?? "",
-		highPass: options.highPass ?? 80,
-		lowPass: options.lowPass ?? 20000,
-		id: options.id,
-	});
+	return new KimVocal2Node(options);
 }

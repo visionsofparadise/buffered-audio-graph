@@ -18,7 +18,7 @@ describe("package metadata", () => {
 			expect.objectContaining({
 				packageName: PACKAGE_NAME,
 				packageVersion: PACKAGE_VERSION,
-				nodeName: "Read",
+				nodeName: "Read WAV",
 			}),
 			expect.objectContaining({
 				packageName: PACKAGE_NAME,

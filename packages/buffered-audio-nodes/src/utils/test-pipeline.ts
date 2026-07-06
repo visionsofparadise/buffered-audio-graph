@@ -29,7 +29,7 @@ export async function runTransform(inputPath: string, transform: TransformNode, 
 		source.to(transform);
 		transform.to(target);
 
-		await source.render();
+		await source.createRenderJob().render();
 
 		const outputResult = await readToBuffer(tempPath);
 		const outputChunk = await outputResult.buffer.read(outputResult.buffer.frames);

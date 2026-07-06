@@ -9,7 +9,7 @@ export function read(path: string, options?: { channels?: ReadonlyArray<number>;
 		return new ReadWavNode({ path, channels: options?.channels });
 	}
 
-	if (!options?.ffmpegPath || !options?.ffprobePath) {
+	if (!options?.ffmpegPath || !options.ffprobePath) {
 		throw new Error(`Non-WAV file requires ffmpegPath and ffprobePath: "${path}"`);
 	}
 

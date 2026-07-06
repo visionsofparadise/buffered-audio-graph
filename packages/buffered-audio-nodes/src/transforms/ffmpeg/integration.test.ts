@@ -3,7 +3,7 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
-import type { NodeIdentity, StreamEvent, StreamPhase } from "@buffered-audio/core";
+import type { NodeIdentity, ProgressPayload, FinishedPayload, StreamPhase } from "@buffered-audio/core";
 import { runTransform } from "../../utils/test-pipeline";
 import { notSilent, expectedDuration, notAnomalous } from "../../utils/test-audio";
 import { audio, binaries, hasBinaryFixtures } from "../../utils/test-binaries";
@@ -68,18 +68,21 @@ describeIfFfmpegFixture("FFmpeg", () => {
 		const progressByPhase = new Map<StreamPhase, number>();
 		const finishedFramesDone: Array<number> = [];
 
-		const onEvent = (node: NodeIdentity, event: StreamEvent): void => {
+		const job = source.createRenderJob({ chunkSize: 4096 });
+
+		job.events.on("progress", (node: NodeIdentity, payload: ProgressPayload) => {
 			if (node.nodeName !== "FFmpeg") return;
 
-			if (event.kind === "progress") {
-				progressByPhase.set(event.phase, (progressByPhase.get(event.phase) ?? 0) + 1);
-			} else if (event.kind === "finished") {
-				finishedFramesDone.push(event.framesDone);
-			}
-		};
+			progressByPhase.set(payload.phase, (progressByPhase.get(payload.phase) ?? 0) + 1);
+		});
+		job.events.on("finished", (node: NodeIdentity, payload: FinishedPayload) => {
+			if (node.nodeName !== "FFmpeg") return;
+
+			finishedFramesDone.push(payload.framesDone);
+		});
 
 		try {
-			await source.render({ onEvent, chunkSize: 4096 });
+			await job.render();
 		} finally {
 			try {
 				await unlink(tempPath);
@@ -120,14 +123,16 @@ describeIfFfmpegFixture("FFmpeg", () => {
 		const tempPath = join(tmpdir(), `ban-test-${randomBytes(8).toString("hex")}.wav`);
 
 		try {
-			const pipeline = chain(
-				read(testVoice),
+			const source = read(testVoice);
+
+			chain(
+				source,
 				ffmpeg({ ffmpegPath: binaries.ffmpeg, args: ["-af", "aresample=24000"], outputSampleRate: 24000 }),
 				ffmpeg({ ffmpegPath: binaries.ffmpeg, args: ["-af", `aresample=${origRate}`], outputSampleRate: origRate }),
 				write(tempPath, { bitDepth: "32f" }),
 			);
 
-			await pipeline.render();
+			await source.createRenderJob().render();
 
 			const { context: outputContext } = await readToBuffer(tempPath);
 			const outputFrames = outputContext.durationFrames ?? 0;

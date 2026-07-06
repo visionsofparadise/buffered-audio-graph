@@ -49,6 +49,8 @@ interface StreamPair {
 }
 
 export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> {
+	override blockSize = WHOLE_FILE;
+
 	private session!: OnnxSession;
 
 	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
@@ -58,9 +60,9 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 		return super._setup(input, context);
 	}
 
-	override async _process(buffer: BlockBuffer): Promise<void> {
-		const originalFrames = buffer.frames;
-		const channels = buffer.channels;
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+		const originalFrames = buffered.frames;
+		const channels = buffered.channels;
 
 		if (originalFrames === 0 || channels === 0) return;
 
@@ -68,9 +70,9 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 		const bitDepth = this.bitDepth;
 		const needsResample = sourceRate !== HTDEMUCS_SAMPLE_RATE;
 
-		const stats = await computeStreamingStats(buffer, channels);
+		const stats = await computeStreamingStats(buffered, channels);
 
-		await buffer.reset();
+		await buffered.reset();
 
 		let pair: StreamPair | undefined;
 
@@ -93,7 +95,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 
 		try {
 			await this.runMainPass({
-				buffer,
+				buffer: buffered,
 				output,
 				channels,
 				originalFrames,
@@ -103,18 +105,10 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 				pair,
 			});
 
-			await buffer.clear();
 			await output.reset();
 
-			for (;;) {
-				const chunk = await output.read(CHUNK_FRAMES);
-				const got = chunk.samples[0]?.length ?? 0;
-
-				if (got === 0) break;
-
-				await buffer.write(chunk.samples, sourceRate, bitDepth);
-
-				if (got < CHUNK_FRAMES) break;
+			for await (const block of output.iterate(CHUNK_FRAMES)) {
+				enqueue(block);
 			}
 		} finally {
 			if (pair) {
@@ -572,19 +566,12 @@ export class HtdemucsNode extends TransformNode<HtdemucsProperties> {
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription = "Rebalance stem volumes using HTDemucs source separation";
 	static override readonly schema = schema;
+	static override readonly streamClass = HtdemucsStream;
 	static override is(value: unknown): value is HtdemucsNode {
 		return TransformNode.is(value) && value.type[2] === "htdemucs";
 	}
 
 	override readonly type = ["buffered-audio-node", "transform", "htdemucs"] as const;
-
-	constructor(properties: HtdemucsProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): HtdemucsStream {
-		return new HtdemucsStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
 
 	override clone(overrides?: Partial<HtdemucsProperties>): HtdemucsNode {
 		return new HtdemucsNode({ ...this.properties, previousProperties: this.properties, ...overrides });
@@ -600,14 +587,10 @@ export function htdemucs(
 		id?: string;
 	},
 ): HtdemucsNode {
-	const parsed = schema.parse({
+	return new HtdemucsNode({
 		modelPath,
 		ffmpegPath: options?.ffmpegPath,
 		onnxAddonPath: options?.onnxAddonPath,
-	});
-
-	return new HtdemucsNode({
-		...parsed,
 		stems: {
 			vocals: stems.vocals ?? 1,
 			drums: stems.drums ?? 1,

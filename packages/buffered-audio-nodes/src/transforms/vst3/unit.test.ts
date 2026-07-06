@@ -1,23 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { BlockBuffer, type StreamContext } from "@buffered-audio/core";
+import { type Block, type StreamContext } from "@buffered-audio/core";
 import { schema, vst3, Vst3Node, Vst3PassthroughStream, Vst3Stream } from ".";
 
 const buildContext = (): StreamContext => ({
 	executionProviders: ["cpu"],
 	memoryLimit: 64 * 1024 * 1024,
 	highWaterMark: 1,
-	visited: new Set(),
 });
 
-const dummyInput = (): ReadableStream => new ReadableStream({ start: (controller) => controller.close() });
+const collect = async (readable: ReadableStream<Block>): Promise<Array<Block>> => {
+	const blocks: Array<Block> = [];
+	const reader = readable.getReader();
 
-const populate = async (channels: Array<Float32Array>, sampleRate = 44100): Promise<BlockBuffer> => {
-	const buffer = new BlockBuffer();
+	for (;;) {
+		const { done, value } = await reader.read();
 
-	await buffer.write(channels, sampleRate, 32);
-	await buffer.flushWrites();
+		if (done) break;
+		if (value) blocks.push(value);
+	}
 
-	return buffer;
+	return blocks;
 };
 
 describe("Vst3Node schema", () => {
@@ -92,50 +94,45 @@ describe("Vst3Node", () => {
 		expect(Vst3Node.nodeDescription).toMatch(/VST3 effect plugins/);
 	});
 
-	it("returns a passthrough stream when bypass is true", () => {
-		const node = vst3({ vstHostPath: "/none", stages: [{ pluginPath: "/none" }], bypass: true });
-		const stream = node.createStream();
-
-		expect(stream).toBeInstanceOf(Vst3PassthroughStream);
-		expect(stream).not.toBeInstanceOf(Vst3Stream);
-	});
-
-	it("returns a Vst3Stream when bypass is false", () => {
-		const node = vst3({ vstHostPath: "/none", stages: [{ pluginPath: "/none" }], bypass: false });
-		const stream = node.createStream();
-
-		expect(stream).toBeInstanceOf(Vst3Stream);
+	it("uses Vst3Stream as its stream class", () => {
+		expect(Vst3Node.streamClass).toBe(Vst3Stream);
 	});
 });
 
-describe("Vst3Node bypass short-circuit", () => {
-	it("passes audio through unchanged sample-for-sample when bypass is true", async () => {
+describe("Vst3PassthroughStream", () => {
+	it("passes audio through unchanged sample-for-sample without spawning a subprocess", async () => {
+		// bypass is now resolved by the executor (the node is skipped); the passthrough stream is the
+		// unbuffered identity used where a passthrough is wired directly. The missing paths would make
+		// any spawn fail loudly, proving no subprocess is spawned.
 		const node = vst3({ vstHostPath: "/missing/binary", stages: [{ pluginPath: "/missing/plugin.vst3" }], bypass: true });
-		const stream = node.createStream();
-
-		// Bypass must NOT spawn a subprocess; the missing paths would make any spawn fail loudly.
-		await stream.setup(dummyInput(), buildContext());
+		const stream = new Vst3PassthroughStream(node);
 
 		const samples = [Float32Array.from([0.1, -0.2, 0.3, -0.4, 0.5]), Float32Array.from([-0.1, 0.2, -0.3, 0.4, -0.5])];
-		const buffer = await populate(samples);
-
 		const before: Array<Float32Array> = samples.map((channel) => Float32Array.from(channel));
 
-		stream._process(buffer);
+		const input = new ReadableStream<Block>({
+			start(controller) {
+				controller.enqueue({ samples, offset: 0, sampleRate: 44100, bitDepth: 32 });
+				controller.close();
+			},
+		});
 
-		const after = await buffer.read(buffer.frames);
+		const output = await stream.setup(input, buildContext());
+		const blocks = await collect(output);
+
+		expect(blocks).toHaveLength(1);
+
+		const result = blocks[0]!;
 
 		for (let ch = 0; ch < samples.length; ch++) {
 			const original = before[ch]!;
-			const result = after.samples[ch]!;
+			const resultChannel = result.samples[ch]!;
 
-			expect(result.length).toBe(original.length);
+			expect(resultChannel.length).toBe(original.length);
 
 			for (let i = 0; i < original.length; i++) {
-				expect(result[i]).toBe(original[i]);
+				expect(resultChannel[i]).toBe(original[i]);
 			}
 		}
-
-		await buffer.close();
 	});
 });

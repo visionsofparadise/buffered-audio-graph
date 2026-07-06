@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
 
@@ -40,13 +40,16 @@ export interface Vst3Properties extends TransformNodeProperties {
 	readonly extraArgs?: ReadonlyArray<string>;
 }
 
-export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends BufferedTransformStream<P> {
-	override _process(_buffer: BlockBuffer): void {
-		// Bypass: leave buffer contents untouched.
+export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends UnbufferedTransformStream<P> {
+	override transform(block: Block, enqueue: (block: Block) => void): void {
+		// Bypass: pass audio through unchanged (no subprocess spawn).
+		enqueue(block);
 	}
 }
 
 export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends BufferedTransformStream<P> {
+	override blockSize = WHOLE_FILE;
+
 	private streamContext?: StreamContext;
 	private stagesJsonPath?: string;
 	private stagesJsonCleanup?: () => Promise<void>;
@@ -62,15 +65,15 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 		return super._setup(input, context);
 	}
 
-	override async _process(buffer: BlockBuffer): Promise<void> {
-		if (!this.streamContext) throw new Error("Vst3Stream._process called before setup()");
-		if (!this.stagesJsonPath) throw new Error("Vst3Stream._process called without a stages JSON file");
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+		if (!this.streamContext) throw new Error("Vst3Stream.transform called before setup()");
+		if (!this.stagesJsonPath) throw new Error("Vst3Stream.transform called without a stages JSON file");
 
-		if (buffer.frames === 0) return;
+		if (buffered.frames === 0) return;
 
-		const channels = buffer.channels;
+		const channels = buffered.channels;
 		const sampleRate = this.sampleRate ?? 44100;
-		const bd = buffer.bitDepth;
+		const bd = buffered.bitDepth;
 
 		const args: Array<string> = [
 			...(this.properties.extraArgs ?? []),
@@ -89,7 +92,13 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 			},
 		});
 
-		await processStreamingThroughVstHost(handle, buffer, channels, sampleRate, bd);
+		await processStreamingThroughVstHost(handle, buffered, channels, sampleRate, bd);
+
+		await buffered.reset();
+
+		for await (const block of buffered.iterate(44100)) {
+			enqueue(block);
+		}
 	}
 
 	override async _destroy(): Promise<void> {
@@ -114,28 +123,15 @@ export class Vst3Node<P extends Vst3Properties = Vst3Properties> extends Transfo
 	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly nodeDescription: string = "Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)";
 	static override readonly schema: z.ZodType = schema;
+	static override readonly streamClass = Vst3Stream;
 	static override is(value: unknown): value is Vst3Node {
 		return TransformNode.is(value) && value.type[2] === "vst3";
 	}
 
 	override readonly type: ReadonlyArray<string> = ["buffered-audio-node", "transform", "vst3"];
 
-	constructor(properties: P) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): BufferedTransformStream<P> {
-		const overlap = this.properties.overlap ?? 0;
-
-		if (this.properties.bypass === true) {
-			return new Vst3PassthroughStream<P>({ ...this.properties, bufferSize: this.bufferSize, overlap });
-		}
-
-		return new Vst3Stream<P>({ ...this.properties, bufferSize: this.bufferSize, overlap });
-	}
-
 	override clone(overrides?: Partial<P>): Vst3Node<P> {
-		return new Vst3Node({ ...this.properties, previousProperties: this.properties, ...overrides });
+		return new Vst3Node<P>({ ...this.properties, previousProperties: this.properties, ...overrides });
 	}
 }
 
@@ -149,7 +145,7 @@ export function vst3(options: {
 	return new Vst3Node({
 		vstHostPath: options.vstHostPath,
 		stages: options.stages,
-		bypass: options.bypass ?? false,
+		bypass: options.bypass,
 		id: options.id,
 		extraArgs: options.extraArgs,
 	});
