@@ -29,7 +29,7 @@ class MockSourceStream extends BufferedSourceStream {
 
 class MockSource extends SourceNode {
 	static readonly packageName = "test";
-	static readonly moduleName = "mock-source";
+	static readonly nodeName = "mock-source";
 	static override readonly schema = z.object({});
 
 	readonly type = ["buffered-audio-node", "source", "mock"] as const;
@@ -94,7 +94,7 @@ class MockTargetStream extends BufferedTargetStream {
 
 class MockTarget extends TargetNode {
 	static readonly packageName = "test";
-	static readonly moduleName = "mock-target";
+	static readonly nodeName = "mock-target";
 	static override readonly schema = z.object({});
 
 	readonly type = ["buffered-audio-node", "target", "mock"] as const;
@@ -273,7 +273,7 @@ describe("Graph executor", () => {
 	it("unpack applies node schema defaults to bag parameters omitting a defaulted field", () => {
 		class DefaultingTransformNode extends TransformNode {
 			static readonly packageName = "test";
-			static readonly moduleName = "defaulting-transform";
+			static readonly nodeName = "defaulting-transform";
 			static override readonly schema = z.object({
 				frameSize: z.number().default(2048),
 				smoothing: z.number().default(100),
@@ -436,7 +436,7 @@ class PathSourceStream extends BufferedSourceStream {
 
 class PathSource extends SourceNode {
 	static readonly packageName = "test";
-	static readonly moduleName = "path-source";
+	static readonly nodeName = "path-source";
 	static override readonly schema = z.object({ path: z.string() });
 
 	readonly type = ["buffered-audio-node", "source", "mock"] as const;
@@ -463,7 +463,7 @@ class PathTargetStream extends BufferedTargetStream {
 
 class PathTarget extends TargetNode {
 	static readonly packageName = "test";
-	static readonly moduleName = "path-target";
+	static readonly nodeName = "path-target";
 	static override readonly schema = z.object({ path: z.string() });
 
 	readonly type = ["buffered-audio-node", "target", "mock"] as const;
@@ -519,7 +519,7 @@ describe("renderGraph parameter substitution", () => {
 	it("throws the node Zod error when a placeholder resolves into a numeric field", async () => {
 		class CeilingTarget extends TargetNode {
 			static readonly packageName = "test";
-			static readonly moduleName = "ceiling-target";
+			static readonly nodeName = "ceiling-target";
 			static override readonly schema = z.object({ ceiling: z.number() });
 
 			readonly type = ["buffered-audio-node", "target", "mock"] as const;

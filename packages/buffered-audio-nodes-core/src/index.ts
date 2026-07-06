@@ -1,6 +1,6 @@
 /* eslint-disable barrel-files/avoid-barrel-files */
 export type { AudioChunk, ExecutionProvider, NodeIdentity, RenderOptions, StreamContext, StreamEvent } from "./node";
-export type { FileInputMeta, ModuleSchema } from "./schema";
+export type { FileInputMeta, NodeSchema } from "./schema";
 
 export { ChunkBuffer, ReverseChunkReader } from "./chunk-buffer";
 export { BufferedAudioNode, type BufferedAudioNodeInput, type BufferedAudioNodeProperties } from "./node";

@@ -11,7 +11,7 @@ export interface AudioChunk {
 export type ExecutionProvider = "gpu" | "cpu-native" | "cpu";
 
 export interface NodeIdentity {
-	readonly moduleName: string;
+	readonly nodeName: string;
 	readonly id?: string;
 	readonly type: ReadonlyArray<string>;
 }
@@ -34,7 +34,7 @@ export function wireStream(node: BufferedAudioNode, stream: BufferedStream, cont
 
 	if (!context.onEvent) return;
 
-	const identity: NodeIdentity = { moduleName: (node.constructor as typeof BufferedAudioNode).moduleName, id: node.id, type: node.type };
+	const identity: NodeIdentity = { nodeName: (node.constructor as typeof BufferedAudioNode).nodeName, id: node.id, type: node.type };
 
 	wireStreamEvents(stream, identity, context.onEvent);
 }
@@ -74,8 +74,8 @@ export type BufferedAudioNodeInput<P extends BufferedAudioNodeProperties = Buffe
 export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> {
 	static readonly packageName: string;
 	static readonly packageVersion: string = "0.0.0";
-	static readonly moduleName: string;
-	static readonly moduleDescription: string = "";
+	static readonly nodeName: string;
+	static readonly nodeDescription: string = "";
 	static readonly schema: z.ZodType = z.object({});
 
 	abstract readonly type: ReadonlyArray<string>;

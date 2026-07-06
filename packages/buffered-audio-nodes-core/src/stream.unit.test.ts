@@ -160,7 +160,7 @@ class LifeSourceStream extends BufferedSourceStream {
 
 class LifeSource extends SourceNode {
 	static readonly packageName = "test";
-	static readonly moduleName = "life-source";
+	static readonly nodeName = "life-source";
 	static override readonly schema = z.object({});
 
 	readonly type = ["buffered-audio-node", "source", "life"] as const;
@@ -194,7 +194,7 @@ class LifeTargetStream extends BufferedTargetStream {
 
 class LifeTarget extends TargetNode {
 	static readonly packageName = "test";
-	static readonly moduleName = "life-target";
+	static readonly nodeName = "life-target";
 	static override readonly schema = z.object({});
 
 	readonly type = ["buffered-audio-node", "target", "life"] as const;
@@ -216,7 +216,7 @@ class LifeTarget extends TargetNode {
 
 class LifeTransform extends TransformNode {
 	static readonly packageName = "test";
-	static readonly moduleName = "life-transform";
+	static readonly nodeName = "life-transform";
 	static override readonly schema = z.object({});
 
 	readonly type = ["buffered-audio-node", "transform", "life"] as const;
@@ -251,8 +251,8 @@ describe("Lifecycle events end-to-end", () => {
 
 		await source.render({ onEvent: (node, event) => events.push({ node, event }) });
 
-		const sourceEvents = events.filter((e) => e.node.moduleName === "life-source");
-		const targetEvents = events.filter((e) => e.node.moduleName === "life-target");
+		const sourceEvents = events.filter((e) => e.node.nodeName === "life-source");
+		const targetEvents = events.filter((e) => e.node.nodeName === "life-target");
 
 		expect(sourceEvents.filter((e) => e.event.kind === "started")).toHaveLength(1);
 
@@ -275,7 +275,7 @@ describe("Lifecycle events end-to-end", () => {
 
 		await source.render({ onEvent: (node, event) => events.push({ node, event }) });
 
-		const finished = events.find((e) => e.node.moduleName === "life-transform" && e.event.kind === "finished");
+		const finished = events.find((e) => e.node.nodeName === "life-transform" && e.event.kind === "finished");
 
 		expect(finished?.event).toMatchObject({ kind: "finished", framesDone: 200 });
 		expect((finished?.event as { processingMs?: number }).processingMs).toBeTypeOf("number");
@@ -295,7 +295,7 @@ describe("onEvent aggregation", () => {
 
 		await source.render({
 			onEvent: (node) => {
-				identities.add(node.moduleName);
+				identities.add(node.nodeName);
 			},
 		});
 

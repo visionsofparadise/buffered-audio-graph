@@ -6,4 +6,4 @@ export interface FileInputMeta {
 	readonly download?: string;
 }
 
-export type { ZodType as ModuleSchema } from "zod";
+export type { ZodType as NodeSchema } from "zod";

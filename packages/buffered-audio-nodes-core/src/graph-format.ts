@@ -119,7 +119,7 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 			id,
 			packageName: ctor.packageName,
 			packageVersion: ctor.packageVersion,
-			nodeName: ctor.moduleName,
+			nodeName: ctor.nodeName,
 			...(Object.keys(parameters as Record<string, unknown>).length > 0 && { parameters: parameters as Record<string, unknown> }),
 			...(Object.keys(options).length > 0 && { options }),
 		};
@@ -145,11 +145,11 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 	const nodeMap = new Map<string, BufferedAudioNode>();
 
 	for (const nodeDef of definition.nodes) {
-		const packageModules = registry.get(nodeDef.packageName);
+		const packageNodes = registry.get(nodeDef.packageName);
 
-		if (!packageModules) throw new Error(`Unknown package: "${nodeDef.packageName}"`);
+		if (!packageNodes) throw new Error(`Unknown package: "${nodeDef.packageName}"`);
 
-		const NodeClass = packageModules.get(nodeDef.nodeName);
+		const NodeClass = packageNodes.get(nodeDef.nodeName);
 
 		if (!NodeClass) throw new Error(`Unknown node: "${nodeDef.nodeName}" in package "${nodeDef.packageName}"`);
 
