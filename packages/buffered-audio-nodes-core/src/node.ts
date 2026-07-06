@@ -41,7 +41,7 @@ export interface BufferedAudioNodeProperties {
 	readonly children?: ReadonlyArray<BufferedAudioNode>;
 }
 
-export type BufferedAudioNodeInput<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> = P;
+export type BufferedAudioNodeInput<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> = Partial<P> & BufferedAudioNodeProperties;
 
 export interface Composition {
 	readonly head: BufferedAudioNode;
@@ -76,7 +76,7 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 		return this.properties.children ?? [];
 	}
 
-	constructor(properties?: P) {
+	constructor(properties?: BufferedAudioNodeInput<P>) {
 		const ctor = this.constructor as typeof BufferedAudioNode;
 
 		let parsed: unknown;
