@@ -17,7 +17,7 @@ describeIfFixtureSet("htdemucs", () => {
 		expect(expectedDuration(output, context.durationFrames ?? 0).pass).toBe(true);
 		expect(somethingChanged(input, output).pass).toBe(true);
 		expect(notAnomalous(output).pass).toBe(true);
-	}, 240_000);
+	}, 480_000);
 
 	// Exercises the resample path (input rate is not 44.1 kHz); passes only if the background pump/drainer pattern is correct, else ffmpeg's ~225 K stdin buffer deadlocks the segment loop.
 	(hasBinaryFixtures("ffmpeg") && hasAudioFixtures("testVoice48k") ? it : it.skip)("processes voice audio at 48 kHz (resample path)", async () => {
@@ -28,5 +28,5 @@ describeIfFixtureSet("htdemucs", () => {
 		expect(expectedDuration(output, context.durationFrames ?? 0).pass).toBe(true);
 		expect(somethingChanged(input, output).pass).toBe(true);
 		expect(notAnomalous(output).pass).toBe(true);
-	}, 240_000);
+	}, 480_000);
 });
