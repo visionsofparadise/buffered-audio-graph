@@ -18,6 +18,7 @@ export interface SourceNodeProperties extends BufferedAudioNodeProperties {}
 
 export abstract class BufferedSourceStream<P extends SourceNodeProperties = SourceNodeProperties> extends BufferedStream<P> {
 	private framesRead = 0;
+	private processingMs = 0;
 	private hasStarted = false;
 
 	abstract getMetadata(): Promise<SourceMetadata>;
@@ -33,6 +34,7 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 		let done = false;
 
 		this.framesRead = 0;
+		this.processingMs = 0;
 		this.hasStarted = false;
 
 		const { signal, durationFrames: sourceTotalFrames, highWaterMark } = context;
@@ -55,12 +57,15 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 							this.emitStarted();
 						}
 
+						const start = performance.now();
 						const chunk = await this._read();
+
+						this.processingMs += performance.now() - start;
 
 						if (!chunk) {
 							done = true;
 							this.emitProgress("read", this.framesRead, sourceTotalFrames, { force: true });
-							this.emitFinished({ framesDone: this.framesRead });
+							this.emitFinished({ framesDone: this.framesRead, processingMs: this.processingMs });
 							await this.destroy();
 							controller.close();
 

@@ -230,11 +230,11 @@ describe("Lifecycle events end-to-end", () => {
 
 		source.to(target);
 
-		const events: Array<{ identity: NodeIdentity; kind: string; framesDone?: number }> = [];
+		const events: Array<{ identity: NodeIdentity; kind: string; framesDone?: number; processingMs?: number }> = [];
 		const job = source.createRenderJob();
 
 		job.events.on("started", (identity) => events.push({ identity, kind: "started" }));
-		job.events.on("finished", (identity, payload) => events.push({ identity, kind: "finished", framesDone: payload.framesDone }));
+		job.events.on("finished", (identity, payload) => events.push({ identity, kind: "finished", framesDone: payload.framesDone, processingMs: payload.processingMs }));
 
 		await job.render();
 
@@ -245,6 +245,10 @@ describe("Lifecycle events end-to-end", () => {
 		expect(sourceStarted).toHaveLength(1);
 		expect(sourceFinished?.framesDone).toBe(200);
 		expect(targetFinished?.framesDone).toBe(200);
+		expect(sourceFinished?.processingMs).toBeTypeOf("number");
+		expect(Number.isFinite(sourceFinished?.processingMs)).toBe(true);
+		expect(targetFinished?.processingMs).toBeTypeOf("number");
+		expect(Number.isFinite(targetFinished?.processingMs)).toBe(true);
 	});
 
 	it("delivers events for all three nodes with correct identity", async () => {
