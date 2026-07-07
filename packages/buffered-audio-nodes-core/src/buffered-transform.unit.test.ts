@@ -1,7 +1,9 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { BlockBuffer } from "./block-buffer";
 import { BufferedTransformStream, WHOLE_FILE } from "./buffered-transform";
-import type { Block, BufferedAudioNode, StreamContext } from "./node";
+import type { Block, BufferedAudioNode, NodeIdentity, StreamContext } from "./node";
+import { DEFAULT_PROGRESS_QUANTUM, type ProgressPayload, type RenderEvents } from "./stream";
 
 function createBlock(value: number, offset: number, frames: number): Block {
 	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
@@ -13,6 +15,22 @@ function nodeWith(properties: Record<string, unknown>): BufferedAudioNode {
 
 function context(): StreamContext {
 	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
+}
+
+function contextWithDuration(durationFrames: number): StreamContext {
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, durationFrames };
+}
+
+const EMIT_IDENTITY: NodeIdentity = { nodeName: "probe-transform", id: "pt", type: ["buffered-audio-node", "transform", "probe"] };
+
+function bindProgress(stream: BufferedTransformStream): Array<ProgressPayload> {
+	const events: RenderEvents = new EventEmitter();
+	const progress: Array<ProgressPayload> = [];
+
+	events.on("progress", (_identity, payload) => progress.push(payload));
+	stream.bind(events, EMIT_IDENTITY, DEFAULT_PROGRESS_QUANTUM);
+
+	return progress;
 }
 
 function readableFrom(blocks: Array<Block>): ReadableStream<Block> {
@@ -193,5 +211,45 @@ describe("BufferedTransformStream destroy", () => {
 		await new Promise((resolve) => setTimeout(resolve, 20));
 
 		expect(stream.destroyCount).toBe(1);
+	});
+});
+
+describe("BufferedTransformStream emit-phase progress totals", () => {
+	it("emit events carry framesTotal = sourceTotalFrames and stay quantum-bounded (known total)", async () => {
+		const stream = new BufferedTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 10 }));
+		const progress = bindProgress(stream);
+
+		await drain(await stream.setup(readableFrom([createBlock(0.5, 0, 1000)]), contextWithDuration(1000)));
+
+		const emits = progress.filter((p) => p.phase === "emit");
+
+		expect(emits.length).toBeGreaterThanOrEqual(10);
+		expect(emits.length).toBeLessThanOrEqual(13);
+		expect(emits.every((p) => p.framesTotal === 1000)).toBe(true);
+		expect(emits.at(-1)?.framesDone).toBe(1000);
+	});
+
+	it("unknown total falls back to the 480k constant — no per-chunk emit spam", async () => {
+		const stream = new BufferedTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 10 }));
+		const progress = bindProgress(stream);
+
+		await drain(await stream.setup(readableFrom([createBlock(0.5, 0, 1000)]), context()));
+
+		const emits = progress.filter((p) => p.phase === "emit");
+
+		expect(emits.every((p) => p.framesTotal === undefined)).toBe(true);
+		expect(emits.length).toBeLessThanOrEqual(3);
+		expect(emits.at(-1)?.framesDone).toBe(1000);
+	});
+
+	it("the forced WHOLE_FILE process start renders a percentage (framesTotal set, framesDone 0)", async () => {
+		const stream = new BufferedTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 10 }));
+		const progress = bindProgress(stream);
+
+		await drain(await stream.setup(readableFrom([createBlock(0.5, 0, 1000)]), contextWithDuration(1000)));
+
+		const processStart = progress.find((p) => p.phase === "process" && p.framesDone === 0);
+
+		expect(processStart?.framesTotal).toBe(1000);
 	});
 });

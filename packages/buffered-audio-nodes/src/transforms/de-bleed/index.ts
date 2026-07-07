@@ -396,6 +396,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 		_profAdd("warmup", _twarm);
 
+		this.log("warm-up seed complete", { warmupSeconds: WARMUP_SECONDS });
+
 		await buffered.reset();
 		for (const refBuffer of referenceBuffers) await refBuffer.reset();
 
@@ -657,6 +659,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 				await outputBuffer.write(writeSamplesByChannel, sampleRate, bitDepth);
 				_profAdd("write", _twrite);
+
+				this.progress(Math.min(outStart + chunkFrames, processStftFrames), processStftFrames);
 			}
 
 			// Defensive trailing zero-pad against off-by-one in the final chunk's clip math.

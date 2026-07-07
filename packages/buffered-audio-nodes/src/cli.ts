@@ -47,6 +47,13 @@ function parseParams(entries: ReadonlyArray<string>): Record<string, string> {
 	return Object.fromEntries(parameters);
 }
 
+function stamp(): string {
+	const now = new Date();
+	const pad = (value: number): string => String(value).padStart(2, "0");
+
+	return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
 interface EventSink {
 	subscribe: (events: RenderEvents) => void;
 	printSummary: (jobs: ReadonlyArray<RenderJob>) => void;
@@ -58,7 +65,7 @@ function createEventSink(): EventSink {
 
 	const subscribe = (events: RenderEvents): void => {
 		events.on("started", (node: NodeIdentity) => {
-			process.stdout.write(`[${labelOf(node)}] started\n`);
+			process.stdout.write(`${stamp()} [${labelOf(node)}] started\n`);
 		});
 
 		events.on("progress", (node: NodeIdentity, payload: ProgressPayload) => {
@@ -67,9 +74,9 @@ function createEventSink(): EventSink {
 			if (payload.framesTotal !== undefined) {
 				const percent = Math.round((payload.framesDone / payload.framesTotal) * 100);
 
-				process.stdout.write(`[${label}] ${payload.phase} ${percent}%\n`);
+				process.stdout.write(`${stamp()} [${label}] ${payload.phase} ${percent}%\n`);
 			} else {
-				process.stdout.write(`[${label}] ${payload.phase} frames=${payload.framesDone}\n`);
+				process.stdout.write(`${stamp()} [${label}] ${payload.phase} frames=${payload.framesDone}\n`);
 			}
 		});
 
@@ -78,12 +85,15 @@ function createEventSink(): EventSink {
 			const parts = [payload.message, ...data].join(" ");
 			const prefix = payload.level === "warn" ? "warn: " : "";
 
-			process.stdout.write(`${prefix}[${labelOf(node)}] ${parts}\n`);
+			process.stdout.write(`${stamp()} ${prefix}[${labelOf(node)}] ${parts}\n`);
 		});
 
 		events.on("finished", (node: NodeIdentity, payload: FinishedPayload) => {
 			totals.set(node, { framesDone: payload.framesDone, processingMs: payload.processingMs });
-			process.stdout.write(`[${labelOf(node)}] finished\n`);
+
+			const ms = payload.processingMs !== undefined ? ` ms=${Math.round(payload.processingMs)}` : "";
+
+			process.stdout.write(`${stamp()} [${labelOf(node)}] finished frames=${payload.framesDone}${ms}\n`);
 		});
 	};
 
@@ -92,9 +102,9 @@ function createEventSink(): EventSink {
 			const label = labelOf(node);
 
 			if (processingMs !== undefined) {
-				process.stdout.write(`[${label}] processed ${framesDone} frames in ${Math.round(processingMs)}ms\n`);
+				process.stdout.write(`${stamp()} [${label}] processed ${framesDone} frames in ${Math.round(processingMs)}ms\n`);
 			} else {
-				process.stdout.write(`[${label}] processed ${framesDone} frames\n`);
+				process.stdout.write(`${stamp()} [${label}] processed ${framesDone} frames\n`);
 			}
 		}
 
@@ -105,7 +115,7 @@ function createEventSink(): EventSink {
 
 			const label = sourceLabel(job) ?? "source";
 
-			process.stdout.write(`[${label}] total ${(timing.totalMs / 1000).toFixed(1)}s, ${timing.realTimeMultiplier.toFixed(1)}x RT\n`);
+			process.stdout.write(`${stamp()} [${label}] total ${(timing.totalMs / 1000).toFixed(1)}s, ${timing.realTimeMultiplier.toFixed(1)}x RT\n`);
 		}
 	};
 

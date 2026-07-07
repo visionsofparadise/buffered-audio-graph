@@ -103,9 +103,9 @@ describeIfFfmpegFixture("FFmpeg", () => {
 		expect(bufferCount).toBeGreaterThan(0);
 		expect(bufferCount).toBeLessThanOrEqual(13);
 
-		// `emit` is unknown-total → UNKNOWN_TOTAL_QUANTUM_FRAMES (480k) boundaries + the forced final.
+		// `emit` now carries the known source total → default quantum 0.1 gives ≤~11 crossings + the forced final.
 		expect(emitCount).toBeGreaterThan(0);
-		expect(emitCount).toBeLessThanOrEqual(Math.ceil(inputFrames / 480_000) + 2);
+		expect(emitCount).toBeLessThanOrEqual(13);
 
 		// Both phases are bounded well under the per-chunk count.
 		expect(bufferCount).toBeLessThan(sourceChunks);

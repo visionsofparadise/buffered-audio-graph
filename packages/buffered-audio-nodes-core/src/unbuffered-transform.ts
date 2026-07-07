@@ -32,7 +32,7 @@ export abstract class UnbufferedTransformStream<P extends TransformNodePropertie
 		return (block) => {
 			controller.enqueue(block);
 			this.framesEmitted += block.samples[0]?.length ?? 0;
-			this.emitProgress("emit", this.framesEmitted);
+			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		};
 	}
 
@@ -60,7 +60,7 @@ export abstract class UnbufferedTransformStream<P extends TransformNodePropertie
 		this.processingMs += performance.now() - start;
 
 		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames, { force: true });
-		this.emitProgress("emit", this.framesEmitted, undefined, { force: true });
+		this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames, { force: true });
 		this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
 
 		await this.destroy();

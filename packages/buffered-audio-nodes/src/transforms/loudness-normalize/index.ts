@@ -30,6 +30,8 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 		const integrated = this.accumulator === undefined ? -Infinity : this.accumulator.finalize();
 		const gain = Number.isFinite(integrated) ? Math.pow(10, (this.properties.target - integrated) / 20) : 1;
 
+		this.log("loudness measured", { integrated, gain, target: this.properties.target });
+
 		for await (const block of buffered.iterate(44100)) {
 			if (gain === 1) {
 				enqueue(block);

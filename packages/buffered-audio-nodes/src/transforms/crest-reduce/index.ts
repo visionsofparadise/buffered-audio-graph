@@ -86,7 +86,7 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 			peakInputSample,
 			sampleRate,
 			lambda,
-		});
+		}, (done, total) => this.progress(done, total));
 
 		if (frameCount === 0) {
 			for await (const block of buffered.iterate(44100)) {
@@ -96,11 +96,14 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 			return;
 		}
 
+		this.log("trajectory analysed", { frameCount });
+
 		const smoothedTrajectory = smoothControlTrajectory(trajectory, smoothing, trajectoryFrameRate(sampleRate, hopSize), exactHoldHalfWidthFrames(sampleRate, hopSize), hopSize);
 
 		await buffered.reset();
 
 		let applyState: LatticeApplyState | undefined;
+		let appliedFrames = 0;
 
 		for await (const block of buffered.iterate(44100)) {
 			const frames = block.samples[0]?.length ?? 0;
@@ -118,6 +121,9 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 			const samples = block.samples.map((inputChannel, ch) => transformed[ch] ?? inputChannel);
 
 			enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+
+			appliedFrames += frames;
+			this.progress(Math.min(appliedFrames, totalFrames), totalFrames);
 		}
 	}
 }

@@ -31,6 +31,8 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeProperties
 		const raw = this.peak === 0 ? 1 : this.properties.ceiling / this.peak;
 		const scale = Number.isFinite(raw) ? raw : 1;
 
+		this.log("peak measured", { peak: this.peak, scale, ceiling: this.properties.ceiling });
+
 		for await (const block of buffered.iterate(44100)) {
 			if (scale === 1) {
 				enqueue(block);

@@ -109,6 +109,7 @@ export interface IterateForTargetsArgs {
 	seedB?: number | undefined;
 	// Pre-built base-rate detection envelope (ownership transfers; closed by this call). Must be bit-identical to buildBaseRateDetectionCache output for the same buffer/halfWidth.
 	detectionEnvelope?: BlockBuffer | undefined;
+	onAttempt?: (attempt: IterationAttempt, attemptIndex: number) => void;
 }
 
 export async function iterateForTargets(args: IterateForTargetsArgs): Promise<IterateResult> {
@@ -127,6 +128,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		tolerance = DEFAULT_TOLERANCE,
 		peakTolerance,
 		seedB,
+		onAttempt,
 	} = args;
 
 	const channelCount = buffer.channels;
@@ -238,7 +240,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			const lufsErr = measured.outputLufs - targetLufs;
 			const peakErr = measured.outputTruePeakDb - effectiveTargetTp;
 
-			attempts.push({
+			const attempt: IterationAttempt = {
 				boost: currentBoost,
 				limitDb: currentLimit,
 				lufsErr,
@@ -248,7 +250,10 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				peakGainDb: currentPeakGainDb,
 				peakErr,
 				elapsedMs: Date.now() - tAttempt0,
-			});
+			};
+
+			attempts.push(attempt);
+			onAttempt?.(attempt, attemptIdx);
 
 			// Best-attempt score = max of each axis's error over its own gate tolerance. `score < 1 ⇔ passes both
 			// gates`, so a gate-failing attempt can never beat a gate-passing one — the winner matches the gates.

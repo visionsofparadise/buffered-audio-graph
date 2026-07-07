@@ -114,6 +114,7 @@ export async function streamLatticeTrajectory(
 	backend?: FftBackend,
 	addonOptions?: { vkfftPath?: string; fftwPath?: string },
 	search?: ItemSevenSearchParams,
+	progress?: (done: number, total: number) => void,
 ): Promise<{ trajectory: ControlTrajectory; frameCount: number; signalLength: number; windowPeaks: Array<WindowPeak>; bindingMask: Array<boolean> }> {
 	const channelCount = buffer.channels;
 	const signalLength = buffer.frames;
@@ -256,6 +257,8 @@ export async function streamLatticeTrajectory(
 		}
 
 		toRead -= got;
+
+		progress?.(nextFrame, frameCount);
 	}
 
 	for (let frame = 0; frame < frameCount; frame++) {

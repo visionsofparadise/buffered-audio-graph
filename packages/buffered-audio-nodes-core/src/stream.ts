@@ -29,6 +29,7 @@ export type RenderEvents = EventEmitter<{
 
 export const UNKNOWN_TOTAL_QUANTUM_FRAMES = 480_000;
 export const DEFAULT_PROGRESS_QUANTUM = 0.1;
+export const PROCESS_QUANTUM_FRACTION = 0.02;
 
 export abstract class BufferedStream<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> {
 	readonly node: BufferedAudioNode;
@@ -73,7 +74,8 @@ export abstract class BufferedStream<P extends BufferedAudioNodeProperties = Buf
 			return;
 		}
 
-		const quantum = total ? Math.max(1, Math.floor(total * this.quantumFraction)) : UNKNOWN_TOTAL_QUANTUM_FRAMES;
+		const fraction = phase === "process" ? Math.min(this.quantumFraction, PROCESS_QUANTUM_FRACTION) : this.quantumFraction;
+		const quantum = total ? Math.max(1, Math.floor(total * fraction)) : UNKNOWN_TOTAL_QUANTUM_FRAMES;
 		const boundary = Math.floor(framesDone / quantum) * quantum;
 		const last = this.lastBoundaryByPhase.get(phase);
 

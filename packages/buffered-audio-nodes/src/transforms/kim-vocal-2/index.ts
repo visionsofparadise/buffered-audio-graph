@@ -146,6 +146,9 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 		const outAccumRight = new Float32Array(SEGMENT_SAMPLES);
 		const sumWeight = new Float32Array(SEGMENT_SAMPLES);
 
+		const modelRateFrames = Math.round(originalFrames * SAMPLE_RATE / sourceRate);
+		let stableEmitted = 0;
+
 		for (;;) {
 			if (!inputExhausted) {
 				while (segFilled < SEGMENT_SAMPLES) {
@@ -203,6 +206,9 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Properties
 				originalFrames,
 				writerState,
 			});
+
+			stableEmitted += nStable;
+			this.progress(Math.min(stableEmitted, modelRateFrames), modelRateFrames);
 
 			if (!isFinalIter) {
 				segLeft.copyWithin(0, nStable, SEGMENT_SAMPLES);

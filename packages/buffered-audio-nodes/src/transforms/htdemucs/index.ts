@@ -72,6 +72,8 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 
 		const stats = await computeStreamingStats(buffered, channels);
 
+		this.log("streaming stats computed", { mean: stats.mean, std: stats.std });
+
 		await buffered.reset();
 
 		let pair: StreamPair | undefined;
@@ -188,6 +190,9 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 
 		const inv = 1 / (stats.std || 1);
 
+		const modelRateFrames = Math.round(originalFrames * HTDEMUCS_SAMPLE_RATE / sourceRate);
+		let stableEmitted = 0;
+
 		for (;;) {
 			if (!inputExhausted) {
 				while (segFilled < SEGMENT_SAMPLES) {
@@ -254,6 +259,9 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 				originalFrames,
 				writerState,
 			});
+
+			stableEmitted += nStable;
+			this.progress(Math.min(stableEmitted, modelRateFrames), modelRateFrames);
 
 			if (!isFinalIter) {
 				segLeft.copyWithin(0, nStable, SEGMENT_SAMPLES);

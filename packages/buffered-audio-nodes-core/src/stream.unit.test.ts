@@ -114,6 +114,35 @@ describe("BufferedStream per-phase independence", () => {
 	});
 });
 
+describe("BufferedStream process-phase quantum", () => {
+	it("process phase emits at the finer 0.02 boundary — ~50 lines per pass", () => {
+		const { stream, events } = probe();
+		const collected = collectProgress(events);
+
+		for (let i = 0; i <= 1000; i++) stream.emit("process", i, 1000);
+
+		expect(collected.map((e) => e.framesDone)).toEqual(Array.from({ length: 51 }, (_, k) => k * 20));
+	});
+
+	it("buffer phase with the same total keeps the 0.1 cadence", () => {
+		const { stream, events } = probe();
+		const collected = collectProgress(events);
+
+		for (let i = 0; i <= 1000; i++) stream.emit("buffer", i, 1000);
+
+		expect(collected.map((e) => e.framesDone)).toEqual(Array.from({ length: 11 }, (_, k) => k * 100));
+	});
+
+	it("a caller quantumFraction finer than 0.02 wins for the process phase", () => {
+		const { stream, events } = probe(0.01);
+		const collected = collectProgress(events);
+
+		for (let i = 0; i <= 1000; i++) stream.emit("process", i, 1000);
+
+		expect(collected.map((e) => e.framesDone)).toEqual(Array.from({ length: 101 }, (_, k) => k * 10));
+	});
+});
+
 describe("BufferedStream helpers", () => {
 	it("progress() routes through the process phase throttle", () => {
 		const { stream, events } = probe();
@@ -122,7 +151,7 @@ describe("BufferedStream helpers", () => {
 		for (let i = 0; i <= 1000; i++) stream.callProgress(i, 1000);
 
 		expect(collected.every((e) => e.phase === "process")).toBe(true);
-		expect(collected.length).toBeLessThan(20);
+		expect(collected.length).toBe(51);
 		expect(collected[0]?.framesDone).toBe(0);
 	});
 

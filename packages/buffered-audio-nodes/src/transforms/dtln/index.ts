@@ -168,6 +168,8 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 		const pumpDone = pair !== undefined ? pumpSourceToResampleIn({ buffer, resampleIn: pair.resampleIn, channels, chunkFrames: CHUNK_FRAMES }) : Promise.resolve();
 		const drainerDone = pair !== undefined ? drainResampleOutToBuffer({ resampleOut: pair.resampleOut, output, channels, sourceRate, bitDepth, originalFrames, writerState }) : Promise.resolve();
 
+		const total16k = Math.round(originalFrames * DTLN_SAMPLE_RATE / sourceRate);
+
 		for (;;) {
 			const got16k = await pullNextChunkAt16k({ buffer, pair, channels, frames: CHUNK_FRAMES });
 
@@ -209,6 +211,8 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 					}
 				}
 			}
+
+			this.progress(Math.min(samplesFed, total16k), total16k);
 		}
 
 		// Await defensively to surface pump-side errors.

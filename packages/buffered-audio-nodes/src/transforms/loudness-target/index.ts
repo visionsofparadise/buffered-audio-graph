@@ -202,6 +202,18 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			peakTolerance,
 			seedB,
 			detectionEnvelope,
+			onAttempt: (attempt, attemptIndex) => {
+				this.log("attempt", {
+					attempt: attemptIndex + 1,
+					B: attempt.boost,
+					peakGainDb: attempt.peakGainDb,
+					lufsErr: attempt.lufsErr,
+					peakErr: attempt.peakErr,
+					outputLra: attempt.outputLra,
+					elapsedMs: attempt.elapsedMs,
+				});
+				this.progress(attemptIndex + 1, maxAttempts);
+			},
 		});
 
 		this.learnTimingMs.iteration = Date.now() - tIterate0;
@@ -240,22 +252,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		const limitDbRepr = `${bestLimitDbRepr} (${limitDbSource})`;
 		const expansiveGeometry = result.bestPeakGainDb > result.bestB;
-
-		for (let attemptIdx = 0; attemptIdx < result.attempts.length; attemptIdx++) {
-			const attempt = result.attempts[attemptIdx];
-
-			if (attempt === undefined) continue;
-			this.log("attempt", {
-				attempt: attemptIdx + 1,
-				B: attempt.boost,
-				peakGainDb: attempt.peakGainDb,
-				lufsErr: attempt.lufsErr,
-				peakErr: attempt.peakErr,
-				outputLra: attempt.outputLra,
-				elapsedMs: attempt.elapsedMs,
-			});
-			this.progress(attemptIdx + 1, maxAttempts);
-		}
 
 		const fmt = (x: number | undefined): string => (x === undefined ? "off" : String(x));
 
