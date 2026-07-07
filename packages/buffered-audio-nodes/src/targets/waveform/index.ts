@@ -163,8 +163,5 @@ export class WaveformNode extends TargetNode<WaveformProperties> {
 }
 
 export function waveform(outputPath: string, options?: { resolution?: number }): WaveformNode {
-	return new WaveformNode({
-		outputPath,
-		resolution: options?.resolution ?? 1000,
-	});
+	return new WaveformNode({ outputPath, ...options });
 }

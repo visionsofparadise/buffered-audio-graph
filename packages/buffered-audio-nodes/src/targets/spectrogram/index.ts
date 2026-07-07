@@ -298,14 +298,5 @@ export function spectrogram(
 		fftwAddonPath?: string;
 	},
 ): SpectrogramNode {
-	return new SpectrogramNode({
-		outputPath,
-		fftSize: options?.fftSize ?? 2048,
-		hopSize: options?.hopSize ?? 512,
-		frequencyScale: options?.frequencyScale,
-		numBands: options?.numBands,
-		minFrequency: options?.minFrequency,
-		maxFrequency: options?.maxFrequency,
-		fftwAddonPath: options?.fftwAddonPath ?? "",
-	});
+	return new SpectrogramNode({ outputPath, ...options });
 }

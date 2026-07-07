@@ -264,10 +264,5 @@ export class WriteNode extends TargetNode<WriteProperties> {
 }
 
 export function write(path: string, options?: { bitDepth?: WavBitDepth; ffmpegPath?: string; encoding?: EncodingOptions }): WriteNode {
-	return new WriteNode({
-		path,
-		bitDepth: options?.bitDepth ?? "16",
-		ffmpegPath: options?.ffmpegPath ?? "",
-		encoding: options?.encoding,
-	});
+	return new WriteNode({ path, ...options });
 }

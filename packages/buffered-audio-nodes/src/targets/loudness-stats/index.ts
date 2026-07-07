@@ -172,9 +172,5 @@ export class LoudnessStatsNode extends TargetNode<LoudnessStatsProperties> {
 }
 
 export function loudnessStats(options?: { id?: string; bucketCount?: number; outputPath?: string }): LoudnessStatsNode {
-	return new LoudnessStatsNode({
-		id: options?.id,
-		bucketCount: options?.bucketCount ?? 1024,
-		outputPath: options?.outputPath ?? "",
-	});
+	return new LoudnessStatsNode(options ?? {});
 }
