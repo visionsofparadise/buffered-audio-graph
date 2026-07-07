@@ -82,7 +82,7 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 			}
 
 			this.framesEmitted += frames;
-			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+			this.emitProgress("emit", this.framesEmitted);
 		};
 	}
 
@@ -166,7 +166,7 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 
 		await this.flush(this.makeEnqueue(controller));
 
-		this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames, { force: true });
+		this.emitProgress("emit", this.framesEmitted, undefined, { force: true });
 		this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
 	}
 
