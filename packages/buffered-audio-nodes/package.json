@@ -1,6 +1,6 @@
 {
   "name": "@buffered-audio/nodes",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "type": "module",
   "exports": {
     ".": {
@@ -45,8 +45,8 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "@buffered-audio/core": "0.7.1",
-    "@buffered-audio/utils": "0.6.1",
+    "@buffered-audio/core": "0.7.2",
+    "@buffered-audio/utils": "0.6.2",
     "bufferfy": "^4.0.3",
     "commander": "^14.0.3",
     "tsx": "^4.21.0",
