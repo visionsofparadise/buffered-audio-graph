@@ -318,18 +318,6 @@ Invert or rotate signal phase
 | `invert` | boolean | `true` | Invert |
 | `angle` | number (-180 to 180, step 1), optional | — | Angle |
 
-### Read
-
-Read audio from a file
-
-[Source](./src/sources/read/index.ts)
-
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `path` | string | `""` |  |
-| `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
-| `ffprobePath` | string | `""` | FFprobe — media file analyzer (included with FFmpeg) Download: [ffprobe](https://ffmpeg.org/download.html) |
-
 ### Read FFmpeg
 
 Read audio from a file using FFmpeg

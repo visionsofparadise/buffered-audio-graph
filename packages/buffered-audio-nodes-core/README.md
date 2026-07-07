@@ -12,226 +12,319 @@ npm install @buffered-audio/core
 
 This package defines the abstractions that all buffered-audio-nodes packages build on. It is used by two audiences:
 
-- **Node authors** extend `SourceNode`, `TransformNode`, or `TargetNode` to create concrete audio processing modules.
-- **Graph executors** use the BAG format (`pack`, `unpack`, `renderGraph`) to serialize, deserialize, and run audio processing pipelines.
+- **Node authors** extend `SourceNode`, `TransformNode`, or `TargetNode` (pairing each with a stream class) to create concrete audio processing modules.
+- **Graph executors** use the BAG format (`pack`, `unpack`, `createRenderJobs`) to serialize, deserialize, and run audio processing pipelines.
 
 Concrete node implementations live in separate packages (e.g. `@buffered-audio/nodes`). This package provides only the protocol layer and has a single runtime dependency: `zod`.
 
 ## Node Types
 
-Nodes are inert descriptors. They hold parameters, bypass state, and schema metadata. They are safe to serialize, reuse, and share. Each node type has a corresponding stream class that handles the actual runtime processing.
+Nodes are pure configuration. They hold parameters, bypass state, identity, and schema metadata, and reference a stream class. They carry no per-render state, so they are safe to serialize, reuse across pipelines, and share between renders. Each node type names its stream class through a `static readonly streamClass`, and the executor constructs one stream instance per node per render pass.
 
 ### SourceNode
 
-Produces audio. Implements `createStream()` returning a `BufferedSourceStream` that provides a `ReadableStream<AudioChunk>`. Call `source.render(options?)` to execute the entire pipeline rooted at this source.
+Produces audio. Its stream class extends `BufferedSourceStream` and drives a `ReadableStream<Block>`. Call `source.createRenderJob(options?)` to build a `RenderJob` for the entire pipeline rooted at this source.
 
 ### TransformNode
 
-Processes audio. Implements `createStream()` returning a `BufferedTransformStream` that pipes through a `TransformStream<AudioChunk, AudioChunk>`. Supports buffering modes via `bufferSize`.
+Processes audio. Its stream class extends either `UnbufferedTransformStream` or `BufferedTransformStream` (see [Transform Streams](#transform-streams)), piping input `Block`s through to output.
 
 ### TargetNode
 
-Consumes audio. Implements `createStream()` returning a `BufferedTargetStream` that writes to a `WritableStream<AudioChunk>`. Typically writes output to a file or destination.
+Consumes audio. Its stream class extends `BufferedTargetStream` and writes to a `WritableStream<Block>`, typically an output file or destination.
 
-### CompositeNode
+## Node Construction
 
-Abstract base for multi-node compositions. Exposes `head` and `tail` properties to define the internal sub-graph. Calling `.to()` on a composite connects downstream from `tail`. If the head is a `SourceNode`, the composite can be rendered directly.
+The `BufferedAudioNode` base constructor is the single defaulting and validation site. It runs `schema.parse(properties ?? {})` and merges the parsed result over the input, so schema `.default()`s apply once, on every path — the fluent factory, `.clone()`, and BAG `unpack` all flow through it. The constructor accepts the input shape `BufferedAudioNodeInput<P>` (`Partial<P> & BufferedAudioNodeProperties`); parsing strips unknown keys and preserves the base keys `id`, `bypass`, `children`, and `previousProperties`. A schema failure throws with the node name and the Zod message.
 
-## Streams
-
-Every render creates fresh stream instances via `node.createStream()`. Streams are mutable runtime objects that hold processing state for a single render pass. They are never reused.
+Concrete nodes follow a fixed convention: a `type` tuple, a `clone()` implementation, and four statics — `static readonly nodeName`, `static readonly schema`, `static readonly streamClass`, plus `packageName`/`packageVersion` for serialization.
 
 ```ts
-class MyTransform extends TransformNode {
-	readonly type = ["buffered-audio-node", "transform", "my-transform"] as const;
+import { z } from "zod";
+import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 
-	createStream() {
-		return new MyTransformStream(this.properties);
-	}
+export const schema = z.object({
+	gain: z.number().min(-60).max(24).default(0).describe("Gain (dB)"),
+});
 
-	clone() {
-		return new MyTransform(this.properties);
+export interface GainProperties extends z.infer<typeof schema>, TransformNodeProperties {}
+
+export class GainStream extends UnbufferedTransformStream<GainProperties> {
+	override transform(block: Block, enqueue: (block: Block) => void): void {
+		const linear = Math.pow(10, this.properties.gain / 20);
+
+		const samples = block.samples.map((channel) => channel.map((sample) => sample * linear));
+
+		enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
 	}
+}
+
+export class GainNode extends TransformNode<GainProperties> {
+	static override readonly nodeName = "Gain";
+	static override readonly packageName = "@buffered-audio/nodes";
+	static override readonly packageVersion = "0.7.0";
+	static override readonly schema = schema;
+	static override readonly streamClass = GainStream;
+
+	override readonly type = ["buffered-audio-node", "transform", "gain"] as const;
+
+	override clone(overrides?: Partial<GainProperties>): GainNode {
+		return new GainNode({ ...this.properties, previousProperties: this.properties, ...overrides });
+	}
+}
+
+export function gain(options?: { gain?: number; id?: string }): GainNode {
+	return new GainNode(options ?? {});
 }
 ```
 
-Nodes connect with `.to()`:
+## Block
+
+`Block` is the unit of audio flowing through the pipeline: per-channel samples carrying their stream position and format.
+
+```ts
+interface Block {
+	readonly samples: Array<Float32Array>;  // one Float32Array per channel
+	readonly offset: number;                // frame position in the stream
+	readonly sampleRate: number;
+	readonly bitDepth: number;
+}
+```
+
+A frame is one multichannel sample step; `samples[channel][frame]` addresses a single value.
+
+## Connecting Nodes
+
+`.to()` connects a node downstream and returns void. It exists on `SourceNode` and `TransformNode`; `TargetNode` is always a leaf.
 
 ```ts
 source.to(transform);
 transform.to(target);
-await source.render();
+
+const job = source.createRenderJob();
+await job.render();
 ```
 
-Fan-out is supported by calling `.to()` multiple times from the same node.
+Fan-out is multiple `.to()` calls from the same node — the executor branches the readable with `teeReadable()`. Fan-in (a node reached by several paths) instantiates that node's stream once per path; each instance is independent, which is safe because nodes carry no per-render state.
 
-## Stream Hooks
+`.to()` also accepts a `Composition` — the `{ head, tail }` handle returned by `chain()` in the nodes package — and unwraps it to its `head`, so separately-built subgraphs compose. Core exports the `Composition` interface for typing; `chain()` itself lives in `@buffered-audio/nodes`.
 
-### Source Hooks
+## Render Jobs
 
-`BufferedSourceStream` provides three hooks:
-
-#### `getMetadata(): Promise<SourceMetadata>`
-
-Return the audio format: `{ sampleRate, channels, durationFrames? }`. Called before render to compute backpressure and pipeline context.
-
-#### `_read(): Promise<AudioChunk | undefined>`
-
-Produce the next chunk of audio. Return `undefined` to signal end of stream. Called repeatedly by the readable stream's pull mechanism.
-
-#### `_flush(): Promise<void>`
-
-Cleanup after the last chunk has been read. Close file handles, finalize readers.
-
-### Target Hooks
-
-`BufferedTargetStream` provides two hooks:
-
-#### `_write(chunk: AudioChunk): Promise<void>`
-
-Consume each incoming chunk. Write to disk, accumulate statistics, or forward to an external process.
-
-#### `_close(): Promise<void>`
-
-Finalize after the last chunk has been written. Flush buffers, close file handles, write headers.
-
-### Transform Hooks
-
-`BufferedTransformStream` provides four hooks for processing audio:
-
-### `_buffer(chunk, buffer)`
-
-Accumulate incoming audio into the `ChunkBuffer`. Default implementation calls `buffer.write(chunk.samples, chunk.sampleRate, chunk.bitDepth)`. Override to pre-process or filter chunks before buffering.
-
-### `_process(buffer)`
-
-Called when the buffer reaches the `bufferSize` threshold (or on flush for `WHOLE_FILE` mode). Read the buffer sequentially, transform, and write the result back. Not called when `bufferSize` is `0`.
-
-### `_unbuffer(chunk)`
-
-Transform individual chunks during emission. Called for every chunk read back from the buffer. Return `undefined` to drop a chunk.
-
-### `_setup(input, context)`
-
-Override for custom stream wiring. Default implementation pipes input through `createTransformStream()`. Use this to set up context-dependent resources before processing begins.
-
-### `_teardown()`
-
-Cleanup after render completes. Override to close file handles, free native resources, or release ONNX sessions. Called automatically on all streams after the pipeline finishes (whether it succeeds or fails). Defined on `BufferedStream` — available to all stream types, not just transforms.
-
-### bufferSize Modes
-
-| Value | Behavior |
-|---|---|
-| `0` | Pass-through. Chunks flow directly through `_buffer` then `_unbuffer`. `_process` is never called. |
-| `N` | Block mode. Accumulate `N` frames, call `_process`, then emit. |
-| `WHOLE_FILE` | Buffer all audio before processing. `_process` runs once on flush with the complete file. |
-
-`ChunkBuffer` exposes only sequential access. Read with `buffer.read(N)` in a loop until the returned chunk is shorter than `N` (end-of-buffer); write with `buffer.write(samples, sampleRate, bitDepth)`. There is no offset-based random access — see the [ChunkBuffer](#chunkbuffer) section below.
-
-Example transform that processes in 4096-frame blocks using the two-buffer pattern (stream the input into a temp buffer applying the transform, then swap the temp back into the framework's buffer):
+A render runs in two phases. `source.createRenderJob(options?)` synchronously builds a `RenderJob` — it walks the graph from the source, constructs every stream, and allocates the event emitter, so subscription and stream inspection are guaranteed to precede the first event. `job.render()` then probes metadata, wires the pipeline, streams, and cleans up.
 
 ```ts
-const CHUNK_FRAMES = 4096;
+class RenderJob {
+	readonly events: RenderEvents;
+	readonly streams: ReadonlyMap<BufferedAudioNode, ReadonlyArray<BufferedStream>>;
+	get timing(): RenderTiming | undefined;  // set after render() resolves
+	abort(): void;
+	render(): Promise<void>;                 // single-use; a second call throws
+}
+```
 
-class MyTransformStream extends BufferedTransformStream {
-	constructor(properties: TransformNodeProperties) {
-		super({ ...properties, bufferSize: 4096 });
+Construction resolves bypass and composites: a bypassed node contributes no stream and its children are visited in its place, and cycles throw. A node reached by fan-in appears in `streams` with one entry per path. `abort()` aborts an internal controller chained with `options.signal`; `timing` holds `{ totalMs, audioDurationMs, realTimeMultiplier }` once the render resolves.
+
+`RenderOptions` are the caller-facing knobs: `{ chunkSize?, highWaterMark?, memoryLimit?, signal?, executionProviders?, progressQuantum? }`.
+
+### Events
+
+Subscribe on `job.events`, a typed `EventEmitter`. Each event carries the emitting node's `NodeIdentity` as its first argument:
+
+```ts
+type RenderEvents = EventEmitter<{
+	started: [NodeIdentity];
+	finished: [NodeIdentity, FinishedPayload];
+	progress: [NodeIdentity, ProgressPayload];
+	log: [NodeIdentity, LogPayload];
+}>;
+```
+
+`NodeIdentity` is `{ nodeName, id?, type }`. `ProgressPayload` is `{ phase, framesDone, framesTotal? }` over the phases `"read" | "buffer" | "process" | "emit" | "write"`. `FinishedPayload` is `{ framesDone, processingMs? }`. `LogPayload` is `{ level, message, data? }`. Progress is frame-quantum throttled (`progressQuantum`, default 0.1 — roughly ten events per phase per node), never time-based, so identical input produces identical events.
+
+```ts
+const job = source.createRenderJob();
+
+job.events.on("progress", (node, { phase, framesDone, framesTotal }) => {
+	console.log(`${node.nodeName} ${phase}: ${framesDone}/${framesTotal ?? "?"}`);
+});
+job.events.on("finished", (node, { processingMs }) => {
+	console.log(`${node.nodeName} done in ${processingMs ?? 0}ms`);
+});
+
+await job.render();
+```
+
+## Streams
+
+The executor constructs one stream per node per render via `new node.streamClass(node)`. Streams are mutable runtime objects holding processing state for a single pass; they are never reused. The constructor receives the node and snapshots `this.properties = { ...node.properties }` — reading `node.properties` live would leak `.to()` mutation into an in-flight render, so the snapshot is taken once at construction. The node reference stays available on `this.node` for statics.
+
+### `_destroy()`
+
+`BufferedStream` provides `_destroy(): Promise<void> | void` (no-op base) for resource cleanup — file handles, subprocesses, ONNX sessions, FFT workspaces. The framework invokes it at each stream's own termination on every path (graceful end, error, cancel), and guarantees it runs at most once, so overrides must be idempotent. Because it fires on every path, cleanup that must not leak belongs here rather than in the graceful-only data hooks below.
+
+### Source Streams
+
+`BufferedSourceStream` has two abstract hooks:
+
+- `getMetadata(): Promise<SourceMetadata>` — return `{ sampleRate, channels, durationFrames? }`. The job calls this first to compute backpressure and progress denominators.
+- `_read(): Promise<Block | undefined>` — produce the next block, or `undefined` to signal end of stream. The framework owns the controller (enqueue, close, frame counting) and calls `_read()` repeatedly on pull.
+
+### Target Streams
+
+`BufferedTargetStream` has two abstract hooks:
+
+- `_write(block: Block): Promise<void>` — consume each incoming block (write to disk, accumulate statistics, forward to a subprocess).
+- `_close(): Promise<void>` — finalize on graceful end of stream (flush buffers, rewrite a WAV header). Graceful-path only; resource release goes in `_destroy()`.
+
+## Transform Streams
+
+Transform authoring splits along one question: does the node care about block size? The answer picks the base class.
+
+### UnbufferedTransformStream
+
+An instrumented pass-through with no accumulation and no block size — for per-block streaming transforms (gain, pan) and external pumps (ffmpeg) whose output cadence is decoupled from input.
+
+- `transform(block: Block, enqueue: (block: Block) => void): Promise<void> | void` (abstract) — called once per incoming block. Enqueue as many output blocks as you like; enqueue none to drop the input.
+- `flush(enqueue): Promise<void> | void` (no-op base) — emit trailing output at graceful end of stream.
+
+### BufferedTransformStream
+
+Accumulates incoming blocks into a `BlockBuffer` until a full block is assembled, then hands the buffer to the author. For measure-then-apply DSP (normalize) and windowed processing.
+
+- `blockSize: number` — the assembly size, read from `properties.blockSize`, defaulting to `WHOLE_FILE`. Positive integer or `WHOLE_FILE`; `0` throws in the constructor. In block mode the buffer holds exactly `blockSize` frames per firing (short only at end of stream); `WHOLE_FILE` fires once at end of stream with the whole signal.
+- `prepare(block: Block): Promise<Block> | Block` (identity base) — a transform on each incoming block before buffering. The framework writes the returned block into the buffer, so `prepare` must be length-preserving. Use it to accumulate a streaming measurement (peak, LUFS) on the way in, or to reshape format.
+- `transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> | void` — fires when a full block is assembled and once at end of stream with the trailing partial. Read the buffer and enqueue output blocks. Authors own output offsets: the framework never rewrites `offset`, it only counts emitted frames for progress and re-slices any enqueued block larger than the output chunk size. The default implementation drains the buffer unchanged (`buffered.iterate(outputChunkSize)`), so a bare `BufferedTransformStream` is a valid barrier pass-through.
+- `flush(enqueue): Promise<void> | void` (no-op base) — emit trailing output at graceful end of stream, after the final `transform` firing.
+
+The framework clears the buffer after each `transform` firing and closes it in `_destroy()`. A measure-then-apply transform reads its accumulated statistic in `transform`, then walks the buffer and applies it:
+
+```ts
+class NormalizeStream extends BufferedTransformStream<NormalizeProperties> {
+	private peak = 0;
+
+	override prepare(block: Block): Block {
+		for (const channel of block.samples) {
+			for (const sample of channel) this.peak = Math.max(this.peak, Math.abs(sample));
+		}
+
+		return block;  // length-preserving; the framework writes this to the buffer
 	}
 
-	override async _process(buffer: ChunkBuffer): Promise<void> {
-		const sr = buffer.sampleRate;
-		const bd = buffer.bitDepth;
-		const output = new ChunkBuffer();
+	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+		const target = Math.pow(10, this.properties.ceiling / 20);
+		const scale = this.peak > 0 ? target / this.peak : 1;
 
-		try {
-			for (;;) {
-				const chunk = await buffer.read(CHUNK_FRAMES);
-				const got = chunk.samples[0]?.length ?? 0;
-
-				if (got === 0) break;
-				const processed = doSomething(chunk.samples);
-
-				await output.write(processed, sr, bd);
-				if (got < CHUNK_FRAMES) break;
-			}
-
-			await buffer.clear();
-			await output.reset();
-
-			for (;;) {
-				const chunk = await output.read(CHUNK_FRAMES);
-				const got = chunk.samples[0]?.length ?? 0;
-
-				if (got === 0) break;
-				await buffer.write(chunk.samples, sr, bd);
-				if (got < CHUNK_FRAMES) break;
-			}
-		} finally {
-			await output.close();
+		for await (const block of buffered.iterate(44100)) {
+			enqueue({
+				samples: block.samples.map((channel) => channel.map((sample) => sample * scale)),
+				offset: block.offset,
+				sampleRate: block.sampleRate,
+				bitDepth: block.bitDepth,
+			});
 		}
 	}
 }
 ```
 
-For simple in-place transforms where `bufferSize` is small and bounded (so a single `buffer.read(buffer.frames)` is safe), drop the temp buffer: read everything in one call, process it, `buffer.clear()`, then `buffer.write(...)` the result. The two-buffer pattern is the general case — use it for transforms whose output differs in length, position, or rate from the input (pad/trim/reverse, ML segment streaming), or wherever a single bounded read isn't appropriate.
+### Composition and Context
+
+Both transform bases expose `_setup(input, context)` as the wiring hook. The default pipes input through the stream's own transform. Override for context-dependent initialization — do the init work, then `return super._setup(input, context)` — or to compose inner streams by chaining their `_setup()` calls. `StreamContext` carries `{ executionProviders, memoryLimit, durationFrames?, highWaterMark, signal?, progressQuantum? }`; it deliberately omits sample rate and channels, which streams read from the blocks themselves so upstream rate changes are honored.
+
+### Reporting from hooks
+
+Inside any hook, protected helpers report to the render's event stream: `this.progress(framesDone, framesTotal?)` emits `process`-phase progress (throttled, safe to call every loop iteration), and `this.log(message, data?, level?)` emits a structured `log` event.
+
+## BlockBuffer
+
+`BlockBuffer` is the sequential, disk-spilling accumulator used by `BufferedTransformStream` and constructible by transforms needing scratch space. Data stays in memory until it exceeds ~10 MB, then spills to a temp file (unlinked on `close()`), so memory stays bounded regardless of source length. Access is strictly sequential — there is no offset-based random read, which makes the whole-source-`Float32Array` antipattern structurally impossible.
+
+| Method | Behavior |
+|---|---|
+| `read(frames): Promise<Block>` | Pull the next N frames from the read cursor. Returns a short (possibly empty) block at end of buffer. |
+| `iterate(frames): AsyncIterableIterator<Block>` | Yield successive `read(frames)` results including the trailing short block, then complete. An empty buffer yields nothing. |
+| `write(samples, sampleRate?, bitDepth?): Promise<void>` | Append samples at the tail. Captures format on the first call and validates it thereafter. |
+| `flushWrites(): Promise<void>` | Force pending writes to disk so subsequent reads see them. |
+| `reset(): Promise<void>` | Rewind the read cursor; preserve data. |
+| `clear(): Promise<void>` | Drop all data and reset cursors. |
+| `setSampleRate(rate)` / `setBitDepth(depth)` | Override the captured format (resample, dither). |
+| `openReverseReader(): Promise<ReverseBlockReader>` | Open a read-only reverse view over the buffer. |
+| `close(): Promise<void>` | Release the temp file and reset state. |
+
+Walk a buffer with `iterate` (or `read` in a loop until a short block). Transforms whose output differs in length, position, or rate from the input allocate a separate scratch `BlockBuffer`, stream output into it, `clear()` the source, then stream the scratch back.
+
+### ReverseBlockReader
+
+`openReverseReader()` returns a `ReverseBlockReader` — a borrowed, read-only view that walks the buffer end-to-start, delivering samples already in reverse time order. It exposes `read(frames)` and `iterate(frames)` (mirroring the forward API) plus `frames`/`channels` snapshotted at open. It holds its own file handle and must be `close()`d: a leaked handle blocks the parent buffer's `unlink()` on Windows. The source closes any still-open readers in `clear()`/`close()`, but wrap a reader in `try`/`finally` at the call site so it closes on throw.
 
 ## Graph Format (BAG)
 
-BAG (Buffered Audio Graph) is a JSON format for serializing audio processing pipelines. A `GraphDefinition` contains:
+BAG (Buffered Audio Graph) is a JSON format for serializing audio pipelines. A `GraphDefinition` contains:
 
-- `name` -- graph name
-- `nodes` -- flat array of `{ id, packageName, nodeName, parameters?, options? }`
-- `edges` -- flat array of `{ from, to }` referencing node IDs
+- `id` — stable UUID identity, persistent across path changes
+- `name` — graph name
+- `nodes` — flat array of `{ id, packageName, packageVersion, nodeName, parameters?, options? }`
+- `edges` — flat array of `{ from, to }` referencing node IDs
+
+The flat nodes/edges shape represents DAGs directly. `GraphNode`, `GraphEdge`, and `GraphDefinition` are exported types.
 
 ### NodeRegistry
 
-A two-level `Map<packageName, Map<nodeName, Constructor>>` that maps serialized node references back to their classes:
+A two-level `Map<packageName, Map<nodeName, Constructor>>` mapping serialized references back to their classes:
 
 ```ts
 const registry: NodeRegistry = new Map([
 	["@buffered-audio/nodes", new Map([
-		["wav-source", WavSourceNode],
+		["read", ReadNode],
 		["gain", GainNode],
-		["wav-target", WavTargetNode],
+		["write", WriteNode],
 	])],
 ]);
 ```
 
 ### pack
 
-Serialize live nodes into a `GraphDefinition`:
+Serialize live nodes into a `GraphDefinition`. Parameters are extracted through each node's schema, so serialization is self-maintaining as schemas evolve.
 
 ```ts
 import { pack } from "@buffered-audio/core";
 
-const definition = pack([source], "my-graph");
+const definition = pack([source], { name: "my-graph" });
 ```
 
 ### unpack
 
-Deserialize a `GraphDefinition` back into live node instances:
+Deserialize a `GraphDefinition` back into live node instances. Each node is constructed through its schema (defaults applied), then edges are wired with `.to()`. Returns the source nodes.
 
 ```ts
 import { unpack } from "@buffered-audio/core";
 
 const sources = unpack(definition, registry);
-await sources[0].render();
+const job = sources[0].createRenderJob();
+await job.render();
 ```
 
-### renderGraph
+### createRenderJobs
 
-Shorthand to unpack and render in one step:
+Substitute parameters, unpack, and build one `RenderJob` per source in a single synchronous call. It returns the un-rendered jobs so callers can subscribe before starting; the caller renders them.
 
 ```ts
-import { renderGraph } from "@buffered-audio/core";
+import { createRenderJobs } from "@buffered-audio/core";
 
-await renderGraph(definition, registry, { memoryLimit: 512 * 1024 * 1024 });
+const jobs = createRenderJobs(definition, registry, { memoryLimit: 512 * 1024 * 1024 });
+
+for (const job of jobs) {
+	job.events.on("finished", (node) => console.log(`${node.nodeName} done`));
+}
+
+await Promise.all(jobs.map((job) => job.render()));
 ```
+
+`RenderGraphOptions` extends `RenderOptions` with `parameters?: Record<string, string>` for `{{name}}` template substitution, applied to a copy per call so the definition stays a durable template.
 
 ### validateGraphDefinition
 
-Validates raw JSON against the BAG schema using Zod:
+Validate raw JSON against the BAG schema with Zod:
 
 ```ts
 import { validateGraphDefinition } from "@buffered-audio/core";
@@ -239,36 +332,12 @@ import { validateGraphDefinition } from "@buffered-audio/core";
 const definition = validateGraphDefinition(JSON.parse(raw));
 ```
 
-## ChunkBuffer
-
-`ChunkBuffer` is the audio sample storage used internally by `BufferedTransformStream` and constructible by transforms that need their own scratch space. A single concrete class — data lives in an in-memory write batch until it exceeds a 10 MB threshold, at which point a temp file is lazily created and the batch flushes. Buffers whose total lifetime stays under 10 MB never touch disk; large buffers (e.g. `WHOLE_FILE` mode) auto-spill so memory stays bounded. The temp file is unlinked on `close()`.
-
-### Sequential-only API
-
-All access is sequential through internal cursors — there is no offset-based random access:
-
-| Method | Behavior |
-|---|---|
-| `read(n): Promise<AudioChunk>` | Pull the next N frames from the forward read cursor. Returns a short chunk (possibly zero-length) at end of buffer. |
-| `readReverse(n): Promise<AudioChunk>` | Same, advancing backward from the tail. |
-| `write(samples, sampleRate?, bitDepth?): Promise<void>` | Append samples at the tail via the internal writer's batch. Capture or validate sample-rate/bit-depth on the first call. |
-| `writeReverse(samples, sampleRate?, bitDepth?): Promise<void>` | Prepend samples at the head. |
-| `flushWrites(): Promise<void>` | Force the in-flight write batch to disk so subsequent reads see it. |
-| `reset(): Promise<void>` | Rewind cursors to their starting positions; preserve data. |
-| `clear(): Promise<void>` | Drop all data and reset cursors. |
-| `setSampleRate(rate)` / `setBitDepth(depth)` | Override the captured format (e.g. for resample / dither transforms). |
-| `close(): Promise<void>` | Release the temp file (if any) and reset state. |
-
-`read(N)` returns an `AudioChunk` whose `samples[0].length === N` when N frames are available; at end of buffer the returned chunk has fewer (possibly zero) frames. Callers loop until the short chunk and then break.
-
-Concurrent read + write on the same buffer is allowed under the invariant that the read cursor leads the write cursor (callers maintain the invariant; the buffer does not enforce). Reads see disk plus already-flushed writes; in-flight write batches are invisible until `flushWrites()` or `close()`.
-
-The sequential-only contract eliminates the whole-source `Float32Array` antipattern at the API level — random-access reads are structurally impossible, so transforms cannot accidentally materialize an entire source in memory. Transforms that need to compose or rearrange audio allocate a separate temp `ChunkBuffer`, stream output into it, then `buffer.clear()` and stream the temp back (see the `_process` example above).
-
 ## Backpressure
 
-`SourceNode.render()` computes a `highWaterMark` from the pipeline depth, channel count, and chunk size, bounded by a configurable `memoryLimit` (default 256 MB). This is passed to all streams via `StreamContext` to apply consistent backpressure across the pipeline.
+`RenderJob` computes a `highWaterMark` from the pipeline stage count, channel count, and chunk size, bounded by a configurable `memoryLimit` (default 256 MB), and threads it to every stream through `StreamContext` for consistent backpressure across the pipeline. Whole-file transforms consume memory outside this budget but self-regulate through `BlockBuffer`'s disk spillover. An explicit `highWaterMark` in `RenderOptions` overrides the calculation.
 
 ## License
 
 ISC
+</content>
+</invoke>
