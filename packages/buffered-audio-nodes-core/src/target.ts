@@ -1,24 +1,25 @@
 import { BufferedAudioNode, type Block, type BufferedAudioNodeProperties, type StreamContext } from "./node";
+import { createProgressGate } from "./progress-gate";
 import { BufferedStream } from "./stream";
 
 export interface TargetNodeProperties extends BufferedAudioNodeProperties {}
 
-export abstract class BufferedTargetStream<P extends TargetNodeProperties = TargetNodeProperties> extends BufferedStream<P> {
+export abstract class BufferedTargetStream<N extends BufferedAudioNode<TargetNodeProperties> = BufferedAudioNode<TargetNodeProperties>> extends BufferedStream<N> {
 	private hasStarted = false;
 	private framesWritten = 0;
 	private processingMs = 0;
 	private sourceTotalFrames?: number;
 
-	abstract _write(chunk: Block): Promise<void>;
-	abstract _close(): Promise<void>;
+	abstract _write(chunk: Block): Promise<void> | void;
+	abstract _close(): Promise<void> | void;
 
 	setup(readable: ReadableStream<Block>, context: StreamContext): Promise<void> {
 		this.sourceTotalFrames = context.durationFrames;
 
-		return this._setup(readable, context);
+		return Promise.resolve(this._setup(readable, context));
 	}
 
-	async _setup(input: ReadableStream<Block>, _context: StreamContext): Promise<void> {
+	_setup(input: ReadableStream<Block>, _context: StreamContext): Promise<void> | void {
 		return input.pipeTo(this.createWritableStream());
 	}
 
@@ -26,6 +27,8 @@ export abstract class BufferedTargetStream<P extends TargetNodeProperties = Targ
 		this.hasStarted = false;
 		this.framesWritten = 0;
 		this.processingMs = 0;
+
+		const writeGate = createProgressGate(this.sourceTotalFrames);
 
 		return new WritableStream<Block>({
 			write: async (chunk) => {
@@ -41,7 +44,7 @@ export abstract class BufferedTargetStream<P extends TargetNodeProperties = Targ
 				this.processingMs += performance.now() - start;
 				this.framesWritten += chunk.samples[0]?.length ?? 0;
 
-				this.emitProgress("write", this.framesWritten, this.sourceTotalFrames);
+				if (writeGate(this.framesWritten, Date.now())) this.emitProgress("write", this.framesWritten, this.sourceTotalFrames);
 			},
 			close: async () => {
 				const start = performance.now();
@@ -50,7 +53,7 @@ export abstract class BufferedTargetStream<P extends TargetNodeProperties = Targ
 
 				this.processingMs += performance.now() - start;
 
-				this.emitProgress("write", this.framesWritten, this.sourceTotalFrames, { force: true });
+				this.emitProgress("write", this.framesWritten, this.sourceTotalFrames);
 				this.emitFinished({ framesDone: this.framesWritten, processingMs: this.processingMs });
 				await this.destroy();
 			},

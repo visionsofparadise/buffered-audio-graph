@@ -1,16 +1,22 @@
-import type { Block, StreamContext } from "./node";
+import type { Block, BufferedAudioNode, StreamContext } from "./node";
+import { createProgressGate } from "./progress-gate";
 import { BufferedStream } from "./stream";
 import type { TransformNodeProperties } from "./transform";
 
-export abstract class UnbufferedTransformStream<P extends TransformNodeProperties = TransformNodeProperties> extends BufferedStream<P> {
+export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>> extends BufferedStream<N> {
 	private processingMs = 0;
 	private framesBuffered = 0;
 	private framesEmitted = 0;
 	private hasStarted = false;
 	private sourceTotalFrames?: number;
 
+	private bufferGate = createProgressGate();
+	private emitGate = createProgressGate();
+
 	setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.durationFrames;
+		this.bufferGate = createProgressGate(context.durationFrames);
+		this.emitGate = createProgressGate(context.durationFrames);
 
 		return this._setup(input, context);
 	}
@@ -35,7 +41,7 @@ export abstract class UnbufferedTransformStream<P extends TransformNodePropertie
 		return (block) => {
 			controller.enqueue(block);
 			this.framesEmitted += block.samples[0]?.length ?? 0;
-			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+			if (this.emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		};
 	}
 
@@ -52,7 +58,7 @@ export abstract class UnbufferedTransformStream<P extends TransformNodePropertie
 		this.processingMs += performance.now() - start;
 		this.framesBuffered += block.samples[0]?.length ?? 0;
 
-		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+		if (this.bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 	}
 
 	private async handleFlush(controller: TransformStreamDefaultController<Block>): Promise<void> {
@@ -62,8 +68,8 @@ export abstract class UnbufferedTransformStream<P extends TransformNodePropertie
 
 		this.processingMs += performance.now() - start;
 
-		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames, { force: true });
-		this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames, { force: true });
+		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+		this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
 
 		await this.destroy();

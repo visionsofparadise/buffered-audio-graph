@@ -1,12 +1,13 @@
 import { BlockBuffer } from "./block-buffer";
 import type { Block, BufferedAudioNode, StreamContext } from "./node";
-import { BufferedStream } from "./stream";
+import { createProgressGate } from "./progress-gate";
+import { BufferedStream, type StreamRenderContext } from "./stream";
 import type { TransformNodeProperties } from "./transform";
 
 export const WHOLE_FILE = Infinity;
 
 // FIX: We need to have this narrowed to a type with blockSize
-export abstract class BufferedTransformStream<P extends TransformNodeProperties = TransformNodeProperties> extends BufferedStream<P> {
+export abstract class BufferedTransformStream<N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>> extends BufferedStream<N> {
 	blockSize: number;
 
 	private processingMs = 0;
@@ -18,8 +19,11 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 	private hasStarted = false;
 	private sourceTotalFrames?: number;
 
-	constructor(node: BufferedAudioNode) {
-		super(node);
+	private bufferGate = createProgressGate();
+	private emitGate = createProgressGate();
+
+	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
+		super(node, context);
 
 		const blockSize = (this.properties as { blockSize?: number }).blockSize ?? WHOLE_FILE;
 
@@ -46,6 +50,8 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 
 	setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.durationFrames;
+		this.bufferGate = createProgressGate(context.durationFrames);
+		this.emitGate = createProgressGate(context.durationFrames);
 
 		return this._setup(input, context);
 	}
@@ -84,7 +90,7 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 			}
 
 			this.framesEmitted += frames;
-			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+			if (this.emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		};
 	}
 
@@ -133,7 +139,7 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 		this.processingMs += performance.now() - start;
 		this.framesBuffered += blockFrames;
 
-		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+		if (this.bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 	}
 
 	private async fireTransform(controller: TransformStreamDefaultController<Block>): Promise<void> {
@@ -146,9 +152,9 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 
 		await this.buffer.flushWrites();
 
-		if (wholeFile) this.emitProgress("process", 0, framesBefore, { force: true });
+		if (wholeFile) this.emitProgress("process", 0, framesBefore);
 		await this.transform(this.buffer, this.makeEnqueue(controller));
-		if (wholeFile) this.emitProgress("process", framesBefore, framesBefore, { force: true });
+		if (wholeFile) this.emitProgress("process", framesBefore, framesBefore);
 
 		await this.buffer.clear();
 
@@ -161,7 +167,7 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 	}
 
 	private async finalizeFlush(controller: TransformStreamDefaultController<Block>): Promise<void> {
-		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames, { force: true });
+		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
 		if (this.buffer && this.buffer.frames > 0) {
 			await this.fireTransform(controller);
@@ -169,7 +175,7 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 
 		await this.flush(this.makeEnqueue(controller));
 
-		this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames, { force: true });
+		this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
 	}
 

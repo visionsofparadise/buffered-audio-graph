@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { BufferedTransformStream } from "./buffered-transform";
 import type { Block, BufferedAudioNode, ExecutionProvider, RenderOptions, StreamContext } from "./node";
 import { BufferedSourceStream, type RenderTiming, type SourceNode } from "./source";
-import { type BufferedStream, DEFAULT_PROGRESS_QUANTUM, type RenderEvents } from "./stream";
+import type { BufferedStream, RenderEvents, StreamRenderContext } from "./stream";
 import { BufferedTargetStream } from "./target";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
 import { teeReadable } from "./utils/tee-readable";
@@ -22,7 +22,7 @@ export class RenderJob {
 
 	private readonly streamsMap = new Map<BufferedAudioNode, Array<BufferedStream>>();
 	private readonly abortController = new AbortController();
-	private readonly quantumFraction: number;
+	private readonly renderContext: StreamRenderContext;
 
 	private readonly root: PlanNode;
 	private readonly sourceStream: BufferedSourceStream;
@@ -34,7 +34,9 @@ export class RenderJob {
 		source: SourceNode,
 		private readonly options?: RenderOptions,
 	) {
-		this.quantumFraction = options?.progressQuantum ?? DEFAULT_PROGRESS_QUANTUM;
+		let streamIdCounter = 0;
+
+		this.renderContext = { events: this.events, startedAt: Date.now(), nextStreamId: () => streamIdCounter++ };
 
 		this.root = this.build(source, new Set<BufferedAudioNode>());
 
@@ -63,9 +65,7 @@ export class RenderJob {
 		path.add(node);
 
 		const ctor = node.constructor as typeof BufferedAudioNode;
-		const stream = new ctor.Stream(node);
-
-		stream.bind(this.events, { nodeName: ctor.nodeName, nodeId: node.id }, this.quantumFraction);
+		const stream = new ctor.Stream(node, this.renderContext);
 
 		const existing = this.streamsMap.get(node);
 
@@ -121,7 +121,6 @@ export class RenderJob {
 			durationFrames: meta.durationFrames,
 			highWaterMark: this.options?.highWaterMark ?? computedHighWaterMark,
 			signal: this.signal(),
-			progressQuantum: this.options?.progressQuantum,
 		};
 
 		const start = performance.now();

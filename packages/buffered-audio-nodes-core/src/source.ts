@@ -1,4 +1,5 @@
 import { BufferedAudioNode, type Block, type BufferedAudioNodeProperties, type Composition, type RenderOptions, type StreamContext } from "./node";
+import { createProgressGate } from "./progress-gate";
 import { RenderJob } from "./render-job";
 import { BufferedStream } from "./stream";
 
@@ -16,7 +17,7 @@ export interface RenderTiming {
 
 export interface SourceNodeProperties extends BufferedAudioNodeProperties {}
 
-export abstract class BufferedSourceStream<P extends SourceNodeProperties = SourceNodeProperties> extends BufferedStream<P> {
+export abstract class BufferedSourceStream<N extends BufferedAudioNode<SourceNodeProperties> = BufferedAudioNode<SourceNodeProperties>> extends BufferedStream<N> {
 	private framesRead = 0;
 	private processingMs = 0;
 	private hasStarted = false;
@@ -26,11 +27,10 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 	abstract _read(): Promise<Block | undefined>;
 
 	setup(context: StreamContext): Promise<ReadableStream<Block>> {
-		return this._setup(context);
+		return Promise.resolve(this._setup(context));
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async _setup(context: StreamContext): Promise<ReadableStream<Block>> {
+	_setup(context: StreamContext): Promise<ReadableStream<Block>> | ReadableStream<Block> {
 		let done = false;
 
 		this.framesRead = 0;
@@ -38,6 +38,7 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 		this.hasStarted = false;
 
 		const { signal, durationFrames: sourceTotalFrames, highWaterMark } = context;
+		const readGate = createProgressGate(sourceTotalFrames);
 
 		return new ReadableStream<Block>(
 			{
@@ -64,7 +65,7 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 
 						if (!chunk) {
 							done = true;
-							this.emitProgress("read", this.framesRead, sourceTotalFrames, { force: true });
+							this.emitProgress("read", this.framesRead, sourceTotalFrames);
 							this.emitFinished({ framesDone: this.framesRead, processingMs: this.processingMs });
 							await this.destroy();
 							controller.close();
@@ -74,7 +75,7 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 
 						this.framesRead += chunk.samples[0]?.length ?? 0;
 						controller.enqueue(chunk);
-						this.emitProgress("read", this.framesRead, sourceTotalFrames);
+						if (readGate(this.framesRead, Date.now())) this.emitProgress("read", this.framesRead, sourceTotalFrames);
 					} catch (error) {
 						done = true;
 						await this.destroy();

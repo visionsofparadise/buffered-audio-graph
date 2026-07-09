@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { BufferedStream } from "./stream";
+import type { BufferedStream, StreamRenderContext } from "./stream";
 
 export interface Block {
 	readonly samples: Array<Float32Array>;
@@ -13,6 +13,7 @@ export type ExecutionProvider = "gpu" | "cpu-native" | "cpu";
 export interface NodeIdentity {
 	readonly nodeName: string;
 	readonly nodeId?: string;
+	readonly streamId: number;
 }
 
 export interface StreamContext {
@@ -21,7 +22,6 @@ export interface StreamContext {
 	readonly durationFrames?: number;
 	readonly highWaterMark: number;
 	readonly signal?: AbortSignal;
-	readonly progressQuantum?: number;
 }
 
 export interface RenderOptions {
@@ -30,7 +30,6 @@ export interface RenderOptions {
 	readonly memoryLimit?: number;
 	readonly signal?: AbortSignal;
 	readonly executionProviders?: ReadonlyArray<ExecutionProvider>;
-	readonly progressQuantum?: number;
 }
 
 export interface BufferedAudioNodeProperties {
@@ -65,7 +64,7 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 	static readonly description: string = "";
 	static readonly schema: z.ZodType = z.object({});
 
-	static readonly Stream: new (node: BufferedAudioNode) => BufferedStream;
+	static readonly Stream: new (node: BufferedAudioNode, context: StreamRenderContext) => BufferedStream;
 
 	properties: P;
 
