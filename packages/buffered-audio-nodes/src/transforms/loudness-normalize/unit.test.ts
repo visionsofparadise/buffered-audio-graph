@@ -186,8 +186,8 @@ describe("LoudnessNormalize", () => {
 		// the stream directly. The schema has no `ffmpegPath`, so adding a subprocess would be visible in review.
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
 		const stream = new LoudnessNormalizeStream(loudnessNormalize({ target: -16 }), renderContext());
-		const output = await stream.setup(readableFrom([{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]), execContext());
-		const reader = output.getReader();
+		const outputStream = await stream.setup(readableFrom([{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]), execContext());
+		const reader = outputStream.getReader();
 
 		const collected: Array<Float32Array> = [];
 
