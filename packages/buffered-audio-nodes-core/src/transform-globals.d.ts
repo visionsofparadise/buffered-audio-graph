@@ -4,3 +4,5 @@
 interface Transformer<I = any, O = any> {
 	cancel?: (reason?: unknown) => void | PromiseLike<void>;
 }
+
+// FIX: This seems like a hack requiring an actual structural fix

@@ -5,6 +5,7 @@ import type { TransformNodeProperties } from "./transform";
 
 export const WHOLE_FILE = Infinity;
 
+// FIX: We need to have this narrowed to a type with blockSize
 export abstract class BufferedTransformStream<P extends TransformNodeProperties = TransformNodeProperties> extends BufferedStream<P> {
 	blockSize: number;
 
@@ -15,8 +16,6 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 	private buffer?: BlockBuffer;
 	private inferredChunkSize?: number;
 	private hasStarted = false;
-
-	protected streamChunkSize?: number;
 	private sourceTotalFrames?: number;
 
 	constructor(node: BufferedAudioNode) {
@@ -27,7 +26,6 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 		if (blockSize === 0) throw new Error("BufferedTransformStream: blockSize must be a positive integer or WHOLE_FILE, not 0");
 
 		this.blockSize = blockSize;
-		this.streamChunkSize = (this.properties as { streamChunkSize?: number }).streamChunkSize;
 	}
 
 	protected get sampleRate(): number | undefined {
@@ -40,6 +38,10 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 
 	private get outputChunkSize(): number {
 		return this.streamChunkSize ?? this.inferredChunkSize ?? 44100;
+	}
+
+	protected get streamChunkSize() {
+		return this.properties.streamChunkSize;
 	}
 
 	setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
@@ -71,7 +73,7 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 					const take = Math.min(cap, frames - start);
 
 					controller.enqueue({
-						samples: block.samples.map((channel) => channel.subarray(start, start + take)),
+						samples: block.samples.map((channel) => channel.subarray(start, start + take)), // FIX: Can you explain what exactly we're doing here?
 						offset: block.offset + start,
 						sampleRate: block.sampleRate,
 						bitDepth: block.bitDepth,
@@ -135,6 +137,7 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 	}
 
 	private async fireTransform(controller: TransformStreamDefaultController<Block>): Promise<void> {
+		// FIX: This is confusing. Why do we have fireTransform and transform? Does unravelling enqueue to being passed in make it so we can consolidate them into one transform method?
 		if (!this.buffer) return;
 
 		const framesBefore = this.buffer.frames;
@@ -191,7 +194,6 @@ export abstract class BufferedTransformStream<P extends TransformNodeProperties 
 		}
 	}
 
-	 
 	flush(_enqueue: (block: Block) => void): Promise<void> | void {
 		return;
 	}

@@ -1,4 +1,4 @@
-import type { EventEmitter } from "node:events";
+import type { EventEmitter } from "node:events"; // FIX: I'm getting a type error "Cannot find name 'node:events'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.". is our tsconfig set properly?
 import type { BufferedAudioNode, BufferedAudioNodeProperties, NodeIdentity } from "./node";
 
 export type StreamPhase = "read" | "buffer" | "process" | "emit" | "write";
@@ -7,6 +7,7 @@ export interface ProgressPayload {
 	phase: StreamPhase;
 	framesDone: number;
 	framesTotal?: number;
+	// FIX: We should be tracking createdAt, absolute time for all events emitted.
 }
 
 export interface FinishedPayload {
@@ -30,8 +31,10 @@ export type RenderEvents = EventEmitter<{
 export const UNKNOWN_TOTAL_QUANTUM_FRAMES = 480_000;
 export const DEFAULT_PROGRESS_QUANTUM = 0.1;
 export const PROCESS_QUANTUM_FRACTION = 0.02;
+// FIX: We should just commit on quantum size being a fixed constant.
 
 export abstract class BufferedStream<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> {
+	// FIX: Why do we take the properties type rather than the Node type? We're having to assert the node type because of this, when properties is accessible on the node. the properties property should just be a getter on the node.properties
 	readonly node: BufferedAudioNode;
 	readonly properties: P;
 
@@ -41,9 +44,10 @@ export abstract class BufferedStream<P extends BufferedAudioNodeProperties = Buf
 
 	private destroyed = false;
 
-	private readonly lastBoundaryByPhase = new Map<StreamPhase, number>();
+	private readonly lastBoundaryByPhase = new Map<StreamPhase, number>(); // FIX: Can you explain why we are having to track this state?
 
 	constructor(node: BufferedAudioNode) {
+		// FIX: We should be receiving a render context here with events, and startedAt so we can track elapsed since render start internally.
 		this.node = node;
 		this.properties = { ...node.properties } as P;
 	}
@@ -52,14 +56,15 @@ export abstract class BufferedStream<P extends BufferedAudioNodeProperties = Buf
 		this.renderEvents = events;
 		this.identity = identity;
 		this.quantumFraction = quantumFraction;
-	}
+	} // FIX: Eliminating this method will reduce a lot of complexity. We should look to have everything set either in the constructor or in the setup phase instead of creating another bind "stage". events and quantumFraction seem like they can be passed in a construction. im not sure of what identity is or it's justification, can you explain it to me? can't we generate an id at construction, move this all to the constructor, and get rid of all these null checks below?
 
 	protected emitStarted(): void {
-		if (this.renderEvents && this.identity) this.renderEvents.emit("started", this.identity);
+		// FIX: We should be setting a startedAt here so we can track elapsedMs in progress and finished
+		if (this.identity) this.renderEvents?.emit("started", this.identity);
 	}
 
 	protected emitFinished(payload: FinishedPayload): void {
-		if (this.renderEvents && this.identity) this.renderEvents.emit("finished", this.identity, payload);
+		if (this.identity) this.renderEvents?.emit("finished", this.identity, payload);
 	}
 
 	protected emitProgress(phase: StreamPhase, framesDone: number, framesTotal?: number, options?: { force?: boolean }): void {
@@ -91,10 +96,11 @@ export abstract class BufferedStream<P extends BufferedAudioNodeProperties = Buf
 
 	protected progress(framesDone: number, framesTotal?: number): void {
 		this.emitProgress("process", framesDone, framesTotal);
-	}
+	} // FIX: I don't like this shorthand. Node creators are responsible for doing their own logging in process, but it's feasible that they are extending and modifying other phases too. locking "progress" to just one phase may be misleading, we should just use emitProgress directly instead.
 
 	async destroy(): Promise<void> {
 		if (this.destroyed) return;
+
 		this.destroyed = true;
 
 		await this._destroy();

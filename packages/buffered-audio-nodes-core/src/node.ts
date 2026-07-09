@@ -52,15 +52,16 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 	static readonly packageName: string;
 	static readonly packageVersion: string = "0.0.0";
 	static readonly nodeName: string;
-	static readonly nodeDescription: string = "";
+	static readonly nodeDescription: string = ""; // FIX: Change this to just "description"
 	static readonly schema: z.ZodType = z.object({});
-	static readonly streamClass: new (node: BufferedAudioNode) => BufferedStream;
+
+	static readonly Stream: new (node: BufferedAudioNode) => BufferedStream; // FIX: This was renamed streamNode -> Stream, needs to be propagated everywhere
 
 	abstract readonly type: ReadonlyArray<string>;
 
 	static is(value: unknown): value is BufferedAudioNode {
 		return typeof value === "object" && value !== null && "type" in value && Array.isArray(value.type) && value.type[0] === "buffered-audio-node";
-	}
+	} // FIX: We added this utility because of quirks around dynamically importing in things like the app at render time, however I'm going back on this being the place to put this. We should just have an abstract utility that asserts all nodes based on their static metadata properties.
 
 	properties: P;
 
@@ -83,6 +84,8 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 
 		try {
 			parsed = ctor.schema.parse(properties ?? {});
+
+			// FIX: This needs to assert the type of parsed such that we don't need to assert the type inline below.
 		} catch (error) {
 			if (error instanceof z.ZodError) {
 				throw new Error(`Invalid parameters for node "${ctor.nodeName}": ${error.message}`);
@@ -95,4 +98,5 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 	}
 
 	abstract clone(overrides?: Partial<BufferedAudioNodeProperties>): BufferedAudioNode;
+	// FIX: I'm questioning if we need this anymore? Can you dig up the reasoning for why it exists? We can eliminate boilerplate from all nodes, and a test path for all nodes if we no longer need this.
 }

@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { BufferedTransformStream } from "./buffered-transform";
-import type { BufferedAudioNode, Block, ExecutionProvider, RenderOptions, StreamContext } from "./node";
-import { BufferedSourceStream, type SourceNode, type RenderTiming } from "./source";
+import type { Block, BufferedAudioNode, ExecutionProvider, RenderOptions, StreamContext } from "./node";
+import { BufferedSourceStream, type RenderTiming, type SourceNode } from "./source";
 import { type BufferedStream, DEFAULT_PROGRESS_QUANTUM, type RenderEvents } from "./stream";
 import { BufferedTargetStream } from "./target";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
@@ -63,7 +63,7 @@ export class RenderJob {
 		path.add(node);
 
 		const ctor = node.constructor as typeof BufferedAudioNode;
-		const stream = new ctor.streamClass(node);
+		const stream = new ctor.Stream(node);
 
 		stream.bind(this.events, { nodeName: ctor.nodeName, id: node.id, type: node.type }, this.quantumFraction);
 

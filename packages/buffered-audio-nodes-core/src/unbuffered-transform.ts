@@ -15,12 +15,15 @@ export abstract class UnbufferedTransformStream<P extends TransformNodePropertie
 		return this._setup(input, context);
 	}
 
+	// FIX: we should disable this rule if it's blocking writing perfectly valid code
 	// eslint-disable-next-line @typescript-eslint/require-await
 	async _setup(input: ReadableStream<Block>, _context: StreamContext): Promise<ReadableStream<Block>> {
-		return input.pipeThrough(this.createTransformStream());
+		return input.pipeThrough(this.createTransformStream()); // FIX: We should have a another step _pipe which is called in setup() instead of doing this here. Downstream overwrites of _setup shouldn't have to know about the stream piping. those that do want to hook into the piping phase should overwrite _pipe()
 	}
 
+	// FIX: "TransformStream" is overloaded in our context, we should call this createWebTransformStream to differentiate
 	createTransformStream(): TransformStream<Block, Block> {
+		// FIX: Shouldn't we create our equeue here and pass it to handleTransform and handleFlush? instead of creating a method for it
 		return new TransformStream<Block, Block>({
 			transform: (block, controller) => this.handleTransform(block, controller),
 			flush: (controller) => this.handleFlush(controller),
@@ -68,8 +71,7 @@ export abstract class UnbufferedTransformStream<P extends TransformNodePropertie
 
 	abstract transform(block: Block, enqueue: (block: Block) => void): Promise<void> | void;
 
-	 
 	flush(_enqueue: (block: Block) => void): Promise<void> | void {
 		return;
-	}
+	} // FIX: This is a noop?
 }
