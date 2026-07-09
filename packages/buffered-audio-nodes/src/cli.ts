@@ -1,14 +1,14 @@
 import { Command } from "commander";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createRenderJobs, validateGraphDefinition, BufferedSourceStream, SourceNode, type NodeIdentity, type ProgressPayload, type FinishedPayload, type LogPayload, type NodeRegistry, type BufferedAudioNode, type RenderEvents, type RenderJob } from "@buffered-audio/core";
+import { createRenderJobs, validateGraphDefinition, BufferedSourceStream, SourceNode, type NodeIdentity, type StartedPayload, type ProgressPayload, type FinishedPayload, type LogPayload, type NodeRegistry, type BufferedAudioNode, type RenderEvents, type RenderJob } from "@buffered-audio/core";
 
-const labelOf = (node: { nodeName: string; id?: string }): string => (node.id ? `${node.nodeName}#${node.id}` : node.nodeName);
+const labelOf = (identity: NodeIdentity): string => (identity.nodeId !== undefined ? `${identity.nodeName}#${identity.nodeId}` : `${identity.nodeName}#${identity.streamId}`);
 
 function sourceLabel(job: RenderJob): string | undefined {
-	for (const [node, streams] of job.streams) {
-		if (streams.some((stream) => stream instanceof BufferedSourceStream)) {
-			return labelOf({ nodeName: (node.constructor as typeof BufferedAudioNode).nodeName, id: node.id });
+	for (const streams of job.streams.values()) {
+		for (const stream of streams) {
+			if (stream instanceof BufferedSourceStream) return labelOf(stream.identity);
 		}
 	}
 
@@ -47,11 +47,11 @@ function parseParams(entries: ReadonlyArray<string>): Record<string, string> {
 	return Object.fromEntries(parameters);
 }
 
-function stamp(): string {
-	const now = new Date();
+function stamp(createdAt: number): string {
+	const date = new Date(createdAt);
 	const pad = (value: number): string => String(value).padStart(2, "0");
 
-	return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+	return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 interface EventSink {
@@ -60,12 +60,12 @@ interface EventSink {
 }
 
 function createEventSink(): EventSink {
-	// Keyed by identity object, not label: id-less same-type nodes share a label but must not collide.
-	const totals = new Map<NodeIdentity, { framesDone: number; processingMs?: number }>();
+	// Keyed by streamId, not label: id-less same-type nodes share a label but each has a unique streamId.
+	const totals = new Map<number, { label: string; framesDone: number; processingMs?: number }>();
 
 	const subscribe = (events: RenderEvents): void => {
-		events.on("started", (node: NodeIdentity) => {
-			process.stdout.write(`${stamp()} [${labelOf(node)}] started\n`);
+		events.on("started", (node: NodeIdentity, payload: StartedPayload) => {
+			process.stdout.write(`${stamp(payload.createdAt)} [${labelOf(node)}] started\n`);
 		});
 
 		events.on("progress", (node: NodeIdentity, payload: ProgressPayload) => {
@@ -74,9 +74,9 @@ function createEventSink(): EventSink {
 			if (payload.framesTotal !== undefined) {
 				const percent = Math.round((payload.framesDone / payload.framesTotal) * 100);
 
-				process.stdout.write(`${stamp()} [${label}] ${payload.phase} ${percent}%\n`);
+				process.stdout.write(`${stamp(payload.createdAt)} [${label}] ${payload.phase} ${percent}%\n`);
 			} else {
-				process.stdout.write(`${stamp()} [${label}] ${payload.phase} frames=${payload.framesDone}\n`);
+				process.stdout.write(`${stamp(payload.createdAt)} [${label}] ${payload.phase} frames=${payload.framesDone}\n`);
 			}
 		});
 
@@ -85,26 +85,24 @@ function createEventSink(): EventSink {
 			const parts = [payload.message, ...data].join(" ");
 			const prefix = payload.level === "warn" ? "warn: " : "";
 
-			process.stdout.write(`${stamp()} ${prefix}[${labelOf(node)}] ${parts}\n`);
+			process.stdout.write(`${stamp(payload.createdAt)} ${prefix}[${labelOf(node)}] ${parts}\n`);
 		});
 
 		events.on("finished", (node: NodeIdentity, payload: FinishedPayload) => {
-			totals.set(node, { framesDone: payload.framesDone, processingMs: payload.processingMs });
+			totals.set(node.streamId, { label: labelOf(node), framesDone: payload.framesDone, processingMs: payload.processingMs });
 
 			const ms = payload.processingMs !== undefined ? ` ms=${Math.round(payload.processingMs)}` : "";
 
-			process.stdout.write(`${stamp()} [${labelOf(node)}] finished frames=${payload.framesDone}${ms}\n`);
+			process.stdout.write(`${stamp(payload.createdAt)} [${labelOf(node)}] finished frames=${payload.framesDone}${ms}\n`);
 		});
 	};
 
 	const printSummary = (jobs: ReadonlyArray<RenderJob>): void => {
-		for (const [node, { framesDone, processingMs }] of totals) {
-			const label = labelOf(node);
-
+		for (const { label, framesDone, processingMs } of totals.values()) {
 			if (processingMs !== undefined) {
-				process.stdout.write(`${stamp()} [${label}] processed ${framesDone} frames in ${Math.round(processingMs)}ms\n`);
+				process.stdout.write(`${stamp(Date.now())} [${label}] processed ${framesDone} frames in ${Math.round(processingMs)}ms\n`);
 			} else {
-				process.stdout.write(`${stamp()} [${label}] processed ${framesDone} frames\n`);
+				process.stdout.write(`${stamp(Date.now())} [${label}] processed ${framesDone} frames\n`);
 			}
 		}
 
@@ -115,7 +113,7 @@ function createEventSink(): EventSink {
 
 			const label = sourceLabel(job) ?? "source";
 
-			process.stdout.write(`${stamp()} [${label}] total ${(timing.totalMs / 1000).toFixed(1)}s, ${timing.realTimeMultiplier.toFixed(1)}x RT\n`);
+			process.stdout.write(`${stamp(Date.now())} [${label}] total ${(timing.totalMs / 1000).toFixed(1)}s, ${timing.realTimeMultiplier.toFixed(1)}x RT\n`);
 		}
 	};
 

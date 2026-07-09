@@ -438,99 +438,87 @@ Write audio to a file
 
 ## Creating Nodes
 
-Each node has two parts: a **Node** (inert descriptor) and a **Stream** (stateful runtime instance). Nodes are defined once and describe the transform. Streams are created fresh per render and hold the mutable processing state.
+Each node has two parts: a **Node** (inert descriptor) and a **Stream** (stateful runtime instance). The node is pure static declaration — `nodeName`, `description`, `schema`, `Stream`, plus `packageName`/`packageVersion` — and carries no per-render state. The executor constructs one stream per node per render.
 
-Extend `TransformNode` from `@buffered-audio/core` and create a companion `BufferedTransformStream`. The node's `createStream()` method produces a new stream instance for each render.
+Transforms extend one of two stream bases from `@buffered-audio/core`, picked by whether the node needs the whole signal (or fixed-size blocks) before it can produce output:
+
+- **`UnbufferedTransformStream`** — per-block streaming (gain, pan, dither). One input block in, zero or more output blocks out.
+- **`BufferedTransformStream`** — measure-then-apply and windowed DSP (normalize, loudness). Accumulates into a `BlockBuffer` sized by `blockSize` (default `WHOLE_FILE`), then serves.
 
 ### Stream Hooks
 
-- **`_buffer(chunk, buffer)`** — called for each incoming chunk. Override to inspect or modify data as it's buffered. Default appends to the buffer.
-- **`_process(buffer)`** — called once the buffer reaches `bufferSize`. Use this for analysis or in-place modification of the full buffer.
-- **`_unbuffer(chunk)`** — called for each chunk emitted from the buffer. Transform or replace the chunk here. Return `undefined` to drop it.
-- **`_teardown()`** — cleanup after render completes. Close file handles, free native resources, release ONNX sessions. Called automatically on all streams.
+All output hooks are generators — `yield` a block to emit it, yield nothing to drop it. Production is paced by downstream demand (one `yield` served per pull).
 
-### Buffer Size Modes
+- **`_transform`** — the core hook. Unbuffered: `*_transform(block)` runs once per input block. Buffered: `async *_transform(buffered: BlockBuffer)` runs once per assembled block (and once at end of stream with the trailing partial); walk the buffer with `buffered.iterate(frames)` and `yield` output.
+- **`_prepare(block)`** (buffered only) — a length-preserving transform on each incoming block before it is buffered. Use it to fold a streaming measurement (peak, LUFS) on the way in.
+- **`_flush()`** — a generator emitting trailing output at graceful end of stream, after the final `_transform`.
+- **`_setup(context)`** — context-dependent initialization (subprocess, ONNX session, FFT workspace). Runs before piping.
+- **`_pipe(input)`** — maps the input readable to the output; override to compose inner streams (e.g. wrap the transform in resamplers).
+- **`_destroy()`** — cleanup on every termination path (graceful end, error, cancel), invoked at most once. Close file handles, free native resources, release ONNX sessions.
 
-- `0` — pass-through. Each chunk flows through `_unbuffer` immediately.
-- `N` — block mode. Chunks accumulate until `N` frames are collected, then `_process` runs and `_unbuffer` emits the result.
-- `WHOLE_FILE` (`Infinity`) — full-file. All audio is buffered before `_process` and `_unbuffer` run.
+Report progress with `this.emitProgress(phase, framesDone, framesTotal?)` (pace it with `createProgressGate`) and structured logs with `this.log(message, data?, level?)`.
+
+### blockSize Modes (buffered)
+
+- `WHOLE_FILE` (`Infinity`, the default) — one firing at end of stream with the whole signal.
+- `N` — block mode. `_transform` fires each time the buffer fills to `N` frames (short only at end of stream).
 
 ### Example: Normalize
 
 ```ts
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type AudioChunk, type ChunkBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
 
-const schema = z.object({
+export const schema = z.object({
 	ceiling: z.number().min(0).max(1).multipleOf(0.01).default(1.0).describe("Ceiling"),
 });
 
-interface NormalizeProperties extends z.infer<typeof schema>, TransformNodeProperties {}
+export interface NormalizeProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-class NormalizeStream extends BufferedTransformStream<NormalizeProperties> {
+export class NormalizeStream extends BufferedTransformStream<NormalizeNode> {
+	override blockSize = WHOLE_FILE;
+
 	private peak = 0;
-	private scale = 1;
 
-	override async _buffer(chunk: AudioChunk, buffer: ChunkBuffer): Promise<void> {
-		await super._buffer(chunk, buffer);
-
-		for (let ch = 0; ch < chunk.samples.length; ch++) {
-			const channel = chunk.samples[ch] ?? new Float32Array(0);
-
-			for (let si = 0; si < channel.length; si++) {
-				const absolute = Math.abs(channel[si] ?? 0);
-
-				if (Number.isFinite(absolute) && absolute > this.peak) this.peak = absolute;
-			}
+	override _prepare(block: Block): Block {
+		for (const channel of block.samples) {
+			for (const sample of channel) this.peak = Math.max(this.peak, Math.abs(sample));
 		}
+
+		return block;
 	}
 
-	override _process(_buffer: ChunkBuffer): void {
-		const raw = this.peak === 0 ? 1 : this.properties.ceiling / this.peak;
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
+		const scale = this.peak > 0 ? this.properties.ceiling / this.peak : 1;
 
-		this.scale = Number.isFinite(raw) ? raw : 1;
-	}
+		for await (const block of buffered.iterate(44100)) {
+			if (scale === 1) {
+				yield block;
 
-	override _unbuffer(chunk: AudioChunk): AudioChunk {
-		if (this.scale === 1) return chunk;
-
-		const scaledSamples = chunk.samples.map((channel) => {
-			const scaled = new Float32Array(channel.length);
-
-			for (let index = 0; index < channel.length; index++) {
-				scaled[index] = (channel[index] ?? 0) * this.scale;
+				continue;
 			}
 
-			return scaled;
-		});
-
-		return { samples: scaledSamples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+			yield {
+				samples: block.samples.map((channel) => channel.map((sample) => sample * scale)),
+				offset: block.offset,
+				sampleRate: block.sampleRate,
+				bitDepth: block.bitDepth,
+			};
+		}
 	}
 }
 
-class NormalizeNode extends TransformNode<NormalizeProperties> {
+export class NormalizeNode extends TransformNode<NormalizeProperties> {
 	static override readonly nodeName = "Normalize";
-	static override readonly packageName = "buffered-audio-nodes";
-	static override readonly nodeDescription = "Adjust peak or loudness level to a target ceiling";
+	static override readonly packageName = "@buffered-audio/nodes";
+	static override readonly packageVersion = "0.8.0";
+	static override readonly description = "Adjust peak or loudness level to a target ceiling";
 	static override readonly schema = schema;
-
-	override readonly type = ["buffered-audio-node", "transform", "normalize"] as const;
-
-	constructor(properties: NormalizeProperties) {
-		super({ bufferSize: WHOLE_FILE, latency: WHOLE_FILE, ...properties });
-	}
-
-	override createStream(): NormalizeStream {
-		return new NormalizeStream({ ...this.properties, bufferSize: this.bufferSize, overlap: this.properties.overlap ?? 0 });
-	}
-
-	override clone(overrides?: Partial<NormalizeProperties>): NormalizeNode {
-		return new NormalizeNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = NormalizeStream;
 }
 
 export function normalize(options?: { ceiling?: number; id?: string }): NormalizeNode {
-	return new NormalizeNode({ ceiling: options?.ceiling ?? 1.0, id: options?.id });
+	return new NormalizeNode(options ?? {});
 }
 ```
 

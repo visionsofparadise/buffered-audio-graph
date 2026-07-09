@@ -19,7 +19,7 @@ Concrete node implementations live in separate packages (e.g. `@buffered-audio/n
 
 ## Node Types
 
-Nodes are pure configuration. They hold parameters, bypass state, identity, and schema metadata, and reference a stream class. They carry no per-render state, so they are safe to serialize, reuse across pipelines, and share between renders. Each node type names its stream class through a `static readonly streamClass`, and the executor constructs one stream instance per node per render pass.
+Nodes are pure configuration. They hold parameters, bypass state, identity, and schema metadata, and reference a stream class. They carry no per-render state, so they are safe to serialize, reuse across pipelines, and share between renders. Each node type names its stream class through a `static readonly Stream`, and the executor constructs one stream instance per node per render pass.
 
 ### SourceNode
 
@@ -35,9 +35,9 @@ Consumes audio. Its stream class extends `BufferedTargetStream` and writes to a 
 
 ## Node Construction
 
-The `BufferedAudioNode` base constructor is the single defaulting and validation site. It runs `schema.parse(properties ?? {})` and merges the parsed result over the input, so schema `.default()`s apply once, on every path — the fluent factory, `.clone()`, and BAG `unpack` all flow through it. The constructor accepts the input shape `BufferedAudioNodeInput<P>` (`Partial<P> & BufferedAudioNodeProperties`); parsing strips unknown keys and preserves the base keys `id`, `bypass`, `children`, and `previousProperties`. A schema failure throws with the node name and the Zod message.
+The `BufferedAudioNode` base constructor is the single defaulting and validation site. It runs `schema.parse(properties ?? {})` and merges the parsed result over the input, so schema `.default()`s apply once, on every path — both the fluent factory and BAG `unpack` flow through it. The constructor accepts the input shape `BufferedAudioNodeInput<P>` (`Partial<P> & BufferedAudioNodeProperties`); parsing strips unknown keys and preserves the base keys `id`, `bypass`, and `children`. A schema failure throws with the node name and the Zod message.
 
-Concrete nodes follow a fixed convention: a `type` tuple, a `clone()` implementation, and four statics — `static readonly nodeName`, `static readonly schema`, `static readonly streamClass`, plus `packageName`/`packageVersion` for serialization.
+Concrete nodes are pure static declaration — no methods. Each names four statics — `static readonly nodeName`, `static readonly description`, `static readonly schema`, `static readonly Stream` — plus `packageName`/`packageVersion` for serialization.
 
 ```ts
 import { z } from "zod";
@@ -49,28 +49,29 @@ export const schema = z.object({
 
 export interface GainProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class GainStream extends UnbufferedTransformStream<GainProperties> {
-	override transform(block: Block, enqueue: (block: Block) => void): void {
+export class GainStream extends UnbufferedTransformStream<GainNode> {
+	override *_transform(block: Block): Generator<Block> {
 		const linear = Math.pow(10, this.properties.gain / 20);
+
+		if (linear === 1) {
+			yield block;
+
+			return;
+		}
 
 		const samples = block.samples.map((channel) => channel.map((sample) => sample * linear));
 
-		enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+		yield { samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
 	}
 }
 
 export class GainNode extends TransformNode<GainProperties> {
 	static override readonly nodeName = "Gain";
 	static override readonly packageName = "@buffered-audio/nodes";
-	static override readonly packageVersion = "0.7.0";
+	static override readonly packageVersion = "0.8.0";
+	static override readonly description = "Adjust signal level by a fixed amount in dB";
 	static override readonly schema = schema;
-	static override readonly streamClass = GainStream;
-
-	override readonly type = ["buffered-audio-node", "transform", "gain"] as const;
-
-	override clone(overrides?: Partial<GainProperties>): GainNode {
-		return new GainNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = GainStream;
 }
 
 export function gain(options?: { gain?: number; id?: string }): GainNode {
@@ -125,22 +126,22 @@ class RenderJob {
 
 Construction resolves bypass and composites: a bypassed node contributes no stream and its children are visited in its place, and cycles throw. A node reached by fan-in appears in `streams` with one entry per path. `abort()` aborts an internal controller chained with `options.signal`; `timing` holds `{ totalMs, audioDurationMs, realTimeMultiplier }` once the render resolves.
 
-`RenderOptions` are the caller-facing knobs: `{ chunkSize?, highWaterMark?, memoryLimit?, signal?, executionProviders?, progressQuantum? }`.
+`RenderOptions` are the caller-facing knobs: `{ chunkSize?, highWaterMark?, memoryLimit?, signal?, executionProviders? }`.
 
 ### Events
 
-Subscribe on `job.events`, a typed `EventEmitter`. Each event carries the emitting node's `NodeIdentity` as its first argument:
+Subscribe on `job.events`, a typed `EventEmitter`. Each event carries the emitting node's `NodeIdentity` as its first argument, followed by a payload:
 
 ```ts
 type RenderEvents = EventEmitter<{
-	started: [NodeIdentity];
+	started: [NodeIdentity, StartedPayload];
 	finished: [NodeIdentity, FinishedPayload];
 	progress: [NodeIdentity, ProgressPayload];
 	log: [NodeIdentity, LogPayload];
 }>;
 ```
 
-`NodeIdentity` is `{ nodeName, id?, type }`. `ProgressPayload` is `{ phase, framesDone, framesTotal? }` over the phases `"read" | "buffer" | "process" | "emit" | "write"`. `FinishedPayload` is `{ framesDone, processingMs? }`. `LogPayload` is `{ level, message, data? }`. Progress is frame-quantum throttled (`progressQuantum`, default 0.1 — roughly ten events per phase per node), never time-based, so identical input produces identical events.
+`NodeIdentity` is `{ nodeName, nodeId?, streamId }` — `streamId` is a per-job monotonic counter minted at stream construction, unique within a job even when two id-less nodes share a `nodeName`. Every payload carries `createdAt` (Unix ms, stamped at the emit site): `StartedPayload` is `{ createdAt }`, `ProgressPayload` is `{ phase, framesDone, framesTotal?, createdAt }` over the phases `"read" | "buffer" | "process" | "emit" | "write"`, `FinishedPayload` is `{ framesDone, processingMs?, createdAt }`, and `LogPayload` is `{ level, message, data?, createdAt }`. Streams emit progress on every call; a stream author paces emission with `createProgressGate` (see [Reporting from hooks](#reporting-from-hooks)), and consumers derive elapsed time from `createdAt`.
 
 ```ts
 const job = source.createRenderJob();
@@ -157,7 +158,7 @@ await job.render();
 
 ## Streams
 
-The executor constructs one stream per node per render via `new node.streamClass(node)`. Streams are mutable runtime objects holding processing state for a single pass; they are never reused. The constructor receives the node and snapshots `this.properties = { ...node.properties }` — reading `node.properties` live would leak `.to()` mutation into an in-flight render, so the snapshot is taken once at construction. The node reference stays available on `this.node` for statics.
+The executor constructs one stream per node per render via `new node.Stream(node, context)`, passing a `StreamRenderContext` (`{ events, startedAt, nextStreamId }`) the job builds once per render. Streams are mutable runtime objects holding processing state for a single pass; they are never reused. The base constructor mints the stream's `identity` (allocating a `streamId` from the context) and exposes `get properties()`, which reads through to `this.node.properties`. The node reference stays available on `this.node` for statics.
 
 ### `_destroy()`
 
@@ -174,8 +175,8 @@ The executor constructs one stream per node per render via `new node.streamClass
 
 `BufferedTargetStream` has two abstract hooks:
 
-- `_write(block: Block): Promise<void>` — consume each incoming block (write to disk, accumulate statistics, forward to a subprocess).
-- `_close(): Promise<void>` — finalize on graceful end of stream (flush buffers, rewrite a WAV header). Graceful-path only; resource release goes in `_destroy()`.
+- `_write(block: Block): Promise<void> | void` — consume each incoming block (write to disk, accumulate statistics, forward to a subprocess).
+- `_close(): Promise<void> | void` — finalize on graceful end of stream (flush buffers, rewrite a WAV header). Graceful-path only; resource release goes in `_destroy()`.
 
 ## Transform Streams
 
@@ -185,25 +186,27 @@ Transform authoring splits along one question: does the node care about block si
 
 An instrumented pass-through with no accumulation and no block size — for per-block streaming transforms (gain, pan) and external pumps (ffmpeg) whose output cadence is decoupled from input.
 
-- `transform(block: Block, enqueue: (block: Block) => void): Promise<void> | void` (abstract) — called once per incoming block. Enqueue as many output blocks as you like; enqueue none to drop the input.
-- `flush(enqueue): Promise<void> | void` (no-op base) — emit trailing output at graceful end of stream.
+- `_transform(block: Block): AsyncIterable<Block> | Iterable<Block>` (abstract) — a generator called once per incoming block. `yield` as many output blocks as you like; yield nothing to drop the input. Sync transforms may use a plain generator (`*_transform`).
+- `_flush(): AsyncIterable<Block> | Iterable<Block>` (base yields nothing) — a generator that emits trailing output at graceful end of stream.
 
 ### BufferedTransformStream
 
-Accumulates incoming blocks into a `BlockBuffer` until a full block is assembled, then hands the buffer to the author. For measure-then-apply DSP (normalize) and windowed processing.
+Accumulates incoming blocks into a `BlockBuffer` until a full block is assembled, then hands the buffer to the author. For measure-then-apply DSP (normalize) and windowed processing. Its properties type is `BufferedTransformNodeProperties` — `TransformNodeProperties` plus optional `blockSize`/`streamChunkSize`.
 
 - `blockSize: number` — the assembly size, read from `properties.blockSize`, defaulting to `WHOLE_FILE`. Positive integer or `WHOLE_FILE`; `0` throws in the constructor. In block mode the buffer holds exactly `blockSize` frames per firing (short only at end of stream); `WHOLE_FILE` fires once at end of stream with the whole signal.
-- `prepare(block: Block): Promise<Block> | Block` (identity base) — a transform on each incoming block before buffering. The framework writes the returned block into the buffer, so `prepare` must be length-preserving. Use it to accumulate a streaming measurement (peak, LUFS) on the way in, or to reshape format.
-- `transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> | void` — fires when a full block is assembled and once at end of stream with the trailing partial. Read the buffer and enqueue output blocks. Authors own output offsets: the framework never rewrites `offset`, it only counts emitted frames for progress and re-slices any enqueued block larger than the output chunk size. The default implementation drains the buffer unchanged (`buffered.iterate(outputChunkSize)`), so a bare `BufferedTransformStream` is a valid barrier pass-through.
-- `flush(enqueue): Promise<void> | void` (no-op base) — emit trailing output at graceful end of stream, after the final `transform` firing.
+- `_prepare(block: Block): Promise<Block> | Block` (identity base) — a transform on each incoming block before buffering. The framework writes the returned block into the buffer, so `_prepare` must be length-preserving. Use it to accumulate a streaming measurement (peak, LUFS) on the way in, or to reshape format.
+- `_transform(buffered: BlockBuffer): AsyncIterable<Block>` — a generator that fires when a full block is assembled and once at end of stream with the trailing partial. Read the buffer and `yield` output blocks. Authors own output offsets: the framework never rewrites `offset`, it only counts emitted frames for progress and re-slices any yielded block larger than the output chunk size. The default drains the buffer unchanged (`yield* buffered.iterate(outputChunkSize)`), so a bare `BufferedTransformStream` is a valid barrier pass-through.
+- `_flush(): AsyncIterable<Block> | Iterable<Block>` (base yields nothing) — a generator that emits trailing output at graceful end of stream, after the final `_transform` firing.
 
-The framework clears the buffer after each `transform` firing and closes it in `_destroy()`. A measure-then-apply transform reads its accumulated statistic in `transform`, then walks the buffer and applies it:
+The framework serves the pull loop: each downstream pull advances the active `_transform` (or `_flush`) generator by one block, so production is paced by consumer demand. It clears the buffer after each batch and closes it in `_destroy()`. A measure-then-apply transform reads its accumulated statistic in `_transform`, then walks the buffer and applies it:
 
 ```ts
-class NormalizeStream extends BufferedTransformStream<NormalizeProperties> {
+class NormalizeStream extends BufferedTransformStream<NormalizeNode> {
+	override blockSize = WHOLE_FILE;
+
 	private peak = 0;
 
-	override prepare(block: Block): Block {
+	override _prepare(block: Block): Block {
 		for (const channel of block.samples) {
 			for (const sample of channel) this.peak = Math.max(this.peak, Math.abs(sample));
 		}
@@ -211,29 +214,39 @@ class NormalizeStream extends BufferedTransformStream<NormalizeProperties> {
 		return block;  // length-preserving; the framework writes this to the buffer
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const target = Math.pow(10, this.properties.ceiling / 20);
 		const scale = this.peak > 0 ? target / this.peak : 1;
 
 		for await (const block of buffered.iterate(44100)) {
-			enqueue({
+			yield {
 				samples: block.samples.map((channel) => channel.map((sample) => sample * scale)),
 				offset: block.offset,
 				sampleRate: block.sampleRate,
 				bitDepth: block.bitDepth,
-			});
+			};
 		}
 	}
 }
 ```
 
-### Composition and Context
+### Setup and Piping
 
-Both transform bases expose `_setup(input, context)` as the wiring hook. The default pipes input through the stream's own transform. Override for context-dependent initialization — do the init work, then `return super._setup(input, context)` — or to compose inner streams by chaining their `_setup()` calls. `StreamContext` carries `{ executionProviders, memoryLimit, durationFrames?, highWaterMark, signal?, progressQuantum? }`; it deliberately omits sample rate and channels, which streams read from the blocks themselves so upstream rate changes are honored.
+Both transform bases split wiring into two hooks. `_setup(context: StreamContext): Promise<void> | void` (no-op base) runs context-dependent initialization — open a subprocess, load an ONNX session, build an FFT workspace. `_pipe(input: ReadableStream<Block>): ReadableStream<Block>` (default: the pull-driven machine above) maps the input readable to the output readable; override it to compose inner streams by chaining their `_pipe()` calls (e.g. wrapping the core transform in resamplers). `StreamContext` carries `{ executionProviders, memoryLimit, durationFrames?, highWaterMark, signal? }`; it deliberately omits sample rate and channels, which streams read from the blocks themselves so upstream rate changes are honored.
 
 ### Reporting from hooks
 
-Inside any hook, protected helpers report to the render's event stream: `this.progress(framesDone, framesTotal?)` emits `process`-phase progress (throttled, safe to call every loop iteration), and `this.log(message, data?, level?)` emits a structured `log` event.
+Inside any hook, protected helpers report to the render's event stream. `this.emitProgress(phase, framesDone, framesTotal?)` emits a `progress` event on every call — pace it yourself with `createProgressGate(framesTotal?)`, which returns a `(framesDone, now) => boolean` that passes at most once per 1% bucket and no more often than every 10 s:
+
+```ts
+const gate = createProgressGate(totalFrames);
+
+for (const framesDone of frameCounts) {
+	if (gate(framesDone, Date.now())) this.emitProgress("process", framesDone, totalFrames);
+}
+```
+
+`this.log(message, data?, level?)` emits a structured `log` event.
 
 ## BlockBuffer
 

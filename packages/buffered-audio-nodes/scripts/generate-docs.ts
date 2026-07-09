@@ -11,7 +11,7 @@ import { zodToRows, type Row } from "./zod-rows";
  */
 interface NodeClass {
 	readonly nodeName: string;
-	readonly nodeDescription: string;
+	readonly description: string;
 	readonly schema: z.ZodType;
 }
 
@@ -42,10 +42,10 @@ const README_PATH = resolve(PACKAGE_ROOT, "README.md");
 function isNodeClass(value: unknown): value is NodeClass {
 	if (typeof value !== "function") return false;
 
-	const candidate = value as { nodeName?: unknown; nodeDescription?: unknown; schema?: unknown };
+	const candidate = value as { nodeName?: unknown; description?: unknown; schema?: unknown };
 
 	if (typeof candidate.nodeName !== "string" || candidate.nodeName === "") return false;
-	if (typeof candidate.nodeDescription !== "string") return false;
+	if (typeof candidate.description !== "string") return false;
 	if (candidate.schema === undefined || candidate.schema === null) return false;
 
 	return true;
@@ -121,7 +121,7 @@ function renderNodeSection(node: DiscoveredNode): string {
 	const rows = zodToRows(node.cls.schema);
 	const header = `### ${node.cls.nodeName}
 
-${node.cls.nodeDescription}
+${node.cls.description}
 
 [Source](./${relativeSource})`;
 
