@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, type BlockBuffer, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, type BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { initFftBackend, linearToDb, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { LATTICE_ORDER } from "./utils/lattice";
@@ -36,27 +36,25 @@ export const schema = z.object({
 
 export interface CrestReduceProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class CrestReduceStream extends BufferedTransformStream<CrestReduceProperties> {
+export class CrestReduceStream extends BufferedTransformStream<CrestReduceNode> {
 	override blockSize = WHOLE_FILE;
 
 	private fftBackend?: FftBackend;
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
 	private truePeakAccumulator?: TruePeakArgmaxAccumulator;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	override _setup(context: StreamContext): void {
 		const fft = initFftBackend(context.executionProviders, this.properties);
 
 		this.fftBackend = fft.backend;
 		this.fftAddonOptions = fft.addonOptions;
-
-		return super._setup(input, context);
 	}
 
 	private get hopSize(): number {
 		return this.properties.frameSize / 4;
 	}
 
-	override prepare(block: Block): Block {
+	override _prepare(block: Block): Block {
 		const frames = block.samples[0]?.length ?? 0;
 
 		if (frames === 0 || block.samples.length === 0) return block;
@@ -67,7 +65,7 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 		return block;
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const { frameSize, smoothing } = this.properties;
 		const channelCount = buffered.channels;
 		const totalFrames = buffered.frames;
@@ -81,17 +79,18 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 		const { db: inputTpDb, peakInputSample } = this.truePeakAccumulator?.finalize() ?? { db: linearToDb(0), peakInputSample: 0 };
 
 		const lambda = groupDelayLambda(sampleRate, order);
+		const trajectoryGate = createProgressGate();
 		const { trajectory, frameCount } = await streamLatticeTrajectory(buffered, frameSize, hopSize, this.fftBackend, this.fftAddonOptions, {
 			globalTruePeakDb: inputTpDb,
 			peakInputSample,
 			sampleRate,
 			lambda,
-		}, (done, total) => this.progress(done, total));
+		}, (done, total) => {
+			if (trajectoryGate(done, Date.now())) this.emitProgress("process", done, total);
+		});
 
 		if (frameCount === 0) {
-			for await (const block of buffered.iterate(44100)) {
-				enqueue(block);
-			}
+			yield* buffered.iterate(44100);
 
 			return;
 		}
@@ -104,13 +103,14 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 
 		let applyState: LatticeApplyState | undefined;
 		let appliedFrames = 0;
+		const applyGate = createProgressGate(totalFrames);
 
 		for await (const block of buffered.iterate(44100)) {
 			const frames = block.samples[0]?.length ?? 0;
 			const blockChannelCount = block.samples.length;
 
 			if (frames === 0 || blockChannelCount === 0) {
-				enqueue(block);
+				yield block;
 
 				continue;
 			}
@@ -120,10 +120,13 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceProper
 			const transformed = applyState.apply(block.samples, frames);
 			const samples = block.samples.map((inputChannel, ch) => transformed[ch] ?? inputChannel);
 
-			enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+			yield { samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
 
 			appliedFrames += frames;
-			this.progress(Math.min(appliedFrames, totalFrames), totalFrames);
+
+			const doneFrames = Math.min(appliedFrames, totalFrames);
+
+			if (applyGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, totalFrames);
 		}
 	}
 }

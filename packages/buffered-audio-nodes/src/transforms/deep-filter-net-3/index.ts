@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type StreamContext, type StreamRenderContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { ffmpeg, FfmpegStream } from "../ffmpeg";
@@ -33,40 +33,57 @@ export const schema = z.object({
 
 export interface DeepFilterNet3Properties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3Properties> {
+export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3Node> {
 	override blockSize = DFN3_BUFFER_SIZE;
 
 	private session?: OnnxSession;
 	private dfnStates: Array<DfnState> = [];
+	private readonly renderContext: StreamRenderContext;
+	private upResample?: FfmpegStream;
+	private downResample?: FfmpegStream;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
+		super(node, context);
+
+		this.renderContext = context;
+	}
+
+	override _setup(context: StreamContext): void {
 		// CPU-only: DML rejects DFN3 ops; see design-onnx-providers.
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
 
 		const sourceRate = this.properties.sampleRate;
 
-		if (sourceRate === DFN3_SAMPLE_RATE) {
-			return super._setup(input, context);
-		}
+		if (sourceRate === DFN3_SAMPLE_RATE) return;
 
-		const upResample = new FfmpegStream(ffmpeg({
-			ffmpegPath: this.properties.ffmpegPath,
-			args: ["-af", `aresample=${DFN3_SAMPLE_RATE}`],
-			outputSampleRate: DFN3_SAMPLE_RATE,
-		}));
-		const downResample = new FfmpegStream(ffmpeg({
-			ffmpegPath: this.properties.ffmpegPath,
-			args: ["-af", `aresample=${sourceRate}`],
-			outputSampleRate: sourceRate,
-		}));
+		this.upResample = new FfmpegStream(
+			ffmpeg({
+				ffmpegPath: this.properties.ffmpegPath,
+				args: ["-af", `aresample=${DFN3_SAMPLE_RATE}`],
+				outputSampleRate: DFN3_SAMPLE_RATE,
+			}),
+			this.renderContext,
+		);
+		this.downResample = new FfmpegStream(
+			ffmpeg({
+				ffmpegPath: this.properties.ffmpegPath,
+				args: ["-af", `aresample=${sourceRate}`],
+				outputSampleRate: sourceRate,
+			}),
+			this.renderContext,
+		);
 
-		const upResampled = await upResample._setup(input, context);
-		const inferenced = await super._setup(upResampled, context);
-
-		return downResample._setup(inferenced, context);
+		this.upResample._setup(context);
+		this.downResample._setup(context);
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override _pipe(input: ReadableStream<Block>): ReadableStream<Block> {
+		if (!this.upResample || !this.downResample) return super._pipe(input);
+
+		return this.downResample._pipe(super._pipe(this.upResample._pipe(input)));
+	}
+
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		if (!this.session) throw new Error("deep-filter-net-3: stream not set up");
 
 		// Guard: caller-declared sampleRate mismatch → throw before garbage; see design-transforms DFN3 failure mode.
@@ -104,7 +121,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 			outputChannels.push(denoised);
 		}
 
-		enqueue({ samples: outputChannels, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+		yield { samples: outputChannels, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 
 	override _destroy(): void {

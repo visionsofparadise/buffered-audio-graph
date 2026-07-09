@@ -1,9 +1,10 @@
+import { EventEmitter } from "node:events";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { type Block, type StreamContext } from "@buffered-audio/core";
+import { type Block, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
 import { vst3, Vst3Stream } from ".";
 import { spawnVstHostReady, VstHostExitedBeforeReadyError } from "./utils/process";
 
@@ -35,6 +36,8 @@ const buildContext = (): StreamContext => ({
 	memoryLimit: 64 * 1024 * 1024,
 	highWaterMark: 1,
 });
+
+const renderContext = (): StreamRenderContext => ({ events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 });
 
 // Drives the whole-file transform the way the framework does: feeds the channels through the stream's
 // pipe (setup), reads the enqueued output blocks back, and concatenates them per channel for round-trip
@@ -87,7 +90,7 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			vstHostPath: process.execPath,
 			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
 			extraArgs: [stubBinary],
-		}));
+		}), renderContext());
 
 		const channels = 2;
 		const frames = 8192;
@@ -125,7 +128,7 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			vstHostPath: process.execPath,
 			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
 			extraArgs: [stubBinary],
-		}));
+		}), renderContext());
 
 		const frames = 1500;
 		const samples: Array<Float32Array> = [Float32Array.from({ length: frames }, (_, i) => i / frames)];
@@ -150,7 +153,7 @@ describe("Vst3Stream init-crash retry", () => {
 			vstHostPath: process.execPath,
 			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
 			extraArgs: [crashBinary, "--crash-file", counter, "--crash-count", "2", "--crash-code", "3221225477"],
-		}));
+		}), renderContext());
 
 		const frames = 2048;
 		const samples: Array<Float32Array> = [Float32Array.from({ length: frames }, (_, i) => i / frames)];

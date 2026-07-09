@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { bandpass, ResampleStream } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
@@ -48,19 +48,17 @@ interface StreamPair {
 	readonly resampleOut: ResampleStream;
 }
 
-export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> {
+export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 	override blockSize = WHOLE_FILE;
 
 	private session!: OnnxSession;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	override _setup(_context: StreamContext): void {
 		// CPU-only: DML session-create throw; see design-onnx-providers.
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
-
-		return super._setup(input, context);
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const originalFrames = buffered.frames;
 		const channels = buffered.channels;
 
@@ -109,9 +107,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 
 			await output.reset();
 
-			for await (const block of output.iterate(CHUNK_FRAMES)) {
-				enqueue(block);
-			}
+			yield* output.iterate(CHUNK_FRAMES);
 		} finally {
 			if (pair) {
 				await Promise.all([pair.resampleIn.close(), pair.resampleOut.close()]);
@@ -191,6 +187,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 		const inv = 1 / (stats.std || 1);
 
 		const modelRateFrames = Math.round(originalFrames * HTDEMUCS_SAMPLE_RATE / sourceRate);
+		const progressGate = createProgressGate(modelRateFrames);
 		let stableEmitted = 0;
 
 		for (;;) {
@@ -261,7 +258,10 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsProperties> 
 			});
 
 			stableEmitted += nStable;
-			this.progress(Math.min(stableEmitted, modelRateFrames), modelRateFrames);
+
+			const doneFrames = Math.min(stableEmitted, modelRateFrames);
+
+			if (progressGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, modelRateFrames);
 
 			if (!isFinalIter) {
 				segLeft.copyWithin(0, nStable, SEGMENT_SAMPLES);

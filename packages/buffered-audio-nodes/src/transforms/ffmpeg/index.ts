@@ -19,11 +19,11 @@ export interface FfmpegProperties extends TransformNodeProperties {
 
 const TEARDOWN_KILL_GRACE_MS = 2000;
 
-export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends UnbufferedTransformStream<P> {
+export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends UnbufferedTransformStream<FfmpegNode<P>> {
 	private streamContext?: StreamContext;
 
 	private child?: ChildProcessWithoutNullStreams;
-	private enqueueBlock?: (block: Block) => void;
+	private readonly pending: Array<Block> = [];
 	private stdoutStash: Buffer = Buffer.alloc(0);
 	private outputOffset = 0;
 	private stderr = "";
@@ -34,10 +34,8 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	private inputSampleRate = 0;
 	private inputChannels = 0;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	override _setup(context: StreamContext): void {
 		this.streamContext = context;
-
-		return super._setup(input, context);
 	}
 
 	protected _buildArgs(context: StreamContext): Array<string> {
@@ -77,10 +75,6 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	}
 
 	private handleStdoutBytes(bytes: Buffer): void {
-		const enqueue = this.enqueueBlock;
-
-		if (!enqueue) return;
-
 		const outRate = this.properties.outputSampleRate ?? this.inputSampleRate;
 		const { block, stash, frameCount } = parseStdoutFrames(this.stdoutStash, bytes, this.inputChannels, this.outputOffset, outRate);
 
@@ -88,13 +82,11 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		if (!block) return;
 
-		enqueue(block);
+		this.pending.push(block);
 		this.outputOffset += frameCount;
 	}
 
-	override async transform(block: Block, enqueue: (block: Block) => void): Promise<void> {
-		this.enqueueBlock = enqueue;
-
+	override async *_transform(block: Block): AsyncGenerator<Block> {
 		if (this.stdinError) throw this.stdinError;
 
 		const channels = block.samples.length;
@@ -127,11 +119,11 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 				});
 			});
 		}
+
+		yield* this.pending.splice(0);
 	}
 
-	override async flush(enqueue: (block: Block) => void): Promise<void> {
-		this.enqueueBlock = enqueue;
-
+	override async *_flush(): AsyncGenerator<Block> {
 		const child = this.child;
 
 		if (!child) return;
@@ -157,6 +149,8 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		if (this.stdoutStash.length >= this.inputChannels * 4) {
 			this.handleStdoutBytes(Buffer.alloc(0));
 		}
+
+		yield* this.pending.splice(0);
 	}
 
 	override async _destroy(): Promise<void> {

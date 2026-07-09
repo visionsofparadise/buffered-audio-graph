@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { initFftBackend, ResampleStream, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
@@ -51,7 +51,7 @@ export const schema = z.object({
 
 export interface DtlnProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
+export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 	override blockSize = WHOLE_FILE;
 
 	private session1!: OnnxSession;
@@ -59,7 +59,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 	private fftBackend?: FftBackend;
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	override _setup(context: StreamContext): void {
 		const onnxProviders = filterOnnxProviders(context.executionProviders);
 
 		this.session1 = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath1, { executionProviders: onnxProviders }, (message, data) => this.log(message, data));
@@ -70,11 +70,9 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 
 		this.fftBackend = fft.backend;
 		this.fftAddonOptions = fft.addonOptions;
-
-		return super._setup(input, context);
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const originalFrames = buffered.frames;
 		const channels = buffered.channels;
 
@@ -118,9 +116,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 
 			await output.reset();
 
-			for await (const block of output.iterate(CHUNK_FRAMES)) {
-				enqueue(block);
-			}
+			yield* output.iterate(CHUNK_FRAMES);
 		} finally {
 			if (pair) {
 				await Promise.all([pair.resampleIn.close(), pair.resampleOut.close()]);
@@ -169,6 +165,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 		const drainerDone = pair !== undefined ? drainResampleOutToBuffer({ resampleOut: pair.resampleOut, output, channels, sourceRate, bitDepth, originalFrames, writerState }) : Promise.resolve();
 
 		const total16k = Math.round(originalFrames * DTLN_SAMPLE_RATE / sourceRate);
+		const progressGate = createProgressGate(total16k);
 
 		for (;;) {
 			const got16k = await pullNextChunkAt16k({ buffer, pair, channels, frames: CHUNK_FRAMES });
@@ -212,7 +209,9 @@ export class DtlnStream extends BufferedTransformStream<DtlnProperties> {
 				}
 			}
 
-			this.progress(Math.min(samplesFed, total16k), total16k);
+			const doneFrames = Math.min(samplesFed, total16k);
+
+			if (progressGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, total16k);
 		}
 
 		// Await defensively to surface pump-side errors.

@@ -40,34 +40,32 @@ export interface Vst3Properties extends TransformNodeProperties {
 	readonly extraArgs?: ReadonlyArray<string>;
 }
 
-export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends UnbufferedTransformStream<P> {
-	override transform(block: Block, enqueue: (block: Block) => void): void {
+export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends UnbufferedTransformStream<Vst3Node<P>> {
+	override *_transform(block: Block): Generator<Block> {
 		// Bypass: pass audio through unchanged (no subprocess spawn).
-		enqueue(block);
+		yield block;
 	}
 }
 
-export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends BufferedTransformStream<P> {
+export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends BufferedTransformStream<Vst3Node<P>> {
 	override blockSize = WHOLE_FILE;
 
 	private streamContext?: StreamContext;
 	private stagesJsonPath?: string;
 	private stagesJsonCleanup?: () => Promise<void>;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	override async _setup(context: StreamContext): Promise<void> {
 		this.streamContext = context;
 
 		const { path, cleanup } = await writeStagesJson(this.properties.stages);
 
 		this.stagesJsonPath = path;
 		this.stagesJsonCleanup = cleanup;
-
-		return super._setup(input, context);
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
-		if (!this.streamContext) throw new Error("Vst3Stream.transform called before setup()");
-		if (!this.stagesJsonPath) throw new Error("Vst3Stream.transform called without a stages JSON file");
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
+		if (!this.streamContext) throw new Error("Vst3Stream._transform called before setup()");
+		if (!this.stagesJsonPath) throw new Error("Vst3Stream._transform called without a stages JSON file");
 
 		if (buffered.frames === 0) return;
 
@@ -96,9 +94,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 
 		await buffered.reset();
 
-		for await (const block of buffered.iterate(44100)) {
-			enqueue(block);
-		}
+		yield* buffered.iterate(44100);
 	}
 
 	override async _destroy(): Promise<void> {

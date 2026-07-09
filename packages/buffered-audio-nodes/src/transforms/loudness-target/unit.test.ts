@@ -1,10 +1,36 @@
 /* eslint-disable no-console -- the node logs an iteration summary by design; tests run with vitest, console output is fine in CI. */
+import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
-import { type Block, BlockBuffer } from "@buffered-audio/core";
+import { type Block, BlockBuffer, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
 import { loudnessTarget, LoudnessTargetStream } from ".";
 
 const TEST_SAMPLE_RATE = 48_000;
+
+function execContext(): StreamContext {
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
+}
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
+
+function readableFrom(blocks: Array<Block>): ReadableStream<Block> {
+	let index = 0;
+
+	return new ReadableStream<Block>({
+		pull: (controller) => {
+			const block = blocks[index];
+
+			if (block) {
+				index += 1;
+				controller.enqueue(block);
+			} else {
+				controller.close();
+			}
+		},
+	});
+}
 const TEST_FRAMES = TEST_SAMPLE_RATE * 4; // 4 s — long enough for BS.1770 gating.
 const TEST_FRAMES_LRA = TEST_SAMPLE_RATE * 10; // 10 s — needed for LRA ≥ 2 short-term blocks at meaningful limitDb.
 
@@ -122,33 +148,25 @@ async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: numb
 		tolerance: properties.tolerance ?? 0.5,
 		peakTolerance: properties.peakTolerance ?? 0.1,
 		maxAttempts: properties.maxAttempts ?? 10,
-	}));
-	const transformStream = stream.createTransformStream();
-	const writer = transformStream.writable.getWriter();
-	const reader = transformStream.readable.getReader();
-
-	const drain = (async () => {
-		const collected: Array<Array<Float32Array>> = [];
-
-		while (true) {
-			const next = await reader.read();
-
-			if (next.done) return collected;
-
-			collected.push(next.value.samples);
-		}
-	})();
+	}), renderContext());
 
 	const samples: Array<Float32Array> = [];
 
 	for (const channel of channels) samples.push(channel);
 
 	const chunk: Block = { samples, offset: 0, sampleRate, bitDepth: 32 };
+	const output = await stream.setup(readableFrom([chunk]), execContext());
+	const reader = output.getReader();
 
-	await writer.write(chunk);
-	await writer.close();
+	const collected: Array<Array<Float32Array>> = [];
 
-	const collected = await drain;
+	for (;;) {
+		const next = await reader.read();
+
+		if (next.done) break;
+
+		collected.push(next.value.samples);
+	}
 
 	const lengths = new Array<number>(channelCount).fill(0);
 
@@ -755,7 +773,7 @@ async function runProcessAndMeasureArrayBuffers(frames: number, sampleRate: numb
 		tolerance: 0.5,
 		peakTolerance: 0.1,
 		maxAttempts: 10,
-	}));
+	}), renderContext());
 
 	let peakBytes = baselineBytes;
 	const samplePeak = (): void => {

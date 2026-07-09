@@ -1,5 +1,6 @@
+import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import { type Block, type StreamContext } from "@buffered-audio/core";
+import { type Block, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
 import { schema, vst3, Vst3Node, Vst3PassthroughStream, Vst3Stream } from ".";
 
 const buildContext = (): StreamContext => ({
@@ -7,6 +8,8 @@ const buildContext = (): StreamContext => ({
 	memoryLimit: 64 * 1024 * 1024,
 	highWaterMark: 1,
 });
+
+const renderContext = (): StreamRenderContext => ({ events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 });
 
 const collect = async (readable: ReadableStream<Block>): Promise<Array<Block>> => {
 	const blocks: Array<Block> = [];
@@ -98,7 +101,7 @@ describe("Vst3PassthroughStream", () => {
 		// unbuffered identity used where a passthrough is wired directly. The missing paths would make
 		// any spawn fail loudly, proving no subprocess is spawned.
 		const node = vst3({ vstHostPath: "/missing/binary", stages: [{ pluginPath: "/missing/plugin.vst3" }], bypass: true });
-		const stream = new Vst3PassthroughStream(node);
+		const stream = new Vst3PassthroughStream(node, renderContext());
 
 		const samples = [Float32Array.from([0.1, -0.2, 0.3, -0.4, 0.5]), Float32Array.from([-0.1, 0.2, -0.3, 0.4, -0.5])];
 		const before: Array<Float32Array> = samples.map((channel) => Float32Array.from(channel));

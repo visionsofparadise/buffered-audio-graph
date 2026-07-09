@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { applyBaseRateChunk } from "./utils/apply";
 import { windowSamplesFromMs } from "./utils/envelope";
@@ -27,7 +27,7 @@ export const schema = z.object({
 
 export interface LoudnessTargetProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTargetProperties> {
+export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTargetNode> {
 	override blockSize = WHOLE_FILE;
 
 	private winningSmoothedEnvelopeBuffer: BlockBuffer | null = null;
@@ -46,7 +46,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		iteration: 0,
 	};
 
-	override async prepare(block: Block): Promise<Block> {
+	override async _prepare(block: Block): Promise<Block> {
 		const frames = block.samples[0]?.length ?? 0;
 		const channelCount = block.samples.length;
 
@@ -73,9 +73,10 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		return block;
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		await this.finalize(buffered);
-		await this.emitApplied(buffered, enqueue);
+
+		yield* this.emitApplied(buffered);
 	}
 
 	private async finalize(buffer: BlockBuffer): Promise<void> {
@@ -186,6 +187,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		});
 
 		const tIterate0 = Date.now();
+		const attemptGate = createProgressGate(maxAttempts);
 		const result = await iterateForTargets({
 			buffer,
 			sampleRate,
@@ -212,7 +214,8 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 					outputLra: attempt.outputLra,
 					elapsedMs: attempt.elapsedMs,
 				});
-				this.progress(attemptIndex + 1, maxAttempts);
+
+				if (attemptGate(attemptIndex + 1, Date.now())) this.emitProgress("process", attemptIndex + 1, maxAttempts);
 			},
 		});
 
@@ -323,15 +326,13 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		}
 	}
 
-	private async emitApplied(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	private async *emitApplied(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const envelopeBuffer = this.winningSmoothedEnvelopeBuffer;
 
 		await buffered.reset();
 
 		if (envelopeBuffer === null || envelopeBuffer.frames === 0) {
-			for await (const block of buffered.iterate(44100)) {
-				enqueue(block);
-			}
+			yield* buffered.iterate(44100);
 
 			return;
 		}
@@ -344,7 +345,8 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 			if (chunkFrames === 0) {
 				this.unbufferElapsedMs += Date.now() - tStart;
-				enqueue(block);
+
+				yield block;
 
 				continue;
 			}
@@ -365,7 +367,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 			this.unbufferElapsedMs += Date.now() - tStart;
 
-			enqueue({ samples: transformed, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+			yield { samples: transformed, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
 		}
 	}
 }

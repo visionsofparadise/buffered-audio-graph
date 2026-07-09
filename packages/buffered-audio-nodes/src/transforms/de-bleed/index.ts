@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight DSP loops with bounds-checked typed array access */
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { applyDfttSmoothing, applyNlmSmoothing, getFftAddon, initFftBackend, istft, stft, type FftBackend, type StftOutput, type StftResult } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { readToBuffer } from "../../utils/read-to-buffer";
@@ -172,7 +172,7 @@ async function readSequentialPadded(
 	}
 }
 
-export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
+export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 	override blockSize = WHOLE_FILE;
 
 	private fftBackend?: FftBackend;
@@ -183,7 +183,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 	private chunkFrames!: number;
 	private numBins!: number;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	override async _setup(context: StreamContext): Promise<void> {
 		const fft = initFftBackend(context.executionProviders, this.properties);
 
 		this.fftBackend = fft.backend;
@@ -241,10 +241,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 			this.numBins = fftSize / 2 + 1;
 			this.chunkFrames = computeChunkFrames(this.numBins);
-
-			await super._setup(input, context);
-
- return;
 		} catch (error) {
 			for (const refBuffer of openedBuffers) {
 				await refBuffer.close();
@@ -350,7 +346,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		return seedsByChannel;
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const { frames: totalFrames, channels, sampleRate, bitDepth } = buffered;
 		const { fftSize, hopSize, reductionStrength, artifactSmoothing, adaptationSpeed } = this.properties;
 		const { chunkFrames, numBins, referenceBuffers } = this;
@@ -436,6 +432,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 		const msadFrameImags = new Array<Float32Array>(refCount + 1);
 
 		const outputBuffer = new BlockBuffer();
+
+		const progressGate = createProgressGate(processStftFrames);
 
 		try {
 			let prevWinStart = 0;
@@ -662,7 +660,9 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 				await outputBuffer.write(writeSamplesByChannel, sampleRate, bitDepth);
 				_profAdd("write", _twrite);
 
-				this.progress(Math.min(outStart + chunkFrames, processStftFrames), processStftFrames);
+				const doneFrames = Math.min(outStart + chunkFrames, processStftFrames);
+
+				if (progressGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, processStftFrames);
 			}
 
 			// Defensive trailing zero-pad against off-by-one in the final chunk's clip math.
@@ -677,9 +677,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 
 			await outputBuffer.reset();
 
-			for await (const block of outputBuffer.iterate(STREAM_COPY_FRAMES)) {
-				enqueue(block);
-			}
+			yield* outputBuffer.iterate(STREAM_COPY_FRAMES);
 		} finally {
 			await outputBuffer.close();
 		}

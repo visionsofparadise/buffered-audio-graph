@@ -1,11 +1,37 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
-import { type Block } from "@buffered-audio/core";
+import { type Block, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
 import { TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { readWavSamples } from "../../utils/read-to-buffer";
 import { audio, hasAudioFixtures } from "../../utils/test-binaries";
 import { crestReduce, CrestReduceNode, CrestReduceStream, schema } from ".";
 
 const TEST_SAMPLE_RATE = 48_000;
+
+function execContext(): StreamContext {
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
+}
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
+
+function readableFrom(blocks: Array<Block>): ReadableStream<Block> {
+	let index = 0;
+
+	return new ReadableStream<Block>({
+		pull: (controller) => {
+			const block = blocks[index];
+
+			if (block) {
+				index += 1;
+				controller.enqueue(block);
+			} else {
+				controller.close();
+			}
+		},
+	});
+}
 
 // FRESH TruePeakAccumulator per call (never reused — its 12-tap history carries across pushes and its
 // running max only grows, so reuse would contaminate the comparison).
@@ -168,30 +194,21 @@ async function runStream(
 ): Promise<Array<Float32Array>> {
 	const channelCount = channels.length;
 	const frameSize = properties.frameSize ?? 2048;
-	const stream = new CrestReduceStream(crestReduce({ smoothing: properties.smoothing ?? 100, frameSize }));
-
-	const transformStream = stream.createTransformStream();
-	const writer = transformStream.writable.getWriter();
-	const reader = transformStream.readable.getReader();
-
-	const drain = (async () => {
-		const collected: Array<Array<Float32Array>> = [];
-
-		while (true) {
-			const next = await reader.read();
-
-			if (next.done) return collected;
-
-			collected.push(next.value.samples);
-		}
-	})();
+	const stream = new CrestReduceStream(crestReduce({ smoothing: properties.smoothing ?? 100, frameSize }), renderContext());
 
 	const chunk: Block = { samples: channels.map((channel) => channel), offset: 0, sampleRate, bitDepth: 32 };
+	const output = await stream.setup(readableFrom([chunk]), execContext());
+	const reader = output.getReader();
 
-	await writer.write(chunk);
-	await writer.close();
+	const collected: Array<Array<Float32Array>> = [];
 
-	const collected = await drain;
+	for (;;) {
+		const next = await reader.read();
+
+		if (next.done) break;
+
+		collected.push(next.value.samples);
+	}
 
 	const lengths = new Array<number>(channelCount).fill(0);
 
@@ -262,14 +279,9 @@ function pctChangedAndMax(input: Float32Array, output: Float32Array): { pct: num
 }
 
 describe("CrestReduce discoverability", () => {
-	it("exposes the registration statics and recognizes its own instances", () => {
+	it("exposes the registration statics", () => {
 		expect(CrestReduceNode.nodeName).toBe("Crest Reduce");
-
-		const node = crestReduce();
-
-		expect(CrestReduceNode.is(node)).toBe(true);
-		expect(CrestReduceNode.is({ type: ["buffered-audio-node", "transform", "crest-reduce"] })).toBe(true);
-		expect(CrestReduceNode.is({ type: ["buffered-audio-node", "transform", "loudness-normalize"] })).toBe(false);
+		expect(CrestReduceNode.Stream).toBe(CrestReduceStream);
 	});
 
 	it("the schema has NO `strength` field (removed by the 2026-05-17 keystone — the node always applies the optimal value)", () => {
