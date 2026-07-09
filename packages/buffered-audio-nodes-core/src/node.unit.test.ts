@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { BufferedAudioNode, type Composition } from "./node";
+import { type Composition } from "./node";
 import { SourceNode } from "./source";
 import { TargetNode } from "./target";
 import { TransformNode } from "./transform";
@@ -9,55 +9,19 @@ class MockSource extends SourceNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "mock-source";
 	static override readonly schema = z.object({});
-
-	readonly type = ["buffered-audio-node", "source", "mock"] as const;
-
-	clone(): MockSource {
-		return new MockSource();
-	}
 }
 
 class MockTransform extends TransformNode<{ gain?: number } & Record<string, unknown>> {
 	static readonly packageName = "test";
 	static readonly nodeName = "mock-transform";
 	static override readonly schema = z.object({ gain: z.number().default(1) });
-
-	readonly type = ["buffered-audio-node", "transform", "mock"] as const;
-
-	clone(): MockTransform {
-		return new MockTransform();
-	}
 }
 
 class MockTarget extends TargetNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "mock-target";
 	static override readonly schema = z.object({});
-
-	readonly type = ["buffered-audio-node", "target", "mock"] as const;
-
-	clone(): MockTarget {
-		return new MockTarget();
-	}
 }
-
-describe("BufferedAudioNode type discrimination", () => {
-	it("is() distinguishes node kinds", () => {
-		const source = new MockSource();
-		const transform = new MockTransform();
-		const target = new MockTarget();
-
-		expect(BufferedAudioNode.is(source)).toBe(true);
-		expect(BufferedAudioNode.is({})).toBe(false);
-		expect(BufferedAudioNode.is(null)).toBe(false);
-
-		expect(SourceNode.is(source)).toBe(true);
-		expect(SourceNode.is(transform)).toBe(false);
-		expect(TransformNode.is(transform)).toBe(true);
-		expect(TargetNode.is(target)).toBe(true);
-		expect(TargetNode.is(source)).toBe(false);
-	});
-});
 
 describe("BufferedAudioNode constructor parsing", () => {
 	it("applies schema defaults", () => {

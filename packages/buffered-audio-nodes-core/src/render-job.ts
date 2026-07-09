@@ -65,7 +65,7 @@ export class RenderJob {
 		const ctor = node.constructor as typeof BufferedAudioNode;
 		const stream = new ctor.Stream(node);
 
-		stream.bind(this.events, { nodeName: ctor.nodeName, id: node.id, type: node.type }, this.quantumFraction);
+		stream.bind(this.events, { nodeName: ctor.nodeName, nodeId: node.id }, this.quantumFraction);
 
 		const existing = this.streamsMap.get(node);
 

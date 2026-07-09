@@ -2,8 +2,8 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import type { BufferedAudioNode, RenderOptions } from "./node";
 import type { RenderJob } from "./render-job";
-import { SourceNode } from "./source";
-import { TransformNode } from "./transform";
+import type { SourceNode } from "./source";
+import type { TransformNode } from "./transform";
 
 const graphNodeSchema = z.object({
 	id: z.string().min(1),
@@ -142,6 +142,9 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 	return graphDefinitionSchema.parse({ id: metadata?.id ?? randomUUID(), name: metadata?.name ?? "Untitled", nodes, edges });
 }
 
+const canConnect = (node: BufferedAudioNode): node is SourceNode | TransformNode => typeof (node as { to?: unknown }).to === "function";
+const isRenderable = (node: BufferedAudioNode): node is SourceNode => typeof (node as { createRenderJob?: unknown }).createRenderJob === "function";
+
 export function unpack(definition: GraphDefinition, registry: NodeRegistry): Array<SourceNode> {
 	const nodeMap = new Map<string, BufferedAudioNode>();
 
@@ -170,7 +173,7 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 		if (!fromNode) throw new Error(`Edge references unknown node: "${edge.from}"`);
 		if (!toNode) throw new Error(`Edge references unknown node: "${edge.to}"`);
 
-		if (SourceNode.is(fromNode) || TransformNode.is(fromNode)) {
+		if (canConnect(fromNode)) {
 			fromNode.to(toNode);
 		} else {
 			throw new Error(`Cannot connect from target node "${edge.from}"`);
@@ -184,7 +187,7 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 		if (!targetIds.has(nodeDef.id)) {
 			const node = nodeMap.get(nodeDef.id);
 
-			if (SourceNode.is(node)) {
+			if (node !== undefined && isRenderable(node)) {
 				sources.push(node);
 			}
 		}

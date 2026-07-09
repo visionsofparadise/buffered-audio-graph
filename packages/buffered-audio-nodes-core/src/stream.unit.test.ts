@@ -8,7 +8,7 @@ import { UnbufferedTransformStream } from "./unbuffered-transform";
 import { TransformNode } from "./transform";
 import { BufferedStream, UNKNOWN_TOTAL_QUANTUM_FRAMES, type LogPayload, type ProgressPayload, type RenderEvents, type StreamPhase } from "./stream";
 
-const IDENTITY: NodeIdentity = { nodeName: "probe", id: "p", type: ["buffered-audio-node", "probe"] };
+const IDENTITY: NodeIdentity = { nodeName: "probe", nodeId: "p" };
 
 class ProbeStream extends BufferedStream {
 	emit(phase: StreamPhase, framesDone: number, framesTotal?: number, options?: { force?: boolean }): void {
@@ -202,16 +202,10 @@ class LifeSource extends SourceNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "life-source";
 	static override readonly schema = z.object({});
-	static override readonly streamClass = LifeSourceStream;
-
-	readonly type = ["buffered-audio-node", "source", "life"] as const;
+	static override readonly Stream = LifeSourceStream;
 
 	constructor(chunks: Array<Block>) {
 		super({ chunks } as never);
-	}
-
-	clone(): LifeSource {
-		return new LifeSource(this.properties.chunks as Array<Block>);
 	}
 }
 
@@ -225,13 +219,7 @@ class LifeTransform extends TransformNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "life-transform";
 	static override readonly schema = z.object({});
-	static override readonly streamClass = LifeTransformStream;
-
-	readonly type = ["buffered-audio-node", "transform", "life"] as const;
-
-	clone(): LifeTransform {
-		return new LifeTransform();
-	}
+	static override readonly Stream = LifeTransformStream;
 }
 
 class LifeTargetStream extends BufferedTargetStream {
@@ -243,13 +231,7 @@ class LifeTarget extends TargetNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "life-target";
 	static override readonly schema = z.object({});
-	static override readonly streamClass = LifeTargetStream;
-
-	readonly type = ["buffered-audio-node", "target", "life"] as const;
-
-	clone(): LifeTarget {
-		return new LifeTarget();
-	}
+	static override readonly Stream = LifeTargetStream;
 }
 
 describe("Lifecycle events end-to-end", () => {

@@ -12,8 +12,7 @@ export type ExecutionProvider = "gpu" | "cpu-native" | "cpu";
 
 export interface NodeIdentity {
 	readonly nodeName: string;
-	readonly id?: string;
-	readonly type: ReadonlyArray<string>;
+	readonly nodeId?: string;
 }
 
 export interface StreamContext {
@@ -37,7 +36,6 @@ export interface RenderOptions {
 export interface BufferedAudioNodeProperties {
 	readonly id?: string;
 	readonly bypass?: boolean;
-	readonly previousProperties?: BufferedAudioNodeProperties;
 	readonly children?: ReadonlyArray<BufferedAudioNode>;
 }
 
@@ -48,20 +46,26 @@ export interface Composition {
 	readonly tail: BufferedAudioNode;
 }
 
+function parseNodeProperties<P extends BufferedAudioNodeProperties>(schema: z.ZodType, value: unknown, nodeName: string): P {
+	try {
+		return schema.parse(value) as P;
+	} catch (error) {
+		if (error instanceof z.ZodError) {
+			throw new Error(`Invalid parameters for node "${nodeName}": ${error.message}`);
+		}
+
+		throw error;
+	}
+}
+
 export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> {
 	static readonly packageName: string;
 	static readonly packageVersion: string = "0.0.0";
 	static readonly nodeName: string;
-	static readonly nodeDescription: string = ""; // FIX: Change this to just "description"
+	static readonly description: string = "";
 	static readonly schema: z.ZodType = z.object({});
 
-	static readonly Stream: new (node: BufferedAudioNode) => BufferedStream; // FIX: This was renamed streamNode -> Stream, needs to be propagated everywhere
-
-	abstract readonly type: ReadonlyArray<string>;
-
-	static is(value: unknown): value is BufferedAudioNode {
-		return typeof value === "object" && value !== null && "type" in value && Array.isArray(value.type) && value.type[0] === "buffered-audio-node";
-	} // FIX: We added this utility because of quirks around dynamically importing in things like the app at render time, however I'm going back on this being the place to put this. We should just have an abstract utility that asserts all nodes based on their static metadata properties.
+	static readonly Stream: new (node: BufferedAudioNode) => BufferedStream;
 
 	properties: P;
 
@@ -79,24 +83,8 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 
 	constructor(properties?: BufferedAudioNodeInput<P>) {
 		const ctor = this.constructor as typeof BufferedAudioNode;
+		const parsed = parseNodeProperties<P>(ctor.schema, properties ?? {}, ctor.nodeName);
 
-		let parsed: unknown;
-
-		try {
-			parsed = ctor.schema.parse(properties ?? {});
-
-			// FIX: This needs to assert the type of parsed such that we don't need to assert the type inline below.
-		} catch (error) {
-			if (error instanceof z.ZodError) {
-				throw new Error(`Invalid parameters for node "${ctor.nodeName}": ${error.message}`);
-			}
-
-			throw error;
-		}
-
-		this.properties = { ...properties, ...(parsed as Record<string, unknown>) } as P;
+		this.properties = { ...properties, ...parsed };
 	}
-
-	abstract clone(overrides?: Partial<BufferedAudioNodeProperties>): BufferedAudioNode;
-	// FIX: I'm questioning if we need this anymore? Can you dig up the reasoning for why it exists? We can eliminate boilerplate from all nodes, and a test path for all nodes if we no longer need this.
 }

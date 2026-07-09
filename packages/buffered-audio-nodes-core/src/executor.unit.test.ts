@@ -34,16 +34,10 @@ class MockSource extends SourceNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "mock-source";
 	static override readonly schema = z.object({});
-	static override readonly streamClass = MockSourceStream;
-
-	readonly type = ["buffered-audio-node", "source", "mock"] as const;
+	static override readonly Stream = MockSourceStream;
 
 	constructor(chunks: Array<Block> = [], meta: SourceMetadata = { sampleRate: 44100, channels: 1 }) {
 		super({ chunks, meta } as never);
-	}
-
-	clone(): MockSource {
-		return new MockSource();
 	}
 }
 
@@ -57,13 +51,7 @@ class MockTransform extends TransformNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "mock-transform";
 	static override readonly schema = z.object({});
-	static override readonly streamClass = MockTransformStream;
-
-	readonly type = ["buffered-audio-node", "transform", "mock"] as const;
-
-	clone(): MockTransform {
-		return new MockTransform();
-	}
+	static override readonly Stream = MockTransformStream;
 }
 
 class MockTargetStream extends BufferedTargetStream {
@@ -83,13 +71,7 @@ class MockTarget extends TargetNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "mock-target";
 	static override readonly schema = z.object({});
-	static override readonly streamClass = MockTargetStream;
-
-	readonly type = ["buffered-audio-node", "target", "mock"] as const;
-
-	clone(): MockTarget {
-		return new MockTarget();
-	}
+	static override readonly Stream = MockTargetStream;
 }
 
 class FailingTargetStream extends BufferedTargetStream {
@@ -110,13 +92,7 @@ class FailingTarget extends TargetNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "failing-target";
 	static override readonly schema = z.object({});
-	static override readonly streamClass = FailingTargetStream;
-
-	readonly type = ["buffered-audio-node", "target", "failing"] as const;
-
-	clone(): FailingTarget {
-		return new FailingTarget();
-	}
+	static override readonly Stream = FailingTargetStream;
 }
 
 function targetStream(job: RenderJob, node: TargetNode): MockTargetStream {
@@ -319,13 +295,7 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 				frameSize: z.number().default(2048),
 				smoothing: z.number().default(100),
 			});
-			static override readonly streamClass = MockTransformStream;
-
-			readonly type = ["buffered-audio-node", "transform", "mock"] as const;
-
-			clone(): DefaultingTransform {
-				return new DefaultingTransform();
-			}
+			static override readonly Stream = MockTransformStream;
 		}
 
 		const registry: NodeRegistry = new Map([
@@ -432,13 +402,7 @@ class PathSource extends SourceNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "path-source";
 	static override readonly schema = z.object({ path: z.string() });
-	static override readonly streamClass = PathSourceStream;
-
-	readonly type = ["buffered-audio-node", "source", "mock"] as const;
-
-	clone(): PathSource {
-		return new PathSource(this.properties);
-	}
+	static override readonly Stream = PathSourceStream;
 }
 
 const capturedPaths: Array<string> = [];
@@ -454,13 +418,7 @@ class PathTarget extends TargetNode {
 	static readonly packageName = "test";
 	static readonly nodeName = "path-target";
 	static override readonly schema = z.object({ path: z.string() });
-	static override readonly streamClass = PathTargetStream;
-
-	readonly type = ["buffered-audio-node", "target", "mock"] as const;
-
-	clone(): PathTarget {
-		return new PathTarget(this.properties);
-	}
+	static override readonly Stream = PathTargetStream;
 }
 
 describe("createRenderJobs parameter substitution", () => {

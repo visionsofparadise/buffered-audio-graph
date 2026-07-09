@@ -61,8 +61,4 @@ export abstract class BufferedTargetStream<P extends TargetNodeProperties = Targ
 	}
 }
 
-export abstract class TargetNode<P extends TargetNodeProperties = TargetNodeProperties> extends BufferedAudioNode<P> {
-	static override is(value: unknown): value is TargetNode {
-		return BufferedAudioNode.is(value) && value.type[1] === "target";
-	}
-}
+export abstract class TargetNode<P extends TargetNodeProperties = TargetNodeProperties> extends BufferedAudioNode<P> {}

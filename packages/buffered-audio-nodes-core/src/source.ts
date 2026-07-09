@@ -92,10 +92,6 @@ export abstract class BufferedSourceStream<P extends SourceNodeProperties = Sour
 }
 
 export abstract class SourceNode<P extends SourceNodeProperties = SourceNodeProperties> extends BufferedAudioNode<P> {
-	static override is(value: unknown): value is SourceNode {
-		return BufferedAudioNode.is(value) && value.type[1] === "source";
-	}
-
 	to(child: BufferedAudioNode | Composition): void {
 		const head = "head" in child ? child.head : child;
 
