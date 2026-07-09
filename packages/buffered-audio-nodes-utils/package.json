@@ -40,6 +40,6 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "@buffered-audio/core": "0.7.2"
+    "@buffered-audio/core": "0.8.0"
   }
 }
