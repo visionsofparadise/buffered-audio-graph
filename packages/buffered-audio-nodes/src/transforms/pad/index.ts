@@ -10,14 +10,14 @@ export const schema = z.object({
 
 export interface PadProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class PadStream extends UnbufferedTransformStream<PadProperties> {
+export class PadStream extends UnbufferedTransformStream<PadNode> {
 	private seenChunk = false;
 	private capturedSampleRate = 44100;
 	private capturedBitDepth = 32;
 	private capturedChannels = 0;
 	private outputOffset = 0;
 
-	override transform(chunk: Block, enqueue: (block: Block) => void): void {
+	override *_transform(chunk: Block): Generator<Block> {
 		const frames = chunk.samples[0]?.length ?? 0;
 
 		if (!this.seenChunk) {
@@ -40,7 +40,7 @@ export class PadStream extends UnbufferedTransformStream<PadProperties> {
 
 				this.outputOffset += leading + frames;
 
-				enqueue({ samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+				yield { samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 
 				return;
 			}
@@ -50,10 +50,10 @@ export class PadStream extends UnbufferedTransformStream<PadProperties> {
 
 		this.outputOffset += frames;
 
-		enqueue({ samples: chunk.samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+		yield { samples: chunk.samples, offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 
-	override flush(enqueue: (block: Block) => void): void {
+	override *_flush(): Generator<Block> {
 		if (!this.seenChunk) return;
 
 		const trailing = Math.round(this.properties.after * this.capturedSampleRate);
@@ -68,7 +68,7 @@ export class PadStream extends UnbufferedTransformStream<PadProperties> {
 			const offset = this.outputOffset;
 
 			this.outputOffset += take;
-			enqueue({ samples, offset, sampleRate: this.capturedSampleRate, bitDepth: this.capturedBitDepth });
+			yield { samples, offset, sampleRate: this.capturedSampleRate, bitDepth: this.capturedBitDepth };
 			remaining -= take;
 		}
 	}
@@ -78,18 +78,9 @@ export class PadNode extends TransformNode<PadProperties> {
 	static override readonly nodeName = "Pad";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Add silence to start or end of audio";
+	static override readonly description = "Add silence to start or end of audio";
 	static override readonly schema = schema;
-	static override readonly streamClass = PadStream;
-	static override is(value: unknown): value is PadNode {
-		return TransformNode.is(value) && value.type[2] === "pad";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "pad"] as const;
-
-	override clone(overrides?: Partial<PadProperties>): PadNode {
-		return new PadNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = PadStream;
 }
 
 export function pad(options: { before?: number; after?: number; id?: string }): PadNode {

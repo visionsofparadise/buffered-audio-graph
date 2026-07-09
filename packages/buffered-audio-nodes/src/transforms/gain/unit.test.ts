@@ -1,6 +1,11 @@
+import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block } from "@buffered-audio/core";
+import type { Block, RenderEvents, StreamRenderContext } from "@buffered-audio/core";
 import { gain, GainNode, GainStream } from ".";
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
 
 function makeStereoChunk(leftValue: number, rightValue: number, frames = 512): Block {
 	const left = new Float32Array(frames).fill(leftValue);
@@ -9,14 +14,12 @@ function makeStereoChunk(leftValue: number, rightValue: number, frames = 512): B
 }
 
 function applyGain(node: GainNode, chunk: Block): Block {
-	const stream = new GainStream(node);
+	const stream = new GainStream(node, renderContext());
 	let result: Block | undefined;
 
-	stream.transform(chunk, (block) => {
-		result = block;
-	});
+	for (const block of stream._transform(chunk)) result = block;
 
-	if (!result) throw new Error("transform enqueued nothing");
+	if (!result) throw new Error("transform yielded nothing");
 
 	return result;
 }

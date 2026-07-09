@@ -242,7 +242,9 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedProperties> {
 			this.numBins = fftSize / 2 + 1;
 			this.chunkFrames = computeChunkFrames(this.numBins);
 
-			return await super._setup(input, context);
+			await super._setup(input, context);
+
+ return;
 		} catch (error) {
 			for (const refBuffer of openedBuffers) {
 				await refBuffer.close();
@@ -706,18 +708,9 @@ export class DeBleedNode extends TransformNode<DeBleedProperties> {
 	static override readonly nodeName = "De-Bleed Adaptive";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reduction. Stages 1+2 are MEF Meyer-Elshamy-Fingscheidt 2020; Stage 3 is Lukin-Todd 2D NLM+DFTT post-filter.";
+	static override readonly description = "Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reduction. Stages 1+2 are MEF Meyer-Elshamy-Fingscheidt 2020; Stage 3 is Lukin-Todd 2D NLM+DFTT post-filter.";
 	static override readonly schema = schema;
-	static override readonly streamClass = DeBleedStream;
-	static override is(value: unknown): value is DeBleedNode {
-		return TransformNode.is(value) && value.type[2] === "de-bleed";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "de-bleed"] as const;
-
-	override clone(overrides?: Partial<DeBleedProperties>): DeBleedNode {
-		return new DeBleedNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = DeBleedStream;
 }
 
 export function deBleed(

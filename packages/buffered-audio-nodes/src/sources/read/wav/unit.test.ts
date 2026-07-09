@@ -2,7 +2,9 @@ import { randomBytes } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
+import type { RenderEvents, StreamRenderContext } from "@buffered-audio/core";
 import { ReadWavNode, ReadWavStream, readWav } from ".";
 import { read } from "..";
 import { write } from "../../../targets/write";
@@ -10,6 +12,10 @@ import { readToBuffer, readWavSamples } from "../../../utils/read-to-buffer";
 import { audio } from "../../../utils/test-binaries";
 
 const testVoice = audio.testVoice;
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
 
 describe("ReadWavNode", () => {
 	it("creates a ReadWavNode via readWav convenience function", () => {
@@ -26,7 +32,7 @@ describe("ReadWavNode", () => {
 
 	it("reads WAV file metadata correctly", async () => {
 		const node = readWav(testVoice);
-		const meta = await new ReadWavStream(node).getMetadata();
+		const meta = await new ReadWavStream(node, renderContext()).getMetadata();
 
 		expect(meta.sampleRate).toBeGreaterThan(0);
 		expect(meta.channels).toBeGreaterThan(0);
@@ -53,12 +59,6 @@ describe("ReadWavNode", () => {
 		}
 	}, 240_000);
 
-	it("clones with overrides", () => {
-		const node = readWav("test.wav");
-		const cloned = node.clone({ path: "other.wav" });
-
-		expect(cloned).toBeInstanceOf(ReadWavNode);
-	});
 });
 
 describe("ReadWavStream", () => {
@@ -138,13 +138,13 @@ describe("ReadWavStream", () => {
 
 	it("getMetadata returns stable metadata across repeated probes", async () => {
 		const source = readWav(testVoice);
-		const meta = await new ReadWavStream(source).getMetadata();
+		const meta = await new ReadWavStream(source, renderContext()).getMetadata();
 
 		expect(meta.sampleRate).toBeGreaterThan(0);
 		expect(meta.channels).toBeGreaterThan(0);
 		expect(meta.durationFrames).toBeGreaterThan(0);
 
-		const meta2 = await new ReadWavStream(source).getMetadata();
+		const meta2 = await new ReadWavStream(source, renderContext()).getMetadata();
 		expect(meta2.sampleRate).toBe(meta.sampleRate);
 		expect(meta2.channels).toBe(meta.channels);
 		expect(meta2.durationFrames).toBe(meta.durationFrames);

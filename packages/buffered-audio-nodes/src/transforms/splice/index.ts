@@ -12,13 +12,13 @@ export interface SpliceProperties extends z.infer<typeof schema>, TransformNodeP
 	readonly channels?: ReadonlyArray<number>;
 }
 
-export class SpliceStream extends UnbufferedTransformStream<SpliceProperties> {
+export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 	private insertSamples!: Array<Float32Array>;
 	private insertSampleRate = 0;
 	private insertLength = 0;
 	private sampleRateChecked = false;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	override async _setup(_context: StreamContext): Promise<void> {
 		const { samples, sampleRate } = await readWavSamples(this.properties.insertPath);
 
 		const targetChannels = this.properties.channels;
@@ -34,11 +34,9 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceProperties> {
 		this.insertSamples = samples;
 		this.insertSampleRate = sampleRate;
 		this.insertLength = samples[0]?.length ?? 0;
-
-		return super._setup(input, context);
 	}
 
-	override transform(chunk: Block, enqueue: (block: Block) => void): void {
+	override *_transform(chunk: Block): Generator<Block> {
 		if (!this.sampleRateChecked) {
 			this.sampleRateChecked = true;
 
@@ -53,7 +51,7 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceProperties> {
 		const insertEnd = this.properties.insertAt + this.insertLength;
 
 		if (chunkEnd <= this.properties.insertAt || chunkStart >= insertEnd) {
-			enqueue(chunk);
+			yield chunk;
 
 			return;
 		}
@@ -103,7 +101,7 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceProperties> {
 			}
 		}
 
-		enqueue({ samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+		yield { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 }
 
@@ -111,18 +109,9 @@ export class SpliceNode extends TransformNode<SpliceProperties> {
 	static override readonly nodeName = "Splice";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Replace a region of audio with processed content";
+	static override readonly description = "Replace a region of audio with processed content";
 	static override readonly schema = schema;
-	static override readonly streamClass = SpliceStream;
-	static override is(value: unknown): value is SpliceNode {
-		return TransformNode.is(value) && value.type[2] === "splice";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "splice"] as const;
-
-	override clone(overrides?: Partial<SpliceProperties>): SpliceNode {
-		return new SpliceNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = SpliceStream;
 }
 
 export function splice(insertPath: string, insertAt: number, options?: { channels?: ReadonlyArray<number> }): SpliceNode {

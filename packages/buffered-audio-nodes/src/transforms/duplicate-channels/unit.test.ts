@@ -1,6 +1,11 @@
+import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block } from "@buffered-audio/core";
+import type { Block, RenderEvents, StreamRenderContext } from "@buffered-audio/core";
 import { duplicateChannels, DuplicateChannelsNode, DuplicateChannelsStream } from ".";
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
 
 function makeMonoChunk(value: number, frames = 256): Block {
 	return {
@@ -12,14 +17,12 @@ function makeMonoChunk(value: number, frames = 256): Block {
 }
 
 function applyDuplicate(node: DuplicateChannelsNode, chunk: Block): Block {
-	const stream = new DuplicateChannelsStream(node);
+	const stream = new DuplicateChannelsStream(node, renderContext());
 	let result: Block | undefined;
 
-	stream.transform(chunk, (block) => {
-		result = block;
-	});
+	for (const block of stream._transform(chunk)) result = block;
 
-	if (!result) throw new Error("transform enqueued nothing");
+	if (!result) throw new Error("transform yielded nothing");
 
 	return result;
 }
@@ -67,7 +70,7 @@ describe("DuplicateChannelsNode", () => {
 	});
 
 	it("throws when input has more than 1 channel", () => {
-		const stream = new DuplicateChannelsStream(duplicateChannels({ channels: 2 }));
+		const stream = new DuplicateChannelsStream(duplicateChannels({ channels: 2 }), renderContext());
 		const chunk: Block = {
 			samples: [new Float32Array(256), new Float32Array(256)],
 			offset: 0,
@@ -75,6 +78,6 @@ describe("DuplicateChannelsNode", () => {
 			bitDepth: 32,
 		};
 
-		expect(() => stream.transform(chunk, () => undefined)).toThrow(/DuplicateChannelsNode requires exactly 1 input channel/);
+		expect(() => Array.from(stream._transform(chunk))).toThrow(/DuplicateChannelsNode requires exactly 1 input channel/);
 	});
 });

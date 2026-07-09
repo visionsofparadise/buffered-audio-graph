@@ -1,6 +1,11 @@
+import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block } from "@buffered-audio/core";
+import type { Block, RenderEvents, StreamRenderContext } from "@buffered-audio/core";
 import { pan, PanNode, PanStream } from ".";
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
 
 function makeMonoChunk(value: number, frames = 256): Block {
 	return { samples: [new Float32Array(frames).fill(value)], offset: 0, sampleRate: 48000, bitDepth: 32 };
@@ -11,14 +16,12 @@ function makeStereoChunk(leftValue: number, rightValue: number, frames = 256): B
 }
 
 function applyPan(node: PanNode, chunk: Block): Block {
-	const stream = new PanStream(node);
+	const stream = new PanStream(node, renderContext());
 	let result: Block | undefined;
 
-	stream.transform(chunk, (block) => {
-		result = block;
-	});
+	for (const block of stream._transform(chunk)) result = block;
 
-	if (!result) throw new Error("transform enqueued nothing");
+	if (!result) throw new Error("transform yielded nothing");
 
 	return result;
 }
@@ -98,7 +101,7 @@ describe("PanNode", () => {
 
 	describe("channel count validation", () => {
 		it("throws when input has more than 2 channels", () => {
-			const stream = new PanStream(pan({ pan: 0 }));
+			const stream = new PanStream(pan({ pan: 0 }), renderContext());
 			const chunk: Block = {
 				samples: [new Float32Array(256), new Float32Array(256), new Float32Array(256)],
 				offset: 0,
@@ -106,7 +109,7 @@ describe("PanNode", () => {
 				bitDepth: 32,
 			};
 
-			expect(() => stream.transform(chunk, () => undefined)).toThrow(/PanNode supports 1 or 2 channel inputs only/);
+			expect(() => Array.from(stream._transform(chunk))).toThrow(/PanNode supports 1 or 2 channel inputs only/);
 		});
 	});
 });

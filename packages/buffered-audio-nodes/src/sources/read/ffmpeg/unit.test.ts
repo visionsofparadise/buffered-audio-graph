@@ -13,11 +13,4 @@ describe("ReadFfmpegNode", () => {
 
 		expect(node).toBeInstanceOf(ReadFfmpegNode);
 	});
-
-	it("clones with overrides", () => {
-		const node = readFfmpeg("test.mp3", { ffmpegPath: "/usr/bin/ffmpeg", ffprobePath: "/usr/bin/ffprobe" });
-		const cloned = node.clone({ path: "other.flac" });
-
-		expect(cloned).toBeInstanceOf(ReadFfmpegNode);
-	});
 });

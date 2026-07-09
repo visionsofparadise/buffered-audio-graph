@@ -8,12 +8,12 @@ export const schema = z.object({
 
 export interface NormalizeProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class NormalizeStream extends BufferedTransformStream<NormalizeProperties> {
+export class NormalizeStream extends BufferedTransformStream<NormalizeNode> {
 	override blockSize = WHOLE_FILE;
 
 	private peak = 0;
 
-	override prepare(block: Block): Block {
+	override _prepare(block: Block): Block {
 		for (let ch = 0; ch < block.samples.length; ch++) {
 			const channel = block.samples[ch] ?? new Float32Array(0);
 
@@ -27,7 +27,7 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeProperties
 		return block;
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const raw = this.peak === 0 ? 1 : this.properties.ceiling / this.peak;
 		const scale = Number.isFinite(raw) ? raw : 1;
 
@@ -35,7 +35,7 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeProperties
 
 		for await (const block of buffered.iterate(44100)) {
 			if (scale === 1) {
-				enqueue(block);
+				yield block;
 
 				continue;
 			}
@@ -50,7 +50,7 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeProperties
 				return scaled;
 			});
 
-			enqueue({ samples: scaledSamples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+			yield { samples: scaledSamples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
 		}
 	}
 }
@@ -59,18 +59,9 @@ export class NormalizeNode extends TransformNode<NormalizeProperties> {
 	static override readonly nodeName = "Normalize";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Adjust peak or loudness level to a target ceiling";
+	static override readonly description = "Adjust peak or loudness level to a target ceiling";
 	static override readonly schema = schema;
-	static override readonly streamClass = NormalizeStream;
-	static override is(value: unknown): value is NormalizeNode {
-		return TransformNode.is(value) && value.type[2] === "normalize";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "normalize"] as const;
-
-	override clone(overrides?: Partial<NormalizeProperties>): NormalizeNode {
-		return new NormalizeNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = NormalizeStream;
 }
 
 export function normalize(options?: { ceiling?: number; id?: string }): NormalizeNode {

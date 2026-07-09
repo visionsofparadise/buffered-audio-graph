@@ -13,7 +13,7 @@ export interface WaveformProperties extends z.infer<typeof schema>, TargetNodePr
 
 const HEADER_SIZE = 16;
 
-export class WaveformStream extends BufferedTargetStream<WaveformProperties> {
+export class WaveformStream extends BufferedTargetStream<WaveformNode> {
 	private fileHandle?: FileHandle;
 	private channels = 0;
 	private samplesPerPoint = 1;
@@ -147,19 +147,9 @@ export class WaveformNode extends TargetNode<WaveformProperties> {
 	static override readonly nodeName = "Waveform";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Generate waveform visualization data";
+	static override readonly description = "Generate waveform visualization data";
 	static override readonly schema = schema;
-	static override readonly streamClass = WaveformStream;
-
-	static override is(value: unknown): value is WaveformNode {
-		return TargetNode.is(value) && value.type[2] === "waveform";
-	}
-
-	override readonly type = ["buffered-audio-node", "target", "waveform"] as const;
-
-	override clone(overrides?: Partial<WaveformProperties>): WaveformNode {
-		return new WaveformNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = WaveformStream;
 }
 
 export function waveform(outputPath: string, options?: { resolution?: number }): WaveformNode {

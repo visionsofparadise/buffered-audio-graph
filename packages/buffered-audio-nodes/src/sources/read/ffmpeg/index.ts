@@ -28,7 +28,7 @@ interface ProbeResult {
 	readonly duration: number;
 }
 
-export class ReadFfmpegStream<P extends ReadFfmpegProperties = ReadFfmpegProperties> extends BufferedSourceStream<P> {
+export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 	private ffmpegProcess?: ChildProcess;
 	private stdout?: NodeJS.ReadableStream;
 	private frameOffset = 0;
@@ -260,14 +260,9 @@ export class ReadFfmpegNode extends SourceNode<ReadFfmpegProperties> {
 	static override readonly nodeName = "Read FFmpeg";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Read audio from a file using FFmpeg";
+	static override readonly description = "Read audio from a file using FFmpeg";
 	static override readonly schema = ffmpegSchema;
-	static override readonly streamClass = ReadFfmpegStream;
-	override readonly type = ["buffered-audio-node", "source", "read-ffmpeg"] as const;
-
-	clone(overrides?: Partial<ReadFfmpegProperties>): ReadFfmpegNode {
-		return new ReadFfmpegNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = ReadFfmpegStream;
 }
 
 export function readFfmpeg(path: string, options: { channels?: ReadonlyArray<number>; ffmpegPath: string; ffprobePath: string }): ReadFfmpegNode {

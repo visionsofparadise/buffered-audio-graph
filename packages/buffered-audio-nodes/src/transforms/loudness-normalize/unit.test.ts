@@ -1,13 +1,40 @@
+import { EventEmitter } from "node:events";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { WaveFile } from "wavefile";
+import type { Block, RenderEvents, StreamContext, StreamRenderContext } from "@buffered-audio/core";
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { read } from "../../sources/read";
 import { write } from "../../targets/write";
 import { loudnessNormalize, LoudnessNormalizeStream } from ".";
+
+function execContext(): StreamContext {
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
+}
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
+
+function readableFrom(blocks: Array<Block>): ReadableStream<Block> {
+	let index = 0;
+
+	return new ReadableStream<Block>({
+		pull: (controller) => {
+			const block = blocks[index];
+
+			if (block) {
+				index += 1;
+				controller.enqueue(block);
+			} else {
+				controller.close();
+			}
+		},
+	});
+}
 
 const TEST_SAMPLE_RATE = 48_000;
 const TEST_FRAMES = TEST_SAMPLE_RATE * 4; // 4 s — long enough for BS.1770 gating
@@ -158,31 +185,21 @@ describe("LoudnessNormalize", () => {
 		// ESM namespace exports can't be patched in vitest (`Cannot redefine property: spawn`), so drive
 		// the stream directly. The schema has no `ffmpegPath`, so adding a subprocess would be visible in review.
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
-		const stream = new LoudnessNormalizeStream(loudnessNormalize({ target: -16 }));
-		const transformStream = stream.createTransformStream();
-		const writer = transformStream.writable.getWriter();
-		const reader = transformStream.readable.getReader();
+		const stream = new LoudnessNormalizeStream(loudnessNormalize({ target: -16 }), renderContext());
+		const output = await stream.setup(readableFrom([{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]), execContext());
+		const reader = output.getReader();
 
-		// Drain the readable concurrently with the writer: awaiting `writer.close()` first
-		// deadlocks, since the flush handler back-pressures on `enqueue` until the reader consumes.
-		const drain = (async () => {
-			const collected: Array<Float32Array> = [];
+		const collected: Array<Float32Array> = [];
 
-			while (true) {
-				const next = await reader.read();
+		for (;;) {
+			const next = await reader.read();
 
-				if (next.done) return collected;
+			if (next.done) break;
 
-				const channel = next.value.samples[0];
+			const channel = next.value.samples[0];
 
-				if (channel) collected.push(channel);
-			}
-		})();
-
-		await writer.write({ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 });
-		await writer.close();
-
-		const collected = await drain;
+			if (channel) collected.push(channel);
+		}
 
 		const totalLength = collected.reduce((sum, channel) => sum + channel.length, 0);
 

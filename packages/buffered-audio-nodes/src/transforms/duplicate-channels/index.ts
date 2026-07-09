@@ -8,8 +8,8 @@ export const schema = z.object({
 
 export interface DuplicateChannelsProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class DuplicateChannelsStream extends UnbufferedTransformStream<DuplicateChannelsProperties> {
-	override transform(chunk: Block, enqueue: (block: Block) => void): void {
+export class DuplicateChannelsStream extends UnbufferedTransformStream<DuplicateChannelsNode> {
+	override *_transform(chunk: Block): Generator<Block> {
 		const inputChannels = chunk.samples.length;
 
 		if (inputChannels !== 1) {
@@ -24,7 +24,7 @@ export class DuplicateChannelsStream extends UnbufferedTransformStream<Duplicate
 			samples.push(Float32Array.from(source));
 		}
 
-		enqueue({ samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+		yield { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 }
 
@@ -32,18 +32,9 @@ export class DuplicateChannelsNode extends TransformNode<DuplicateChannelsProper
 	static override readonly nodeName = "Duplicate Channels";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Duplicate a mono signal into multiple identical output channels; requires exactly 1 input channel, throws otherwise";
+	static override readonly description = "Duplicate a mono signal into multiple identical output channels; requires exactly 1 input channel, throws otherwise";
 	static override readonly schema = schema;
-	static override readonly streamClass = DuplicateChannelsStream;
-	static override is(value: unknown): value is DuplicateChannelsNode {
-		return TransformNode.is(value) && value.type[2] === "duplicate-channels";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "duplicate-channels"] as const;
-
-	override clone(overrides?: Partial<DuplicateChannelsProperties>): DuplicateChannelsNode {
-		return new DuplicateChannelsNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = DuplicateChannelsStream;
 }
 
 export function duplicateChannels(options?: { channels?: number; id?: string }): DuplicateChannelsNode {

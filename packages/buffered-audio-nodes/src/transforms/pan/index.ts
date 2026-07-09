@@ -8,8 +8,8 @@ export const schema = z.object({
 
 export interface PanProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class PanStream extends UnbufferedTransformStream<PanProperties> {
-	override transform(chunk: Block, enqueue: (block: Block) => void): void {
+export class PanStream extends UnbufferedTransformStream<PanNode> {
+	override *_transform(chunk: Block): Generator<Block> {
 		const { pan } = this.properties;
 		const channels = chunk.samples.length;
 
@@ -34,7 +34,7 @@ export class PanStream extends UnbufferedTransformStream<PanProperties> {
 				right[index] = sample * rightGain;
 			}
 
-			enqueue({ samples: [left, right], offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+			yield { samples: [left, right], offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 
 			return;
 		}
@@ -53,7 +53,7 @@ export class PanStream extends UnbufferedTransformStream<PanProperties> {
 			outputRight[index] = (inputRight[index] ?? 0) * rightScale;
 		}
 
-		enqueue({ samples: [outputLeft, outputRight], offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+		yield { samples: [outputLeft, outputRight], offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 }
 
@@ -61,18 +61,9 @@ export class PanNode extends TransformNode<PanProperties> {
 	static override readonly nodeName = "Pan";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Position mono signal in stereo field or adjust stereo balance; throws for inputs with more than 2 channels";
+	static override readonly description = "Position mono signal in stereo field or adjust stereo balance; throws for inputs with more than 2 channels";
 	static override readonly schema = schema;
-	static override readonly streamClass = PanStream;
-	static override is(value: unknown): value is PanNode {
-		return TransformNode.is(value) && value.type[2] === "pan";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "pan"] as const;
-
-	override clone(overrides?: Partial<PanProperties>): PanNode {
-		return new PanNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = PanStream;
 }
 
 export function pan(options?: { pan?: number; id?: string }): PanNode {

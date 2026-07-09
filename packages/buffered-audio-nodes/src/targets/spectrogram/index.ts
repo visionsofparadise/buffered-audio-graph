@@ -32,7 +32,7 @@ interface BandMapping {
 	readonly weightEnd: number;
 }
 
-export class SpectrogramStream extends BufferedTargetStream<SpectrogramProperties> {
+export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 	private fileHandle?: FileHandle;
 	private channels = 0;
 	private linearBins = 0;
@@ -271,19 +271,9 @@ export class SpectrogramNode extends TargetNode<SpectrogramProperties> {
 	static override readonly nodeName = "Spectrogram";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Generate spectrogram visualization data";
+	static override readonly description = "Generate spectrogram visualization data";
 	static override readonly schema = schema;
-	static override readonly streamClass = SpectrogramStream;
-
-	static override is(value: unknown): value is SpectrogramNode {
-		return TargetNode.is(value) && value.type[2] === "spectrogram";
-	}
-
-	override readonly type = ["buffered-audio-node", "target", "spectrogram"] as const;
-
-	override clone(overrides?: Partial<SpectrogramProperties>): SpectrogramNode {
-		return new SpectrogramNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = SpectrogramStream;
 }
 
 export function spectrogram(

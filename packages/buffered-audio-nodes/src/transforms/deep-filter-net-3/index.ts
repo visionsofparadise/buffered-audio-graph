@@ -118,19 +118,9 @@ export class DeepFilterNet3Node extends TransformNode<DeepFilterNet3Properties> 
 	static override readonly nodeName = "DeepFilterNet3 (Denoiser)";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)";
+	static override readonly description = "Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)";
 	static override readonly schema = schema;
-	static override readonly streamClass = DeepFilterNet3Stream;
-
-	static override is(value: unknown): value is DeepFilterNet3Node {
-		return TransformNode.is(value) && value.type[2] === "deep-filter-net-3";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "deep-filter-net-3"] as const;
-
-	override clone(overrides?: Partial<DeepFilterNet3Properties>): DeepFilterNet3Node {
-		return new DeepFilterNet3Node({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = DeepFilterNet3Stream;
 }
 
 export function deepFilterNet3(options: {

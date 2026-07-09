@@ -572,18 +572,9 @@ export class HtdemucsNode extends TransformNode<HtdemucsProperties> {
 	static override readonly nodeName = "HTDemucs (Stem Separator)";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Rebalance stem volumes using HTDemucs source separation";
+	static override readonly description = "Rebalance stem volumes using HTDemucs source separation";
 	static override readonly schema = schema;
-	static override readonly streamClass = HtdemucsStream;
-	static override is(value: unknown): value is HtdemucsNode {
-		return TransformNode.is(value) && value.type[2] === "htdemucs";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "htdemucs"] as const;
-
-	override clone(overrides?: Partial<HtdemucsProperties>): HtdemucsNode {
-		return new HtdemucsNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = HtdemucsStream;
 }
 
 export function htdemucs(

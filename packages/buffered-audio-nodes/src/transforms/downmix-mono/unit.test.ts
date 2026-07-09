@@ -1,6 +1,11 @@
+import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block } from "@buffered-audio/core";
+import type { Block, RenderEvents, StreamRenderContext } from "@buffered-audio/core";
 import { downmixMono, DownmixMonoNode, DownmixMonoStream } from ".";
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
 
 function makeChunk(channelValues: Array<number>, frames = 256): Block {
 	return {
@@ -12,14 +17,12 @@ function makeChunk(channelValues: Array<number>, frames = 256): Block {
 }
 
 function applyDownmix(chunk: Block): Block {
-	const stream = new DownmixMonoStream(downmixMono());
+	const stream = new DownmixMonoStream(downmixMono(), renderContext());
 	let result: Block | undefined;
 
-	stream.transform(chunk, (block) => {
-		result = block;
-	});
+	for (const block of stream._transform(chunk)) result = block;
 
-	if (!result) throw new Error("transform enqueued nothing");
+	if (!result) throw new Error("transform yielded nothing");
 
 	return result;
 }

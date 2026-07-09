@@ -1,17 +1,20 @@
+import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block } from "@buffered-audio/core";
+import type { Block, RenderEvents, StreamRenderContext } from "@buffered-audio/core";
 import { dither, DitherStream } from ".";
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
 
 function applyDither(bitDepth: 16 | 24, input: Float32Array): Block {
 	const node = dither(bitDepth);
-	const stream = new DitherStream(node);
+	const stream = new DitherStream(node, renderContext());
 	let result: Block | undefined;
 
-	stream.transform({ samples: [input], offset: 0, sampleRate: 44100, bitDepth: 32 }, (block) => {
-		result = block;
-	});
+	for (const block of stream._transform({ samples: [input], offset: 0, sampleRate: 44100, bitDepth: 32 })) result = block;
 
-	if (!result) throw new Error("transform enqueued nothing");
+	if (!result) throw new Error("transform yielded nothing");
 
 	return result;
 }

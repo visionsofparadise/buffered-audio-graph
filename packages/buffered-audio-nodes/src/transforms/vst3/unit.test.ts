@@ -82,20 +82,13 @@ describe("Vst3Node schema", () => {
 });
 
 describe("Vst3Node", () => {
-	it("identifies VST3 nodes via .is()", () => {
-		const node = vst3({ vstHostPath: "x", stages: [{ pluginPath: "y" }] });
-
-		expect(Vst3Node.is(node)).toBe(true);
-		expect(node.type[2]).toBe("vst3");
-	});
-
 	it("exposes the expected static metadata", () => {
 		expect(Vst3Node.nodeName).toBe("VST3");
-		expect(Vst3Node.nodeDescription).toMatch(/VST3 effect plugins/);
+		expect(Vst3Node.description).toMatch(/VST3 effect plugins/);
 	});
 
 	it("uses Vst3Stream as its stream class", () => {
-		expect(Vst3Node.streamClass).toBe(Vst3Stream);
+		expect(Vst3Node.Stream).toBe(Vst3Stream);
 	});
 });
 

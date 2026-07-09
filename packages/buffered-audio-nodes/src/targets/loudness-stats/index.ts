@@ -26,7 +26,7 @@ export interface LoudnessStats {
 	readonly amplitude: AmplitudeDistribution;
 }
 
-export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsProperties> {
+export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsNode> {
 	private channels = 0;
 	private sampleRate = 0;
 	private truePeakAccumulator: TruePeakAccumulator | undefined;
@@ -59,8 +59,7 @@ export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsPrope
 		this.histogramAccumulator = new AmplitudeHistogramAccumulator(this.properties.bucketCount);
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	override async _write(chunk: Block): Promise<void> {
+	override _write(chunk: Block): void {
 		this.ensureInit(chunk);
 
 		const frames = chunk.samples[0]?.length ?? 0;
@@ -156,19 +155,9 @@ export class LoudnessStatsNode extends TargetNode<LoudnessStatsProperties> {
 	static override readonly nodeName = "Loudness Stats";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Measure integrated loudness, true peak, and loudness range per EBU R128, plus an amplitude-distribution histogram";
+	static override readonly description = "Measure integrated loudness, true peak, and loudness range per EBU R128, plus an amplitude-distribution histogram";
 	static override readonly schema = schema;
-	static override readonly streamClass = LoudnessStatsStream;
-
-	static override is(value: unknown): value is LoudnessStatsNode {
-		return TargetNode.is(value) && value.type[2] === "loudness-stats";
-	}
-
-	override readonly type = ["buffered-audio-node", "target", "loudness-stats"] as const;
-
-	override clone(overrides?: Partial<LoudnessStatsProperties>): LoudnessStatsNode {
-		return new LoudnessStatsNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = LoudnessStatsStream;
 }
 
 export function loudnessStats(options?: { id?: string; bucketCount?: number; outputPath?: string }): LoudnessStatsNode {

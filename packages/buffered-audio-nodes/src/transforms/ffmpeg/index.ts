@@ -194,18 +194,9 @@ export class FfmpegNode<P extends FfmpegProperties = FfmpegProperties> extends T
 	static override readonly nodeName: string = "FFmpeg";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription: string = "Process audio through FFmpeg filters";
+	static override readonly description: string = "Process audio through FFmpeg filters";
 	static override readonly schema: z.ZodType = schema;
-	static override readonly streamClass = FfmpegStream;
-	static override is(value: unknown): value is FfmpegNode {
-		return TransformNode.is(value) && value.type[2] === "ffmpeg";
-	}
-
-	override readonly type: ReadonlyArray<string> = ["buffered-audio-node", "transform", "ffmpeg"];
-
-	override clone(overrides?: Partial<P>): FfmpegNode<P> {
-		return new FfmpegNode<P>({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = FfmpegStream;
 }
 
 export function ffmpeg(options: { ffmpegPath: string; args: Array<string> | ((context: StreamContext) => Array<string>); outputSampleRate?: number; id?: string }): FfmpegNode {

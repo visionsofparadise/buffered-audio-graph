@@ -12,14 +12,14 @@ export const schema = z.object({
 
 export interface TrimProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class TrimStream extends BufferedTransformStream<TrimProperties> {
+export class TrimStream extends BufferedTransformStream<TrimNode> {
 	override blockSize = WHOLE_FILE;
 
 	private firstAbove = Infinity;
 	private lastAbove = -1;
 	private scanOffset = 0;
 
-	override prepare(block: Block): Block {
+	override _prepare(block: Block): Block {
 		const chunkFrames = block.samples[0]?.length ?? 0;
 
 		if (chunkFrames === 0) return block;
@@ -39,7 +39,7 @@ export class TrimStream extends BufferedTransformStream<TrimProperties> {
 		return block;
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const frames = buffered.frames;
 		const channels = buffered.channels;
 
@@ -67,7 +67,7 @@ export class TrimStream extends BufferedTransformStream<TrimProperties> {
 			if (overlapEnd <= overlapStart) continue;
 
 			if (overlapStart === chunkStart && overlapEnd === chunkEnd) {
-				enqueue({ samples: block.samples, offset: chunkStart - startFrame, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+				yield { samples: block.samples, offset: chunkStart - startFrame, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
 
 				continue;
 			}
@@ -75,12 +75,12 @@ export class TrimStream extends BufferedTransformStream<TrimProperties> {
 			const sliceStart = overlapStart - chunkStart;
 			const sliceEnd = overlapEnd - chunkStart;
 
-			enqueue({
+			yield {
 				samples: block.samples.map((channel) => channel.subarray(sliceStart, sliceEnd)),
 				offset: overlapStart - startFrame,
 				sampleRate: block.sampleRate,
 				bitDepth: block.bitDepth,
-			});
+			};
 		}
 	}
 }
@@ -89,18 +89,9 @@ export class TrimNode extends TransformNode<TrimProperties> {
 	static override readonly nodeName = "Trim";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Remove silence from start and end";
+	static override readonly description = "Remove silence from start and end";
 	static override readonly schema = schema;
-	static override readonly streamClass = TrimStream;
-	static override is(value: unknown): value is TrimNode {
-		return TransformNode.is(value) && value.type[2] === "trim";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "trim"] as const;
-
-	override clone(overrides?: Partial<TrimProperties>): TrimNode {
-		return new TrimNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = TrimStream;
 }
 
 export function trim(options?: { threshold?: number; margin?: number; start?: boolean; end?: boolean; id?: string }): TrimNode {

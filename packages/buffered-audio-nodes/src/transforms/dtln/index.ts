@@ -276,18 +276,9 @@ export class DtlnNode extends TransformNode<DtlnProperties> {
 	static override readonly nodeName = "DTLN (Denoiser)";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Remove background noise from speech using DTLN neural network";
+	static override readonly description = "Remove background noise from speech using DTLN neural network";
 	static override readonly schema = schema;
-	static override readonly streamClass = DtlnStream;
-	static override is(value: unknown): value is DtlnNode {
-		return TransformNode.is(value) && value.type[2] === "dtln";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "dtln"] as const;
-
-	override clone(overrides?: Partial<DtlnProperties>): DtlnNode {
-		return new DtlnNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = DtlnStream;
 }
 
 export function dtln(options: {

@@ -9,12 +9,12 @@ export const schema = z.object({
 
 export interface TruePeakNormalizeProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNormalizeProperties> {
+export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNormalizeNode> {
 	override blockSize = WHOLE_FILE;
 
 	private accumulator?: TruePeakAccumulator;
 
-	override prepare(block: Block): Block {
+	override _prepare(block: Block): Block {
 		const frames = block.samples[0]?.length ?? 0;
 		const channelCount = block.samples.length;
 
@@ -26,12 +26,12 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 		return block;
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const gain = this.resolveGain();
 
 		for await (const block of buffered.iterate(44100)) {
 			if (gain === 1) {
-				enqueue(block);
+				yield block;
 
 				continue;
 			}
@@ -46,7 +46,7 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 				return output;
 			});
 
-			enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+			yield { samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
 		}
 	}
 
@@ -74,18 +74,9 @@ export class TruePeakNormalizeNode extends TransformNode<TruePeakNormalizeProper
 	static override readonly nodeName = "True Peak Normalize";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single linear gain to hit a target dBTP";
+	static override readonly description = "Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single linear gain to hit a target dBTP";
 	static override readonly schema = schema;
-	static override readonly streamClass = TruePeakNormalizeStream;
-	static override is(value: unknown): value is TruePeakNormalizeNode {
-		return TransformNode.is(value) && value.type[2] === "true-peak-normalize";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "true-peak-normalize"] as const;
-
-	override clone(overrides?: Partial<TruePeakNormalizeProperties>): TruePeakNormalizeNode {
-		return new TruePeakNormalizeNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = TruePeakNormalizeStream;
 }
 
 export function truePeakNormalize(options?: { target?: number; id?: string }): TruePeakNormalizeNode {

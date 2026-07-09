@@ -132,18 +132,9 @@ export class CrestReduceNode extends TransformNode<CrestReduceProperties> {
 	static override readonly nodeName = "Crest Reduce";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor";
+	static override readonly description = "Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor";
 	static override readonly schema = schema;
-	static override readonly streamClass = CrestReduceStream;
-	static override is(value: unknown): value is CrestReduceNode {
-		return TransformNode.is(value) && value.type[2] === "crest-reduce";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "crest-reduce"] as const;
-
-	override clone(overrides?: Partial<CrestReduceProperties>): CrestReduceNode {
-		return new CrestReduceNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = CrestReduceStream;
 }
 
 export function crestReduce(options?: { smoothing?: number; frameSize?: number; vkfftAddonPath?: string; fftwAddonPath?: string; id?: string }): CrestReduceNode {

@@ -426,19 +426,9 @@ export class KimVocal2Node extends TransformNode<KimVocal2Properties> {
 	static override readonly nodeName = "Kim Vocal 2 (Stem Separator)";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Isolate dialogue from background using MDX-Net vocal separation";
+	static override readonly description = "Isolate dialogue from background using MDX-Net vocal separation";
 	static override readonly schema = schema;
-	static override readonly streamClass = KimVocal2Stream;
-
-	static override is(value: unknown): value is KimVocal2Node {
-		return TransformNode.is(value) && value.type[2] === "kim-vocal-2";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "kim-vocal-2"] as const;
-
-	override clone(overrides?: Partial<KimVocal2Properties>): KimVocal2Node {
-		return new KimVocal2Node({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = KimVocal2Stream;
 }
 
 export function kimVocal2(options: { modelPath: string; ffmpegPath: string; onnxAddonPath?: string; highPass?: number; lowPass?: number; id?: string }): KimVocal2Node {

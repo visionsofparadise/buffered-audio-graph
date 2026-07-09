@@ -3,7 +3,7 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type BufferedAudioNodeProperties, type StreamContext } from "@buffered-audio/core";
+import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type StreamRenderContext } from "@buffered-audio/core";
 import { read } from "../sources/read";
 import { write } from "../targets/write";
 import { readWavSamples } from "../utils/read-to-buffer";
@@ -12,24 +12,19 @@ import { audio } from "../utils/test-binaries";
 const testVoice = audio.testVoice;
 
 class PassthroughStream extends UnbufferedTransformStream {
-	override transform(block: Block, enqueue: (block: Block) => void): void {
-		enqueue(block);
+	override *_transform(block: Block): Generator<Block> {
+		yield block;
 	}
 }
 
 class PassthroughTransform extends TransformNode {
 	static override readonly nodeName = "Passthrough";
 	static override readonly packageName = "test";
-	static override readonly streamClass = PassthroughStream;
-	override readonly type = ["buffered-audio-node", "transform", "passthrough"] as const;
-
-	clone(overrides?: Partial<BufferedAudioNodeProperties>): PassthroughTransform {
-		return new PassthroughTransform({ ...this.properties, ...overrides });
-	}
+	static override readonly Stream = PassthroughStream;
 }
 
 class ErrorStream extends BufferedTransformStream {
-	override async transform(_buffered: BlockBuffer, _enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(_buffered: BlockBuffer): AsyncGenerator<Block> {
 		await Promise.resolve();
 
 		throw new Error("Intentional transform error");
@@ -39,23 +34,19 @@ class ErrorStream extends BufferedTransformStream {
 class ErrorTransform extends TransformNode {
 	static override readonly nodeName = "Error";
 	static override readonly packageName = "test";
-	static override readonly streamClass = ErrorStream;
-	override readonly type = ["buffered-audio-node", "transform", "error"] as const;
-
-	clone(overrides?: Partial<BufferedAudioNodeProperties>): ErrorTransform {
-		return new ErrorTransform({ ...this.properties, ...overrides });
-	}
+	static override readonly Stream = ErrorStream;
 }
 
 class ScaleStream extends UnbufferedTransformStream {
 	constructor(
 		node: BufferedAudioNode,
+		context: StreamRenderContext,
 		private readonly factor: number,
 	) {
-		super(node);
+		super(node, context);
 	}
 
-	override transform(block: Block, enqueue: (chunk: Block) => void): void {
+	override *_transform(block: Block): Generator<Block> {
 		const scaled = block.samples.map((channel) => {
 			const out = new Float32Array(channel.length);
 			for (let i = 0; i < channel.length; i++) {
@@ -63,31 +54,33 @@ class ScaleStream extends UnbufferedTransformStream {
 			}
 			return out;
 		});
-		enqueue({ ...block, samples: scaled });
+		yield { ...block, samples: scaled };
 	}
 }
 
 class CompositeStream extends UnbufferedTransformStream {
-	override async _setup(input: ReadableStream<Block>, _context: StreamContext): Promise<ReadableStream<Block>> {
-		const first = new ScaleStream(this.node, 2);
-		const second = new ScaleStream(this.node, 0.5);
-		return input.pipeThrough(first.createTransformStream()).pipeThrough(second.createTransformStream());
+	private readonly first: ScaleStream;
+	private readonly second: ScaleStream;
+
+	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
+		super(node, context);
+		this.first = new ScaleStream(this.node, context, 2);
+		this.second = new ScaleStream(this.node, context, 0.5);
 	}
 
-	override transform(block: Block, enqueue: (chunk: Block) => void): void {
-		enqueue(block);
+	override *_transform(block: Block): Generator<Block> {
+		yield block;
+	}
+
+	override _pipe(input: ReadableStream<Block>): ReadableStream<Block> {
+		return this.second._pipe(super._pipe(this.first._pipe(input)));
 	}
 }
 
 class CompositeTransform extends TransformNode {
 	static override readonly nodeName = "Composite";
 	static override readonly packageName = "test";
-	static override readonly streamClass = CompositeStream;
-	override readonly type = ["buffered-audio-node", "transform", "composite"] as const;
-
-	clone(overrides?: Partial<BufferedAudioNodeProperties>): CompositeTransform {
-		return new CompositeTransform({ ...this.properties, ...overrides });
-	}
+	static override readonly Stream = CompositeStream;
 }
 
 describe("TransformNode lifecycle", () => {

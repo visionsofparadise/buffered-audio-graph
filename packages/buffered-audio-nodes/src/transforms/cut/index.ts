@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type BufferedAudioNode, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type BufferedAudioNode, type StreamRenderContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 const cutRegionSchema = z.object({
@@ -15,17 +15,17 @@ export type CutRegion = z.infer<typeof cutRegionSchema>;
 
 export interface CutProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class CutStream extends UnbufferedTransformStream<CutProperties> {
+export class CutStream extends UnbufferedTransformStream<CutNode> {
 	private sortedRegions: Array<CutRegion>;
 	private removedFrames = 0;
 
-	constructor(node: BufferedAudioNode) {
-		super(node);
+	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
+		super(node, context);
 
 		this.sortedRegions = [...this.properties.regions].sort((left, right) => left.start - right.start);
 	}
 
-	override transform(chunk: Block, enqueue: (block: Block) => void): void {
+	override *_transform(chunk: Block): Generator<Block> {
 		const sampleRate = chunk.sampleRate;
 		const chunkFrames = chunk.samples[0]?.length ?? 0;
 		const chunkStartSec = chunk.offset / sampleRate;
@@ -62,7 +62,7 @@ export class CutStream extends UnbufferedTransformStream<CutProperties> {
 		this.removedFrames += removedFrames;
 
 		if (totalKept === chunkFrames) {
-			enqueue({ samples: chunk.samples, offset: adjustedOffset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+			yield { samples: chunk.samples, offset: adjustedOffset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 
 			return;
 		}
@@ -89,7 +89,7 @@ export class CutStream extends UnbufferedTransformStream<CutProperties> {
 			output.push(out);
 		}
 
-		enqueue({ samples: output, offset: adjustedOffset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+		yield { samples: output, offset: adjustedOffset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 }
 
@@ -97,18 +97,9 @@ export class CutNode extends TransformNode<CutProperties> {
 	static override readonly nodeName = "Cut";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Remove a region of audio";
+	static override readonly description = "Remove a region of audio";
 	static override readonly schema = schema;
-	static override readonly streamClass = CutStream;
-	static override is(value: unknown): value is CutNode {
-		return TransformNode.is(value) && value.type[2] === "cut";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "cut"] as const;
-
-	override clone(overrides?: Partial<CutProperties>): CutNode {
-		return new CutNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = CutStream;
 }
 
 export function cut(regions: Array<CutRegion>, options?: { id?: string }): CutNode {

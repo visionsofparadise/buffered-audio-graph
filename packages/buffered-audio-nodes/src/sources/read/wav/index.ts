@@ -12,7 +12,7 @@ export interface ReadWavProperties extends z.infer<typeof wavSchema>, SourceNode
 	readonly channels?: ReadonlyArray<number>;
 }
 
-export class ReadWavStream<P extends ReadWavProperties = ReadWavProperties> extends BufferedSourceStream<P> {
+export class ReadWavStream extends BufferedSourceStream<ReadWavNode> {
 	private fileHandle?: FileHandle;
 	private format?: WavFormat;
 	private bytesRead = 0;
@@ -131,14 +131,9 @@ export class ReadWavNode extends SourceNode<ReadWavProperties> {
 	static override readonly nodeName = "Read WAV";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Read audio from a WAV file";
+	static override readonly description = "Read audio from a WAV file";
 	static override readonly schema = wavSchema;
-	static override readonly streamClass = ReadWavStream;
-	override readonly type = ["buffered-audio-node", "source", "read-wav"] as const;
-
-	clone(overrides?: Partial<ReadWavProperties>): ReadWavNode {
-		return new ReadWavNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = ReadWavStream;
 }
 
 export function readWav(path: string, options?: { channels?: ReadonlyArray<number> }): ReadWavNode {

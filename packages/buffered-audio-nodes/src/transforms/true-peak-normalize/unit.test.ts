@@ -1,8 +1,34 @@
 /* eslint-disable no-console -- the node logs a measurement summary by design; tests run with vitest, console output is fine in CI. */
+import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { TruePeakAccumulator } from "@buffered-audio/utils";
-import { type Block } from "@buffered-audio/core";
+import { type Block, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
 import { schema, truePeakNormalize, TruePeakNormalizeStream } from ".";
+
+function execContext(): StreamContext {
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
+}
+
+function renderContext(): StreamRenderContext {
+	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+}
+
+function readableFrom(blocks: Array<Block>): ReadableStream<Block> {
+	let index = 0;
+
+	return new ReadableStream<Block>({
+		pull: (controller) => {
+			const block = blocks[index];
+
+			if (block) {
+				index += 1;
+				controller.enqueue(block);
+			} else {
+				controller.close();
+			}
+		},
+	});
+}
 
 const TEST_SAMPLE_RATE = 48_000;
 const TEST_FRAMES = TEST_SAMPLE_RATE;
@@ -50,47 +76,37 @@ interface StreamRunOptions {
 
 async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: number, options: StreamRunOptions): Promise<Array<Float32Array>> {
 	const channelCount = channels.length;
-	const stream = new TruePeakNormalizeStream(truePeakNormalize({ target: options.target }));
-	const transformStream = stream.createTransformStream();
-	const writer = transformStream.writable.getWriter();
-	const reader = transformStream.readable.getReader();
-
-	const drain = (async () => {
-		const collected: Array<Array<Float32Array>> = [];
-
-		while (true) {
-			const next = await reader.read();
-
-			if (next.done) return collected;
-
-			collected.push(next.value.samples);
-		}
-	})();
+	const stream = new TruePeakNormalizeStream(truePeakNormalize({ target: options.target }), renderContext());
 
 	const totalFrames = channels[0]?.length ?? 0;
 	const chunkFrames = options.chunkFrames ?? totalFrames;
-	let offset = 0;
+	const inputChunks: Array<Block> = [];
 
 	if (totalFrames === 0) {
 		// Still need a chunk to advance the stream; send empty.
-		const samples: Array<Float32Array> = channels.map(() => new Float32Array(0));
-		const chunk: Block = { samples, offset: 0, sampleRate, bitDepth: 32 };
-
-		await writer.write(chunk);
+		inputChunks.push({ samples: channels.map(() => new Float32Array(0)), offset: 0, sampleRate, bitDepth: 32 });
 	} else {
+		let offset = 0;
+
 		while (offset < totalFrames) {
 			const take = Math.min(chunkFrames, totalFrames - offset);
-			const samples: Array<Float32Array> = channels.map((channel) => channel.slice(offset, offset + take));
-			const chunk: Block = { samples, offset, sampleRate, bitDepth: 32 };
 
-			await writer.write(chunk);
+			inputChunks.push({ samples: channels.map((channel) => channel.slice(offset, offset + take)), offset, sampleRate, bitDepth: 32 });
 			offset += take;
 		}
 	}
 
-	await writer.close();
+	const output = await stream.setup(readableFrom(inputChunks), execContext());
+	const reader = output.getReader();
+	const collected: Array<Array<Float32Array>> = [];
 
-	const collected = await drain;
+	for (;;) {
+		const next = await reader.read();
+
+		if (next.done) break;
+
+		collected.push(next.value.samples);
+	}
 
 	const lengths = new Array<number>(channelCount).fill(0);
 

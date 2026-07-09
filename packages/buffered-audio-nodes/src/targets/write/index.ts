@@ -52,7 +52,7 @@ export interface WriteProperties extends TargetNodeProperties {
 const WAV_HEADER_SIZE = 80;
 const UINT32_MAX = 0xffffffff;
 
-export class WriteStream extends BufferedTargetStream<WriteProperties> {
+export class WriteStream extends BufferedTargetStream<WriteNode> {
 	private fileHandle?: FileHandle;
 	private ffmpegProcess?: ChildProcess;
 	private ffmpegStdin?: NodeJS.WritableStream;
@@ -253,14 +253,9 @@ export class WriteNode extends TargetNode<WriteProperties> {
 	static override readonly nodeName = "Write";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Write audio to a file";
+	static override readonly description = "Write audio to a file";
 	static override readonly schema = schema;
-	static override readonly streamClass = WriteStream;
-	override readonly type = ["buffered-audio-node", "target", "write"] as const;
-
-	clone(overrides?: Partial<WriteProperties>): WriteNode {
-		return new WriteNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = WriteStream;
 }
 
 export function write(path: string, options?: { bitDepth?: WavBitDepth; ffmpegPath?: string; encoding?: EncodingOptions }): WriteNode {

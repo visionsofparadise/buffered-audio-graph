@@ -9,25 +9,25 @@ export const schema = z.object({
 
 export interface PhaseProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class PhaseStream extends UnbufferedTransformStream<PhaseProperties> {
+export class PhaseStream extends UnbufferedTransformStream<PhaseNode> {
 	private allpassState: Array<number> = [];
 
-	override transform(chunk: Block, enqueue: (block: Block) => void): void {
+	override *_transform(chunk: Block): Generator<Block> {
 		const { invert, angle } = this.properties;
 
 		if (angle !== undefined) {
-			enqueue(this.applyPhaseRotation(chunk, angle));
+			yield this.applyPhaseRotation(chunk, angle);
 
 			return;
 		}
 
 		if (invert) {
-			enqueue(this.applyInvert(chunk));
+			yield this.applyInvert(chunk);
 
 			return;
 		}
 
-		enqueue(chunk);
+		yield chunk;
 	}
 
 	private applyInvert(chunk: Block): Block {
@@ -77,18 +77,9 @@ export class PhaseNode extends TransformNode<PhaseProperties> {
 	static override readonly nodeName = "Phase";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Invert or rotate signal phase";
+	static override readonly description = "Invert or rotate signal phase";
 	static override readonly schema = schema;
-	static override readonly streamClass = PhaseStream;
-	static override is(value: unknown): value is PhaseNode {
-		return TransformNode.is(value) && value.type[2] === "phase";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "phase"] as const;
-
-	override clone(overrides?: Partial<PhaseProperties>): PhaseNode {
-		return new PhaseNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = PhaseStream;
 }
 
 export function phase(options?: { invert?: boolean; angle?: number; id?: string }): PhaseNode {

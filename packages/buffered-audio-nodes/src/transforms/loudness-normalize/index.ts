@@ -9,12 +9,12 @@ export const schema = z.object({
 
 export interface LoudnessNormalizeProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNormalizeProperties> {
+export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNormalizeNode> {
 	override blockSize = WHOLE_FILE;
 
 	private accumulator?: IntegratedLufsAccumulator;
 
-	override prepare(block: Block): Block {
+	override _prepare(block: Block): Block {
 		const frames = block.samples[0]?.length ?? 0;
 		const channelCount = block.samples.length;
 
@@ -26,7 +26,7 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 		return block;
 	}
 
-	override async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
+	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const integrated = this.accumulator === undefined ? -Infinity : this.accumulator.finalize();
 		const gain = Number.isFinite(integrated) ? Math.pow(10, (this.properties.target - integrated) / 20) : 1;
 
@@ -34,7 +34,7 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 
 		for await (const block of buffered.iterate(44100)) {
 			if (gain === 1) {
-				enqueue(block);
+				yield block;
 
 				continue;
 			}
@@ -49,7 +49,7 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 				return output;
 			});
 
-			enqueue({ samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth });
+			yield { samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
 		}
 	}
 }
@@ -58,18 +58,9 @@ export class LoudnessNormalizeNode extends TransformNode<LoudnessNormalizeProper
 	static override readonly nodeName = "Loudness Normalize";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics";
+	static override readonly description = "Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics";
 	static override readonly schema = schema;
-	static override readonly streamClass = LoudnessNormalizeStream;
-	static override is(value: unknown): value is LoudnessNormalizeNode {
-		return TransformNode.is(value) && value.type[2] === "loudness-normalize";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "loudness-normalize"] as const;
-
-	override clone(overrides?: Partial<LoudnessNormalizeProperties>): LoudnessNormalizeNode {
-		return new LoudnessNormalizeNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = LoudnessNormalizeStream;
 }
 
 export function loudnessNormalize(options?: { target?: number; id?: string }): LoudnessNormalizeNode {

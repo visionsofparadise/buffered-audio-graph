@@ -1,15 +1,15 @@
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 export const schema = z.object({});
 
 export class DownmixMonoStream extends UnbufferedTransformStream {
-	override transform(chunk: Block, enqueue: (block: Block) => void): void {
+	override *_transform(chunk: Block): Generator<Block> {
 		const channels = chunk.samples.length;
 
 		if (channels === 0 || channels === 1) {
-			enqueue(chunk);
+			yield chunk;
 
 			return;
 		}
@@ -26,7 +26,7 @@ export class DownmixMonoStream extends UnbufferedTransformStream {
 			}
 		}
 
-		enqueue({ samples: [mono], offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth });
+		yield { samples: [mono], offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 }
 
@@ -34,18 +34,9 @@ export class DownmixMonoNode extends TransformNode {
 	static override readonly nodeName = "Downmix Mono";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Mix all input channels to a single mono channel by averaging";
+	static override readonly description = "Mix all input channels to a single mono channel by averaging";
 	static override readonly schema = schema;
-	static override readonly streamClass = DownmixMonoStream;
-	static override is(value: unknown): value is DownmixMonoNode {
-		return TransformNode.is(value) && value.type[2] === "downmix-mono";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "downmix-mono"] as const;
-
-	override clone(overrides?: Partial<TransformNodeProperties>): DownmixMonoNode {
-		return new DownmixMonoNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = DownmixMonoStream;
 }
 
 export function downmixMono(options?: { id?: string }): DownmixMonoNode {

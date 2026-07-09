@@ -34,56 +34,38 @@ class MockSourceStream extends BufferedSourceStream {
 }
 
 class MockSource extends SourceNode {
-	static override readonly streamClass = MockSourceStream;
-	readonly type = ["buffered-audio-node", "source", "mock"] as const;
+	static override readonly Stream = MockSourceStream;
 
 	constructor(chunks: Array<Block> = [], meta: SourceMetadata = { sampleRate: 44100, channels: 1 }) {
 		super({ chunks, meta } as never);
 	}
-
-	clone(): MockSource {
-		return new MockSource();
-	}
 }
 
 class MockTransformStream extends UnbufferedTransformStream {
-	// eslint-disable-next-line @typescript-eslint/require-await
-	override async transform(block: Block, enqueue: (block: Block) => void): Promise<void> {
-		enqueue(block);
+	override *_transform(block: Block): Generator<Block> {
+		yield block;
 	}
 }
 
 class MockTransform extends TransformNode {
-	static override readonly streamClass = MockTransformStream;
-	readonly type = ["buffered-audio-node", "transform", "mock"] as const;
-
-	clone(): MockTransform {
-		return new MockTransform();
-	}
+	static override readonly Stream = MockTransformStream;
 }
 
 class MockTargetStream extends BufferedTargetStream {
 	readonly receivedChunks: Array<Block> = [];
 	closed = false;
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	override async _write(chunk: Block): Promise<void> {
+	override _write(chunk: Block): void {
 		this.receivedChunks.push(chunk);
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	override async _close(): Promise<void> {
+	override _close(): void {
 		this.closed = true;
 	}
 }
 
 class MockTarget extends TargetNode {
-	static override readonly streamClass = MockTargetStream;
-	readonly type = ["buffered-audio-node", "target", "mock"] as const;
-
-	clone(): MockTarget {
-		return new MockTarget();
-	}
+	static override readonly Stream = MockTargetStream;
 }
 
 function createChunk(value: number, offset: number, duration: number): Block {

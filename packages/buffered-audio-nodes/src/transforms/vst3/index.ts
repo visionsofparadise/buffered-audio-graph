@@ -121,18 +121,9 @@ export class Vst3Node<P extends Vst3Properties = Vst3Properties> extends Transfo
 	static override readonly nodeName: string = "VST3";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription: string = "Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)";
+	static override readonly description: string = "Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)";
 	static override readonly schema: z.ZodType = schema;
-	static override readonly streamClass = Vst3Stream;
-	static override is(value: unknown): value is Vst3Node {
-		return TransformNode.is(value) && value.type[2] === "vst3";
-	}
-
-	override readonly type: ReadonlyArray<string> = ["buffered-audio-node", "transform", "vst3"];
-
-	override clone(overrides?: Partial<P>): Vst3Node<P> {
-		return new Vst3Node<P>({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = Vst3Stream;
 }
 
 export function vst3(options: {

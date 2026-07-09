@@ -374,18 +374,9 @@ export class LoudnessTargetNode extends TransformNode<LoudnessTargetProperties> 
 	static override readonly nodeName = "Loudness Target";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly packageVersion = PACKAGE_VERSION;
-	static override readonly nodeDescription = "Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.";
+	static override readonly description = "Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.";
 	static override readonly schema = schema;
-	static override readonly streamClass = LoudnessTargetStream;
-	static override is(value: unknown): value is LoudnessTargetNode {
-		return TransformNode.is(value) && value.type[2] === "loudness-target";
-	}
-
-	override readonly type = ["buffered-audio-node", "transform", "loudness-target"] as const;
-
-	override clone(overrides?: Partial<LoudnessTargetProperties>): LoudnessTargetNode {
-		return new LoudnessTargetNode({ ...this.properties, previousProperties: this.properties, ...overrides });
-	}
+	static override readonly Stream = LoudnessTargetStream;
 }
 
 export function loudnessTarget(options: { targetLufs?: number; pivot?: number; floor?: number; targetTp?: number; limitPercentile?: number; limitDb?: number; smoothing?: number; tolerance?: number; peakTolerance?: number; maxAttempts?: number; id?: string }): LoudnessTargetNode {
