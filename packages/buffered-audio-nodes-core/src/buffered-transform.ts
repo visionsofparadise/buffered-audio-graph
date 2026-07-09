@@ -6,8 +6,20 @@ import type { TransformNodeProperties } from "./transform";
 
 export const WHOLE_FILE = Infinity;
 
-// FIX: We need to have this narrowed to a type with blockSize
-export abstract class BufferedTransformStream<N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>> extends BufferedStream<N> {
+export interface BufferedTransformNodeProperties extends TransformNodeProperties {
+	readonly blockSize?: number;
+	readonly streamChunkSize?: number;
+}
+
+function iteratorOf(iterable: AsyncIterable<Block> | Iterable<Block>): AsyncIterator<Block> | Iterator<Block> {
+	if (Symbol.asyncIterator in iterable) return iterable[Symbol.asyncIterator]();
+
+	return iterable[Symbol.iterator]();
+}
+
+export abstract class BufferedTransformStream<
+	N extends BufferedAudioNode<BufferedTransformNodeProperties> = BufferedAudioNode<BufferedTransformNodeProperties>,
+> extends BufferedStream<N> {
 	blockSize: number;
 
 	private processingMs = 0;
@@ -19,13 +31,10 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Transf
 	private hasStarted = false;
 	private sourceTotalFrames?: number;
 
-	private bufferGate = createProgressGate();
-	private emitGate = createProgressGate();
-
 	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
 		super(node, context);
 
-		const blockSize = (this.properties as { blockSize?: number }).blockSize ?? WHOLE_FILE;
+		const blockSize = this.properties.blockSize ?? WHOLE_FILE;
 
 		if (blockSize === 0) throw new Error("BufferedTransformStream: blockSize must be a positive integer or WHOLE_FILE, not 0");
 
@@ -44,33 +53,39 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Transf
 		return this.streamChunkSize ?? this.inferredChunkSize ?? 44100;
 	}
 
-	protected get streamChunkSize() {
+	protected get streamChunkSize(): number | undefined {
 		return this.properties.streamChunkSize;
 	}
 
 	setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.durationFrames;
-		this.bufferGate = createProgressGate(context.durationFrames);
-		this.emitGate = createProgressGate(context.durationFrames);
 
-		return this._setup(input, context);
+		return this.orchestrate(input, context);
 	}
 
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async _setup(input: ReadableStream<Block>, _context: StreamContext): Promise<ReadableStream<Block>> {
-		return input.pipeThrough(this.createTransformStream());
+	private async orchestrate(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+		await this._setup(context);
+
+		return this._pipe(input);
 	}
 
-	createTransformStream(): TransformStream<Block, Block> {
-		return new TransformStream<Block, Block>({
-			transform: (block, controller) => this.handleTransform(block, controller),
-			flush: (controller) => this.handleFlush(controller),
-			cancel: () => this.destroy(),
-		});
+	_setup(_context: StreamContext): Promise<void> | void {
+		return;
 	}
 
-	private makeEnqueue(controller: TransformStreamDefaultController<Block>): (block: Block) => void {
-		return (block) => {
+	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
+		const reader = input.getReader();
+		const bufferGate = createProgressGate(this.sourceTotalFrames);
+		const emitGate = createProgressGate(this.sourceTotalFrames);
+
+		let pending: { block: Block; offset: number } | undefined;
+		let iterator: AsyncIterator<Block> | Iterator<Block> | undefined;
+		let servingFlush = false;
+		let batchFrames = 0;
+		let inputEnded = false;
+		let flushDone = false;
+
+		const serve = (controller: ReadableStreamDefaultController<Block>, block: Block): void => {
 			const frames = block.samples[0]?.length ?? 0;
 			const cap = this.outputChunkSize;
 
@@ -79,7 +94,7 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Transf
 					const take = Math.min(cap, frames - start);
 
 					controller.enqueue({
-						samples: block.samples.map((channel) => channel.subarray(start, start + take)), // FIX: Can you explain what exactly we're doing here?
+						samples: block.samples.map((channel) => channel.subarray(start, start + take)),
 						offset: block.offset + start,
 						sampleRate: block.sampleRate,
 						bitDepth: block.bitDepth,
@@ -90,93 +105,141 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Transf
 			}
 
 			this.framesEmitted += frames;
-			if (this.emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+			if (emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		};
-	}
 
-	private async handleTransform(block: Block, controller: TransformStreamDefaultController<Block>): Promise<void> {
-		if (!this.hasStarted) {
-			this.hasStarted = true;
-			this.emitStarted();
-		}
+		// Writes into the buffer from `current`, advancing its offset. WHOLE_FILE writes the whole block and
+		// never signals a batch; block mode writes one blockSize-capped slice and returns true when the buffer
+		// has filled to blockSize (a batch is ready to serve).
+		const intake = async (current: { block: Block; offset: number }): Promise<boolean> => {
+			const buffer = (this.buffer ??= new BlockBuffer());
+			const blockFrames = current.block.samples[0]?.length ?? 0;
+			const start = performance.now();
 
-		const blockFrames = block.samples[0]?.length ?? 0;
+			if (this.blockSize === WHOLE_FILE) {
+				const prepared = await this._prepare(current.block);
 
-		this.inferredChunkSize ??= blockFrames;
-		this.buffer ??= new BlockBuffer();
+				await buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
+				current.offset = blockFrames;
+				this.processingMs += performance.now() - start;
+				this.framesBuffered += blockFrames;
+				if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
-		const start = performance.now();
-
-		if (this.blockSize === WHOLE_FILE) {
-			const prepared = await this.prepare(block);
-
-			await this.buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
-		} else {
-			let offset = 0;
-
-			while (offset < blockFrames) {
-				const space = this.blockSize - this.buffer.frames;
-				const take = Math.min(space, blockFrames - offset);
-
-				const sliced: Block = {
-					samples: block.samples.map((channel) => channel.subarray(offset, offset + take)),
-					offset: block.offset + offset,
-					sampleRate: block.sampleRate,
-					bitDepth: block.bitDepth,
-				};
-
-				const prepared = await this.prepare(sliced);
-
-				await this.buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
-				offset += take;
-
-				if (this.buffer.frames >= this.blockSize) {
-					await this.fireTransform(controller);
-				}
+				return false;
 			}
-		}
 
-		this.processingMs += performance.now() - start;
-		this.framesBuffered += blockFrames;
+			const space = this.blockSize - buffer.frames;
+			const take = Math.min(space, blockFrames - current.offset);
+			const sliced: Block = {
+				samples: current.block.samples.map((channel) => channel.subarray(current.offset, current.offset + take)),
+				offset: current.block.offset + current.offset,
+				sampleRate: current.block.sampleRate,
+				bitDepth: current.block.bitDepth,
+			};
+			const prepared = await this._prepare(sliced);
 
-		if (this.bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-	}
+			await buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
+			current.offset += take;
+			this.processingMs += performance.now() - start;
+			this.framesBuffered += take;
+			if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
-	private async fireTransform(controller: TransformStreamDefaultController<Block>): Promise<void> {
-		// FIX: This is confusing. Why do we have fireTransform and transform? Does unravelling enqueue to being passed in make it so we can consolidate them into one transform method?
-		if (!this.buffer) return;
+			return buffer.frames >= this.blockSize;
+		};
 
-		const framesBefore = this.buffer.frames;
-		const start = performance.now();
-		const wholeFile = this.blockSize === WHOLE_FILE;
+		const beginBatch = async (): Promise<void> => {
+			const buffer = this.buffer;
 
-		await this.buffer.flushWrites();
+			if (!buffer) return;
 
-		if (wholeFile) this.emitProgress("process", 0, framesBefore);
-		await this.transform(this.buffer, this.makeEnqueue(controller));
-		if (wholeFile) this.emitProgress("process", framesBefore, framesBefore);
+			await buffer.flushWrites();
+			batchFrames = buffer.frames;
+			servingFlush = false;
+			if (this.blockSize === WHOLE_FILE) this.emitProgress("process", 0, batchFrames);
+			iterator = this._transform(buffer)[Symbol.asyncIterator]();
+		};
 
-		await this.buffer.clear();
+		return new ReadableStream<Block>({
+			pull: async (controller) => {
+				for (;;) {
+					if (iterator) {
+						const start = performance.now();
+						const result = await iterator.next();
 
-		this.processingMs += performance.now() - start;
-	}
+						this.processingMs += performance.now() - start;
 
-	private async handleFlush(controller: TransformStreamDefaultController<Block>): Promise<void> {
-		await this.finalizeFlush(controller);
-		await this.destroy();
-	}
+						if (!result.done) {
+							serve(controller, result.value);
 
-	private async finalizeFlush(controller: TransformStreamDefaultController<Block>): Promise<void> {
-		this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+							return;
+						}
 
-		if (this.buffer && this.buffer.frames > 0) {
-			await this.fireTransform(controller);
-		}
+						iterator = undefined;
 
-		await this.flush(this.makeEnqueue(controller));
+						if (!servingFlush) {
+							if (this.blockSize === WHOLE_FILE) this.emitProgress("process", batchFrames, batchFrames);
+							await this.buffer?.clear();
+						}
 
-		this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
-		this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
+						continue;
+					}
+
+					if (!inputEnded) {
+						if (!pending) {
+							const { value, done } = await reader.read();
+
+							if (done) {
+								inputEnded = true;
+
+								continue;
+							}
+
+							if (!this.hasStarted) {
+								this.hasStarted = true;
+								this.emitStarted();
+							}
+
+							this.inferredChunkSize ??= value.samples[0]?.length ?? 0;
+							pending = { block: value, offset: 0 };
+						}
+
+						const ready = await intake(pending);
+
+						if (pending.offset >= (pending.block.samples[0]?.length ?? 0)) pending = undefined;
+						if (ready) await beginBatch();
+
+						continue;
+					}
+
+					if (this.buffer && this.buffer.frames > 0) {
+						await beginBatch();
+
+						continue;
+					}
+
+					if (!flushDone) {
+						flushDone = true;
+						servingFlush = true;
+						iterator = iteratorOf(this._flush());
+
+						continue;
+					}
+
+					this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+					this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+					this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
+					controller.close();
+					await this.destroy();
+
+					return;
+				}
+			},
+			cancel: async (reason) => {
+				await iterator?.return?.();
+				await reader.cancel(reason);
+				await this.destroy();
+			},
+		});
 	}
 
 	override async destroy(): Promise<void> {
@@ -190,17 +253,15 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Transf
 		}
 	}
 
-	prepare(block: Block): Promise<Block> | Block {
+	_prepare(block: Block): Promise<Block> | Block {
 		return block;
 	}
 
-	async transform(buffered: BlockBuffer, enqueue: (block: Block) => void): Promise<void> {
-		for await (const block of buffered.iterate(this.outputChunkSize)) {
-			enqueue(block);
-		}
+	async *_transform(buffered: BlockBuffer): AsyncIterable<Block> {
+		yield* buffered.iterate(this.outputChunkSize);
 	}
 
-	flush(_enqueue: (block: Block) => void): Promise<void> | void {
-		return;
+	_flush(): AsyncIterable<Block> | Iterable<Block> {
+		return [];
 	}
 }

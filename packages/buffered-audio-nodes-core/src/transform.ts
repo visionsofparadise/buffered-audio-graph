@@ -1,8 +1,6 @@
 import { BufferedAudioNode, type BufferedAudioNodeProperties, type Composition } from "./node";
 
-export interface TransformNodeProperties extends BufferedAudioNodeProperties {
-	readonly streamChunkSize?: number;
-}
+export interface TransformNodeProperties extends BufferedAudioNodeProperties {}
 
 export abstract class TransformNode<P extends TransformNodeProperties = TransformNodeProperties> extends BufferedAudioNode<P> {
 	to(child: BufferedAudioNode | Composition): void {

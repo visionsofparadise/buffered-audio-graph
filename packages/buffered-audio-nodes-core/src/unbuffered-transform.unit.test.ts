@@ -1,5 +1,7 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { Block, BufferedAudioNode, StreamContext } from "./node";
+import type { ProgressPayload, RenderEvents, StreamRenderContext } from "./stream";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
 
 function createBlock(value: number, offset: number, frames: number): Block {
@@ -7,11 +9,26 @@ function createBlock(value: number, offset: number, frames: number): Block {
 }
 
 function nodeWith(properties: Record<string, unknown>): BufferedAudioNode {
-	return { properties } as unknown as BufferedAudioNode;
+	return { properties, constructor: { nodeName: "probe-transform" } } as unknown as BufferedAudioNode;
 }
 
-function context(): StreamContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
+function renderContext(): { context: StreamRenderContext; events: RenderEvents } {
+	const events: RenderEvents = new EventEmitter();
+	let counter = 0;
+
+	return { events, context: { events, startedAt: Date.now(), nextStreamId: () => counter++ } };
+}
+
+function execContext(durationFrames?: number): StreamContext {
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, durationFrames };
+}
+
+function collectProgress(events: RenderEvents): Array<ProgressPayload> {
+	const out: Array<ProgressPayload> = [];
+
+	events.on("progress", (_identity, payload) => out.push(payload));
+
+	return out;
 }
 
 function readableFrom(blocks: Array<Block>): ReadableStream<Block> {
@@ -46,81 +63,90 @@ async function drain(readable: ReadableStream<Block>): Promise<Array<Block>> {
 }
 
 class GainStream extends UnbufferedTransformStream {
-	override transform(block: Block, enqueue: (block: Block) => void): void {
-		enqueue({ ...block, samples: block.samples.map((channel) => channel.map((v) => v * 2)) });
+	override *_transform(block: Block): Iterable<Block> {
+		yield { ...block, samples: block.samples.map((channel) => channel.map((v) => v * 2)) };
 	}
 }
 
-describe("UnbufferedTransformStream.transform", () => {
+describe("UnbufferedTransformStream._transform", () => {
 	it("transforms each block in arrival order", async () => {
-		const stream = new GainStream(nodeWith({}));
+		const { context } = renderContext();
+		const stream = new GainStream(nodeWith({}), context);
 		const input = [createBlock(1, 0, 10), createBlock(2, 10, 10)];
 
-		const output = await drain(await stream._setup(readableFrom(input), context()));
+		const output = await drain(await stream.setup(readableFrom(input), execContext()));
 
 		expect(output.map((b) => b.samples[0]?.[0])).toEqual([2, 4]);
 	});
 
-	it("dropping a block by not enqueuing yields no output for it", async () => {
+	it("dropping a block by yielding nothing produces no output for it", async () => {
 		class DropOddStream extends UnbufferedTransformStream {
-			override transform(block: Block, enqueue: (block: Block) => void): void {
-				if ((block.samples[0]?.[0] ?? 0) % 2 === 0) enqueue(block);
+			override *_transform(block: Block): Iterable<Block> {
+				if ((block.samples[0]?.[0] ?? 0) % 2 === 0) yield block;
 			}
 		}
 
-		const stream = new DropOddStream(nodeWith({}));
-		const output = await drain(await stream._setup(readableFrom([createBlock(1, 0, 10), createBlock(2, 10, 10)]), context()));
+		const { context } = renderContext();
+		const stream = new DropOddStream(nodeWith({}), context);
+		const output = await drain(await stream.setup(readableFrom([createBlock(1, 0, 10), createBlock(2, 10, 10)]), execContext()));
 
 		expect(output).toHaveLength(1);
 		expect(output[0]?.samples[0]?.[0]).toBe(2);
 	});
 });
 
-describe("UnbufferedTransformStream.flush", () => {
-	it("flush enqueues trailing output after all blocks", async () => {
+describe("UnbufferedTransformStream._flush", () => {
+	it("yields trailing output after all blocks", async () => {
 		const MARKER = -3;
 
 		class TrailingStream extends UnbufferedTransformStream {
 			flushCalls = 0;
 
-			override transform(block: Block, enqueue: (block: Block) => void): void {
-				enqueue(block);
+			override *_transform(block: Block): Iterable<Block> {
+				yield block;
 			}
 
-			override flush(enqueue: (block: Block) => void): void {
+			override *_flush(): Iterable<Block> {
 				this.flushCalls += 1;
-				enqueue(createBlock(MARKER, 0, 4));
+
+				yield createBlock(MARKER, 0, 4);
 			}
 		}
 
-		const stream = new TrailingStream(nodeWith({}));
-		const output = await drain(await stream._setup(readableFrom([createBlock(1, 0, 10)]), context()));
+		const { context } = renderContext();
+		const stream = new TrailingStream(nodeWith({}), context);
+		const output = await drain(await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext()));
 
 		expect(stream.flushCalls).toBe(1);
 		expect(output.at(-1)?.samples[0]?.[0]).toBe(MARKER);
 	});
 
-	it("flush still fires once on empty upstream", async () => {
+	it("still fires once on empty upstream", async () => {
 		class TrailingStream extends UnbufferedTransformStream {
 			flushCalls = 0;
 
-			override transform(): void {}
+			override _transform(): Iterable<Block> {
+				return [];
+			}
 
-			override flush(): void {
+			override _flush(): Iterable<Block> {
 				this.flushCalls += 1;
+
+				return [];
 			}
 		}
 
-		const stream = new TrailingStream(nodeWith({}));
+		const { context } = renderContext();
+		const stream = new TrailingStream(nodeWith({}), context);
 
-		await drain(await stream._setup(readableFrom([]), context()));
+		await drain(await stream.setup(readableFrom([]), execContext()));
 
 		expect(stream.flushCalls).toBe(1);
 	});
 });
 
 describe("UnbufferedTransformStream destroy", () => {
-	it("runs _destroy once on graceful flush", async () => {
+	it("runs _destroy once on graceful completion", async () => {
 		class CountingStream extends GainStream {
 			destroyCount = 0;
 
@@ -129,33 +155,97 @@ describe("UnbufferedTransformStream destroy", () => {
 			}
 		}
 
-		const stream = new CountingStream(nodeWith({}));
+		const { context } = renderContext();
+		const stream = new CountingStream(nodeWith({}), context);
 
-		await drain(await stream._setup(readableFrom([createBlock(1, 0, 10)]), context()));
+		await drain(await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext()));
 
 		expect(stream.destroyCount).toBe(1);
 	});
+});
 
-	it("runs destroy once on downstream cancel", async () => {
-		class CountingStream extends GainStream {
+describe("UnbufferedTransformStream pull-paced serving", () => {
+	it("advances the transform generator only on consumer demand — reading one block bounds production", async () => {
+		let yields = 0;
+
+		class PacedStream extends UnbufferedTransformStream {
+			override async *_transform(block: Block): AsyncIterable<Block> {
+				for (let i = 0; i < 500; i += 1) {
+					yields += 1;
+
+					yield block;
+				}
+			}
+		}
+
+		const { context } = renderContext();
+		const stream = new PacedStream(nodeWith({}), context);
+		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext());
+		const reader = output.getReader();
+
+		const first = await reader.read();
+
+		// Settle any eager draining: under correct pull-pacing the generator advances only to refill the
+		// one-block queue and then blocks on consumer demand; a regressed loop that drains inside one pull
+		// would run all 500 yields during this window.
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		expect(first.done).toBe(false);
+		expect(yields).toBeLessThanOrEqual(4);
+
+		await reader.cancel("done");
+	});
+
+	it("cancelling the output reader runs the generator's finally and destroys once", async () => {
+		let finallyRan = false;
+
+		class CancelStream extends UnbufferedTransformStream {
 			destroyCount = 0;
+
+			override async *_transform(block: Block): AsyncIterable<Block> {
+				try {
+					for (let i = 0; i < 1000; i += 1) yield block;
+				} finally {
+					finallyRan = true;
+				}
+			}
 
 			override _destroy(): void {
 				this.destroyCount += 1;
 			}
 		}
 
-		const stream = new CountingStream(nodeWith({}));
-		const input = new ReadableStream<Block>({
-			pull: (controller) => controller.enqueue(createBlock(1, 0, 10)),
-		});
-
-		const output = await stream._setup(input, context());
+		const { context } = renderContext();
+		const stream = new CancelStream(nodeWith({}), context);
+		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext());
 		const reader = output.getReader();
 
+		await reader.read();
 		await reader.cancel("stop");
 		await new Promise((resolve) => setTimeout(resolve, 20));
 
+		expect(finallyRan).toBe(true);
 		expect(stream.destroyCount).toBe(1);
+	});
+});
+
+describe("UnbufferedTransformStream progress shape", () => {
+	it("emits buffer/emit progress with monotonic framesDone, completions at true totals, createdAt present", async () => {
+		const { context, events } = renderContext();
+		const stream = new GainStream(nodeWith({}), context);
+		const progress = collectProgress(events);
+
+		await drain(await stream.setup(readableFrom([createBlock(1, 0, 100), createBlock(2, 100, 100)]), execContext(200)));
+
+		const buffers = progress.filter((p) => p.phase === "buffer");
+		const emits = progress.filter((p) => p.phase === "emit");
+		const emitFrames = emits.map((p) => p.framesDone);
+
+		expect(buffers.length).toBeGreaterThanOrEqual(1);
+		expect(emits.length).toBeGreaterThanOrEqual(1);
+		expect(progress.every((p) => typeof p.createdAt === "number")).toBe(true);
+		expect(buffers.at(-1)?.framesDone).toBe(200);
+		expect(emits.at(-1)?.framesDone).toBe(200);
+		expect(emitFrames).toEqual([...emitFrames].sort((a, b) => a - b));
 	});
 });

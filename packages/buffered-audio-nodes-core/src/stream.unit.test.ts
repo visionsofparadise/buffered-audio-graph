@@ -174,8 +174,8 @@ class LifeSource extends SourceNode {
 }
 
 class LifeTransformStream extends UnbufferedTransformStream {
-	override transform(block: Block, enqueue: (block: Block) => void): void {
-		enqueue(block);
+	override *_transform(block: Block): Iterable<Block> {
+		yield block;
 	}
 }
 

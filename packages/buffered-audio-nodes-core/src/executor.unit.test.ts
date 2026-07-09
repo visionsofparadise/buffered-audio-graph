@@ -42,8 +42,8 @@ class MockSource extends SourceNode {
 }
 
 class MockTransformStream extends UnbufferedTransformStream {
-	override transform(block: Block, enqueue: (block: Block) => void): void {
-		enqueue(block);
+	override *_transform(block: Block): Iterable<Block> {
+		yield block;
 	}
 }
 
