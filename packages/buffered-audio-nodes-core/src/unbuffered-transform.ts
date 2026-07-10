@@ -4,14 +4,13 @@ import { BufferedStream } from "./stream";
 import type { TransformNodeProperties } from "./transform";
 
 function iteratorOf(iterable: AsyncIterable<Block> | Iterable<Block>): AsyncIterator<Block> | Iterator<Block> {
+	// FIX: This is a code smell you are doing something wrong
 	if (Symbol.asyncIterator in iterable) return iterable[Symbol.asyncIterator]();
 
 	return iterable[Symbol.iterator]();
 }
 
-export abstract class UnbufferedTransformStream<
-	N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>,
-> extends BufferedStream<N> {
+export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>> extends BufferedStream<N> {
 	private processingMs = 0;
 	private framesBuffered = 0;
 	private framesEmitted = 0;
@@ -44,6 +43,7 @@ export abstract class UnbufferedTransformStream<
 		let flushDone = false;
 
 		return new ReadableStream<Block>({
+			// FIX Why did we move from transforms to readables? This was never discussed
 			pull: async (controller) => {
 				for (;;) {
 					if (iterator) {

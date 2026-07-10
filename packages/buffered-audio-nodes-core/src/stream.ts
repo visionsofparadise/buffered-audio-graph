@@ -44,7 +44,7 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 	readonly node: N;
 	readonly identity: NodeIdentity;
 
-	protected readonly renderEvents: RenderEvents;
+	protected readonly renderEvents: RenderEvents; // FIX: Why the qualifier of render events?
 	protected readonly renderStartedAt: number;
 
 	private destroyed = false;
@@ -54,9 +54,9 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 		this.renderEvents = context.events;
 		this.renderStartedAt = context.startedAt;
 
-		const ctor = node.constructor as typeof BufferedAudioNode;
+		const constructor = node.constructor as typeof BufferedAudioNode;
 
-		this.identity = { nodeName: ctor.nodeName, nodeId: node.id, streamId: context.nextStreamId() };
+		this.identity = { nodeName: constructor.nodeName, nodeId: node.id, streamId: context.nextStreamId() };
 	}
 
 	get properties(): N["properties"] {

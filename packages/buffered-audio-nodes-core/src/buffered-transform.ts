@@ -17,9 +17,7 @@ function iteratorOf(iterable: AsyncIterable<Block> | Iterable<Block>): AsyncIter
 	return iterable[Symbol.iterator]();
 }
 
-export abstract class BufferedTransformStream<
-	N extends BufferedAudioNode<BufferedTransformNodeProperties> = BufferedAudioNode<BufferedTransformNodeProperties>,
-> extends BufferedStream<N> {
+export abstract class BufferedTransformStream<N extends BufferedAudioNode<BufferedTransformNodeProperties> = BufferedAudioNode<BufferedTransformNodeProperties>> extends BufferedStream<N> {
 	blockSize: number;
 
 	private processingMs = 0;
@@ -64,6 +62,7 @@ export abstract class BufferedTransformStream<
 	}
 
 	private async orchestrate(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+		// FIX: What is the point of this? Why not inline?
 		await this._setup(context);
 
 		return this._pipe(input);
@@ -74,6 +73,7 @@ export abstract class BufferedTransformStream<
 	}
 
 	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
+		// FIX: You're going to need to justify this method. We just replaced complexity with even more complexity.
 		const reader = input.getReader();
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
@@ -108,6 +108,7 @@ export abstract class BufferedTransformStream<
 			if (emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		};
 
+		// FIX: Please follow conventions around comments
 		// Writes into the buffer from `current`, advancing its offset. WHOLE_FILE writes the whole block and
 		// never signals a batch; block mode writes one blockSize-capped slice and returns true when the buffer
 		// has filled to blockSize (a batch is ready to serve).

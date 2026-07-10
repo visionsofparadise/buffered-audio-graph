@@ -10,12 +10,14 @@ export interface Block {
 
 export type ExecutionProvider = "gpu" | "cpu-native" | "cpu";
 
+// FIX: This is stream identity not node identity
 export interface NodeIdentity {
 	readonly nodeName: string;
 	readonly nodeId?: string;
 	readonly streamId: number;
 }
 
+// FIX: Why is this defined here? This is related to streams
 export interface StreamContext {
 	readonly executionProviders: ReadonlyArray<ExecutionProvider>;
 	readonly memoryLimit: number;
@@ -23,6 +25,8 @@ export interface StreamContext {
 	readonly highWaterMark: number;
 	readonly signal?: AbortSignal;
 }
+
+// FIX: Clearly no through has been put into the placement of these interfaces
 
 export interface RenderOptions {
 	readonly chunkSize?: number;
