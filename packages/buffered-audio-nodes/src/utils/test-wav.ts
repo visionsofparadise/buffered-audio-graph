@@ -1,4 +1,8 @@
-import { WaveFile } from "wavefile";
+import type * as Wavefile from "wavefile";
+import wavefileExports from "wavefile/dist/wavefile";
+
+// Import wavefile's CJS entry by explicit path (as read-to-buffer.ts does) so tsx and vitest resolve it identically; a bare `import { WaveFile } from "wavefile"` fails under the docs generator's tsx ESM loader, which globs this file.
+const { WaveFile } = wavefileExports as typeof Wavefile;
 
 /**
  * Build a self-contained WAV buffer for tests from the given 32-bit-float
