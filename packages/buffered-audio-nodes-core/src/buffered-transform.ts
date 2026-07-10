@@ -1,7 +1,7 @@
-import { BlockBuffer } from "./block-buffer";
-import type { Block, BufferedAudioNode, StreamContext } from "./node";
+import { BlockBuffer, type Block } from "./block-buffer";
+import type { BufferedAudioNode } from "./node";
 import { createProgressGate, type ProgressGate } from "./progress-gate";
-import { BufferedStream, type StreamRenderContext } from "./stream";
+import { BufferedStream, type StreamContext, type StreamSetupContext } from "./stream";
 import type { TransformNodeProperties } from "./transform";
 import { toReadable } from "./utils/to-readable";
 
@@ -34,7 +34,7 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 	private hasStarted = false;
 	private sourceTotalFrames?: number;
 
-	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
+	constructor(node: BufferedAudioNode, context: StreamContext) {
 		super(node, context);
 
 		const blockSize = this.properties.blockSize ?? WHOLE_FILE;
@@ -60,14 +60,14 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 		return this.properties.streamChunkSize;
 	}
 
-	async setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.durationFrames;
 		await this._setup(context);
 
 		return this._pipe(input);
 	}
 
-	_setup(_context: StreamContext): Promise<void> | void {
+	_setup(_context: StreamSetupContext): Promise<void> | void {
 		return;
 	}
 

@@ -1,5 +1,21 @@
 import type { EventEmitter } from "node:events";
-import type { BufferedAudioNode, NodeIdentity } from "./node";
+import type { BufferedAudioNode } from "./node";
+
+export type ExecutionProvider = "gpu" | "cpu-native" | "cpu";
+
+export interface StreamIdentity {
+	readonly nodeName: string;
+	readonly nodeId?: string;
+	readonly streamId: number;
+}
+
+export interface StreamSetupContext {
+	readonly executionProviders: ReadonlyArray<ExecutionProvider>;
+	readonly memoryLimit: number;
+	readonly durationFrames?: number;
+	readonly highWaterMark: number;
+	readonly signal?: AbortSignal;
+}
 
 export type StreamPhase = "read" | "buffer" | "process" | "emit" | "write";
 
@@ -28,33 +44,30 @@ export interface LogPayload {
 }
 
 export type RenderEvents = EventEmitter<{
-	started: [NodeIdentity, StartedPayload];
-	finished: [NodeIdentity, FinishedPayload];
-	progress: [NodeIdentity, ProgressPayload];
-	log: [NodeIdentity, LogPayload];
+	started: [StreamIdentity, StartedPayload];
+	finished: [StreamIdentity, FinishedPayload];
+	progress: [StreamIdentity, ProgressPayload];
+	log: [StreamIdentity, LogPayload];
 }>;
 
-export interface StreamRenderContext {
+export interface StreamContext {
 	readonly events: RenderEvents;
-	readonly startedAt: number;
 	readonly nextStreamId: () => number;
 }
 
 export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudioNode> {
 	readonly node: N;
-	readonly identity: NodeIdentity;
+	readonly identity: StreamIdentity;
 
-	protected readonly renderEvents: RenderEvents; // FIX: Why the qualifier of render events?
-	protected readonly renderStartedAt: number;
+	protected readonly events: RenderEvents;
 
 	protected processingMs = 0;
 
 	private destroyed = false;
 
-	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
+	constructor(node: BufferedAudioNode, context: StreamContext) {
 		this.node = node as N;
-		this.renderEvents = context.events;
-		this.renderStartedAt = context.startedAt;
+		this.events = context.events;
 
 		const constructor = node.constructor as typeof BufferedAudioNode;
 
@@ -66,19 +79,19 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 	}
 
 	protected emitStarted(): void {
-		this.renderEvents.emit("started", this.identity, { createdAt: Date.now() });
+		this.events.emit("started", this.identity, { createdAt: Date.now() });
 	}
 
 	protected emitFinished(payload: Omit<FinishedPayload, "createdAt">): void {
-		this.renderEvents.emit("finished", this.identity, { ...payload, createdAt: Date.now() });
+		this.events.emit("finished", this.identity, { ...payload, createdAt: Date.now() });
 	}
 
 	protected emitProgress(phase: StreamPhase, framesDone: number, framesTotal?: number): void {
-		this.renderEvents.emit("progress", this.identity, { phase, framesDone, framesTotal, createdAt: Date.now() });
+		this.events.emit("progress", this.identity, { phase, framesDone, framesTotal, createdAt: Date.now() });
 	}
 
 	protected log(message: string, data?: Record<string, unknown>, level: "info" | "warn" = "info"): void {
-		this.renderEvents.emit("log", this.identity, { level, message, data, createdAt: Date.now() });
+		this.events.emit("log", this.identity, { level, message, data, createdAt: Date.now() });
 	}
 
 	protected async *timed<T>(source: AsyncIterable<T> | Iterable<T>): AsyncGenerator<T> {

@@ -1,40 +1,5 @@
 import { z } from "zod";
-import type { BufferedStream, StreamRenderContext } from "./stream";
-
-export interface Block {
-	readonly samples: Array<Float32Array>;
-	readonly offset: number;
-	readonly sampleRate: number;
-	readonly bitDepth: number;
-}
-
-export type ExecutionProvider = "gpu" | "cpu-native" | "cpu";
-
-// FIX: This is stream identity not node identity
-export interface NodeIdentity {
-	readonly nodeName: string;
-	readonly nodeId?: string;
-	readonly streamId: number;
-}
-
-// FIX: Why is this defined here? This is related to streams
-export interface StreamContext {
-	readonly executionProviders: ReadonlyArray<ExecutionProvider>;
-	readonly memoryLimit: number;
-	readonly durationFrames?: number;
-	readonly highWaterMark: number;
-	readonly signal?: AbortSignal;
-}
-
-// FIX: Clearly no through has been put into the placement of these interfaces
-
-export interface RenderOptions {
-	readonly chunkSize?: number;
-	readonly highWaterMark?: number;
-	readonly memoryLimit?: number;
-	readonly signal?: AbortSignal;
-	readonly executionProviders?: ReadonlyArray<ExecutionProvider>;
-}
+import type { BufferedStream, StreamContext } from "./stream";
 
 export interface BufferedAudioNodeProperties {
 	readonly id?: string;
@@ -68,7 +33,7 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 	static readonly description: string = "";
 	static readonly schema: z.ZodType = z.object({});
 
-	static readonly Stream: new (node: BufferedAudioNode, context: StreamRenderContext) => BufferedStream;
+	static readonly Stream: new (node: BufferedAudioNode, context: StreamContext) => BufferedStream;
 
 	properties: P;
 

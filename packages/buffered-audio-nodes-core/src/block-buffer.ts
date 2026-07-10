@@ -5,7 +5,13 @@ import { open, unlink, type FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import type { Block } from "./node";
+
+export interface Block {
+	readonly samples: Array<Float32Array>;
+	readonly offset: number;
+	readonly sampleRate: number;
+	readonly bitDepth: number;
+}
 
 const HIGH_WATER_MARK = 10 * 1024 * 1024;
 const REVERSE_STRIPE_BYTES = 10 * 1024 * 1024;

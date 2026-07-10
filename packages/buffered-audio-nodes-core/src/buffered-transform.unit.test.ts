@@ -1,9 +1,9 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
-import type { BlockBuffer } from "./block-buffer";
+import type { Block, BlockBuffer } from "./block-buffer";
 import { BufferedTransformStream, WHOLE_FILE } from "./buffered-transform";
-import type { Block, BufferedAudioNode, StreamContext } from "./node";
-import type { ProgressPayload, RenderEvents, StreamRenderContext } from "./stream";
+import type { BufferedAudioNode } from "./node";
+import type { ProgressPayload, RenderEvents, StreamContext, StreamSetupContext } from "./stream";
 
 function createBlock(value: number, offset: number, frames: number): Block {
 	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
@@ -13,14 +13,14 @@ function nodeWith(properties: Record<string, unknown>): BufferedAudioNode {
 	return { properties, constructor: { nodeName: "probe-transform" } } as unknown as BufferedAudioNode;
 }
 
-function renderContext(): { context: StreamRenderContext; events: RenderEvents } {
+function renderContext(): { context: StreamContext; events: RenderEvents } {
 	const events: RenderEvents = new EventEmitter();
 	let counter = 0;
 
-	return { events, context: { events, startedAt: Date.now(), nextStreamId: () => counter++ } };
+	return { events, context: { events, nextStreamId: () => counter++ } };
 }
 
-function execContext(durationFrames?: number): StreamContext {
+function execContext(durationFrames?: number): StreamSetupContext {
 	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, durationFrames };
 }
 

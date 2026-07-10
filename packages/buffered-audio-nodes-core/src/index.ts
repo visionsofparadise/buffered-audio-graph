@@ -1,12 +1,12 @@
 /* eslint-disable barrel-files/avoid-barrel-files */
-export type { Block, Composition, ExecutionProvider, NodeIdentity, RenderOptions, StreamContext } from "./node";
+export type { Composition } from "./node";
 export type { FileInputMeta, NodeSchema } from "./schema";
 
-export { BlockBuffer, ReverseBlockReader } from "./block-buffer";
+export { BlockBuffer, ReverseBlockReader, type Block } from "./block-buffer";
 export { BufferedAudioNode, type BufferedAudioNodeInput, type BufferedAudioNodeProperties } from "./node";
-export { RenderJob } from "./render-job";
+export { RenderJob, type RenderOptions } from "./render-job";
 export { BufferedSourceStream, SourceNode, type RenderTiming, type SourceMetadata, type SourceNodeProperties } from "./source";
-export { BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload, type RenderEvents, type StartedPayload, type StreamPhase, type StreamRenderContext } from "./stream";
+export { BufferedStream, type ExecutionProvider, type FinishedPayload, type LogPayload, type ProgressPayload, type RenderEvents, type StartedPayload, type StreamContext, type StreamIdentity, type StreamPhase, type StreamSetupContext } from "./stream";
 export { createProgressGate, PROGRESS_MIN_INTERVAL_MS, PROGRESS_PERCENT_QUANTUM } from "./progress-gate";
 export { BufferedTargetStream, TargetNode, type TargetNodeProperties } from "./target";
 export { BufferedTransformStream, WHOLE_FILE } from "./buffered-transform";

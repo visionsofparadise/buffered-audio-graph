@@ -1,6 +1,7 @@
-import { BufferedAudioNode, type Block, type BufferedAudioNodeProperties, type StreamContext } from "./node";
+import type { Block } from "./block-buffer";
+import { BufferedAudioNode, type BufferedAudioNodeProperties } from "./node";
 import { createProgressGate } from "./progress-gate";
-import { BufferedStream } from "./stream";
+import { BufferedStream, type StreamSetupContext } from "./stream";
 
 export interface TargetNodeProperties extends BufferedAudioNodeProperties {}
 
@@ -12,13 +13,13 @@ export abstract class BufferedTargetStream<N extends BufferedAudioNode<TargetNod
 	abstract _write(chunk: Block): Promise<void> | void;
 	abstract _close(): Promise<void> | void;
 
-	setup(readable: ReadableStream<Block>, context: StreamContext): Promise<void> {
+	setup(readable: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
 		this.sourceTotalFrames = context.durationFrames;
 
 		return Promise.resolve(this._setup(readable, context));
 	}
 
-	_setup(input: ReadableStream<Block>, _context: StreamContext): Promise<void> | void {
+	_setup(input: ReadableStream<Block>, _context: StreamSetupContext): Promise<void> | void {
 		return input.pipeTo(this.createWritableStream());
 	}
 

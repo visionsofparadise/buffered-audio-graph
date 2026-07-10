@@ -1,11 +1,20 @@
 import { EventEmitter } from "node:events";
+import type { Block } from "./block-buffer";
 import { BufferedTransformStream } from "./buffered-transform";
-import type { Block, BufferedAudioNode, ExecutionProvider, RenderOptions, StreamContext } from "./node";
+import type { BufferedAudioNode } from "./node";
 import { BufferedSourceStream, type RenderTiming, type SourceNode } from "./source";
-import type { BufferedStream, RenderEvents, StreamRenderContext } from "./stream";
+import type { BufferedStream, ExecutionProvider, RenderEvents, StreamContext, StreamSetupContext } from "./stream";
 import { BufferedTargetStream } from "./target";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
 import { teeReadable } from "./utils/tee-readable";
+
+export interface RenderOptions {
+	readonly chunkSize?: number;
+	readonly highWaterMark?: number;
+	readonly memoryLimit?: number;
+	readonly signal?: AbortSignal;
+	readonly executionProviders?: ReadonlyArray<ExecutionProvider>;
+}
 
 interface PlanNode {
 	readonly node: BufferedAudioNode;
@@ -22,7 +31,7 @@ export class RenderJob {
 
 	private readonly streamsMap = new Map<BufferedAudioNode, Array<BufferedStream>>();
 	private readonly abortController = new AbortController();
-	private readonly renderContext: StreamRenderContext;
+	private readonly renderContext: StreamContext;
 
 	private readonly root: PlanNode;
 	private readonly sourceStream: BufferedSourceStream;
@@ -36,7 +45,7 @@ export class RenderJob {
 	) {
 		let streamIdCounter = 0;
 
-		this.renderContext = { events: this.events, startedAt: Date.now(), nextStreamId: () => streamIdCounter++ };
+		this.renderContext = { events: this.events, nextStreamId: () => streamIdCounter++ };
 
 		this.root = this.build(source, new Set<BufferedAudioNode>());
 
@@ -115,7 +124,7 @@ export class RenderJob {
 		const bytesPerChunk = meta.channels * chunkSize * 4;
 		const computedHighWaterMark = Math.max(1, Math.floor(memoryLimit / (stages * bytesPerChunk)));
 
-		const context: StreamContext = {
+		const context: StreamSetupContext = {
 			executionProviders: this.options?.executionProviders ?? defaultProviders,
 			memoryLimit,
 			durationFrames: meta.durationFrames,
@@ -148,7 +157,7 @@ export class RenderJob {
 		}
 	}
 
-	private async wireChildren(children: Array<PlanNode>, readable: ReadableStream<Block>, context: StreamContext): Promise<Array<Promise<void>>> {
+	private async wireChildren(children: Array<PlanNode>, readable: ReadableStream<Block>, context: StreamSetupContext): Promise<Array<Promise<void>>> {
 		const pairs = teeReadable(readable, children);
 
 		const nested = await Promise.all(pairs.map(([branch, child]) => this.wire(child, branch, context)));
@@ -156,7 +165,7 @@ export class RenderJob {
 		return nested.flat();
 	}
 
-	private async wire(plan: PlanNode, input: ReadableStream<Block>, context: StreamContext): Promise<Array<Promise<void>>> {
+	private async wire(plan: PlanNode, input: ReadableStream<Block>, context: StreamSetupContext): Promise<Array<Promise<void>>> {
 		const { stream } = plan;
 
 		if (stream instanceof BufferedTargetStream) {

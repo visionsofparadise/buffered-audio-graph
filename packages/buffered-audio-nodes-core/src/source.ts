@@ -1,7 +1,8 @@
-import { BufferedAudioNode, type Block, type BufferedAudioNodeProperties, type Composition, type RenderOptions, type StreamContext } from "./node";
+import type { Block } from "./block-buffer";
+import { BufferedAudioNode, type BufferedAudioNodeProperties, type Composition } from "./node";
 import { createProgressGate } from "./progress-gate";
-import { RenderJob } from "./render-job";
-import { BufferedStream } from "./stream";
+import { RenderJob, type RenderOptions } from "./render-job";
+import { BufferedStream, type StreamSetupContext } from "./stream";
 
 export interface SourceMetadata {
 	readonly sampleRate: number;
@@ -25,11 +26,11 @@ export abstract class BufferedSourceStream<N extends BufferedAudioNode<SourceNod
 
 	abstract _read(): Promise<Block | undefined>;
 
-	setup(context: StreamContext): Promise<ReadableStream<Block>> {
+	setup(context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		return Promise.resolve(this._setup(context));
 	}
 
-	_setup(context: StreamContext): Promise<ReadableStream<Block>> | ReadableStream<Block> {
+	_setup(context: StreamSetupContext): Promise<ReadableStream<Block>> | ReadableStream<Block> {
 		let done = false;
 
 		this.framesRead = 0;

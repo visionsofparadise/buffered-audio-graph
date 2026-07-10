@@ -1,18 +1,19 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { Block, BufferedAudioNode, NodeIdentity, StreamContext } from "./node";
+import type { Block } from "./block-buffer";
+import type { BufferedAudioNode } from "./node";
 import { BufferedSourceStream, SourceNode, type SourceMetadata } from "./source";
 import { BufferedTargetStream, TargetNode } from "./target";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
 import { TransformNode } from "./transform";
-import { BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload, type RenderEvents, type StartedPayload, type StreamPhase, type StreamRenderContext } from "./stream";
+import { BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload, type RenderEvents, type StartedPayload, type StreamContext, type StreamIdentity, type StreamPhase, type StreamSetupContext } from "./stream";
 
-function renderContext(startedAt = 1000): { context: StreamRenderContext; events: RenderEvents } {
+function renderContext(): { context: StreamContext; events: RenderEvents } {
 	const events: RenderEvents = new EventEmitter();
 	let counter = 0;
 
-	return { events, context: { events, startedAt, nextStreamId: () => counter++ } };
+	return { events, context: { events, nextStreamId: () => counter++ } };
 }
 
 function fakeNode(nodeName: string, id?: string): BufferedAudioNode {
@@ -205,7 +206,7 @@ describe("Lifecycle events end-to-end", () => {
 
 		source.to(target);
 
-		const events: Array<{ identity: NodeIdentity; kind: string; framesDone?: number; processingMs?: number; createdAt?: number }> = [];
+		const events: Array<{ identity: StreamIdentity; kind: string; framesDone?: number; processingMs?: number; createdAt?: number }> = [];
 		const job = source.createRenderJob();
 
 		job.events.on("started", (identity) => events.push({ identity, kind: "started" }));
@@ -238,7 +239,7 @@ describe("Lifecycle events end-to-end", () => {
 		const streamIds = new Set<number>();
 		const job = source.createRenderJob();
 
-		const record = (identity: NodeIdentity): void => {
+		const record = (identity: StreamIdentity): void => {
 			names.add(identity.nodeName);
 			streamIds.add(identity.streamId);
 		};
@@ -254,7 +255,7 @@ describe("Lifecycle events end-to-end", () => {
 	});
 });
 
-function destroyContext(): StreamContext {
+function destroyContext(): StreamSetupContext {
 	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
 }
 

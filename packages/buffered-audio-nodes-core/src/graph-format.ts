@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import type { BufferedAudioNode, RenderOptions } from "./node";
-import type { RenderJob } from "./render-job";
+import type { BufferedAudioNode } from "./node";
+import type { RenderJob, RenderOptions } from "./render-job";
 import type { SourceNode } from "./source";
 import type { TransformNode } from "./transform";
 

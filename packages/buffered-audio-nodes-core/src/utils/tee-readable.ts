@@ -1,4 +1,4 @@
-import type { Block } from "../node";
+import type { Block } from "../block-buffer";
 
 export function teeReadable<T>(readable: ReadableStream<Block>, items: ReadonlyArray<T>): Array<[ReadableStream<Block>, T]> {
 	if (items.length === 0) return [];

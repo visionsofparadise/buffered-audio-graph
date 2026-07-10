@@ -3,8 +3,7 @@ import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BlockBuffer, ReverseBlockReader } from "./block-buffer";
-import type { Block } from "./node";
+import { BlockBuffer, ReverseBlockReader, type Block } from "./block-buffer";
 
 // Builds a per-channel ramp with DISTINCT per-channel values so a mistaken channel swap or a
 // deinterleave error is caught: channel `ch` holds ch * 1000 + frame at each frame.

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import type { Block } from "./block-buffer";
 import { createRenderJobs, pack, substituteParameters, unpack, validateGraphDefinition, type GraphDefinition, type NodeRegistry } from "./graph-format";
-import type { Block, BufferedAudioNode } from "./node";
+import type { BufferedAudioNode } from "./node";
 import { RenderJob } from "./render-job";
 import { BufferedSourceStream, SourceNode, type SourceMetadata } from "./source";
 import { BufferedTargetStream, TargetNode } from "./target";
