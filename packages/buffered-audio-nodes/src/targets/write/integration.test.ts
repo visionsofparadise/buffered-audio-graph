@@ -1,14 +1,34 @@
 import { randomBytes } from "node:crypto";
-import { unlink } from "node:fs/promises";
+import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { write } from ".";
 import { read } from "../../sources/read";
 import { readWavSamples } from "../../utils/read-to-buffer";
-import { audio } from "../../utils/test-binaries";
+import { createTestWav } from "../../utils/test-wav";
 
-const testVoice = audio.testVoice;
+// Self-generated input WAV (a 440 Hz sine, mono, 16-bit on disk) — no fetched fixture.
+let testVoice: string;
+
+beforeAll(async () => {
+	const sampleRate = 44100;
+	const frames = 2000;
+	const samples = new Float32Array(frames);
+
+	for (let index = 0; index < frames; index++) {
+		samples[index] = Math.sin((2 * Math.PI * 440 * index) / sampleRate) * 0.5;
+	}
+
+	// 32-bit-float on disk so the 32f round-trip test matches to float precision
+	// (a 16-bit input would differ by the reader dequantisation convention).
+	testVoice = join(tmpdir(), `ban-write-input-${randomBytes(8).toString("hex")}.wav`);
+	await writeFile(testVoice, createTestWav(sampleRate, 1, [samples], "32f"));
+});
+
+afterAll(async () => {
+	await unlink(testVoice).catch(() => undefined);
+});
 
 describe("WriteNode", () => {
 	it("round-trips a WAV file with correct duration and sample rate", async () => {
@@ -38,7 +58,7 @@ describe("WriteNode", () => {
 		} finally {
 			await unlink(tempOut).catch(() => undefined);
 		}
-	}, 240_000);
+	});
 
 	it("writes 16-bit WAV and produces readable output", async () => {
 		const original = await readWavSamples(testVoice);
@@ -66,7 +86,7 @@ describe("WriteNode", () => {
 		} finally {
 			await unlink(tempOut).catch(() => undefined);
 		}
-	}, 240_000);
+	});
 
 	it("writes 32f WAV and produces readable output", async () => {
 		const original = await readWavSamples(testVoice);
@@ -94,5 +114,5 @@ describe("WriteNode", () => {
 		} finally {
 			await unlink(tempOut).catch(() => undefined);
 		}
-	}, 240_000);
+	});
 });

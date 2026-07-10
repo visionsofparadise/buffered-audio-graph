@@ -8,6 +8,7 @@ import { writeFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runTransform } from "../../utils/test-pipeline";
+import { expectedDuration, somethingChanged } from "../../utils/test-audio";
 import { audio } from "../../utils/test-binaries";
 import { deBleed } from ".";
 import { computeMsadDecision, createMsadChannelState } from "./utils/mef-msad";
@@ -415,3 +416,16 @@ describe("deBleed multi-reference scaling (Phase 4.2)", () => {
 		}
 	}, 1_800_000);
 });
+
+// ----- Real-fixture voice render (relocated from de-bleed/unit.test.ts by plan-test-restructure Phase 3.3) -----
+
+describe("DeBleed voice fixture", () => {
+	it("processes voice audio", async () => {
+		const transform = deBleed(audio.testVoice);
+		const { input, output, context } = await runTransform(audio.testVoice, transform);
+
+		expect(expectedDuration(output, context.durationFrames ?? 0).pass).toBe(true);
+		expect(somethingChanged(input, output).pass).toBe(true);
+	}, 1_800_000);
+});
+

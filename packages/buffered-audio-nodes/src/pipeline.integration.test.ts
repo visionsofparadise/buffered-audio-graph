@@ -5,15 +5,9 @@ import { WaveFile } from "wavefile";
 import { read } from "./sources/read";
 import { write } from "./targets/write";
 import { normalize } from "./transforms/normalize";
+import { createTestWav } from "./utils/test-wav";
 
 const testDir = join(import.meta.dirname, "__test_fixtures__");
-
-function createTestWav(sampleRate: number, channels: number, samples: Array<Float32Array>): Buffer {
-	const wav = new WaveFile();
-	wav.fromScratch(channels, sampleRate, "32f", samples);
-	wav.toBitDepth("16");
-	return Buffer.from(wav.toBuffer());
-}
 
 describe("Pipeline integration", () => {
 	const inputPath = join(testDir, "test-input.wav");

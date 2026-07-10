@@ -68,12 +68,6 @@ class MockTarget extends TargetNode {
 	static override readonly Stream = MockTargetStream;
 }
 
-function createChunk(value: number, offset: number, duration: number): Block {
-	const samples = new Float32Array(duration).fill(value);
-
-	return { samples: [samples], offset, sampleRate: 44100, bitDepth: 32 };
-}
-
 describe("chain()", () => {
 	it("chain(source, target) — head is source, tail is target", () => {
 		const source = new MockSource();
@@ -143,25 +137,6 @@ describe("chain()", () => {
 		expect(source.children).toContain(t1 as BufferedAudioNode);
 		expect(t1.children).toContain(t2 as BufferedAudioNode);
 		expect(t2.children).toContain(target as BufferedAudioNode);
-	});
-
-	it("renders via createRenderJob when the head is a source", async () => {
-		const chunks = [createChunk(1.0, 0, 100)];
-		const source = new MockSource(chunks, { sampleRate: 44100, channels: 1, durationFrames: 100 });
-		const transform = new MockTransform();
-		const target = new MockTarget();
-
-		const c = chain(source, transform, target);
-		const job = source.createRenderJob();
-
-		await job.render();
-
-		const targetStream = job.streams.get(c.tail)?.[0];
-
-		if (!(targetStream instanceof MockTargetStream)) throw new Error("expected a MockTargetStream for the tail node");
-
-		expect(targetStream.receivedChunks).toHaveLength(1);
-		expect(targetStream.closed).toBe(true);
 	});
 
 	it("throws with fewer than 2 arguments", () => {

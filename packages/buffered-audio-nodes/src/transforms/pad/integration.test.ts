@@ -1,75 +1,16 @@
-import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block, RenderEvents, StreamSetupContext, StreamContext } from "@buffered-audio/core";
+import type { Block } from "@buffered-audio/core";
+import { channelSamples, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "@buffered-audio/core/testing";
 import { pad, PadStream } from ".";
 
 const SAMPLE_RATE = 44100;
 
-function context(): StreamSetupContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
-}
-
-function renderContext(): StreamContext {
-	const events = new EventEmitter() as RenderEvents;
-	let counter = 0;
-
-	return { events, nextStreamId: () => counter++ };
-}
-
-function readableFrom(chunks: Array<Block>): ReadableStream<Block> {
-	let index = 0;
-
-	return new ReadableStream<Block>({
-		pull: (controller) => {
-			const chunk = chunks[index];
-
-			if (chunk) {
-				index += 1;
-				controller.enqueue(chunk);
-			} else {
-				controller.close();
-			}
-		},
-	});
-}
-
-async function drain(readable: ReadableStream<Block>): Promise<Array<Block>> {
-	const out: Array<Block> = [];
-	const reader = readable.getReader();
-
-	for (;;) {
-		const { done, value } = await reader.read();
-
-		if (done) break;
-		if (value) out.push(value);
-	}
-
-	return out;
-}
-
-function concatChannel(chunks: Array<Block>, channel: number): Float32Array {
-	const total = chunks.reduce((sum, c) => sum + (c.samples[channel]?.length ?? 0), 0);
-	const out = new Float32Array(total);
-	let offset = 0;
-
-	for (const c of chunks) {
-		const src = c.samples[channel];
-
-		if (src) {
-			out.set(src, offset);
-			offset += src.length;
-		}
-	}
-
-	return out;
-}
-
 async function runPad(properties: Parameters<typeof pad>[0], input: Array<Block>, channel = 0): Promise<Float32Array> {
 	const node = pad(properties);
-	const stream = new PadStream(node, renderContext());
-	const output = await stream.setup(readableFrom(input), context());
+	const stream = new PadStream(node, createTestStreamContext().context);
+	const output = await stream.setup(readableFrom(input), createTestSetupContext());
 
-	return concatChannel(await drain(output), channel);
+	return channelSamples(await drainBlocks(output), channel);
 }
 
 function makeRamp(frames: number, offset = 0, step = 0.0001): Block {
@@ -189,11 +130,11 @@ describe("pad", () => {
 		const input: Block = { samples: [left, right], offset: 0, sampleRate: SAMPLE_RATE, bitDepth: 32 };
 
 		const node = pad({ before, after: 0 });
-		const stream = new PadStream(node, renderContext());
-		const chunks = await drain(await stream.setup(readableFrom([input]), context()));
+		const stream = new PadStream(node, createTestStreamContext().context);
+		const chunks = await drainBlocks(await stream.setup(readableFrom([input]), createTestSetupContext()));
 
-		const outLeft = concatChannel(chunks, 0);
-		const outRight = concatChannel(chunks, 1);
+		const outLeft = channelSamples(chunks, 0);
+		const outRight = channelSamples(chunks, 1);
 
 		expect(outLeft.length).toBe(leading + frames);
 		expect(outRight.length).toBe(leading + frames);

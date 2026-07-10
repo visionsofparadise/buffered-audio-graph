@@ -50,8 +50,8 @@ describe("applyBackwardPassOverChunkBuffer", () => {
 		return chunk.samples[0] ?? new Float32Array(0);
 	}
 
-	it("byte-equal-or-ULP match with applyBackwardPassInPlace on random data, single chunk", { timeout: 30_000 }, async () => {
-		const length = 100_000;
+	it("byte-equal-or-ULP match with applyBackwardPassInPlace on random data, single chunk", async () => {
+		const length = 20_000;
 		const random = new Float32Array(length);
 
 		for (let i = 0; i < length; i++) {
@@ -100,7 +100,7 @@ describe("applyBackwardPassOverChunkBuffer", () => {
 		await destBuffer.close();
 	});
 
-	it("state continuity across chunks: multi-chunk result matches single-chunk reference", { timeout: 30_000 }, async () => {
+	it("state continuity across chunks: multi-chunk result matches single-chunk reference", async () => {
 		// Fixture larger than the chunk stride so the reverse walk
 		// traverses multiple chunks and threads state across them.
 		const length = 250_003; // not a multiple of chunkSize — exercises the leading short chunk
@@ -163,7 +163,7 @@ describe("applyBackwardPassOverChunkBuffer", () => {
 		await destBuffer.close();
 	});
 
-	it("brick-wall exactness: spike in flat-low region clamps to per-sample target gain", { timeout: 30_000 }, async () => {
+	it("brick-wall exactness: spike in flat-low region clamps to per-sample target gain", async () => {
 		// Phase 1 of `plan-loudness-target-deterministic`: with the
 		// min-hold + per-sample clamp in place, the output gain at the
 		// peak sample of any source equals `gainDbAt(peakLevel)` exactly

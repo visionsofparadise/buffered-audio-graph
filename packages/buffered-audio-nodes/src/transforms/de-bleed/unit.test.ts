@@ -1,28 +1,14 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- typed-array indexing in tight loops */
 import { describe, it, expect } from "vitest";
-import { runTransform } from "../../utils/test-pipeline";
-import { expectedDuration, somethingChanged } from "../../utils/test-audio";
-import { audio } from "../../utils/test-binaries";
-import { deBleed } from ".";
 import { adaptationSpeedToMarkovForgetting, createKalmanState, kalmanUpdateFrame, type KalmanParams, type KalmanState } from "./utils/mef-kalman";
 import { computeMwfMask, createInterfererPsdState, reductionStrengthToOversubtraction, updateInterfererPsd, updatePrevOutputPsd } from "./utils/mef-mwf";
 import { applyIspRestoration, computeMsadDecision, createIspState, createMsadChannelState } from "./utils/mef-msad";
 import { coldStartSeed, validateTransferSeed } from "./utils/warmup";
 
-const testVoice = audio.testVoice;
-
 // R/K is the hop/fft ratio (0.25 at default 1024/4096); must match the node's runtime.
 const DEFAULT_R_OVER_K = 1024 / 4096;
 
 describe("DeBleed", () => {
-	it("processes voice audio", async () => {
-		const transform = deBleed(testVoice);
-		const { input, output, context } = await runTransform(testVoice, transform);
-
-		expect(expectedDuration(output, context.durationFrames ?? 0).pass).toBe(true);
-		expect(somethingChanged(input, output).pass).toBe(true);
-	}, 1_800_000);
-
 	// Parameter mappings must hit MEF's documented defaults at the default knob positions.
 	describe("MEF parameter mappings", () => {
 		it("adaptationSpeed=3 maps to A=0.998 (MEF Table 1 default)", () => {

@@ -1,11 +1,7 @@
-import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block, RenderEvents, StreamContext } from "@buffered-audio/core";
+import type { Block } from "@buffered-audio/core";
+import { createTestStreamContext } from "@buffered-audio/core/testing";
 import { duplicateChannels, DuplicateChannelsNode, DuplicateChannelsStream } from ".";
-
-function renderContext(): StreamContext {
-	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
-}
 
 function makeMonoChunk(value: number, frames = 256): Block {
 	return {
@@ -17,7 +13,7 @@ function makeMonoChunk(value: number, frames = 256): Block {
 }
 
 function applyDuplicate(node: DuplicateChannelsNode, chunk: Block): Block {
-	const stream = new DuplicateChannelsStream(node, renderContext());
+	const stream = new DuplicateChannelsStream(node, createTestStreamContext().context);
 	let result: Block | undefined;
 
 	for (const block of stream._transform(chunk)) result = block;
@@ -70,7 +66,7 @@ describe("DuplicateChannelsNode", () => {
 	});
 
 	it("throws when input has more than 1 channel", () => {
-		const stream = new DuplicateChannelsStream(duplicateChannels({ channels: 2 }), renderContext());
+		const stream = new DuplicateChannelsStream(duplicateChannels({ channels: 2 }), createTestStreamContext().context);
 		const chunk: Block = {
 			samples: [new Float32Array(256), new Float32Array(256)],
 			offset: 0,

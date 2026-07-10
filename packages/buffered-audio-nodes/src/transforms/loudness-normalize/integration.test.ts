@@ -1,40 +1,14 @@
-import { EventEmitter } from "node:events";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { WaveFile } from "wavefile";
-import type { Block, RenderEvents, StreamSetupContext, StreamContext } from "@buffered-audio/core";
+import { createTestSetupContext, createTestStreamContext, readableFrom } from "@buffered-audio/core/testing";
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { read } from "../../sources/read";
 import { write } from "../../targets/write";
 import { loudnessNormalize, LoudnessNormalizeStream } from ".";
-
-function execContext(): StreamSetupContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
-}
-
-function renderContext(): StreamContext {
-	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
-}
-
-function readableFrom(blocks: Array<Block>): ReadableStream<Block> {
-	let index = 0;
-
-	return new ReadableStream<Block>({
-		pull: (controller) => {
-			const block = blocks[index];
-
-			if (block) {
-				index += 1;
-				controller.enqueue(block);
-			} else {
-				controller.close();
-			}
-		},
-	});
-}
 
 const TEST_SAMPLE_RATE = 48_000;
 const TEST_FRAMES = TEST_SAMPLE_RATE * 4; // 4 s — long enough for BS.1770 gating
@@ -185,8 +159,8 @@ describe("LoudnessNormalize", () => {
 		// ESM namespace exports can't be patched in vitest (`Cannot redefine property: spawn`), so drive
 		// the stream directly. The schema has no `ffmpegPath`, so adding a subprocess would be visible in review.
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
-		const stream = new LoudnessNormalizeStream(loudnessNormalize({ target: -16 }), renderContext());
-		const outputStream = await stream.setup(readableFrom([{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]), execContext());
+		const stream = new LoudnessNormalizeStream(loudnessNormalize({ target: -16 }), createTestStreamContext().context);
+		const outputStream = await stream.setup(readableFrom([{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]), createTestSetupContext());
 		const reader = outputStream.getReader();
 
 		const collected: Array<Float32Array> = [];

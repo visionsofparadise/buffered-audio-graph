@@ -1,15 +1,34 @@
 import { randomBytes } from "node:crypto";
-import { unlink } from "node:fs/promises";
+import { unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type StreamContext } from "@buffered-audio/core";
 import { read } from "../sources/read";
 import { write } from "../targets/write";
 import { readWavSamples } from "../utils/read-to-buffer";
-import { audio } from "../utils/test-binaries";
+import { createTestWav } from "../utils/test-wav";
 
-const testVoice = audio.testVoice;
+// Self-generated input WAV (a 440 Hz sine, mono, 16-bit on disk) — the render
+// pipeline is exercised end-to-end without a fetched audio fixture.
+let testVoice: string;
+
+beforeAll(async () => {
+	const sampleRate = 44100;
+	const frames = 2000;
+	const samples = new Float32Array(frames);
+
+	for (let index = 0; index < frames; index++) {
+		samples[index] = Math.sin((2 * Math.PI * 440 * index) / sampleRate) * 0.5;
+	}
+
+	testVoice = join(tmpdir(), `ban-transforms-input-${randomBytes(8).toString("hex")}.wav`);
+	await writeFile(testVoice, createTestWav(sampleRate, 1, [samples]));
+});
+
+afterAll(async () => {
+	await unlink(testVoice).catch(() => undefined);
+});
 
 class PassthroughStream extends UnbufferedTransformStream {
 	override *_transform(block: Block): Generator<Block> {
@@ -118,7 +137,7 @@ describe("TransformNode lifecycle", () => {
 		} finally {
 			await unlink(tempOut).catch(() => undefined);
 		}
-	}, 240_000);
+	});
 
 	it("propagates errors from transform without hanging", async () => {
 		const tempOut = join(tmpdir(), `ban-error-${randomBytes(8).toString("hex")}.wav`);
@@ -135,7 +154,7 @@ describe("TransformNode lifecycle", () => {
 		} finally {
 			await unlink(tempOut).catch(() => undefined);
 		}
-	}, 240_000);
+	});
 });
 
 describe("Composite stream via _setup()", () => {
@@ -166,5 +185,5 @@ describe("Composite stream via _setup()", () => {
 		} finally {
 			await unlink(tempOut).catch(() => undefined);
 		}
-	}, 240_000);
+	});
 });

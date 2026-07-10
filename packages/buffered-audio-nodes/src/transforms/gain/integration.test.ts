@@ -1,11 +1,7 @@
-import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block, RenderEvents, StreamContext } from "@buffered-audio/core";
+import type { Block } from "@buffered-audio/core";
+import { createTestStreamContext } from "@buffered-audio/core/testing";
 import { gain, GainNode, GainStream } from ".";
-
-function renderContext(): StreamContext {
-	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
-}
 
 function makeStereoChunk(leftValue: number, rightValue: number, frames = 512): Block {
 	const left = new Float32Array(frames).fill(leftValue);
@@ -14,7 +10,7 @@ function makeStereoChunk(leftValue: number, rightValue: number, frames = 512): B
 }
 
 function applyGain(node: GainNode, chunk: Block): Block {
-	const stream = new GainStream(node, renderContext());
+	const stream = new GainStream(node, createTestStreamContext().context);
 	let result: Block | undefined;
 
 	for (const block of stream._transform(chunk)) result = block;

@@ -2,14 +2,36 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EventEmitter } from "node:events";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { type Block, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
 import { loudnessStats, LoudnessStatsStream } from ".";
 import { read } from "../../sources/read";
-import { audio } from "../../utils/test-binaries";
+import { createTestWav } from "../../utils/test-wav";
 
-const testVoice = audio.testVoice;
 const TEST_SAMPLE_RATE = 48_000;
+
+// Self-generated input WAV (4 s of 440 Hz sine — long enough for BS.1770 integrated gating), no fetched fixture.
+let testVoice: string;
+
+beforeAll(() => {
+	const frames = TEST_SAMPLE_RATE * 4;
+	const samples = new Float32Array(frames);
+
+	for (let index = 0; index < frames; index++) {
+		samples[index] = Math.sin((2 * Math.PI * 440 * index) / TEST_SAMPLE_RATE) * 0.5;
+	}
+
+	testVoice = join(tmpdir(), `ban-loudness-input-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`);
+	writeFileSync(testVoice, createTestWav(TEST_SAMPLE_RATE, 1, [samples]));
+});
+
+afterAll(() => {
+	try {
+		unlinkSync(testVoice);
+	} catch {
+		// already removed
+	}
+});
 
 function renderContext(): StreamContext {
 	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
@@ -83,7 +105,7 @@ describe("loudness-stats", () => {
 		expect(stats!.integrated).toBeLessThan(0);
 		expect(stats!.amplitude).toBeDefined();
 		expect(stats!.amplitude.totalSamples).toBeGreaterThan(0);
-	}, 240_000);
+	});
 
 	it("uniform [-0.5, 0.5) input gives median ≈ 0.25 and percentile(95) ≈ 0.475", async () => {
 		// 4 s of uniform noise to provide enough samples for stable percentiles.
