@@ -25,7 +25,7 @@ const WindowBoundsSchema = z.object({
 
 const LoadedNodeInfoSchema = z.object({
 	nodeName: z.string(),
-	nodeDescription: z.string(),
+	description: z.string(),
 	schema: z.unknown(),
 	category: z.enum(["source", "transform", "target"]),
 });
@@ -34,6 +34,7 @@ const NodePackageStateSchema = z.object({
 	requestedSpec: z.string(),
 	name: z.string(),
 	version: z.string().nullable().default(null),
+	apiVersion: z.number().nullable().default(null),
 	status: z.enum(["pending", "installing", "loading", "ready", "error"]).default("pending"),
 	error: z.string().nullable().default(null),
 	nodes: z.array(LoadedNodeInfoSchema).default([]),
@@ -74,6 +75,7 @@ const BUILT_IN_PACKAGE_ENTRY: NodePackageState = {
 	requestedSpec: BUILT_IN_PACKAGE_SPEC,
 	name: BUILT_IN_PACKAGE_NAME,
 	version: null,
+	apiVersion: null,
 	status: "pending",
 	error: null,
 	nodes: [],
@@ -89,6 +91,7 @@ function resetPackageLifecycle(entry: NodePackageState): NodePackageState {
 				error: null,
 				nodes: [],
 				version: null,
+				apiVersion: null,
 			};
 }
 

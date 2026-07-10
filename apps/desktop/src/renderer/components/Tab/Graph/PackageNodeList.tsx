@@ -56,9 +56,9 @@ export function PackageNodeList({ app, onSelect }: Props) {
 							onSelect={() => onSelect(nodePackage.name, nodePackage.version, node.nodeName)}
 						>
 							<span>{node.nodeName}</span>
-							{node.nodeDescription !== "" && (
+							{node.description !== "" && (
 								<span className="line-clamp-3 whitespace-normal text-xs normal-case leading-snug tracking-normal opacity-60">
-									{node.nodeDescription}
+									{node.description}
 								</span>
 							)}
 						</DropdownMenuItem>

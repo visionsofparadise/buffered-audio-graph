@@ -3,7 +3,8 @@ import type { z } from "zod";
 
 export interface NodeClass {
 	readonly nodeName: string;
-	readonly nodeDescription: string;
+	readonly description: string;
+	readonly apiVersion: number;
 	readonly schema: z.ZodType;
 
 	new (properties?: Record<string, unknown>): BufferedAudioNode;

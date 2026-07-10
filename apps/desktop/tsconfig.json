@@ -4,11 +4,7 @@
     "baseUrl": "../..",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "noEmit": true,
-    "paths": {
-      "@buffered-audio/core": ["packages/buffered-audio-nodes-core/src/index.ts"],
-      "@buffered-audio/core/*": ["packages/buffered-audio-nodes-core/src/*"]
-    }
+    "noEmit": true
   },
   "include": ["src", "forge.env.d.ts"],
   "exclude": [".vite", "node_modules", "out"]

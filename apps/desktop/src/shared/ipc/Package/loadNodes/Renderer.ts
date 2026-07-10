@@ -34,13 +34,18 @@ export interface LoadPackageNodesInput {
 
 export interface LoadedNodeInfo {
 	readonly nodeName: string;
-	readonly nodeDescription: string;
+	readonly description: string;
 	readonly schema: NodeJsonSchema;
 	readonly category: "source" | "transform" | "target";
 }
 
+export interface LoadPackageNodesResult {
+	readonly apiVersion: number;
+	readonly nodes: ReadonlyArray<LoadedNodeInfo>;
+}
+
 export type LoadPackageNodesIpcParameters = [input: LoadPackageNodesInput];
-export type LoadPackageNodesIpcReturn = ReadonlyArray<LoadedNodeInfo>;
+export type LoadPackageNodesIpcReturn = LoadPackageNodesResult;
 export const LOAD_PACKAGE_NODES_ACTION = "loadPackageNodes" as const;
 
 export class LoadPackageNodesRendererIpc extends AsyncRendererIpc<

@@ -166,9 +166,9 @@ export const PackageManager = resnapshot<Props>(({ isOpen, onClose, context }: P
 													<span className="type-label text-xs text-text-primary">
 														{node.nodeName}
 													</span>
-													{node.nodeDescription && (
+													{node.description && (
 														<span className="text-xs text-text-secondary">
-															{node.nodeDescription}
+															{node.description}
 														</span>
 													)}
 												</li>

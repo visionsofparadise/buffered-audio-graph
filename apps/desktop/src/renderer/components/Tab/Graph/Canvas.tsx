@@ -59,7 +59,7 @@ function buildReactFlowNodes(
 
 	return context.graphDefinition.nodes.map((graphNode) => {
 		const packageVersion = typeof graphNode.packageVersion === "string" ? graphNode.packageVersion : "";
-		const { category, nodeDescription: nodeDescription, schema, unresolvedReason } = lookupNode(
+		const { category, description, schema, unresolvedReason } = lookupNode(
 			graphNode.packageName,
 			packageVersion,
 			graphNode.nodeName,
@@ -89,7 +89,7 @@ function buildReactFlowNodes(
 				parameters,
 				unresolvedReason,
 				nodeId: graphNode.id,
-				description: nodeDescription,
+				description,
 				progress,
 			},
 		};

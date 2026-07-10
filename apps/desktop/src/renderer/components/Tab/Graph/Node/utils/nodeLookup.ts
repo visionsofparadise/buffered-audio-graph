@@ -16,7 +16,7 @@ export function lookupNode(
 	packageVersion: string,
 	nodeName: string,
 	context: GraphContext,
-): { category: NodeCategory; nodeDescription: string; schema: NodeJsonSchema | null; unresolvedReason: string | null } {
+): { category: NodeCategory; description: string; schema: NodeJsonSchema | null; unresolvedReason: string | null } {
 	let packageFound = false;
 
 	for (const nodePackage of context.app.packages) {
@@ -27,7 +27,7 @@ export function lookupNode(
 				if (node.nodeName === nodeName) {
 					return {
 						category: node.category,
-						nodeDescription: node.nodeDescription,
+						description: node.description,
 						schema: node.schema as NodeJsonSchema,
 						unresolvedReason: null,
 					};
@@ -40,7 +40,7 @@ export function lookupNode(
 		? `Node "${nodeName}" is not in ${packageName}@${packageVersion}`
 		: `Package not installed: ${packageName}@${packageVersion}`;
 
-	return { category: "transform", nodeDescription: "", schema: null, unresolvedReason };
+	return { category: "transform", description: "", schema: null, unresolvedReason };
 }
 
 /**

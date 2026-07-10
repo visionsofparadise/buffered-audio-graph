@@ -50,6 +50,7 @@ export function ensurePackageState(
 		requestedSpec,
 		name: packageNameFromSpec(requestedSpec),
 		version: null,
+		apiVersion: null,
 		status: "pending",
 		error: null,
 		nodes: [],
@@ -75,6 +76,7 @@ export async function runPackagePipeline(
 		target.error = null;
 		target.nodes = [];
 		target.version = null;
+		target.apiVersion = null;
 	});
 
 	const install = await main.installPackage({ packageSpec: entry.requestedSpec });
@@ -85,7 +87,7 @@ export async function runPackagePipeline(
 		target.status = "loading";
 	});
 
-	const nodes = await main.loadPackageNodes({
+	const { apiVersion, nodes } = await main.loadPackageNodes({
 		loadEntryPath: install.loadEntryPath,
 		packageName: install.packageName,
 		packageVersion: install.packageVersion,
@@ -94,6 +96,7 @@ export async function runPackagePipeline(
 	mutatePackageAt(appStore, app, index, (target) => {
 		target.name = install.packageName;
 		target.version = install.packageVersion;
+		target.apiVersion = apiVersion;
 		target.status = "ready";
 		target.error = null;
 		target.nodes = [...nodes];
