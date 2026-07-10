@@ -1,4 +1,4 @@
-import { getFftAddon, detectFftBackend } from "./fft-backend";
+import { getFftAddon, detectFftBackend, vkfftDeviceAvailable } from "./fft-backend";
 import { fixtures, requireFixture } from "./test-fixtures";
 
 function loadFftw() {
@@ -17,6 +17,12 @@ function loadFftw() {
 function loadVkfft() {
 	const path = requireFixture("vkfftAddon");
 	if (!path) return null;
+
+	// The VkFFT addon loads on hosts with no Vulkan device (e.g. CI) but throws at first use; gate on an actual device, not just load.
+	if (!vkfftDeviceAvailable(path)) {
+		console.log("[skip] VkFFT: no Vulkan device");
+		return null;
+	}
 
 	try {
 		const addon = getFftAddon("vkfft", { vkfftPath: path });

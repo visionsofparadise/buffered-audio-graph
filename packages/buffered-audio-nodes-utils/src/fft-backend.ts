@@ -86,3 +86,7 @@ export function getFftAddon(backend: FftBackend, options?: { vkfftPath?: string;
 
 	return null;
 }
+
+export function vkfftDeviceAvailable(vkfftPath?: string): boolean {
+	return Boolean(tryLoadVkfft(vkfftPath)?.detectDevice());
+}

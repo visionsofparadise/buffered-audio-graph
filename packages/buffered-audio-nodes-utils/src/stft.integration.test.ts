@@ -1,6 +1,6 @@
 import { stft, istft } from "./stft";
 import type { FftBackend } from "./fft-backend";
-import { getFftAddon } from "./fft-backend";
+import { getFftAddon, vkfftDeviceAvailable } from "./fft-backend";
 import { fixtures, requireFixture } from "./test-fixtures";
 
 const sampleRate = 48000;
@@ -25,6 +25,12 @@ function generateSignal(): Float32Array {
 function tryLoadBackend(backend: FftBackend, fixtureName: "fftwAddon" | "vkfftAddon"): boolean {
 	const path = requireFixture(fixtureName);
 	if (!path) return false;
+
+	// VkFFT loads without a Vulkan device (e.g. CI) but throws at first use; require an actual device.
+	if (backend === "vkfft" && !vkfftDeviceAvailable(path)) {
+		console.log("[skip] vkfft: no Vulkan device");
+		return false;
+	}
 
 	try {
 		const addon = getFftAddon(backend, {
