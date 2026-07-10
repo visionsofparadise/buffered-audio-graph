@@ -101,7 +101,24 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function addNode(packageName: string, packageVersion: string, nodeName: string, position: Position): void {
-			const { graphStore, graph } = contextRef.current;
+			const { graphStore, graph, graphDefinition, app, logger } = contextRef.current;
+
+			const bagApiVersion = graphDefinition.apiVersion;
+			const packageEntry = app.packages.find(
+				(entry) => entry.name === packageName && entry.version === packageVersion,
+			);
+			const packageApiVersion = packageEntry?.apiVersion ?? null;
+
+			if (packageApiVersion !== null && packageApiVersion !== bagApiVersion) {
+				logger.error(
+					`Cannot add node "${nodeName}": package ${packageName}@${packageVersion} is on API version ${String(packageApiVersion)} but the bag is on API version ${String(bagApiVersion)}`,
+					undefined,
+					{ namespace: "graph" },
+				);
+
+				return;
+			}
+
 			const id = crypto.randomUUID();
 
 			const node: GraphNode = {

@@ -1,5 +1,6 @@
 import type { GraphDefinition } from "@buffered-audio/core";
 import { validateGraphDefinition } from "@buffered-audio/core";
+import { CURRENT_API_VERSION, SUPPORTED_API_VERSIONS } from "../../shared/models/ApiVersion";
 import type { Main } from "../models/Main";
 
 async function selectBag(main: Main, title: string): Promise<string | undefined> {
@@ -42,6 +43,10 @@ export async function loadBag(main: Main, bagPath: string): Promise<GraphDefinit
 
 	const definition = validateGraphDefinition(parsed);
 
+	if (!SUPPORTED_API_VERSIONS.has(definition.apiVersion)) {
+		throw new Error(`Bag API version ${String(definition.apiVersion)} is not supported (supported: ${Array.from(SUPPORTED_API_VERSIONS).join(", ")})`);
+	}
+
 	if (needsWrite) {
 		await main.writeFile(bagPath, JSON.stringify(definition, null, 2));
 	}
@@ -62,6 +67,7 @@ export async function newBag(main: Main): Promise<{ bagPath: string; definition:
 
 	const definition: GraphDefinition = {
 		id: crypto.randomUUID(),
+		apiVersion: CURRENT_API_VERSION,
 		name,
 		nodes: [],
 		edges: [],

@@ -75,6 +75,12 @@ export function mergeImportedBag({
 	currentPositions,
 	importedDefinition,
 }: MergeImportedBagOptions): MergeImportedBagResult {
+	if (importedDefinition.apiVersion !== currentDefinition.apiVersion) {
+		throw new Error(
+			`Cannot import a bag on API version ${String(importedDefinition.apiVersion)} into a bag on API version ${String(currentDefinition.apiVersion)}`,
+		);
+	}
+
 	const idMap = new Map<string, string>();
 	const importedNodes: Array<GraphNode> = importedDefinition.nodes.map((node) => {
 		const nextId = crypto.randomUUID();

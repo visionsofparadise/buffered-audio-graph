@@ -89,18 +89,26 @@ export function useAppCallbacks(
 				(candidate.version ?? "").localeCompare(winner.version ?? "", undefined, { numeric: true, sensitivity: "base" }) > 0 ? candidate : winner,
 			);
 
-			result.definition.nodes.push({
-				id: crypto.randomUUID(),
-				packageName: "@buffered-audio/nodes",
-				packageVersion: latest.version ?? "",
-				nodeName: "Read",
-			});
+			if (latest.apiVersion !== null && latest.apiVersion !== result.definition.apiVersion) {
+				logger.error(
+					`Cannot seed new bag: package @buffered-audio/nodes is on API version ${String(latest.apiVersion)} but the bag is on API version ${String(result.definition.apiVersion)}`,
+					undefined,
+					{ namespace: "graph" },
+				);
+			} else {
+				result.definition.nodes.push({
+					id: crypto.randomUUID(),
+					packageName: "@buffered-audio/nodes",
+					packageVersion: latest.version ?? "",
+					nodeName: "Read WAV",
+				});
 
-			await saveBagDefinition(main, result.bagPath, result.definition);
+				await saveBagDefinition(main, result.bagPath, result.definition);
+			}
 		}
 
 		addTab(result.definition.id, result.bagPath, result.definition.name);
-	}, [addTab, app.packages, main]);
+	}, [addTab, app.packages, main, logger]);
 
 	return {
 		tabNames: tabNamesRef.current,

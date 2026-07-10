@@ -1,6 +1,7 @@
 import { validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
 import { useCallback, useEffect, useRef } from "react";
 import { snapshot, subscribe, type Snapshot } from "valtio/vanilla";
+import { SUPPORTED_API_VERSIONS } from "../../shared/models/ApiVersion";
 import type { FileChangedPayload } from "../../shared/utilities/emitToRenderer";
 import type { AppContext } from "../models/Context";
 import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
@@ -141,12 +142,18 @@ export function useGraphDefinition(
 					const content = await main.readFile(bagPath);
 					const parsed: unknown = JSON.parse(content);
 					const validated = validateGraphDefinition(parsed);
+
+					if (!SUPPORTED_API_VERSIONS.has(validated.apiVersion)) {
+						throw new Error(`Bag API version ${String(validated.apiVersion)} is not supported`);
+					}
+
 					const newHash = await sha256Hex(content);
 
 					hashRef.current = newHash;
 
 					store.mutate(graphDefinition, (proxy) => {
 						proxy.id = validated.id;
+						proxy.apiVersion = validated.apiVersion;
 						proxy.name = validated.name;
 						proxy.nodes = validated.nodes;
 						proxy.edges = validated.edges;
@@ -170,6 +177,7 @@ export function useGraphDefinition(
 			store.mutate(graphDefinition, (proxy) => {
 				const current: GraphDefinition = {
 					id: proxy.id,
+					apiVersion: proxy.apiVersion,
 					name: proxy.name,
 					nodes: structuredClone(proxy.nodes as Array<GraphDefinition["nodes"][number]>),
 					edges: structuredClone(proxy.edges as Array<GraphDefinition["edges"][number]>),
@@ -177,6 +185,7 @@ export function useGraphDefinition(
 				const next = updater(current);
 
 				proxy.id = next.id;
+				proxy.apiVersion = next.apiVersion;
 				proxy.name = next.name;
 				proxy.nodes = next.nodes;
 				proxy.edges = next.edges;

@@ -23,6 +23,15 @@ export function lookupNode(
 		if (nodePackage.name === packageName && nodePackage.version === packageVersion) {
 			packageFound = true;
 
+			if (nodePackage.status === "error") {
+				return {
+					category: "transform",
+					description: "",
+					schema: null,
+					unresolvedReason: nodePackage.error ?? `Package ${packageName}@${packageVersion} failed to load`,
+				};
+			}
+
 			for (const node of nodePackage.nodes) {
 				if (node.nodeName === nodeName) {
 					return {

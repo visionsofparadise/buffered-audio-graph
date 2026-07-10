@@ -63,6 +63,7 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 
 			const previousDefinition: GraphDefinition = structuredClone({
 				id: graphDefinition.id,
+				apiVersion: graphDefinition.apiVersion,
 				name: graphDefinition.name,
 				nodes: graphDefinition.nodes as GraphDefinition["nodes"],
 				edges: graphDefinition.edges as GraphDefinition["edges"],
