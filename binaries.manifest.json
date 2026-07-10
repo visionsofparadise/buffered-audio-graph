@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "bucket": "buffered-audio-binaries-345340320424",
   "region": "us-east-1",
   "assets": [
@@ -161,27 +161,27 @@
       "platform": "darwin",
       "arch": "arm64",
       "filename": "fftw-darwin-arm64.node",
-      "sha256": "e86645cf217ca14945a0e43da288b46d4f93c18eab2466410d1dc84a3d42d260",
-      "size": 694144,
-      "source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.0.0"
+      "sha256": "7b25488e0e6bddcc357346191c444a11ae2638d1a55b121e9fe902626728d455",
+      "size": 695728,
+      "source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.2.0"
     },
     {
       "key": "fftw-addon",
       "platform": "linux",
       "arch": "x64",
       "filename": "fftw-linux-x64.node",
-      "sha256": "fb89d3b655556b6060fffc40ace4c13d061e1a421f0166e85f81b7622ce3b4ac",
-      "size": 1255240,
-      "source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.0.0"
+      "sha256": "b525aaa3551ec04e549fded6417d6aae53f669da2fb026d0c94929d1ae20e74a",
+      "size": 1289472,
+      "source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.2.0"
     },
     {
       "key": "fftw-addon",
       "platform": "win32",
       "arch": "x64",
       "filename": "fftw-win32-x64.node",
-      "sha256": "51623f216b4960ec9a03bfe1a2b0415a244bbe0f46941d50fe4b7e493ce2a0c8",
-      "size": 1091072,
-      "source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.0.0"
+      "sha256": "6fcfaacbe568cd5ad7019a7baeaac45c475ea0e61de6886484d27d09adffbbbc",
+      "size": 1103872,
+      "source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.2.0"
     },
     {
       "key": "htdemucs",
