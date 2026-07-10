@@ -130,18 +130,18 @@ Construction resolves bypass and composites: a bypassed node contributes no stre
 
 ### Events
 
-Subscribe on `job.events`, a typed `EventEmitter`. Each event carries the emitting node's `NodeIdentity` as its first argument, followed by a payload:
+Subscribe on `job.events`, a typed `EventEmitter`. Each event carries the emitting stream's `StreamIdentity` as its first argument, followed by a payload:
 
 ```ts
 type RenderEvents = EventEmitter<{
-	started: [NodeIdentity, StartedPayload];
-	finished: [NodeIdentity, FinishedPayload];
-	progress: [NodeIdentity, ProgressPayload];
-	log: [NodeIdentity, LogPayload];
+	started: [StreamIdentity, StartedPayload];
+	finished: [StreamIdentity, FinishedPayload];
+	progress: [StreamIdentity, ProgressPayload];
+	log: [StreamIdentity, LogPayload];
 }>;
 ```
 
-`NodeIdentity` is `{ nodeName, nodeId?, streamId }` — `streamId` is a per-job monotonic counter minted at stream construction, unique within a job even when two id-less nodes share a `nodeName`. Every payload carries `createdAt` (Unix ms, stamped at the emit site): `StartedPayload` is `{ createdAt }`, `ProgressPayload` is `{ phase, framesDone, framesTotal?, createdAt }` over the phases `"read" | "buffer" | "process" | "emit" | "write"`, `FinishedPayload` is `{ framesDone, processingMs?, createdAt }`, and `LogPayload` is `{ level, message, data?, createdAt }`. Streams emit progress on every call; a stream author paces emission with `createProgressGate` (see [Reporting from hooks](#reporting-from-hooks)), and consumers derive elapsed time from `createdAt`.
+`StreamIdentity` is `{ nodeName, nodeId?, streamId }` — `streamId` is a per-job monotonic counter minted at stream construction, unique within a job even when two id-less nodes share a `nodeName`. Every payload carries `createdAt` (Unix ms, stamped at the emit site): `StartedPayload` is `{ createdAt }`, `ProgressPayload` is `{ phase, framesDone, framesTotal?, createdAt }` over the phases `"read" | "buffer" | "process" | "emit" | "write"`, `FinishedPayload` is `{ framesDone, processingMs?, createdAt }`, and `LogPayload` is `{ level, message, data?, createdAt }`. Streams emit progress on every call; a stream author paces emission with `createProgressGate` (see [Reporting from hooks](#reporting-from-hooks)), and consumers derive elapsed time from `createdAt`.
 
 ```ts
 const job = source.createRenderJob();
@@ -158,7 +158,7 @@ await job.render();
 
 ## Streams
 
-The executor constructs one stream per node per render via `new node.Stream(node, context)`, passing a `StreamRenderContext` (`{ events, startedAt, nextStreamId }`) the job builds once per render. Streams are mutable runtime objects holding processing state for a single pass; they are never reused. The base constructor mints the stream's `identity` (allocating a `streamId` from the context) and exposes `get properties()`, which reads through to `this.node.properties`. The node reference stays available on `this.node` for statics.
+The executor constructs one stream per node per render via `new node.Stream(node, context)`, passing a `StreamContext` (`{ events, nextStreamId }`) the job builds once per render. Streams are mutable runtime objects holding processing state for a single pass; they are never reused. The base constructor mints the stream's `identity` (allocating a `streamId` from the context) and exposes `get properties()`, which reads through to `this.node.properties`. The node reference stays available on `this.node` for statics.
 
 ### `_destroy()`
 
@@ -232,7 +232,7 @@ class NormalizeStream extends BufferedTransformStream<NormalizeNode> {
 
 ### Setup and Piping
 
-Both transform bases split wiring into two hooks. `_setup(context: StreamContext): Promise<void> | void` (no-op base) runs context-dependent initialization — open a subprocess, load an ONNX session, build an FFT workspace. `_pipe(input: ReadableStream<Block>): ReadableStream<Block>` (default: the pull-driven machine above) maps the input readable to the output readable; override it to compose inner streams by chaining their `_pipe()` calls (e.g. wrapping the core transform in resamplers). `StreamContext` carries `{ executionProviders, memoryLimit, durationFrames?, highWaterMark, signal? }`; it deliberately omits sample rate and channels, which streams read from the blocks themselves so upstream rate changes are honored.
+Both transform bases split wiring into two hooks. `_setup(context: StreamSetupContext): Promise<void> | void` (no-op base) runs context-dependent initialization — open a subprocess, load an ONNX session, build an FFT workspace. `_pipe(input: ReadableStream<Block>): ReadableStream<Block>` maps the input readable to the output readable; the default delegates to the base's private generator engine (which serves the pull loop above), so an override means exactly one thing — wrap or replace the composed stream by chaining inner `_pipe()` calls (e.g. wrapping the core transform in resamplers), never reimplement serving. `StreamSetupContext` carries `{ executionProviders, memoryLimit, durationFrames?, highWaterMark, signal? }`; it deliberately omits sample rate and channels, which streams read from the blocks themselves so upstream rate changes are honored.
 
 ### Reporting from hooks
 
@@ -347,7 +347,7 @@ const definition = validateGraphDefinition(JSON.parse(raw));
 
 ## Backpressure
 
-`RenderJob` computes a `highWaterMark` from the pipeline stage count, channel count, and chunk size, bounded by a configurable `memoryLimit` (default 256 MB), and threads it to every stream through `StreamContext` for consistent backpressure across the pipeline. Whole-file transforms consume memory outside this budget but self-regulate through `BlockBuffer`'s disk spillover. An explicit `highWaterMark` in `RenderOptions` overrides the calculation.
+`RenderJob` computes a `highWaterMark` from the pipeline stage count, channel count, and chunk size, bounded by a configurable `memoryLimit` (default 256 MB), and threads it to every stream through `StreamSetupContext` for consistent backpressure across the pipeline. Whole-file transforms consume memory outside this budget but self-regulate through `BlockBuffer`'s disk spillover. An explicit `highWaterMark` in `RenderOptions` overrides the calculation.
 
 ## License
 
