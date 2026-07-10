@@ -56,6 +56,27 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         run: npx turbo run integration --filter=@buffered-audio/utils
 
+      - name: Cache binaries (content-addressed sha256 cache)
+        if: steps.check.outputs.skip == 'false'
+        uses: actions/cache@v4
+        with:
+          path: .binaries-cache
+          key: binaries-linux-x64-${{ hashFiles('binaries.manifest.json') }}
+          restore-keys: |
+            binaries-linux-x64-
+
+      - name: Fetch audio test fixtures
+        if: steps.check.outputs.skip == 'false'
+        run: npm run fixtures:audio
+
+      - name: Fetch binary + model test fixtures
+        if: steps.check.outputs.skip == 'false'
+        run: npm run fixtures:binaries -- --target linux-x64
+
+      - name: Run heavy integration tests
+        if: steps.check.outputs.skip == 'false'
+        run: npx turbo run integration:heavy --filter=@buffered-audio/utils
+
       - name: Publish to npm
         if: steps.check.outputs.skip == 'false'
         run: npm publish --workspace=packages/buffered-audio-nodes-utils --access public
