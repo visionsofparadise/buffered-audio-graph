@@ -61,6 +61,15 @@ function complexFft(
  *   in Audio Noise Reduction by Adaptive 2D Filtering." 123rd AES Convention,
  *   Paper 7168. PDF: http://imaging.cs.msu.ru/pub/MusicalNoise07.pdf
  */
+export interface DfttProfileMs {
+	fill: number;
+	forward: number;
+	gain: number;
+	inverse: number;
+	ola: number;
+	normalize: number;
+}
+
 export function applyDfttSmoothing(
 	nlmSmoothed: Float32Array,
 	rawMask: Float32Array,
@@ -70,6 +79,7 @@ export function applyDfttSmoothing(
 	output: Float32Array,
 	fftBackend: FftBackend | undefined,
 	fftAddonOptions: { vkfftPath?: string; fftwPath?: string } | undefined,
+	profileMs?: DfttProfileMs,
 ): void {
 	const addon = fftBackend ? getFftAddon(fftBackend, fftAddonOptions) : null;
 
@@ -78,6 +88,16 @@ export function applyDfttSmoothing(
 
 		return;
 	}
+
+	let profileMark = profileMs ? performance.now() : 0;
+	const profileAdd = (key: keyof DfttProfileMs): void => {
+		if (!profileMs) return;
+
+		const now = performance.now();
+
+		profileMs[key] += now - profileMark;
+		profileMark = now;
+	};
 
 	const { blockFreq, blockTime, hopFreq, hopTime, threshold } = dfttOptions;
 
@@ -129,8 +149,12 @@ export function applyDfttSmoothing(
 		}
 	}
 
+	profileAdd("fill");
+
 	const rawFft = addon.batchFft2D(rawBatch, blockTime, blockFreq, totalBlocks);
 	const nlmFft = addon.batchFft2D(nlmBatch, blockTime, blockFreq, totalBlocks);
+
+	profileAdd("forward");
 
 	const sigmaSq = threshold * threshold;
 	const totalComplex = totalBlocks * complexBlockSize;
@@ -149,7 +173,11 @@ export function applyDfttSmoothing(
 		rawIm[flatIdx] = rawIm[flatIdx]! * gain;
 	}
 
+	profileAdd("gain");
+
 	const synth = addon.batchIfft2D(rawRe, rawIm, blockTime, blockFreq, totalBlocks);
+
+	profileAdd("inverse");
 
 	// win2d applied again at OLA time → effective window is analysis·synthesis = win².
 	const accumulator = new Float32Array(numFrames * numBins);
@@ -184,6 +212,8 @@ export function applyDfttSmoothing(
 		}
 	}
 
+	profileAdd("ola");
+
 	// Clamp to [0,1] — output is a gain mask.
 	for (let flatIdx = 0; flatIdx < numFrames * numBins; flatIdx++) {
 		const ws = windowSumSq[flatIdx]!;
@@ -196,6 +226,8 @@ export function applyDfttSmoothing(
 			output[flatIdx] = rawMask[flatIdx]!;
 		}
 	}
+
+	profileAdd("normalize");
 }
 
 // JS fallback (row/column 1D FFT), kept for no-addon environments.

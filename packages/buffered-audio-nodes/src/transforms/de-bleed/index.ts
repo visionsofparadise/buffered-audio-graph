@@ -294,6 +294,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 		const profileEnabled = process.env.DEBLEED_PROFILE === "1";
 		const profileMs = { warmup: 0, stftRead: 0, msad: 0, kalman: 0, mwf: 0, nlm: 0, dftt: 0, applyMaskIstft: 0, write: 0 };
+		const dfttProfileMs = profileEnabled ? { fill: 0, forward: 0, gain: 0, inverse: 0, ola: 0, normalize: 0 } : undefined;
 		const _profStart = (): number => profileEnabled ? performance.now() : 0;
 		const _profAdd = (key: keyof typeof profileMs, t0: number): void => {
 			if (profileEnabled) profileMs[key] += performance.now() - t0;
@@ -517,6 +518,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 						finalView,
 						this.dfttFftBackend,
 						this.dfttFftAddonOptions,
+						dfttProfileMs,
 					);
 					_profAdd("dftt", _tdftt);
 
@@ -608,6 +610,19 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				write: pct("write"),
 				totalS: (total / 1000).toFixed(2),
 			});
+
+			if (dfttProfileMs) {
+				const dfttSub = (key: keyof typeof dfttProfileMs): string => `${(dfttProfileMs[key] / 1000).toFixed(2)}s`;
+
+				this.log("profile dftt", {
+					fill: dfttSub("fill"),
+					forward: dfttSub("forward"),
+					gain: dfttSub("gain"),
+					inverse: dfttSub("inverse"),
+					ola: dfttSub("ola"),
+					normalize: dfttSub("normalize"),
+				});
+			}
 		}
 	}
 }
