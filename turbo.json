@@ -15,10 +15,10 @@
       "dependsOn": ["check"]
     },
     "integration": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build", "^integration"]
     },
     "integration:heavy": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build", "^integration:heavy"]
     },
     "start": {},
     "lint": {
