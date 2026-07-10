@@ -1,3 +1,5 @@
+import type { StreamPhase } from "@buffered-audio/core";
+
 export interface WindowBounds {
 	readonly x: number;
 	readonly y: number;
@@ -13,7 +15,7 @@ export interface FileChangedPayload {
 export interface AudioProgressPayload {
 	jobId: string;
 	nodeId: string;
-	phase: string;
+	phase: StreamPhase;
 	framesDone: number;
 	framesTotal?: number;
 }

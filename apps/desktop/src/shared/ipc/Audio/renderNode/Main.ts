@@ -1,8 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { BrowserWindow } from "electron";
-import type { NodeIdentity, SourceNode, StreamEvent, TransformNode } from "@buffered-audio/core";
-import { ReadNode, WriteNode } from "@buffered-audio/nodes";
+import type { ProgressPayload, SourceNode, StreamIdentity, TransformNode } from "@buffered-audio/core";
+import { ReadWavNode, WriteNode } from "@buffered-audio/nodes";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
 import { resolvePackageNodes, type NodeClass, type NodeRegistryMap } from "../../../models/NodeRegistry";
 import type { AudioProgressPayload } from "../../../utilities/emitToRenderer";
@@ -25,29 +25,30 @@ function resolveNode(registry: NodeRegistryMap, packageName: string, packageVers
 }
 
 async function renderWithProgress(
-	sourceNode: ReadNode,
+	source: SourceNode,
 	signal: AbortSignal,
 	jobId: string,
 	nodeId: string,
 	renderedNodeName: string,
 	browserWindow: BrowserWindow,
 ): Promise<void> {
-	const onEvent = (identity: NodeIdentity, event: StreamEvent): void => {
-		if (event.kind !== "progress") return;
+	const job = source.createRenderJob({ signal });
+
+	job.events.on("progress", (identity: StreamIdentity, payload: ProgressPayload): void => {
 		if (identity.nodeName !== renderedNodeName) return;
 
-		const payload: AudioProgressPayload = {
+		const progressPayload: AudioProgressPayload = {
 			jobId,
 			nodeId,
-			phase: event.phase,
-			framesDone: event.framesDone,
-			framesTotal: event.framesTotal,
+			phase: payload.phase,
+			framesDone: payload.framesDone,
+			framesTotal: payload.framesTotal,
 		};
 
-		browserWindow.webContents.send("audio:progress", payload);
-	};
+		browserWindow.webContents.send("audio:progress", progressPayload);
+	});
 
-	await sourceNode.render({ signal, onEvent });
+	await job.render();
 }
 
 export class RenderNodeMainIpc extends AsyncMainIpc<RenderNodeIpcParameters, RenderNodeIpcReturn> {
@@ -80,13 +81,13 @@ export class RenderNodeMainIpc extends AsyncMainIpc<RenderNodeIpcParameters, Ren
 
 			sourceInstance.to(writeInstance);
 
-			await renderWithProgress(sourceInstance as ReadNode, signal, jobId, nodeId, SourceConstructor.nodeName, browserWindow);
+			await renderWithProgress(sourceInstance, signal, jobId, nodeId, SourceConstructor.nodeName, browserWindow);
 		} else {
 			if (!inputPath) {
 				throw new Error(`No input path provided for transform node "${nodeId}"`);
 			}
 
-			const readInstance = new ReadNode({ path: inputPath, ffmpegPath: "", ffprobePath: "" });
+			const readInstance = new ReadWavNode({ path: inputPath });
 			const TransformConstructor = resolveNode(nodeRegistry, packageName, packageVersion, nodeName);
 			const transformInstance = new TransformConstructor(parameters) as TransformNode;
 			const writeInstance = new WriteNode({ path: outputPath, bitDepth: "32f" });
