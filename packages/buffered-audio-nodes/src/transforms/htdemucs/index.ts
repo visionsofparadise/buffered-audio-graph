@@ -3,8 +3,8 @@ import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode
 import { bandpass, ResampleStream } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
-import { computeStftScaled, reflectPad } from "./utils/dsp";
-import { buildModelInput, extractStems, type StftWorkspace } from "./utils/stems";
+import { buildTriangularWeight, computeStftScaled, reflectPad } from "./utils/dsp";
+import { buildModelInput, extractStems, mixStemsToStereo, type StftWorkspace } from "./utils/stems";
 
 export interface StemGains {
 	readonly vocals: number;
@@ -135,11 +135,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 		const drainerDone = pair !== undefined ? drainResampleOutToBuffer({ resampleOut: pair.resampleOut, output, channels, sourceRate, bitDepth, originalFrames, writerState }) : Promise.resolve();
 
 		// OLA weight window: triangular raised to TRANSITION_POWER.
-		const weight = new Float32Array(SEGMENT_SAMPLES);
-		const half = SEGMENT_SAMPLES / 2;
-
-		for (let index = 0; index < half; index++) weight[index] = Math.pow((index + 1) / half, TRANSITION_POWER);
-		for (let index = 0; index < half; index++) weight[SEGMENT_SAMPLES - 1 - index] = weight[index] ?? 0;
+		const weight = buildTriangularWeight(SEGMENT_SAMPLES, TRANSITION_POWER);
 
 		const pad = Math.floor(HOP_SIZE / 2) * 3; // 1536
 		const le = Math.ceil(SEGMENT_SAMPLES / HOP_SIZE);
@@ -305,29 +301,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 
 		if (nStable <= 0) return;
 
-		const outLeft = new Float32Array(nStable);
-		const outRight = new Float32Array(nStable);
-
-		for (let index = 0; index < nStable; index++) {
-			const sw = sumWeight[index] ?? 1;
-			let mixedL = 0;
-			let mixedR = 0;
-
-			for (let stem = 0; stem < 4; stem++) {
-				const gain = stemGains[stem] ?? 1;
-
-				if (gain === 0) continue;
-
-				const arrL = stemAccum[stem * 2];
-				const arrR = stemAccum[stem * 2 + 1];
-
-				if (arrL) mixedL += (sw === 0 ? 0 : (arrL[index] ?? 0) / sw) * gain;
-				if (arrR) mixedR += (sw === 0 ? 0 : (arrR[index] ?? 0) / sw) * gain;
-			}
-
-			outLeft[index] = mixedL * stats.std + stats.mean;
-			outRight[index] = mixedR * stats.std + stats.mean;
-		}
+		const { outLeft, outRight } = mixStemsToStereo(stemAccum, sumWeight, stemGains, stats, nStable);
 
 		// Bandpass at 44.1 kHz native rate, per the original behaviour.
 		bandpass([outLeft, outRight], HTDEMUCS_SAMPLE_RATE, this.properties.highPass, this.properties.lowPass);

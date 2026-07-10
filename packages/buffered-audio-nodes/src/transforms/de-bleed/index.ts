@@ -9,6 +9,8 @@ import { adaptationSpeedToMarkovForgetting, createKalmanState, kalmanUpdateFrame
 import { computeMwfMask, createInterfererPsdState, reductionStrengthToOversubtraction, updateInterfererPsd, updatePrevOutputPsd, type InterfererPsdState, type MwfParams } from "./utils/mef-mwf";
 import { applyIspRestoration, computeMsadDecision, createIspState, createMsadChannelState, ISP_THRESHOLD_FRAMES, type IspState, type MsadChannelState } from "./utils/mef-msad";
 import { coldStartSeed, validateTransferSeed } from "./utils/warmup";
+import { WindowReader } from "./utils/window-reader";
+import { computeChunkWindow, computeProcessGeometry, computeWriteClip } from "./utils/geometry";
 
 export const schema = z.object({
 	references: z.array(z.string()).default([]).describe("References"),
@@ -55,83 +57,6 @@ function allocateStftOutput(frames: number, numBins: number): StftOutput {
 		real: new Float32Array(frames * numBins),
 		imag: new Float32Array(frames * numBins),
 	};
-}
-
-class WindowReader {
-	private readonly scratch: Array<Float32Array>;
-	private readonly windowSamples: number;
-	private readonly channels: number;
-	private virtualCursor = 0;
-	private bufferDrained = false;
-
-	constructor(channels: number, windowSamples: number) {
-		this.channels = channels;
-		this.windowSamples = windowSamples;
-		this.scratch = [];
-		for (let ch = 0; ch < channels; ch++) this.scratch.push(new Float32Array(windowSamples));
-	}
-
-	getScratch(): Array<Float32Array> {
-		return this.scratch;
-	}
-
-	async preload(buffer: BlockBuffer, edgePadSamples: number): Promise<void> {
-		for (let ch = 0; ch < this.channels; ch++) this.scratch[ch]!.fill(0);
-
-		this.virtualCursor = 0;
-		this.bufferDrained = false;
-
-		const headPad = Math.min(edgePadSamples, this.windowSamples);
-		const remainingInWindow = this.windowSamples - headPad;
-
-		if (remainingInWindow > 0) await this.readInto(buffer, headPad, remainingInWindow);
-
-		this.virtualCursor = this.windowSamples;
-	}
-
-	async advance(buffer: BlockBuffer, step: number): Promise<void> {
-		if (step <= 0) return;
-
-		const keep = this.windowSamples - step;
-
-		for (let ch = 0; ch < this.channels; ch++) {
-			const view = this.scratch[ch]!;
-
-			if (keep > 0) view.copyWithin(0, step, this.windowSamples);
-			view.fill(0, keep, this.windowSamples);
-		}
-
-		await this.readInto(buffer, keep, step);
-		this.virtualCursor += step;
-	}
-
-	private async readInto(buffer: BlockBuffer, writeOffset: number, length: number): Promise<void> {
-		if (this.bufferDrained) return;
-
-		let remaining = length;
-		let outOffset = writeOffset;
-
-		while (remaining > 0) {
-			const chunk = await buffer.read(remaining);
-			const chunkFrames = chunk.samples[0]?.length ?? 0;
-
-			if (chunkFrames === 0) {
-				this.bufferDrained = true;
-
-				return;
-			}
-
-			for (let ch = 0; ch < this.channels; ch++) {
-				const src = chunk.samples[ch];
-				const dest = this.scratch[ch]!;
-
-				if (src) dest.set(src.subarray(0, chunkFrames), outOffset);
-			}
-
-			outOffset += chunkFrames;
-			remaining -= chunkFrames;
-		}
-	}
 }
 
 async function readSequentialPadded(
@@ -379,15 +304,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 		const carry = MAX_CARRY_FRAMES;
 
-		const edgePadSamples = fftSize - hopSize;
-		const virtualTotal = totalFrames + 2 * edgePadSamples;
-		const virtualLogicalLength = Math.max(virtualTotal, fftSize);
-		const virtualPaddedLength = virtualLogicalLength + ((hopSize - ((virtualLogicalLength - fftSize) % hopSize)) % hopSize);
-		const processStftFrames = Math.floor((virtualPaddedLength - fftSize) / hopSize) + 1;
-
-		const effectiveSampleRate = sampleRate ?? 48000;
-		const warmupSamples = Math.min(WARMUP_SECONDS * effectiveSampleRate, totalFrames);
-		const warmupFrames = Math.max(0, Math.floor((warmupSamples - fftSize) / hopSize) + 1);
+		const { edgePadSamples, processStftFrames, warmupFrames } = computeProcessGeometry({ totalFrames, fftSize, hopSize, sampleRate, warmupSeconds: WARMUP_SECONDS });
 
 		const _twarm = _profStart();
 		const seedsByChannel = await this.warmupSeedsAllChannels(buffered, channels, warmupFrames, fftSize, hopSize);
@@ -439,11 +356,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 			let prevWinStart = 0;
 
 			for (let outStart = 0; outStart < processStftFrames; outStart += chunkFrames) {
-				const outFramesThisChunk = Math.min(chunkFrames, processStftFrames - outStart);
-				const winStart = Math.max(0, outStart - carry);
-				const winEnd = Math.min(processStftFrames, outStart + outFramesThisChunk + carry);
-				const winFrames = winEnd - winStart;
-				const winSamples = winFrames * hopSize + (fftSize - hopSize);
+				const { outFramesThisChunk, winStart, winFrames, winSamples } = computeChunkWindow({ outStart, chunkFrames, processStftFrames, carry, fftSize, hopSize });
 
 				if (outStart !== 0) {
 					const stepFrames = winStart - prevWinStart;
@@ -621,22 +534,12 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 					_profAdd("applyMaskIstft", _tapp);
 				}
 
-				const centerStartFrame = outStart - winStart;
-				const centerStartSample = centerStartFrame * hopSize;
-				const isFinalChunk = outStart + outFramesThisChunk >= processStftFrames;
 				const cleanedLength = cleanedByChannel[0]!.length;
-				const centerEndSample = isFinalChunk ? cleanedLength : (centerStartFrame + outFramesThisChunk) * hopSize;
+				const clip = computeWriteClip({ outStart, winStart, outFramesThisChunk, processStftFrames, hopSize, edgePadSamples, totalFrames, cleanedLength });
 
-				const virtualWriteStart = winStart * hopSize + centerStartSample;
-				const realWriteStart = virtualWriteStart - edgePadSamples;
-				const realWriteEnd = realWriteStart + (centerEndSample - centerStartSample);
-				const clipStart = Math.max(0, realWriteStart);
-				const clipEnd = Math.min(totalFrames, realWriteEnd);
+				if (!clip) continue;
 
-				if (clipEnd <= clipStart) continue;
-
-				const sliceFromOffset = (clipStart - realWriteStart) + centerStartSample;
-				const sliceLength = clipEnd - clipStart;
+				const { clipStart, sliceFromOffset, sliceLength } = clip;
 				const writeSamplesByChannel: Array<Float32Array> = [];
 
 				for (let ch = 0; ch < channels; ch++) {

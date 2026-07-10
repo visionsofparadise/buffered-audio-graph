@@ -34,6 +34,45 @@ export function buildModelInput(
 	return { inputData, xData };
 }
 
+/**
+ * Collapses the 4 stem OLA accumulators (interleaved L/R per stem) into a stereo pair for the first
+ * `nStable` samples: normalizes each sample by the OLA `sumWeight`, applies per-stem gains, then
+ * de-normalizes with the global `{ mean, std }` used before inference.
+ */
+export function mixStemsToStereo(
+	stemAccum: ReadonlyArray<Float32Array>,
+	sumWeight: Float32Array,
+	stemGains: ReadonlyArray<number>,
+	stats: { readonly mean: number; readonly std: number },
+	nStable: number,
+): { readonly outLeft: Float32Array; readonly outRight: Float32Array } {
+	const outLeft = new Float32Array(nStable);
+	const outRight = new Float32Array(nStable);
+
+	for (let index = 0; index < nStable; index++) {
+		const sw = sumWeight[index] ?? 1;
+		let mixedL = 0;
+		let mixedR = 0;
+
+		for (let stem = 0; stem < 4; stem++) {
+			const gain = stemGains[stem] ?? 1;
+
+			if (gain === 0) continue;
+
+			const arrL = stemAccum[stem * 2];
+			const arrR = stemAccum[stem * 2 + 1];
+
+			if (arrL) mixedL += (sw === 0 ? 0 : (arrL[index] ?? 0) / sw) * gain;
+			if (arrR) mixedR += (sw === 0 ? 0 : (arrR[index] ?? 0) / sw) * gain;
+		}
+
+		outLeft[index] = mixedL * stats.std + stats.mean;
+		outRight[index] = mixedR * stats.std + stats.mean;
+	}
+
+	return { outLeft, outRight };
+}
+
 export interface StftWorkspace {
 	readonly freqRealBuffers: Array<Float32Array>;
 	readonly freqImagBuffers: Array<Float32Array>;

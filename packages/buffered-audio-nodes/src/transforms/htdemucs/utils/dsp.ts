@@ -3,6 +3,17 @@ import { istft, stft } from "@buffered-audio/utils";
 const FFT_SIZE = 4096;
 const HOP_SIZE = 1024;
 
+/** OLA synthesis weight: a triangular window over `segmentSamples`, each half raised to `transitionPower`, mirrored about the midpoint. */
+export function buildTriangularWeight(segmentSamples: number, transitionPower: number): Float32Array {
+	const weight = new Float32Array(segmentSamples);
+	const half = segmentSamples / 2;
+
+	for (let index = 0; index < half; index++) weight[index] = Math.pow((index + 1) / half, transitionPower);
+	for (let index = 0; index < half; index++) weight[segmentSamples - 1 - index] = weight[index] ?? 0;
+
+	return weight;
+}
+
 export function reflectPad(signal: Float32Array, padLeft: number, padRight: number, totalLen: number): Float32Array {
 	const result = new Float32Array(totalLen);
 
