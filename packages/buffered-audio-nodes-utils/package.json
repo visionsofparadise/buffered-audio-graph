@@ -1,6 +1,6 @@
 {
   "name": "@buffered-audio/utils",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "type": "module",
   "exports": {
     ".": {
@@ -41,6 +41,6 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "@buffered-audio/core": "0.8.0"
+    "@buffered-audio/core": "0.9.0"
   }
 }
