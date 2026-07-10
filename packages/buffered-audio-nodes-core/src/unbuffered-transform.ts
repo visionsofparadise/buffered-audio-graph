@@ -1,29 +1,17 @@
 import type { Block, BufferedAudioNode, StreamContext } from "./node";
-import { createProgressGate } from "./progress-gate";
+import { createProgressGate, type ProgressGate } from "./progress-gate";
 import { BufferedStream } from "./stream";
 import type { TransformNodeProperties } from "./transform";
-
-function iteratorOf(iterable: AsyncIterable<Block> | Iterable<Block>): AsyncIterator<Block> | Iterator<Block> {
-	// FIX: This is a code smell you are doing something wrong
-	if (Symbol.asyncIterator in iterable) return iterable[Symbol.asyncIterator]();
-
-	return iterable[Symbol.iterator]();
-}
+import { toReadable } from "./utils/to-readable";
 
 export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>> extends BufferedStream<N> {
-	private processingMs = 0;
 	private framesBuffered = 0;
 	private framesEmitted = 0;
 	private hasStarted = false;
 	private sourceTotalFrames?: number;
 
-	setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	async setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.durationFrames;
-
-		return this.orchestrate(input, context);
-	}
-
-	private async orchestrate(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		await this._setup(context);
 
 		return this._pipe(input);
@@ -34,81 +22,43 @@ export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<Tran
 	}
 
 	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		const reader = input.getReader();
+		return toReadable(this.blocks(input));
+	}
+
+	private async *blocks(input: ReadableStream<Block>): AsyncGenerator<Block> {
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
 
-		let iterator: AsyncIterator<Block> | Iterator<Block> | undefined;
-		let inputEnded = false;
-		let flushDone = false;
-
-		return new ReadableStream<Block>({
-			// FIX Why did we move from transforms to readables? This was never discussed
-			pull: async (controller) => {
-				for (;;) {
-					if (iterator) {
-						const start = performance.now();
-						const result = await iterator.next();
-
-						this.processingMs += performance.now() - start;
-
-						if (!result.done) {
-							controller.enqueue(result.value);
-							this.framesEmitted += result.value.samples[0]?.length ?? 0;
-							if (emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
-
-							return;
-						}
-
-						iterator = undefined;
-
-						continue;
-					}
-
-					if (!inputEnded) {
-						const { value, done } = await reader.read();
-
-						if (done) {
-							inputEnded = true;
-
-							continue;
-						}
-
-						if (!this.hasStarted) {
-							this.hasStarted = true;
-							this.emitStarted();
-						}
-
-						this.framesBuffered += value.samples[0]?.length ?? 0;
-						if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-
-						iterator = iteratorOf(this._transform(value));
-
-						continue;
-					}
-
-					if (!flushDone) {
-						flushDone = true;
-						iterator = iteratorOf(this._flush());
-
-						continue;
-					}
-
-					this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-					this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
-					this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
-					controller.close();
-					await this.destroy();
-
-					return;
+		try {
+			for await (const block of input) {
+				if (!this.hasStarted) {
+					this.hasStarted = true;
+					this.emitStarted();
 				}
-			},
-			cancel: async (reason) => {
-				await iterator?.return?.();
-				await reader.cancel(reason);
-				await this.destroy();
-			},
-		});
+
+				this.framesBuffered += block.samples[0]?.length ?? 0;
+				if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+
+				yield* this.emitted(this.timed(this._transform(block)), emitGate);
+			}
+
+			yield* this.emitted(this.timed(this._flush()), emitGate);
+
+			this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+			this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
+		} finally {
+			await this.destroy();
+		}
+	}
+
+	private async *emitted(blocks: AsyncIterable<Block>, emitGate: ProgressGate): AsyncGenerator<Block> {
+		for await (const block of blocks) {
+			yield block;
+
+			this.framesEmitted += block.samples[0]?.length ?? 0;
+			if (emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+		}
 	}
 
 	abstract _transform(block: Block): AsyncIterable<Block> | Iterable<Block>;

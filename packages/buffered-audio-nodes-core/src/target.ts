@@ -7,7 +7,6 @@ export interface TargetNodeProperties extends BufferedAudioNodeProperties {}
 export abstract class BufferedTargetStream<N extends BufferedAudioNode<TargetNodeProperties> = BufferedAudioNode<TargetNodeProperties>> extends BufferedStream<N> {
 	private hasStarted = false;
 	private framesWritten = 0;
-	private processingMs = 0;
 	private sourceTotalFrames?: number;
 
 	abstract _write(chunk: Block): Promise<void> | void;

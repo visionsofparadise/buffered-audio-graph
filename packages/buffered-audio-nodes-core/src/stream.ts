@@ -47,6 +47,8 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 	protected readonly renderEvents: RenderEvents; // FIX: Why the qualifier of render events?
 	protected readonly renderStartedAt: number;
 
+	protected processingMs = 0;
+
 	private destroyed = false;
 
 	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
@@ -77,6 +79,27 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 
 	protected log(message: string, data?: Record<string, unknown>, level: "info" | "warn" = "info"): void {
 		this.renderEvents.emit("log", this.identity, { level, message, data, createdAt: Date.now() });
+	}
+
+	protected async *timed<T>(source: AsyncIterable<T> | Iterable<T>): AsyncGenerator<T> {
+		const iterator = (async function* () {
+			yield* source;
+		})();
+
+		try {
+			for (;;) {
+				const start = performance.now();
+				const result = await iterator.next();
+
+				this.processingMs += performance.now() - start;
+
+				if (result.done) return;
+
+				yield result.value;
+			}
+		} finally {
+			await iterator.return();
+		}
 	}
 
 	async destroy(): Promise<void> {

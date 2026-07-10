@@ -19,7 +19,6 @@ export interface SourceNodeProperties extends BufferedAudioNodeProperties {}
 
 export abstract class BufferedSourceStream<N extends BufferedAudioNode<SourceNodeProperties> = BufferedAudioNode<SourceNodeProperties>> extends BufferedStream<N> {
 	private framesRead = 0;
-	private processingMs = 0;
 	private hasStarted = false;
 
 	abstract getMetadata(): Promise<SourceMetadata>;

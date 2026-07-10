@@ -1,7 +1,9 @@
 export const PROGRESS_PERCENT_QUANTUM = 0.01;
 export const PROGRESS_MIN_INTERVAL_MS = 10_000;
 
-export function createProgressGate(framesTotal?: number): (framesDone: number, now: number) => boolean {
+export type ProgressGate = (framesDone: number, now: number) => boolean;
+
+export function createProgressGate(framesTotal?: number): ProgressGate {
 	let lastBucket = -1;
 	let lastEmitAt: number | undefined;
 

@@ -1,8 +1,9 @@
 import { BlockBuffer } from "./block-buffer";
 import type { Block, BufferedAudioNode, StreamContext } from "./node";
-import { createProgressGate } from "./progress-gate";
+import { createProgressGate, type ProgressGate } from "./progress-gate";
 import { BufferedStream, type StreamRenderContext } from "./stream";
 import type { TransformNodeProperties } from "./transform";
+import { toReadable } from "./utils/to-readable";
 
 export const WHOLE_FILE = Infinity;
 
@@ -11,16 +12,20 @@ export interface BufferedTransformNodeProperties extends TransformNodeProperties
 	readonly streamChunkSize?: number;
 }
 
-function iteratorOf(iterable: AsyncIterable<Block> | Iterable<Block>): AsyncIterator<Block> | Iterator<Block> {
-	if (Symbol.asyncIterator in iterable) return iterable[Symbol.asyncIterator]();
+function slice(block: Block, offset: number, frames: number): Block {
+	if (offset === 0 && frames === (block.samples[0]?.length ?? 0)) return block;
 
-	return iterable[Symbol.iterator]();
+	return {
+		samples: block.samples.map((channel) => channel.subarray(offset, offset + frames)),
+		offset: block.offset + offset,
+		sampleRate: block.sampleRate,
+		bitDepth: block.bitDepth,
+	};
 }
 
 export abstract class BufferedTransformStream<N extends BufferedAudioNode<BufferedTransformNodeProperties> = BufferedAudioNode<BufferedTransformNodeProperties>> extends BufferedStream<N> {
 	blockSize: number;
 
-	private processingMs = 0;
 	private framesBuffered = 0;
 	private framesEmitted = 0;
 
@@ -55,14 +60,8 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 		return this.properties.streamChunkSize;
 	}
 
-	setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
+	async setup(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.durationFrames;
-
-		return this.orchestrate(input, context);
-	}
-
-	private async orchestrate(input: ReadableStream<Block>, context: StreamContext): Promise<ReadableStream<Block>> {
-		// FIX: What is the point of this? Why not inline?
 		await this._setup(context);
 
 		return this._pipe(input);
@@ -73,174 +72,80 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 	}
 
 	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		// FIX: You're going to need to justify this method. We just replaced complexity with even more complexity.
-		const reader = input.getReader();
+		return toReadable(this.blocks(input));
+	}
+
+	private async *blocks(input: ReadableStream<Block>): AsyncGenerator<Block> {
+		const buffer = (this.buffer ??= new BlockBuffer());
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
 
-		let pending: { block: Block; offset: number } | undefined;
-		let iterator: AsyncIterator<Block> | Iterator<Block> | undefined;
-		let servingFlush = false;
-		let batchFrames = 0;
-		let inputEnded = false;
-		let flushDone = false;
+		try {
+			for await (const block of input) {
+				if (!this.hasStarted) {
+					this.hasStarted = true;
+					this.emitStarted();
+				}
 
-		const serve = (controller: ReadableStreamDefaultController<Block>, block: Block): void => {
+				this.inferredChunkSize ??= block.samples[0]?.length ?? 0;
+
+				const blockFrames = block.samples[0]?.length ?? 0;
+
+				for (let offset = 0; offset < blockFrames; ) {
+					const frames = this.blockSize === WHOLE_FILE ? blockFrames : Math.min(this.blockSize - buffer.frames, blockFrames - offset);
+					const start = performance.now();
+					const prepared = await this._prepare(slice(block, offset, frames));
+
+					await buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
+					this.processingMs += performance.now() - start;
+					offset += frames;
+					this.framesBuffered += frames;
+					if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+
+					if (this.blockSize !== WHOLE_FILE && buffer.frames >= this.blockSize) yield* this.batch(buffer, emitGate);
+				}
+			}
+
+			if (buffer.frames > 0) yield* this.batch(buffer, emitGate);
+
+			yield* this.chunked(this.timed(this._flush()), emitGate);
+
+			this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+			this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
+		} finally {
+			await this.destroy();
+		}
+	}
+
+	private async *batch(buffer: BlockBuffer, emitGate: ProgressGate): AsyncGenerator<Block> {
+		await buffer.flushWrites();
+
+		const batchFrames = buffer.frames;
+
+		if (this.blockSize === WHOLE_FILE) this.emitProgress("process", 0, batchFrames);
+
+		yield* this.chunked(this.timed(this._transform(buffer)), emitGate);
+
+		if (this.blockSize === WHOLE_FILE) this.emitProgress("process", batchFrames, batchFrames);
+
+		await buffer.clear();
+	}
+
+	private async *chunked(blocks: AsyncIterable<Block>, emitGate: ProgressGate): AsyncGenerator<Block> {
+		for await (const block of blocks) {
 			const frames = block.samples[0]?.length ?? 0;
 			const cap = this.outputChunkSize;
 
 			if (frames > cap) {
-				for (let start = 0; start < frames; start += cap) {
-					const take = Math.min(cap, frames - start);
-
-					controller.enqueue({
-						samples: block.samples.map((channel) => channel.subarray(start, start + take)),
-						offset: block.offset + start,
-						sampleRate: block.sampleRate,
-						bitDepth: block.bitDepth,
-					});
-				}
+				for (let start = 0; start < frames; start += cap) yield slice(block, start, Math.min(cap, frames - start));
 			} else {
-				controller.enqueue(block);
+				yield block;
 			}
 
 			this.framesEmitted += frames;
 			if (emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
-		};
-
-		// FIX: Please follow conventions around comments
-		// Writes into the buffer from `current`, advancing its offset. WHOLE_FILE writes the whole block and
-		// never signals a batch; block mode writes one blockSize-capped slice and returns true when the buffer
-		// has filled to blockSize (a batch is ready to serve).
-		const intake = async (current: { block: Block; offset: number }): Promise<boolean> => {
-			const buffer = (this.buffer ??= new BlockBuffer());
-			const blockFrames = current.block.samples[0]?.length ?? 0;
-			const start = performance.now();
-
-			if (this.blockSize === WHOLE_FILE) {
-				const prepared = await this._prepare(current.block);
-
-				await buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
-				current.offset = blockFrames;
-				this.processingMs += performance.now() - start;
-				this.framesBuffered += blockFrames;
-				if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-
-				return false;
-			}
-
-			const space = this.blockSize - buffer.frames;
-			const take = Math.min(space, blockFrames - current.offset);
-			const sliced: Block = {
-				samples: current.block.samples.map((channel) => channel.subarray(current.offset, current.offset + take)),
-				offset: current.block.offset + current.offset,
-				sampleRate: current.block.sampleRate,
-				bitDepth: current.block.bitDepth,
-			};
-			const prepared = await this._prepare(sliced);
-
-			await buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
-			current.offset += take;
-			this.processingMs += performance.now() - start;
-			this.framesBuffered += take;
-			if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-
-			return buffer.frames >= this.blockSize;
-		};
-
-		const beginBatch = async (): Promise<void> => {
-			const buffer = this.buffer;
-
-			if (!buffer) return;
-
-			await buffer.flushWrites();
-			batchFrames = buffer.frames;
-			servingFlush = false;
-			if (this.blockSize === WHOLE_FILE) this.emitProgress("process", 0, batchFrames);
-			iterator = this._transform(buffer)[Symbol.asyncIterator]();
-		};
-
-		return new ReadableStream<Block>({
-			pull: async (controller) => {
-				for (;;) {
-					if (iterator) {
-						const start = performance.now();
-						const result = await iterator.next();
-
-						this.processingMs += performance.now() - start;
-
-						if (!result.done) {
-							serve(controller, result.value);
-
-							return;
-						}
-
-						iterator = undefined;
-
-						if (!servingFlush) {
-							if (this.blockSize === WHOLE_FILE) this.emitProgress("process", batchFrames, batchFrames);
-							await this.buffer?.clear();
-						}
-
-						continue;
-					}
-
-					if (!inputEnded) {
-						if (!pending) {
-							const { value, done } = await reader.read();
-
-							if (done) {
-								inputEnded = true;
-
-								continue;
-							}
-
-							if (!this.hasStarted) {
-								this.hasStarted = true;
-								this.emitStarted();
-							}
-
-							this.inferredChunkSize ??= value.samples[0]?.length ?? 0;
-							pending = { block: value, offset: 0 };
-						}
-
-						const ready = await intake(pending);
-
-						if (pending.offset >= (pending.block.samples[0]?.length ?? 0)) pending = undefined;
-						if (ready) await beginBatch();
-
-						continue;
-					}
-
-					if (this.buffer && this.buffer.frames > 0) {
-						await beginBatch();
-
-						continue;
-					}
-
-					if (!flushDone) {
-						flushDone = true;
-						servingFlush = true;
-						iterator = iteratorOf(this._flush());
-
-						continue;
-					}
-
-					this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-					this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
-					this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
-					controller.close();
-					await this.destroy();
-
-					return;
-				}
-			},
-			cancel: async (reason) => {
-				await iterator?.return?.();
-				await reader.cancel(reason);
-				await this.destroy();
-			},
-		});
+		}
 	}
 
 	override async destroy(): Promise<void> {
