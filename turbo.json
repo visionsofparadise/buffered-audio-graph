@@ -17,6 +17,9 @@
     "integration": {
       "dependsOn": ["build"]
     },
+    "integration:heavy": {
+      "dependsOn": ["build"]
+    },
     "start": {},
     "lint": {
       "dependsOn": []

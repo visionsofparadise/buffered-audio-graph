@@ -1,20 +1,13 @@
-import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { Block } from "./block-buffer";
 import type { BufferedAudioNode } from "./node";
 import { BufferedSourceStream, SourceNode, type SourceMetadata } from "./source";
 import { BufferedTargetStream, TargetNode } from "./target";
+import { createBlock, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "./testing";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
 import { TransformNode } from "./transform";
-import { BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload, type RenderEvents, type StartedPayload, type StreamContext, type StreamIdentity, type StreamPhase, type StreamSetupContext } from "./stream";
-
-function renderContext(): { context: StreamContext; events: RenderEvents } {
-	const events: RenderEvents = new EventEmitter();
-	let counter = 0;
-
-	return { events, context: { events, nextStreamId: () => counter++ } };
-}
+import { BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload, type RenderEvents, type StartedPayload, type StreamIdentity, type StreamPhase } from "./stream";
 
 function fakeNode(nodeName: string, id?: string): BufferedAudioNode {
 	return { id, properties: { id }, constructor: { nodeName } } as unknown as BufferedAudioNode;
@@ -48,7 +41,7 @@ function collectProgress(events: RenderEvents): Array<ProgressPayload> {
 
 describe("BufferedStream identity", () => {
 	it("mints nodeName, nodeId, and an incrementing streamId per construction", () => {
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const a = new ProbeStream(fakeNode("gain", "id-a"), context);
 		const b = new ProbeStream(fakeNode("gain"), context);
 
@@ -61,7 +54,7 @@ describe("BufferedStream identity", () => {
 
 	it("reads properties through to the live node", () => {
 		const node = fakeNode("probe", "p");
-		const stream = new ProbeStream(node, renderContext().context);
+		const stream = new ProbeStream(node, createTestStreamContext().context);
 
 		expect(stream.properties).toBe(node.properties);
 	});
@@ -69,7 +62,7 @@ describe("BufferedStream identity", () => {
 
 describe("BufferedStream.emitProgress", () => {
 	it("emits on every call, carrying phase, frames, and createdAt", () => {
-		const { context, events } = renderContext();
+		const { context, events } = createTestStreamContext();
 		const stream = new ProbeStream(fakeNode("probe", "p"), context);
 		const collected = collectProgress(events);
 
@@ -83,7 +76,7 @@ describe("BufferedStream.emitProgress", () => {
 	});
 
 	it("emits with an undefined total when none is given", () => {
-		const { context, events } = renderContext();
+		const { context, events } = createTestStreamContext();
 		const stream = new ProbeStream(fakeNode("probe"), context);
 		const collected = collectProgress(events);
 
@@ -95,7 +88,7 @@ describe("BufferedStream.emitProgress", () => {
 
 describe("BufferedStream lifecycle emits", () => {
 	it("emitStarted carries a payload stamped with createdAt", () => {
-		const { context, events } = renderContext();
+		const { context, events } = createTestStreamContext();
 		const stream = new ProbeStream(fakeNode("probe"), context);
 		const payloads: Array<StartedPayload> = [];
 
@@ -106,7 +99,7 @@ describe("BufferedStream lifecycle emits", () => {
 	});
 
 	it("emitFinished stamps createdAt onto the payload", () => {
-		const { context, events } = renderContext();
+		const { context, events } = createTestStreamContext();
 		const stream = new ProbeStream(fakeNode("probe"), context);
 		const finished: Array<FinishedPayload> = [];
 
@@ -119,7 +112,7 @@ describe("BufferedStream lifecycle emits", () => {
 
 describe("BufferedStream.log", () => {
 	it("emits once with level, message, data, and createdAt", () => {
-		const { context, events } = renderContext();
+		const { context, events } = createTestStreamContext();
 		const stream = new ProbeStream(fakeNode("probe"), context);
 		const logs: Array<LogPayload> = [];
 
@@ -130,7 +123,7 @@ describe("BufferedStream.log", () => {
 	});
 
 	it("defaults to info", () => {
-		const { context, events } = renderContext();
+		const { context, events } = createTestStreamContext();
 		const stream = new ProbeStream(fakeNode("probe"), context);
 		const logs: Array<LogPayload> = [];
 
@@ -140,10 +133,6 @@ describe("BufferedStream.log", () => {
 		expect(logs[0]?.level).toBe("info");
 	});
 });
-
-function block(value: number, offset: number, frames: number): Block {
-	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
-}
 
 class LifeSourceStream extends BufferedSourceStream {
 	private index = 0;
@@ -201,7 +190,7 @@ class LifeTarget extends TargetNode {
 
 describe("Lifecycle events end-to-end", () => {
 	it("source emits started once and finished with framesDone; target finished with framesDone and createdAt", async () => {
-		const source = new LifeSource([block(1, 0, 100), block(2, 100, 100)]);
+		const source = new LifeSource([createBlock(1, 0, 100), createBlock(2, 100, 100)]);
 		const target = new LifeTarget();
 
 		source.to(target);
@@ -228,7 +217,7 @@ describe("Lifecycle events end-to-end", () => {
 	});
 
 	it("delivers events for all three nodes with correct identity and unique streamIds", async () => {
-		const source = new LifeSource([block(1, 0, 100)]);
+		const source = new LifeSource([createBlock(1, 0, 100)]);
 		const transform = new LifeTransform();
 		const target = new LifeTarget();
 
@@ -255,20 +244,6 @@ describe("Lifecycle events end-to-end", () => {
 	});
 });
 
-function destroyContext(): StreamSetupContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
-}
-
-async function drainReadable(readable: ReadableStream<Block>): Promise<void> {
-	const reader = readable.getReader();
-
-	for (;;) {
-		const { done } = await reader.read();
-
-		if (done) break;
-	}
-}
-
 class CountingSourceStream extends BufferedSourceStream {
 	destroyCount = 0;
 	private index = 0;
@@ -277,7 +252,7 @@ class CountingSourceStream extends BufferedSourceStream {
 		private readonly chunks: Array<Block>,
 		private readonly throwAt?: number,
 	) {
-		super(fakeNode("counting-source"), renderContext().context);
+		super(fakeNode("counting-source"), createTestStreamContext().context);
 	}
 
 	override async getMetadata(): Promise<SourceMetadata> {
@@ -304,7 +279,7 @@ class CountingTargetStream extends BufferedTargetStream {
 	destroyCount = 0;
 
 	constructor() {
-		super(fakeNode("counting-target"), renderContext().context);
+		super(fakeNode("counting-target"), createTestStreamContext().context);
 	}
 
 	override async _write(): Promise<void> {}
@@ -317,7 +292,7 @@ class CountingTargetStream extends BufferedTargetStream {
 
 describe("BufferedStream.destroy idempotency", () => {
 	it("runs _destroy exactly once across repeated destroy() calls", async () => {
-		const stream = new CountingSourceStream([block(1, 0, 10)]);
+		const stream = new CountingSourceStream([createBlock(1, 0, 10)]);
 
 		await stream.destroy();
 		await stream.destroy();
@@ -329,23 +304,23 @@ describe("BufferedStream.destroy idempotency", () => {
 
 describe("source stream-scoped destroy", () => {
 	it("graceful end-of-read invokes destroy once", async () => {
-		const stream = new CountingSourceStream([block(1, 0, 100), block(2, 100, 100)]);
+		const stream = new CountingSourceStream([createBlock(1, 0, 100), createBlock(2, 100, 100)]);
 
-		await drainReadable(await stream._setup(destroyContext()));
+		await drainBlocks(await stream._setup(createTestSetupContext()));
 
 		expect(stream.destroyCount).toBe(1);
 	});
 
 	it("read error invokes destroy once and surfaces the error", async () => {
-		const stream = new CountingSourceStream([block(1, 0, 100)], 0);
+		const stream = new CountingSourceStream([createBlock(1, 0, 100)], 0);
 
-		await expect(drainReadable(await stream._setup(destroyContext()))).rejects.toThrow("read boom");
+		await expect(drainBlocks(await stream._setup(createTestSetupContext()))).rejects.toThrow("read boom");
 		expect(stream.destroyCount).toBe(1);
 	});
 
 	it("consumer cancel invokes destroy once", async () => {
-		const stream = new CountingSourceStream([block(1, 0, 100), block(2, 100, 100)]);
-		const reader = (await stream._setup(destroyContext())).getReader();
+		const stream = new CountingSourceStream([createBlock(1, 0, 100), createBlock(2, 100, 100)]);
+		const reader = (await stream._setup(createTestSetupContext())).getReader();
 
 		await reader.read();
 		await reader.cancel("stop");
@@ -354,28 +329,11 @@ describe("source stream-scoped destroy", () => {
 	});
 });
 
-function readableOf(chunks: Array<Block>): ReadableStream<Block> {
-	let index = 0;
-
-	return new ReadableStream<Block>({
-		pull(controller) {
-			const value = chunks[index];
-
-			if (value) {
-				index += 1;
-				controller.enqueue(value);
-			} else {
-				controller.close();
-			}
-		},
-	});
-}
-
 describe("target stream-scoped destroy", () => {
 	it("graceful close invokes destroy once", async () => {
 		const target = new CountingTargetStream();
 
-		await target._setup(readableOf([block(1, 0, 100), block(2, 100, 100)]), destroyContext());
+		await target._setup(readableFrom([createBlock(1, 0, 100), createBlock(2, 100, 100)]), createTestSetupContext());
 
 		expect(target.destroyCount).toBe(1);
 	});
@@ -388,7 +346,7 @@ describe("target stream-scoped destroy", () => {
 			},
 		});
 
-		await expect(target._setup(erroring, destroyContext())).rejects.toThrow("upstream boom");
+		await expect(target._setup(erroring, createTestSetupContext())).rejects.toThrow("upstream boom");
 		expect(target.destroyCount).toBe(1);
 	});
 });

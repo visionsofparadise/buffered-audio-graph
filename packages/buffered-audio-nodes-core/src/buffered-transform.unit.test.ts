@@ -1,64 +1,18 @@
-import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { Block, BlockBuffer } from "./block-buffer";
 import { BufferedTransformStream, WHOLE_FILE } from "./buffered-transform";
 import type { BufferedAudioNode } from "./node";
-import type { ProgressPayload, RenderEvents, StreamContext, StreamSetupContext } from "./stream";
-
-function createBlock(value: number, offset: number, frames: number): Block {
-	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
-}
+import type { ProgressPayload, RenderEvents } from "./stream";
+import { createBlock, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "./testing";
 
 function nodeWith(properties: Record<string, unknown>): BufferedAudioNode {
 	return { properties, constructor: { nodeName: "probe-transform" } } as unknown as BufferedAudioNode;
-}
-
-function renderContext(): { context: StreamContext; events: RenderEvents } {
-	const events: RenderEvents = new EventEmitter();
-	let counter = 0;
-
-	return { events, context: { events, nextStreamId: () => counter++ } };
-}
-
-function execContext(durationFrames?: number): StreamSetupContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, durationFrames };
 }
 
 function collectProgress(events: RenderEvents): Array<ProgressPayload> {
 	const out: Array<ProgressPayload> = [];
 
 	events.on("progress", (_identity, payload) => out.push(payload));
-
-	return out;
-}
-
-function readableFrom(blocks: Array<Block>): ReadableStream<Block> {
-	let index = 0;
-
-	return new ReadableStream<Block>({
-		pull: (controller) => {
-			const block = blocks[index];
-
-			if (block) {
-				index += 1;
-				controller.enqueue(block);
-			} else {
-				controller.close();
-			}
-		},
-	});
-}
-
-async function drain(readable: ReadableStream<Block>): Promise<Array<Block>> {
-	const out: Array<Block> = [];
-	const reader = readable.getReader();
-
-	for (;;) {
-		const { done, value } = await reader.read();
-
-		if (done) break;
-		if (value) out.push(value);
-	}
 
 	return out;
 }
@@ -75,21 +29,21 @@ class RecordingTransformStream extends BufferedTransformStream {
 
 describe("BufferedTransformStream block-mode firing", () => {
 	it("block mode fires at exactly blockSize frames, then a trailing short block at end", async () => {
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new RecordingTransformStream(nodeWith({ blockSize: 64 }), context);
 		const input = [createBlock(1, 0, 100), createBlock(2, 100, 50)];
 
-		await drain(await stream.setup(readableFrom(input), execContext()));
+		await drainBlocks(await stream.setup(readableFrom(input), createTestSetupContext()));
 
 		expect(stream.firings).toEqual([64, 64, 22]);
 	});
 
 	it("WHOLE_FILE fires once at end with the full buffer", async () => {
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new RecordingTransformStream(nodeWith({ blockSize: WHOLE_FILE }), context);
 		const input = [createBlock(1, 0, 100), createBlock(2, 100, 100)];
 
-		await drain(await stream.setup(readableFrom(input), execContext()));
+		await drainBlocks(await stream.setup(readableFrom(input), createTestSetupContext()));
 
 		expect(stream.firings).toEqual([200]);
 	});
@@ -97,11 +51,11 @@ describe("BufferedTransformStream block-mode firing", () => {
 
 describe("BufferedTransformStream default transform (drain identity)", () => {
 	it("passes buffered audio through unchanged in WHOLE_FILE mode", async () => {
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new BufferedTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 50 }), context);
 		const input = [createBlock(0.5, 0, 100)];
 
-		const output = await drain(await stream.setup(readableFrom(input), execContext()));
+		const output = await drainBlocks(await stream.setup(readableFrom(input), createTestSetupContext()));
 
 		expect(output.reduce((sum, b) => sum + (b.samples[0]?.length ?? 0), 0)).toBe(100);
 		expect(output.every((b) => b.samples[0]?.[0] === 0.5)).toBe(true);
@@ -116,9 +70,9 @@ describe("BufferedTransformStream._prepare", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new DoublingStream(nodeWith({ blockSize: WHOLE_FILE }), context);
-		const output = await drain(await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext()));
+		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()));
 
 		expect(output[0]?.samples[0]?.[0]).toBe(2);
 	});
@@ -138,9 +92,9 @@ describe("BufferedTransformStream._flush", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new FlushingStream(nodeWith({ blockSize: WHOLE_FILE }), context);
-		const output = await drain(await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext()));
+		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()));
 
 		expect(stream.flushCalls).toBe(1);
 		expect(output.at(-1)?.samples[0]?.[0]).toBe(MARKER);
@@ -149,13 +103,13 @@ describe("BufferedTransformStream._flush", () => {
 
 describe("BufferedTransformStream.blockSize validation", () => {
 	it("throws when blockSize is 0", () => {
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 
 		expect(() => new BufferedTransformStream(nodeWith({ blockSize: 0 }), context)).toThrow(/blockSize/);
 	});
 
 	it("defaults to WHOLE_FILE when blockSize is absent", () => {
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new BufferedTransformStream(nodeWith({}), context);
 
 		expect(stream.blockSize).toBe(WHOLE_FILE);
@@ -172,9 +126,9 @@ describe("BufferedTransformStream oversized-yield re-slicing", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new BigYieldStream(nodeWith({ blockSize: 64, streamChunkSize: 100 }), context);
-		const output = await drain(await stream.setup(readableFrom([createBlock(1, 0, 64)]), execContext()));
+		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 64)]), createTestSetupContext()));
 
 		const pieces = output.filter((b) => b.samples[0]?.[0] === 3);
 
@@ -193,10 +147,10 @@ describe("BufferedTransformStream destroy", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new CountingStream(nodeWith({ blockSize: WHOLE_FILE }), context);
 
-		await drain(await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext()));
+		await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()));
 
 		expect(stream.destroyCount).toBe(1);
 	});
@@ -216,9 +170,9 @@ describe("BufferedTransformStream pull-paced serving", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new PacedStream(nodeWith({ blockSize: WHOLE_FILE }), context);
-		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext());
+		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext());
 		const reader = output.getReader();
 
 		const first = await reader.read();
@@ -253,9 +207,9 @@ describe("BufferedTransformStream pull-paced serving", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new CancelStream(nodeWith({ blockSize: WHOLE_FILE }), context);
-		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext());
+		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext());
 		const reader = output.getReader();
 
 		await reader.read();
@@ -269,11 +223,11 @@ describe("BufferedTransformStream pull-paced serving", () => {
 
 describe("BufferedTransformStream progress shape", () => {
 	it("emits buffer/emit progress with monotonic framesDone, completions at true totals, createdAt present", async () => {
-		const { context, events } = renderContext();
+		const { context, events } = createTestStreamContext();
 		const stream = new BufferedTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 10 }), context);
 		const progress = collectProgress(events);
 
-		await drain(await stream.setup(readableFrom([createBlock(0.5, 0, 100)]), execContext(100)));
+		await drainBlocks(await stream.setup(readableFrom([createBlock(0.5, 0, 100)]), createTestSetupContext({ durationFrames: 100 })));
 
 		const buffers = progress.filter((p) => p.phase === "buffer");
 		const emits = progress.filter((p) => p.phase === "emit");

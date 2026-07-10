@@ -1,64 +1,18 @@
-import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { Block } from "./block-buffer";
 import type { BufferedAudioNode } from "./node";
-import type { ProgressPayload, RenderEvents, StreamContext, StreamSetupContext } from "./stream";
+import type { ProgressPayload, RenderEvents } from "./stream";
+import { createBlock, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "./testing";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
-
-function createBlock(value: number, offset: number, frames: number): Block {
-	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
-}
 
 function nodeWith(properties: Record<string, unknown>): BufferedAudioNode {
 	return { properties, constructor: { nodeName: "probe-transform" } } as unknown as BufferedAudioNode;
-}
-
-function renderContext(): { context: StreamContext; events: RenderEvents } {
-	const events: RenderEvents = new EventEmitter();
-	let counter = 0;
-
-	return { events, context: { events, nextStreamId: () => counter++ } };
-}
-
-function execContext(durationFrames?: number): StreamSetupContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, durationFrames };
 }
 
 function collectProgress(events: RenderEvents): Array<ProgressPayload> {
 	const out: Array<ProgressPayload> = [];
 
 	events.on("progress", (_identity, payload) => out.push(payload));
-
-	return out;
-}
-
-function readableFrom(blocks: Array<Block>): ReadableStream<Block> {
-	let index = 0;
-
-	return new ReadableStream<Block>({
-		pull: (controller) => {
-			const block = blocks[index];
-
-			if (block) {
-				index += 1;
-				controller.enqueue(block);
-			} else {
-				controller.close();
-			}
-		},
-	});
-}
-
-async function drain(readable: ReadableStream<Block>): Promise<Array<Block>> {
-	const out: Array<Block> = [];
-	const reader = readable.getReader();
-
-	for (;;) {
-		const { done, value } = await reader.read();
-
-		if (done) break;
-		if (value) out.push(value);
-	}
 
 	return out;
 }
@@ -71,11 +25,11 @@ class GainStream extends UnbufferedTransformStream {
 
 describe("UnbufferedTransformStream._transform", () => {
 	it("transforms each block in arrival order", async () => {
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new GainStream(nodeWith({}), context);
 		const input = [createBlock(1, 0, 10), createBlock(2, 10, 10)];
 
-		const output = await drain(await stream.setup(readableFrom(input), execContext()));
+		const output = await drainBlocks(await stream.setup(readableFrom(input), createTestSetupContext()));
 
 		expect(output.map((b) => b.samples[0]?.[0])).toEqual([2, 4]);
 	});
@@ -87,9 +41,9 @@ describe("UnbufferedTransformStream._transform", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new DropOddStream(nodeWith({}), context);
-		const output = await drain(await stream.setup(readableFrom([createBlock(1, 0, 10), createBlock(2, 10, 10)]), execContext()));
+		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10), createBlock(2, 10, 10)]), createTestSetupContext()));
 
 		expect(output).toHaveLength(1);
 		expect(output[0]?.samples[0]?.[0]).toBe(2);
@@ -114,9 +68,9 @@ describe("UnbufferedTransformStream._flush", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new TrailingStream(nodeWith({}), context);
-		const output = await drain(await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext()));
+		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()));
 
 		expect(stream.flushCalls).toBe(1);
 		expect(output.at(-1)?.samples[0]?.[0]).toBe(MARKER);
@@ -137,10 +91,10 @@ describe("UnbufferedTransformStream._flush", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new TrailingStream(nodeWith({}), context);
 
-		await drain(await stream.setup(readableFrom([]), execContext()));
+		await drainBlocks(await stream.setup(readableFrom([]), createTestSetupContext()));
 
 		expect(stream.flushCalls).toBe(1);
 	});
@@ -156,10 +110,10 @@ describe("UnbufferedTransformStream destroy", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new CountingStream(nodeWith({}), context);
 
-		await drain(await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext()));
+		await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()));
 
 		expect(stream.destroyCount).toBe(1);
 	});
@@ -179,9 +133,9 @@ describe("UnbufferedTransformStream pull-paced serving", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new PacedStream(nodeWith({}), context);
-		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext());
+		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext());
 		const reader = output.getReader();
 
 		const first = await reader.read();
@@ -216,9 +170,9 @@ describe("UnbufferedTransformStream pull-paced serving", () => {
 			}
 		}
 
-		const { context } = renderContext();
+		const { context } = createTestStreamContext();
 		const stream = new CancelStream(nodeWith({}), context);
-		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), execContext());
+		const output = await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext());
 		const reader = output.getReader();
 
 		await reader.read();
@@ -232,11 +186,11 @@ describe("UnbufferedTransformStream pull-paced serving", () => {
 
 describe("UnbufferedTransformStream progress shape", () => {
 	it("emits buffer/emit progress with monotonic framesDone, completions at true totals, createdAt present", async () => {
-		const { context, events } = renderContext();
+		const { context, events } = createTestStreamContext();
 		const stream = new GainStream(nodeWith({}), context);
 		const progress = collectProgress(events);
 
-		await drain(await stream.setup(readableFrom([createBlock(1, 0, 100), createBlock(2, 100, 100)]), execContext(200)));
+		await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 100), createBlock(2, 100, 100)]), createTestSetupContext({ durationFrames: 200 })));
 
 		const buffers = progress.filter((p) => p.phase === "buffer");
 		const emits = progress.filter((p) => p.phase === "emit");

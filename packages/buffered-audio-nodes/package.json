@@ -33,9 +33,10 @@
     "lint:fix": "eslint . --fix",
     "build": "tsup",
     "docs": "tsx scripts/generate-docs.ts",
-    "unit": "vitest run unit",
-    "integration": "vitest run integration --fileParallelism=false",
-    "benchmark": "vitest run benchmark --fileParallelism=false"
+    "unit": "vitest run --project unit",
+    "integration": "vitest run --project integration",
+    "integration:heavy": "vitest run -c vitest.heavy.config.ts",
+    "benchmark": "vitest run -c vitest.benchmark.config.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

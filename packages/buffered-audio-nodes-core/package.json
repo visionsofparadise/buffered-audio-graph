@@ -6,6 +6,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing.js",
+      "types": "./dist/testing.d.ts"
     }
   },
   "files": [
@@ -29,7 +33,8 @@
     "lint:verbose": "eslint .",
     "lint:fix": "eslint . --fix",
     "build": "tsup",
-    "unit": "vitest run unit"
+    "unit": "vitest run --project unit",
+    "integration": "vitest run --project integration"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",
