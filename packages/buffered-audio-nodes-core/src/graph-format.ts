@@ -26,6 +26,7 @@ const graphEdgeSchema = z.object({
 const graphDefinitionSchema = z.object({
 	id: z.uuid(),
 	name: z.string().default("Untitled"),
+	apiVersion: z.number().int().min(1),
 	nodes: z.array(graphNodeSchema),
 	edges: z.array(graphEdgeSchema),
 });
@@ -94,6 +95,7 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 	const visited = new Set<BufferedAudioNode>();
 	const nodes: Array<GraphNode> = [];
 	const edges: Array<GraphEdge> = [];
+	const apiVersions: Array<{ packageName: string; nodeName: string; apiVersion: number }> = [];
 
 	const ensureId = (node: BufferedAudioNode): string => {
 		if (node.id) return node.id;
@@ -111,6 +113,8 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 		const ctor = node.constructor as typeof BufferedAudioNode;
 		const id = ensureId(node);
 		const parameters = ctor.schema.parse(node.properties);
+
+		apiVersions.push({ packageName: ctor.packageName, nodeName: ctor.nodeName, apiVersion: ctor.apiVersion });
 
 		const options: { bypass?: boolean } = {};
 
@@ -139,7 +143,17 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 		walk(source);
 	}
 
-	return graphDefinitionSchema.parse({ id: metadata?.id ?? randomUUID(), name: metadata?.name ?? "Untitled", nodes, edges });
+	const distinctVersions = new Set(apiVersions.map((entry) => entry.apiVersion));
+
+	if (distinctVersions.size > 1) {
+		const detail = apiVersions.map((entry) => `"${entry.nodeName}" (apiVersion ${entry.apiVersion})`).join(", ");
+
+		throw new Error(`Cannot pack nodes at differing apiVersions: ${detail}`);
+	}
+
+	const apiVersion = [...distinctVersions][0];
+
+	return graphDefinitionSchema.parse({ id: metadata?.id ?? randomUUID(), name: metadata?.name ?? "Untitled", apiVersion, nodes, edges });
 }
 
 const canConnect = (node: BufferedAudioNode): node is SourceNode | TransformNode => typeof (node as { to?: unknown }).to === "function";
@@ -156,6 +170,14 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 		const NodeClass = packageNodes.get(nodeDef.nodeName);
 
 		if (!NodeClass) throw new Error(`Unknown node: "${nodeDef.nodeName}" in package "${nodeDef.packageName}"`);
+
+		const classApiVersion = (NodeClass as unknown as typeof BufferedAudioNode).apiVersion;
+
+		if (classApiVersion !== definition.apiVersion) {
+			throw new Error(
+				`apiVersion mismatch for node "${nodeDef.nodeName}": class is apiVersion ${classApiVersion}, bag is apiVersion ${definition.apiVersion}`,
+			);
+		}
 
 		const instance = new NodeClass({
 			...(nodeDef.parameters ?? {}),

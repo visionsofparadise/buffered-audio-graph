@@ -29,6 +29,7 @@ function parseNodeProperties<P extends BufferedAudioNodeProperties>(schema: z.Zo
 export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> {
 	static readonly packageName: string;
 	static readonly packageVersion: string = "0.0.0";
+	static readonly apiVersion: number = 1;
 	static readonly nodeName: string;
 	static readonly description: string = "";
 	static readonly schema: z.ZodType = z.object({});

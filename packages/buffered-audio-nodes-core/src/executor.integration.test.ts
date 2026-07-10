@@ -236,6 +236,7 @@ describe("graph definition validation", () => {
 		const valid = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
+			apiVersion: 1,
 			nodes: [
 				{ id: "a", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "read" },
 				{ id: "b", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "write" },
@@ -249,6 +250,7 @@ describe("graph definition validation", () => {
 	it("defaults name to Untitled", () => {
 		const valid = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			apiVersion: 1,
 			nodes: [{ id: "a", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "read" }],
 			edges: [],
 		});
@@ -260,10 +262,73 @@ describe("graph definition validation", () => {
 		expect(() =>
 			validateGraphDefinition({
 				id: "not-a-uuid",
+				apiVersion: 1,
 				nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read" }],
 				edges: [],
 			}),
 		).toThrow();
+	});
+});
+
+describe("apiVersion enforcement", () => {
+	it("rejects a definition missing apiVersion", () => {
+		expect(() =>
+			validateGraphDefinition({
+				id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+				name: "Test",
+				nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read" }],
+				edges: [],
+			}),
+		).toThrow();
+	});
+
+	it("pack writes the uniform apiVersion into the definition", () => {
+		const source = new MockSource();
+		const target = new MockTarget();
+		source.to(target);
+
+		expect(pack([source]).apiVersion).toBe(1);
+	});
+
+	it("pack throws naming each offending node when statics disagree", () => {
+		class VersionTwoTarget extends TargetNode {
+			static readonly packageName = "test";
+			static readonly nodeName = "v2-target";
+			static override readonly apiVersion = 2;
+			static override readonly schema = z.object({});
+			static override readonly Stream = MockTargetStream;
+		}
+
+		const source = new MockSource();
+		const target = new VersionTwoTarget();
+		source.to(target);
+
+		expect(() => pack([source])).toThrow(/differing apiVersions/);
+		expect(() => pack([source])).toThrow(/"v2-target" \(apiVersion 2\)/);
+	});
+
+	it("unpack throws when a resolved class's apiVersion differs from the bag's", () => {
+		class VersionTwoSource extends SourceNode {
+			static readonly packageName = "test";
+			static readonly nodeName = "v2-source";
+			static override readonly apiVersion = 2;
+			static override readonly schema = z.object({});
+			static override readonly Stream = MockSourceStream;
+		}
+
+		const registry: NodeRegistry = new Map([
+			["test", new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([["v2-source", VersionTwoSource as never]])],
+		]);
+
+		const definition = validateGraphDefinition({
+			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			name: "Test",
+			apiVersion: 1,
+			nodes: [{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "v2-source" }],
+			edges: [],
+		});
+
+		expect(() => unpack(definition, registry)).toThrow(/apiVersion mismatch/);
 	});
 });
 
@@ -312,6 +377,7 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 		const definition = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
+			apiVersion: 1,
 			nodes: [
 				{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "mock-source" },
 				{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "defaulting-transform", parameters: { smoothing: 30 } },
@@ -330,7 +396,7 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 });
 
 function templatedDefinition(nodes: GraphDefinition["nodes"]): GraphDefinition {
-	return { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", name: "Test", nodes, edges: [] };
+	return { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", name: "Test", apiVersion: 1, nodes, edges: [] };
 }
 
 describe("substituteParameters", () => {
@@ -436,6 +502,7 @@ describe("createRenderJobs parameter substitution", () => {
 	const definition: GraphDefinition = {
 		id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		name: "Test",
+		apiVersion: 1,
 		nodes: [
 			{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "path-source", parameters: { path: "{{dir}}/in.wav" } },
 			{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "path-target", parameters: { path: "{{dir}}/out.wav" } },

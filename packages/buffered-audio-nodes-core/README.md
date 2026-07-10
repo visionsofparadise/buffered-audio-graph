@@ -276,6 +276,7 @@ BAG (Buffered Audio Graph) is a JSON format for serializing audio pipelines. A `
 
 - `id` — stable UUID identity, persistent across path changes
 - `name` — graph name
+- `apiVersion` — the core node-contract version every node in the graph speaks; required and uniform across the graph
 - `nodes` — flat array of `{ id, packageName, packageVersion, nodeName, parameters?, options? }`
 - `edges` — flat array of `{ from, to }` referencing node IDs
 

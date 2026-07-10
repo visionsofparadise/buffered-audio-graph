@@ -13,6 +13,7 @@ describe("package metadata", () => {
 
 		const definition = pack([source]);
 
+		expect(definition.apiVersion).toBe(1);
 		expect(definition.nodes).toHaveLength(2);
 		expect(definition.nodes).toMatchObject([
 			expect.objectContaining({
