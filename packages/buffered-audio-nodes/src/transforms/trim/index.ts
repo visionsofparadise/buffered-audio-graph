@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BufferedTransformStream, type BlockBuffer, TransformNode, WHOLE_FILE, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
-import { findFirstAbove, findLastAbove } from "./utils/silence";
+import { computeTrimRegion, findFirstAbove, findLastAbove } from "./utils/silence";
 
 export const schema = z.object({
 	threshold: z.number().min(0).max(1).multipleOf(0.001).default(0.001).describe("Threshold"),
@@ -44,18 +44,14 @@ export class TrimStream extends BufferedTransformStream<TrimNode> {
 		const channels = buffered.channels;
 
 		if (channels === 0 || frames === 0) return;
-		if (this.firstAbove >= frames) return;
 
 		const sr = buffered.sampleRate ?? 44100;
 		const marginFrames = Math.round(this.properties.margin * sr);
+		const region = computeTrimRegion(this.firstAbove, this.lastAbove, frames, marginFrames, this.properties.start, this.properties.end);
 
-		let startFrame = 0;
-		let endFrame = frames;
+		if (region === undefined) return;
 
-		if (this.properties.start) startFrame = Math.max(0, this.firstAbove - marginFrames);
-		if (this.properties.end) endFrame = Math.min(frames, this.lastAbove + 1 + marginFrames);
-
-		if (startFrame >= endFrame) return;
+		const { startFrame, endFrame } = region;
 
 		for await (const block of buffered.iterate(44100)) {
 			const blockFrames = block.samples[0]?.length ?? 0;

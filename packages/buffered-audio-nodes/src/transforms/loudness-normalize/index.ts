@@ -2,6 +2,7 @@ import { z } from "zod";
 import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { resolveLoudnessGain } from "./utils/gain";
 
 export const schema = z.object({
 	target: z.number().min(-50).max(0).multipleOf(0.1).default(-16).describe("Target integrated loudness (LUFS)"),
@@ -28,7 +29,7 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 
 	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const integrated = this.accumulator === undefined ? -Infinity : this.accumulator.finalize();
-		const gain = Number.isFinite(integrated) ? Math.pow(10, (this.properties.target - integrated) / 20) : 1;
+		const gain = resolveLoudnessGain(integrated, this.properties.target);
 
 		this.log("loudness measured", { integrated, gain, target: this.properties.target });
 

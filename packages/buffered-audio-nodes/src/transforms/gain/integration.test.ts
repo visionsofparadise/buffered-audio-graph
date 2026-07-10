@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Block } from "@buffered-audio/core";
-import { createTestStreamContext } from "@buffered-audio/core/testing";
+import { channelSamples, createTestStreamContext, runTransformStream } from "@buffered-audio/core/testing";
 import { gain, GainNode, GainStream } from ".";
 
 function makeStereoChunk(leftValue: number, rightValue: number, frames = 512): Block {
@@ -58,5 +58,17 @@ describe("GainNode", () => {
 
 		expect(output.samples[0]![0]).toBeCloseTo(0.1 * factor, 4);
 		expect(output.samples[1]![0]).toBeCloseTo(0.2 * factor, 4);
+	});
+
+	it("applies gain across a multi-block stream through the harness", async () => {
+		const factor = Math.pow(10, 6 / 20);
+		const { blocks, events } = await runTransformStream(gain({ gain: 6 }), [makeStereoChunk(0.25, 0.25, 256), makeStereoChunk(0.1, 0.1, 256)]);
+		const out = channelSamples(blocks, 0);
+
+		expect(out.length).toBe(512);
+		expect(out[0]).toBeCloseTo(0.25 * factor, 4);
+		expect(out[256]).toBeCloseTo(0.1 * factor, 4);
+		expect(events.some((event) => event.kind === "started")).toBe(true);
+		expect(events.some((event) => event.kind === "finished")).toBe(true);
 	});
 });

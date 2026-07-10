@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TruePeakAccumulator } from "@buffered-audio/utils";
 import type { Block } from "@buffered-audio/core";
-import { createTestSetupContext, createTestStreamContext, readableFrom } from "@buffered-audio/core/testing";
+import { channelSamples, createTestSetupContext, createTestStreamContext, readableFrom, runTransformStream } from "@buffered-audio/core/testing";
 import { truePeakNormalize, TruePeakNormalizeStream } from ".";
 
 const TEST_SAMPLE_RATE = 48_000;
@@ -229,6 +229,17 @@ describe("truePeakNormalize - apply", () => {
 			expect(Number.isFinite(sample)).toBe(true);
 			expect(sample).toBe(0);
 		}
+	});
+
+	it("normalises to the target true peak through the harness", async () => {
+		const target = -1;
+		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.5);
+		const { blocks } = await runTransformStream(truePeakNormalize({ target }), [{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]);
+		const out = channelSamples(blocks, 0);
+		const measuredDb = 20 * Math.log10(measureTruePeak([out], TEST_SAMPLE_RATE));
+
+		expect(out.length).toBe(input.length);
+		expect(Math.abs(measuredDb - target)).toBeLessThan(TARGET_TOLERANCE_DB);
 	});
 
 	it("matches single-chunk output when input is split across chunks", async () => {

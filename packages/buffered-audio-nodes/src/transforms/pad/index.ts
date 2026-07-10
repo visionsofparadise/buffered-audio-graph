@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
-import { CHUNK_FRAMES } from "./utils/chunk-frames";
+import { CHUNK_FRAMES, silenceChunkSizes } from "./utils/chunk-frames";
 
 export const schema = z.object({
 	before: z.number().min(0).multipleOf(0.001).default(0).describe("Before"),
@@ -58,18 +58,12 @@ export class PadStream extends UnbufferedTransformStream<PadNode> {
 
 		const trailing = Math.round(this.properties.after * this.capturedSampleRate);
 
-		if (trailing === 0) return;
-
-		let remaining = trailing;
-
-		while (remaining > 0) {
-			const take = Math.min(CHUNK_FRAMES, remaining);
+		for (const take of silenceChunkSizes(trailing, CHUNK_FRAMES)) {
 			const samples = Array.from({ length: this.capturedChannels }, () => new Float32Array(take));
 			const offset = this.outputOffset;
 
 			this.outputOffset += take;
 			yield { samples, offset, sampleRate: this.capturedSampleRate, bitDepth: this.capturedBitDepth };
-			remaining -= take;
 		}
 	}
 }

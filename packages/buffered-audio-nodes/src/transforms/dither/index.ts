@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { quantizationLevels, quantizeSample } from "./utils/quantize";
 
 export const schema = z.object({
 	bitDepth: z
@@ -17,8 +18,8 @@ export class DitherStream extends UnbufferedTransformStream<DitherNode> {
 
 	override *_transform(chunk: Block): Generator<Block> {
 		const { bitDepth, noiseShaping } = this.properties;
-		const quantizationLevels = Math.pow(2, bitDepth - 1);
-		const lsb = 1 / quantizationLevels;
+		const levels = quantizationLevels(bitDepth);
+		const lsb = 1 / levels;
 
 		while (this.lastError.length < chunk.samples.length) {
 			this.lastError.push(0);
@@ -37,7 +38,7 @@ export class DitherStream extends UnbufferedTransformStream<DitherNode> {
 					dithered += this.lastError[ch] ?? 0;
 				}
 
-				const quantized = Math.round(dithered * quantizationLevels) / quantizationLevels;
+				const quantized = quantizeSample(dithered, levels);
 
 				if (noiseShaping) {
 					this.lastError[ch] = dithered - quantized;

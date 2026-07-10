@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { applyAllpass, invertSamples, phaseCoefficient } from "./utils/phase-shift";
 
 export const schema = z.object({
 	invert: z.boolean().default(true).describe("Invert"),
@@ -31,38 +32,18 @@ export class PhaseStream extends UnbufferedTransformStream<PhaseNode> {
 	}
 
 	private applyInvert(chunk: Block): Block {
-		const samples = chunk.samples.map((channel) => {
-			const output = new Float32Array(channel.length);
-
-			for (let index = 0; index < channel.length; index++) {
-				output[index] = -(channel[index] ?? 0);
-			}
-
-			return output;
-		});
-
-		return { samples, offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		return { samples: invertSamples(chunk.samples), offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
 	}
 
 	private applyPhaseRotation(chunk: Block, angle: number): Block {
-		const radians = (angle * Math.PI) / 180;
-		const coefficient = Math.tan((radians - Math.PI) / 4);
+		const coefficient = phaseCoefficient(angle);
 
 		while (this.allpassState.length < chunk.samples.length) {
 			this.allpassState.push(0);
 		}
 
 		const samples = chunk.samples.map((channel, ch) => {
-			const output = new Float32Array(channel.length);
-			let state = this.allpassState[ch] ?? 0;
-
-			for (let index = 0; index < channel.length; index++) {
-				const input = channel[index] ?? 0;
-				const allpassOut = coefficient * input + state;
-
-				state = input - coefficient * allpassOut;
-				output[index] = allpassOut;
-			}
+			const { output, state } = applyAllpass(channel, coefficient, this.allpassState[ch] ?? 0);
 
 			this.allpassState[ch] = state;
 

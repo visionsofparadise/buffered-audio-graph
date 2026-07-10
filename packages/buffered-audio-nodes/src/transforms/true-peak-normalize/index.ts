@@ -2,6 +2,7 @@ import { z } from "zod";
 import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
 import { TruePeakAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { resolveTruePeakGain } from "./utils/gain";
 
 export const schema = z.object({
 	target: z.number().lt(0).default(-1).describe("Target true peak (dBTP). Must be < 0."),
@@ -53,18 +54,9 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 	private resolveGain(): number {
 		if (this.accumulator === undefined) return 1;
 
-		const sourcePeakLinear = this.accumulator.finalize();
+		const { gain, sourceTpDb } = resolveTruePeakGain(this.accumulator.finalize(), this.properties.target);
 
-		if (sourcePeakLinear <= 0) {
-			this.log("true peak measured", { sourceTpDb: -Infinity, targetDb: this.properties.target, gain: 1 });
-
-			return 1;
-		}
-
-		const sourcePeakDb = 20 * Math.log10(sourcePeakLinear);
-		const gain = Math.pow(10, (this.properties.target - sourcePeakDb) / 20);
-
-		this.log("true peak measured", { sourceTpDb: sourcePeakDb, targetDb: this.properties.target, gain });
+		this.log("true peak measured", { sourceTpDb, targetDb: this.properties.target, gain });
 
 		return gain;
 	}

@@ -21,3 +21,14 @@ export function findLastAbove(samples: Array<Float32Array>, frames: number, thre
 
 	return 0;
 }
+
+export function computeTrimRegion(firstAbove: number, lastAbove: number, frames: number, marginFrames: number, start: boolean, end: boolean): { startFrame: number; endFrame: number } | undefined {
+	if (firstAbove >= frames) return undefined;
+
+	const startFrame = start ? Math.max(0, firstAbove - marginFrames) : 0;
+	const endFrame = end ? Math.min(frames, lastAbove + 1 + marginFrames) : frames;
+
+	if (startFrame >= endFrame) return undefined;
+
+	return { startFrame, endFrame };
+}

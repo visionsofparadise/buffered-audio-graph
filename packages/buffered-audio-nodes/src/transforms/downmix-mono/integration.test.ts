@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Block } from "@buffered-audio/core";
-import { createTestStreamContext } from "@buffered-audio/core/testing";
+import { channelSamples, createTestStreamContext, runTransformStream } from "@buffered-audio/core/testing";
 import { downmixMono, DownmixMonoNode, DownmixMonoStream } from ".";
 
 function makeChunk(channelValues: Array<number>, frames = 256): Block {
@@ -54,5 +54,12 @@ describe("DownmixMonoNode", () => {
 	it("handles channels with different signs correctly", () => {
 		const output = applyDownmix(makeChunk([0.5, -0.5]));
 		expect(output.samples[0]![0]).toBeCloseTo(0.0, 5);
+	});
+
+	it("downmixes a stereo stream to mono through the harness", async () => {
+		const { blocks } = await runTransformStream(downmixMono(), [makeChunk([0.8, 0.4], 256)]);
+
+		expect(blocks[0]!.samples.length).toBe(1);
+		expect(channelSamples(blocks, 0)[0]).toBeCloseTo(0.6, 5);
 	});
 });

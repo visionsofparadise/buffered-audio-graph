@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Block } from "@buffered-audio/core";
-import { createTestStreamContext } from "@buffered-audio/core/testing";
+import { channelSamples, createTestStreamContext, runTransformStream } from "@buffered-audio/core/testing";
 import { pan, PanNode, PanStream } from ".";
 
 function makeMonoChunk(value: number, frames = 256): Block {
@@ -107,5 +107,13 @@ describe("PanNode", () => {
 
 			expect(() => Array.from(stream._transform(chunk))).toThrow(/PanNode supports 1 or 2 channel inputs only/);
 		});
+	});
+
+	it("pans a mono stream to stereo through the harness", async () => {
+		const { blocks } = await runTransformStream(pan({ pan: -1 }), [makeMonoChunk(1.0, 256)]);
+
+		expect(blocks[0]!.samples.length).toBe(2);
+		expect(channelSamples(blocks, 0)[0]).toBeCloseTo(1.0, 5);
+		expect(channelSamples(blocks, 1)[0]).toBeCloseTo(0.0, 5);
 	});
 });

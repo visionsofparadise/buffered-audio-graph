@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Block } from "@buffered-audio/core";
-import { channelSamples, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "@buffered-audio/core/testing";
+import { channelSamples, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom, runTransformStream } from "@buffered-audio/core/testing";
 import { trim, TrimStream } from ".";
 
 const SAMPLE_RATE = 44100;
@@ -190,5 +190,13 @@ describe("trim", () => {
 
 		expect(out.length).toBe(900);
 		for (let i = 0; i < 900; i++) expect(out[i]).toBe(0.5);
+	});
+
+	it("trims leading and trailing silence through the harness", async () => {
+		const { blocks } = await runTransformStream(trim({ margin: 0 }), [makeChunk(1000, 500, 800, 0.5)]);
+		const out = channelSamples(blocks, 0);
+
+		expect(out.length).toBe(500);
+		for (let i = 0; i < 500; i++) expect(out[i]).toBe(0.5);
 	});
 });

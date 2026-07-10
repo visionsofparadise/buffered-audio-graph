@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { computeKeepRanges } from "./utils/regions";
 
 const cutRegionSchema = z.object({
 	start: z.number().min(0).describe("Start (seconds)"),
@@ -26,31 +27,9 @@ export class CutStream extends UnbufferedTransformStream<CutNode> {
 	}
 
 	override *_transform(chunk: Block): Generator<Block> {
-		const sampleRate = chunk.sampleRate;
 		const chunkFrames = chunk.samples[0]?.length ?? 0;
-		const chunkStartSec = chunk.offset / sampleRate;
-		const keepRanges: Array<{ start: number; end: number }> = [];
-		let cursor = 0;
-
-		for (const region of this.sortedRegions) {
-			const cutStart = Math.max(0, Math.round((region.start - chunkStartSec) * sampleRate));
-			const cutEnd = Math.min(chunkFrames, Math.round((region.end - chunkStartSec) * sampleRate));
-
-			if (cutEnd <= 0 || cutStart >= chunkFrames) continue;
-
-			const clampedStart = Math.max(cursor, 0);
-			const clampedEnd = Math.max(clampedStart, cutStart);
-
-			if (clampedEnd > clampedStart) {
-				keepRanges.push({ start: clampedStart, end: clampedEnd });
-			}
-
-			cursor = Math.max(cursor, cutEnd);
-		}
-
-		if (cursor < chunkFrames) {
-			keepRanges.push({ start: cursor, end: chunkFrames });
-		}
+		const chunkStartSec = chunk.offset / chunk.sampleRate;
+		const keepRanges = computeKeepRanges(this.sortedRegions, chunkStartSec, chunk.sampleRate, chunkFrames);
 
 		if (keepRanges.length === 0) return;
 

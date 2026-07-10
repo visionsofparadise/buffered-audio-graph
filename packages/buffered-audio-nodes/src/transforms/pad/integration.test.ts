@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Block } from "@buffered-audio/core";
-import { channelSamples, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "@buffered-audio/core/testing";
+import { channelSamples, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom, runTransformStream } from "@buffered-audio/core/testing";
 import { pad, PadStream } from ".";
 
 const SAMPLE_RATE = 44100;
@@ -103,6 +103,21 @@ describe("pad", () => {
 		const out = await runPad({ before: 0.5, after: 0.5 }, []);
 
 		expect(out.length).toBe(0);
+	});
+
+	it("pads leading and trailing silence through the harness", async () => {
+		const before = 0.02;
+		const after = 0.03;
+		const leading = Math.round(before * SAMPLE_RATE);
+		const trailing = Math.round(after * SAMPLE_RATE);
+		const input = makeRamp(1000);
+
+		const { blocks } = await runTransformStream(pad({ before, after }), [input]);
+		const out = channelSamples(blocks, 0);
+
+		expect(out.length).toBe(leading + 1000 + trailing);
+		expect(out[0]).toBe(0);
+		expect(out[out.length - 1]).toBe(0);
 	});
 
 	it("produces identical output regardless of input chunking (chunking invariance)", async () => {

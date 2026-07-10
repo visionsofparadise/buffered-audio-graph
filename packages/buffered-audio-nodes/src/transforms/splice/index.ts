@@ -2,6 +2,7 @@ import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { readWavSamples } from "../../utils/read-to-buffer";
+import { applyInsert, computeInsertOverlap } from "./utils/insert";
 
 export const schema = z.object({
 	insertPath: z.string().default("").meta({ input: "file", mode: "open", accept: ".wav" }).describe("Insert File Path"),
@@ -46,21 +47,15 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 		}
 
 		const chunkFrames = chunk.samples[0]?.length ?? 0;
-		const chunkStart = chunk.offset;
-		const chunkEnd = chunkStart + chunkFrames;
-		const insertEnd = this.properties.insertAt + this.insertLength;
+		const overlap = computeInsertOverlap(chunk.offset, chunkFrames, this.properties.insertAt, this.insertLength);
 
-		if (chunkEnd <= this.properties.insertAt || chunkStart >= insertEnd) {
+		if (overlap === undefined) {
 			yield chunk;
 
 			return;
 		}
 
 		const samples = chunk.samples.map((channel) => new Float32Array(channel));
-
-		const overlapStart = Math.max(0, this.properties.insertAt - chunkStart);
-		const overlapEnd = Math.min(chunkFrames, insertEnd - chunkStart);
-		const insertOffset = Math.max(0, chunkStart - this.properties.insertAt);
 
 		const targetChannels = this.properties.channels;
 
@@ -74,14 +69,7 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 
 				if (!channelSamples || !insertChannel) continue;
 
-				for (let frame = overlapStart; frame < overlapEnd; frame++) {
-					const insertIndex = insertOffset + frame - overlapStart;
-					const insertSample = insertChannel[insertIndex];
-
-					if (insertSample !== undefined) {
-						channelSamples[frame] = insertSample;
-					}
-				}
+				applyInsert(channelSamples, insertChannel, overlap);
 			}
 		} else {
 			for (let ch = 0; ch < samples.length; ch++) {
@@ -90,14 +78,7 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 
 				if (!channelSamples || !insertChannel) continue;
 
-				for (let frame = overlapStart; frame < overlapEnd; frame++) {
-					const insertIndex = insertOffset + frame - overlapStart;
-					const insertSample = insertChannel[insertIndex];
-
-					if (insertSample !== undefined) {
-						channelSamples[frame] = insertSample;
-					}
-				}
+				applyInsert(channelSamples, insertChannel, overlap);
 			}
 		}
 

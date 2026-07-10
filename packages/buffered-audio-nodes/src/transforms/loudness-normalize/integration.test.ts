@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { WaveFile } from "wavefile";
-import { createTestSetupContext, createTestStreamContext, readableFrom } from "@buffered-audio/core/testing";
+import { channelSamples, createTestSetupContext, createTestStreamContext, readableFrom, runTransformStream } from "@buffered-audio/core/testing";
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { read } from "../../sources/read";
 import { write } from "../../targets/write";
@@ -154,6 +154,16 @@ describe("LoudnessNormalize", () => {
 		expect(saw1).toBe(true);
 		expect(Math.abs(observedPeak - expectedPeak)).toBeLessThan(1e-3);
 	}, TEST_TIMEOUT_MS);
+
+	it("normalises to the target LUFS through the harness", async () => {
+		const target = -16;
+		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
+		const { blocks } = await runTransformStream(loudnessNormalize({ target }), [{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]);
+		const out = channelSamples(blocks, 0);
+
+		expect(out.length).toBe(input.length);
+		expect(Math.abs(measureLufs([out], TEST_SAMPLE_RATE) - target)).toBeLessThan(0.1);
+	}, 60_000);
 
 	it("renders end-to-end with no ffmpeg involvement", async () => {
 		// ESM namespace exports can't be patched in vitest (`Cannot redefine property: spawn`), so drive

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { findPeak, resolveScale } from "./utils/peak";
 
 export const schema = z.object({
 	ceiling: z.number().min(0).max(1).multipleOf(0.01).default(1.0).describe("Ceiling"),
@@ -14,22 +15,13 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeNode> {
 	private peak = 0;
 
 	override _prepare(block: Block): Block {
-		for (let ch = 0; ch < block.samples.length; ch++) {
-			const channel = block.samples[ch] ?? new Float32Array(0);
-
-			for (let si = 0; si < channel.length; si++) {
-				const absolute = Math.abs(channel[si] ?? 0);
-
-				if (Number.isFinite(absolute) && absolute > this.peak) this.peak = absolute;
-			}
-		}
+		this.peak = Math.max(this.peak, findPeak(block.samples));
 
 		return block;
 	}
 
 	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
-		const raw = this.peak === 0 ? 1 : this.properties.ceiling / this.peak;
-		const scale = Number.isFinite(raw) ? raw : 1;
+		const scale = resolveScale(this.peak, this.properties.ceiling);
 
 		this.log("peak measured", { peak: this.peak, scale, ceiling: this.properties.ceiling });
 

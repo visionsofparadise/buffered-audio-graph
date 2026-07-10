@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { balanceScales, panGains } from "./utils/pan-law";
 
 export const schema = z.object({
 	pan: z.number().min(-1).max(1).multipleOf(0.01).default(0).describe("Pan (-1 = full left, 0 = center, 1 = full right)"),
@@ -17,9 +18,7 @@ export class PanStream extends UnbufferedTransformStream<PanNode> {
 			throw new Error(`PanNode supports 1 or 2 channel inputs only, got ${channels}`);
 		}
 
-		const theta = ((pan + 1) / 2) * (Math.PI / 2);
-		const leftGain = Math.cos(theta);
-		const rightGain = Math.sin(theta);
+		const { leftGain, rightGain } = panGains(pan);
 
 		if (channels === 1) {
 			const mono = chunk.samples[0] ?? new Float32Array(0);
@@ -45,8 +44,7 @@ export class PanStream extends UnbufferedTransformStream<PanNode> {
 		const outputLeft = new Float32Array(frames);
 		const outputRight = new Float32Array(frames);
 
-		const leftScale = Math.min(1, 1 - pan);
-		const rightScale = Math.min(1, 1 + pan);
+		const { leftScale, rightScale } = balanceScales(pan);
 
 		for (let index = 0; index < frames; index++) {
 			outputLeft[index] = (inputLeft[index] ?? 0) * leftScale;

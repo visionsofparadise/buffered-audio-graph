@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Block } from "@buffered-audio/core";
-import { createTestStreamContext } from "@buffered-audio/core/testing";
+import { channelSamples, createTestStreamContext, runTransformStream } from "@buffered-audio/core/testing";
 import { duplicateChannels, DuplicateChannelsNode, DuplicateChannelsStream } from ".";
 
 function makeMonoChunk(value: number, frames = 256): Block {
@@ -75,5 +75,13 @@ describe("DuplicateChannelsNode", () => {
 		};
 
 		expect(() => Array.from(stream._transform(chunk))).toThrow(/DuplicateChannelsNode requires exactly 1 input channel/);
+	});
+
+	it("duplicates a mono stream through the harness", async () => {
+		const { blocks } = await runTransformStream(duplicateChannels({ channels: 3 }), [makeMonoChunk(0.7, 256)]);
+
+		expect(blocks[0]!.samples.length).toBe(3);
+		expect(channelSamples(blocks, 0)[0]).toBeCloseTo(0.7, 5);
+		expect(channelSamples(blocks, 2)[0]).toBeCloseTo(0.7, 5);
 	});
 });
