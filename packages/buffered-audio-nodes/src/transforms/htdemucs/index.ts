@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { bandpass, ResampleStream } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
@@ -53,7 +53,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 
 	private session!: OnnxSession;
 
-	override _setup(_context: StreamContext): void {
+	override _setup(_context: StreamSetupContext): void {
 		// CPU-only: DML session-create throw; see design-onnx-providers.
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
 	}

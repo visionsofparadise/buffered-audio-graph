@@ -1,10 +1,10 @@
 import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block, RenderEvents, StreamRenderContext } from "@buffered-audio/core";
+import type { Block, RenderEvents, StreamContext } from "@buffered-audio/core";
 import { pan, PanNode, PanStream } from ".";
 
-function renderContext(): StreamRenderContext {
-	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+function renderContext(): StreamContext {
+	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
 }
 
 function makeMonoChunk(value: number, frames = 256): Block {

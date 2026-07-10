@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
 
@@ -50,11 +50,11 @@ export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> ex
 export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends BufferedTransformStream<Vst3Node<P>> {
 	override blockSize = WHOLE_FILE;
 
-	private streamContext?: StreamContext;
+	private streamContext?: StreamSetupContext;
 	private stagesJsonPath?: string;
 	private stagesJsonCleanup?: () => Promise<void>;
 
-	override async _setup(context: StreamContext): Promise<void> {
+	override async _setup(context: StreamSetupContext): Promise<void> {
 		this.streamContext = context;
 
 		const { path, cleanup } = await writeStagesJson(this.properties.stages);

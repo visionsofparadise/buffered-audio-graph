@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { readWavSamples } from "../../utils/read-to-buffer";
 
@@ -18,7 +18,7 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 	private insertLength = 0;
 	private sampleRateChecked = false;
 
-	override async _setup(_context: StreamContext): Promise<void> {
+	override async _setup(_context: StreamSetupContext): Promise<void> {
 		const { samples, sampleRate } = await readWavSamples(this.properties.insertPath);
 
 		const targetChannels = this.properties.channels;

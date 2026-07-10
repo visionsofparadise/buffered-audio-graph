@@ -5,18 +5,18 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { WaveFile } from "wavefile";
-import type { Block, RenderEvents, StreamContext, StreamRenderContext } from "@buffered-audio/core";
+import type { Block, RenderEvents, StreamSetupContext, StreamContext } from "@buffered-audio/core";
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { read } from "../../sources/read";
 import { write } from "../../targets/write";
 import { loudnessNormalize, LoudnessNormalizeStream } from ".";
 
-function execContext(): StreamContext {
+function execContext(): StreamSetupContext {
 	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
 }
 
-function renderContext(): StreamRenderContext {
-	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+function renderContext(): StreamContext {
+	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
 }
 
 function readableFrom(blocks: Array<Block>): ReadableStream<Block> {

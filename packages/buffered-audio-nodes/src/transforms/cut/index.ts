@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type BufferedAudioNode, type StreamRenderContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type BufferedAudioNode, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
 const cutRegionSchema = z.object({
@@ -19,7 +19,7 @@ export class CutStream extends UnbufferedTransformStream<CutNode> {
 	private sortedRegions: Array<CutRegion>;
 	private removedFrames = 0;
 
-	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
+	constructor(node: BufferedAudioNode, context: StreamContext) {
 		super(node, context);
 
 		this.sortedRegions = [...this.properties.regions].sort((left, right) => left.start - right.start);

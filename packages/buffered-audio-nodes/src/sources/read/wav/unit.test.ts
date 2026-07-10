@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
-import type { RenderEvents, StreamRenderContext } from "@buffered-audio/core";
+import type { RenderEvents, StreamContext } from "@buffered-audio/core";
 import { ReadWavNode, ReadWavStream, readWav } from ".";
 import { read } from "..";
 import { write } from "../../../targets/write";
@@ -13,8 +13,8 @@ import { audio } from "../../../utils/test-binaries";
 
 const testVoice = audio.testVoice;
 
-function renderContext(): StreamRenderContext {
-	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+function renderContext(): StreamContext {
+	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
 }
 
 describe("ReadWavNode", () => {

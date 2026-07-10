@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { waitForDrain } from "../../utils/ffmpeg";
 import { getBytesPerSample, writeSample, buildWavHeader, buildRf64Header } from "./utils/wav";
@@ -63,7 +63,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 	private useEncoding = false;
 	private initialized = false;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<void> {
+	override async _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
 		this.bytesWritten = 0;
 		this.initialized = false;
 

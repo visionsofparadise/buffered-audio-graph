@@ -1,10 +1,10 @@
 import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block, RenderEvents, StreamRenderContext } from "@buffered-audio/core";
+import type { Block, RenderEvents, StreamContext } from "@buffered-audio/core";
 import { dither, DitherStream } from ".";
 
-function renderContext(): StreamRenderContext {
-	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+function renderContext(): StreamContext {
+	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
 }
 
 function applyDither(bitDepth: 16 | 24, input: Float32Array): Block {

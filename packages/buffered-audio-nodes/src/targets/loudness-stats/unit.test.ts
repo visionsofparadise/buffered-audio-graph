@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it } from "vitest";
-import { type Block, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
+import { type Block, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
 import { loudnessStats, LoudnessStatsStream } from ".";
 import { read } from "../../sources/read";
 import { audio } from "../../utils/test-binaries";
@@ -11,8 +11,8 @@ import { audio } from "../../utils/test-binaries";
 const testVoice = audio.testVoice;
 const TEST_SAMPLE_RATE = 48_000;
 
-function renderContext(): StreamRenderContext {
-	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+function renderContext(): StreamContext {
+	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
 }
 
 async function runStats(channels: ReadonlyArray<Float32Array>, sampleRate: number, options?: { bucketCount?: number; outputPath?: string }): Promise<NonNullable<LoudnessStatsStream["stats"]>> {
@@ -24,7 +24,7 @@ async function runStats(channels: ReadonlyArray<Float32Array>, sampleRate: numbe
 			controller.close();
 		},
 	});
-	const context: StreamContext = {
+	const context: StreamSetupContext = {
 		executionProviders: ["cpu"],
 		memoryLimit: Number.POSITIVE_INFINITY,
 		highWaterMark: 1,
@@ -198,7 +198,7 @@ describe("loudness-stats", () => {
 				controller.close();
 			},
 		});
-		const context: StreamContext = {
+		const context: StreamSetupContext = {
 			executionProviders: ["cpu"],
 			memoryLimit: Number.POSITIVE_INFINITY,
 			highWaterMark: 1,

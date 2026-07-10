@@ -1,6 +1,6 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { AmplitudeHistogramAccumulator, LoudnessAccumulator, TruePeakAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 
@@ -40,7 +40,7 @@ export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsNode>
 		return this._stats;
 	}
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<void> {
+	override async _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
 		if (this.properties.outputPath !== "") {
 			this.fileHandle = await open(this.properties.outputPath, "w");
 		}

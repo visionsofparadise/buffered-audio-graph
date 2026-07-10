@@ -1,6 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { UnbufferedTransformStream, TransformNode, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { interleave } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { appendStderr, buildInputArgs, buildOutputArgs, parseStdoutFrames, spawnFfmpegChild } from "./utils/process";
@@ -13,14 +13,14 @@ export const schema = z.object({
 
 export interface FfmpegProperties extends TransformNodeProperties {
 	readonly ffmpegPath: string;
-	readonly args?: Array<string> | ((context: StreamContext) => Array<string>);
+	readonly args?: Array<string> | ((context: StreamSetupContext) => Array<string>);
 	readonly outputSampleRate?: number;
 }
 
 const TEARDOWN_KILL_GRACE_MS = 2000;
 
 export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends UnbufferedTransformStream<FfmpegNode<P>> {
-	private streamContext?: StreamContext;
+	private streamContext?: StreamSetupContext;
 
 	private child?: ChildProcessWithoutNullStreams;
 	private readonly pending: Array<Block> = [];
@@ -34,11 +34,11 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	private inputSampleRate = 0;
 	private inputChannels = 0;
 
-	override _setup(context: StreamContext): void {
+	override _setup(context: StreamSetupContext): void {
 		this.streamContext = context;
 	}
 
-	protected _buildArgs(context: StreamContext): Array<string> {
+	protected _buildArgs(context: StreamSetupContext): Array<string> {
 		const { args } = this.properties;
 
 		if (!args) return [];
@@ -193,7 +193,7 @@ export class FfmpegNode<P extends FfmpegProperties = FfmpegProperties> extends T
 	static override readonly Stream = FfmpegStream;
 }
 
-export function ffmpeg(options: { ffmpegPath: string; args: Array<string> | ((context: StreamContext) => Array<string>); outputSampleRate?: number; id?: string }): FfmpegNode {
+export function ffmpeg(options: { ffmpegPath: string; args: Array<string> | ((context: StreamSetupContext) => Array<string>); outputSampleRate?: number; id?: string }): FfmpegNode {
 	return new FfmpegNode({
 		ffmpegPath: options.ffmpegPath,
 		args: options.args,

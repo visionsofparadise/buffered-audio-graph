@@ -1,16 +1,16 @@
 import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import type { Block, RenderEvents, StreamContext, StreamRenderContext } from "@buffered-audio/core";
+import type { Block, RenderEvents, StreamSetupContext, StreamContext } from "@buffered-audio/core";
 import { trim, TrimStream } from ".";
 
 const SAMPLE_RATE = 44100;
 
-function context(): StreamContext {
+function context(): StreamSetupContext {
 	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
 }
 
-function renderContext(): StreamRenderContext {
-	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+function renderContext(): StreamContext {
+	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
 }
 
 function readableFrom(chunks: Array<Block>): ReadableStream<Block> {

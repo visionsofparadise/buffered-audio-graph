@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight DSP loops with bounds-checked typed array access */
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { applyDfttSmoothing, applyNlmSmoothing, getFftAddon, initFftBackend, istft, stft, type FftBackend, type StftOutput, type StftResult } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { readToBuffer } from "../../utils/read-to-buffer";
@@ -183,7 +183,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 	private chunkFrames!: number;
 	private numBins!: number;
 
-	override async _setup(context: StreamContext): Promise<void> {
+	override async _setup(context: StreamSetupContext): Promise<void> {
 		const fft = initFftBackend(context.executionProviders, this.properties);
 
 		this.fftBackend = fft.backend;

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { initFftBackend, ResampleStream, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
@@ -59,7 +59,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 	private fftBackend?: FftBackend;
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
 
-	override _setup(context: StreamContext): void {
+	override _setup(context: StreamSetupContext): void {
 		const onnxProviders = filterOnnxProviders(context.executionProviders);
 
 		this.session1 = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath1, { executionProviders: onnxProviders }, (message, data) => this.log(message, data));

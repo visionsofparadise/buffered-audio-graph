@@ -1,9 +1,9 @@
 import { Command } from "commander";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createRenderJobs, validateGraphDefinition, BufferedSourceStream, SourceNode, type NodeIdentity, type StartedPayload, type ProgressPayload, type FinishedPayload, type LogPayload, type NodeRegistry, type BufferedAudioNode, type RenderEvents, type RenderJob } from "@buffered-audio/core";
+import { createRenderJobs, validateGraphDefinition, BufferedSourceStream, SourceNode, type StreamIdentity, type StartedPayload, type ProgressPayload, type FinishedPayload, type LogPayload, type NodeRegistry, type BufferedAudioNode, type RenderEvents, type RenderJob } from "@buffered-audio/core";
 
-const labelOf = (identity: NodeIdentity): string => (identity.nodeId !== undefined ? `${identity.nodeName}#${identity.nodeId}` : `${identity.nodeName}#${identity.streamId}`);
+const labelOf = (identity: StreamIdentity): string => (identity.nodeId !== undefined ? `${identity.nodeName}#${identity.nodeId}` : `${identity.nodeName}#${identity.streamId}`);
 
 function sourceLabel(job: RenderJob): string | undefined {
 	for (const streams of job.streams.values()) {
@@ -64,11 +64,11 @@ function createEventSink(): EventSink {
 	const totals = new Map<number, { label: string; framesDone: number; processingMs?: number }>();
 
 	const subscribe = (events: RenderEvents): void => {
-		events.on("started", (node: NodeIdentity, payload: StartedPayload) => {
+		events.on("started", (node: StreamIdentity, payload: StartedPayload) => {
 			process.stdout.write(`${stamp(payload.createdAt)} [${labelOf(node)}] started\n`);
 		});
 
-		events.on("progress", (node: NodeIdentity, payload: ProgressPayload) => {
+		events.on("progress", (node: StreamIdentity, payload: ProgressPayload) => {
 			const label = labelOf(node);
 
 			if (payload.framesTotal !== undefined) {
@@ -80,7 +80,7 @@ function createEventSink(): EventSink {
 			}
 		});
 
-		events.on("log", (node: NodeIdentity, payload: LogPayload) => {
+		events.on("log", (node: StreamIdentity, payload: LogPayload) => {
 			const data = payload.data ? Object.entries(payload.data).map(([key, value]) => `${key}=${String(value)}`) : [];
 			const parts = [payload.message, ...data].join(" ");
 			const prefix = payload.level === "warn" ? "warn: " : "";
@@ -88,7 +88,7 @@ function createEventSink(): EventSink {
 			process.stdout.write(`${stamp(payload.createdAt)} ${prefix}[${labelOf(node)}] ${parts}\n`);
 		});
 
-		events.on("finished", (node: NodeIdentity, payload: FinishedPayload) => {
+		events.on("finished", (node: StreamIdentity, payload: FinishedPayload) => {
 			totals.set(node.streamId, { label: labelOf(node), framesDone: payload.framesDone, processingMs: payload.processingMs });
 
 			const ms = payload.processingMs !== undefined ? ` ms=${Math.round(payload.processingMs)}` : "";

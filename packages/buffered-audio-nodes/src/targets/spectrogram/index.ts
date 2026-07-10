@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { detectFftBackend, getFftAddon, createFftWorkspace, hanningWindow, type FftWorkspace } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { computeSpectrogramFrames } from "./utils/frames";
@@ -57,7 +57,7 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 
 	private initialized = false;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<void> {
+	override async _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
 		this.linearBins = this.properties.fftSize / 2 + 1;
 		this.windowCoefficients = hanningWindow(this.properties.fftSize);
 		this.workspace = createFftWorkspace(this.properties.fftSize);

@@ -2,15 +2,15 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { TruePeakAccumulator } from "@buffered-audio/utils";
-import { type Block, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
+import { type Block, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
 import { schema, truePeakNormalize, TruePeakNormalizeStream } from ".";
 
-function execContext(): StreamContext {
+function execContext(): StreamSetupContext {
 	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
 }
 
-function renderContext(): StreamRenderContext {
-	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+function renderContext(): StreamContext {
+	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
 }
 
 function readableFrom(blocks: Array<Block>): ReadableStream<Block> {

@@ -3,7 +3,7 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type StreamRenderContext } from "@buffered-audio/core";
+import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type StreamContext } from "@buffered-audio/core";
 import { read } from "../sources/read";
 import { write } from "../targets/write";
 import { readWavSamples } from "../utils/read-to-buffer";
@@ -40,7 +40,7 @@ class ErrorTransform extends TransformNode {
 class ScaleStream extends UnbufferedTransformStream {
 	constructor(
 		node: BufferedAudioNode,
-		context: StreamRenderContext,
+		context: StreamContext,
 		private readonly factor: number,
 	) {
 		super(node, context);
@@ -62,7 +62,7 @@ class CompositeStream extends UnbufferedTransformStream {
 	private readonly first: ScaleStream;
 	private readonly second: ScaleStream;
 
-	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
+	constructor(node: BufferedAudioNode, context: StreamContext) {
 		super(node, context);
 		this.first = new ScaleStream(this.node, context, 2);
 		this.second = new ScaleStream(this.node, context, 0.5);

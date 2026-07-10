@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, type BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, type BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { initFftBackend, linearToDb, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { LATTICE_ORDER } from "./utils/lattice";
@@ -43,7 +43,7 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceNode> 
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
 	private truePeakAccumulator?: TruePeakArgmaxAccumulator;
 
-	override _setup(context: StreamContext): void {
+	override _setup(context: StreamSetupContext): void {
 		const fft = initFftBackend(context.executionProviders, this.properties);
 
 		this.fftBackend = fft.backend;

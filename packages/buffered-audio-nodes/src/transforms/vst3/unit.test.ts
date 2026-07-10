@@ -1,15 +1,15 @@
 import { EventEmitter } from "node:events";
 import { describe, it, expect } from "vitest";
-import { type Block, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
+import { type Block, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
 import { schema, vst3, Vst3Node, Vst3PassthroughStream, Vst3Stream } from ".";
 
-const buildContext = (): StreamContext => ({
+const buildContext = (): StreamSetupContext => ({
 	executionProviders: ["cpu"],
 	memoryLimit: 64 * 1024 * 1024,
 	highWaterMark: 1,
 });
 
-const renderContext = (): StreamRenderContext => ({ events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 });
+const renderContext = (): StreamContext => ({ events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 });
 
 const collect = async (readable: ReadableStream<Block>): Promise<Array<Block>> => {
 	const blocks: Array<Block> = [];

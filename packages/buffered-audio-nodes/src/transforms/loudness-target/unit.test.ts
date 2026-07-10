@@ -2,17 +2,17 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
-import { type Block, BlockBuffer, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
+import { type Block, BlockBuffer, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
 import { loudnessTarget, LoudnessTargetStream } from ".";
 
 const TEST_SAMPLE_RATE = 48_000;
 
-function execContext(): StreamContext {
+function execContext(): StreamSetupContext {
 	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16 };
 }
 
-function renderContext(): StreamRenderContext {
-	return { events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 };
+function renderContext(): StreamContext {
+	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
 }
 
 function readableFrom(blocks: Array<Block>): ReadableStream<Block> {

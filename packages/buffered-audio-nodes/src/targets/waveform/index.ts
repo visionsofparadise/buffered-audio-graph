@@ -1,6 +1,6 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, type Block, type StreamContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { updateMinMax, writeMinMaxPoint } from "./utils/minmax";
 
@@ -31,7 +31,7 @@ export class WaveformStream extends BufferedTargetStream<WaveformNode> {
 
 	private initialized = false;
 
-	override async _setup(input: ReadableStream<Block>, context: StreamContext): Promise<void> {
+	override async _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
 		this.writeBufferOffset = 0;
 		this.writeBufferFileOffset = HEADER_SIZE;
 		this.totalPoints = 0;

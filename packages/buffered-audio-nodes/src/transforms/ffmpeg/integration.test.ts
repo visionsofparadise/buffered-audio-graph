@@ -3,7 +3,7 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
-import type { NodeIdentity, ProgressPayload, FinishedPayload, StreamPhase } from "@buffered-audio/core";
+import type { StreamIdentity, ProgressPayload, FinishedPayload, StreamPhase } from "@buffered-audio/core";
 import { runTransform } from "../../utils/test-pipeline";
 import { notSilent, expectedDuration, notAnomalous } from "../../utils/test-audio";
 import { audio, binaries, hasBinaryFixtures } from "../../utils/test-binaries";
@@ -70,12 +70,12 @@ describeIfFfmpegFixture("FFmpeg", () => {
 
 		const job = source.createRenderJob({ chunkSize: 4096 });
 
-		job.events.on("progress", (node: NodeIdentity, payload: ProgressPayload) => {
+		job.events.on("progress", (node: StreamIdentity, payload: ProgressPayload) => {
 			if (node.nodeName !== "FFmpeg") return;
 
 			progressByPhase.set(payload.phase, (progressByPhase.get(payload.phase) ?? 0) + 1);
 		});
-		job.events.on("finished", (node: NodeIdentity, payload: FinishedPayload) => {
+		job.events.on("finished", (node: StreamIdentity, payload: FinishedPayload) => {
 			if (node.nodeName !== "FFmpeg") return;
 
 			finishedFramesDone.push(payload.framesDone);

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type StreamContext, type StreamRenderContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type StreamSetupContext, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { ffmpeg, FfmpegStream } from "../ffmpeg";
@@ -38,17 +38,17 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 
 	private session?: OnnxSession;
 	private dfnStates: Array<DfnState> = [];
-	private readonly renderContext: StreamRenderContext;
+	private readonly renderContext: StreamContext;
 	private upResample?: FfmpegStream;
 	private downResample?: FfmpegStream;
 
-	constructor(node: BufferedAudioNode, context: StreamRenderContext) {
+	constructor(node: BufferedAudioNode, context: StreamContext) {
 		super(node, context);
 
 		this.renderContext = context;
 	}
 
-	override _setup(context: StreamContext): void {
+	override _setup(context: StreamSetupContext): void {
 		// CPU-only: DML rejects DFN3 ops; see design-onnx-providers.
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
 

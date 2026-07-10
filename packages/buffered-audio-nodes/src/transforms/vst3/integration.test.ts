@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { type Block, type RenderEvents, type StreamContext, type StreamRenderContext } from "@buffered-audio/core";
+import { type Block, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
 import { vst3, Vst3Stream } from ".";
 import { spawnVstHostReady, VstHostExitedBeforeReadyError } from "./utils/process";
 
@@ -31,13 +31,13 @@ const writeStagesFile = async (): Promise<string> => {
 	return path;
 };
 
-const buildContext = (): StreamContext => ({
+const buildContext = (): StreamSetupContext => ({
 	executionProviders: ["cpu"],
 	memoryLimit: 64 * 1024 * 1024,
 	highWaterMark: 1,
 });
 
-const renderContext = (): StreamRenderContext => ({ events: new EventEmitter() as RenderEvents, startedAt: Date.now(), nextStreamId: () => 0 });
+const renderContext = (): StreamContext => ({ events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 });
 
 // Drives the whole-file transform the way the framework does: feeds the channels through the stream's
 // pipe (setup), reads the enqueued output blocks back, and concatenates them per channel for round-trip
