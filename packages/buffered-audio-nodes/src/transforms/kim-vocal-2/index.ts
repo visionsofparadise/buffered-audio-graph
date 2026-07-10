@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type BufferedAudioNode, type StreamSetupContext, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { bandpass, MixedRadixFft, ResampleStream } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
@@ -47,7 +47,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 	private session!: OnnxSession;
 	private fftInstance: MixedRadixFft;
 
-	constructor(node: BufferedAudioNode, context: StreamContext) {
+	constructor(node: KimVocal2Node, context: StreamContext) {
 		super(node, context);
 		this.fftInstance = new MixedRadixFft(N_FFT);
 	}

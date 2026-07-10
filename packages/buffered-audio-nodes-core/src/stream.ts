@@ -56,17 +56,14 @@ export interface StreamContext {
 }
 
 export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudioNode> {
-	readonly node: N;
 	readonly identity: StreamIdentity;
-
+	readonly node: N;
 	protected readonly events: RenderEvents;
-
 	protected processingMs = 0;
-
 	private destroyed = false;
 
-	constructor(node: BufferedAudioNode, context: StreamContext) {
-		this.node = node as N;
+	constructor(node: N, context: StreamContext) {
+		this.node = node;
 		this.events = context.events;
 
 		const constructor = node.constructor as typeof BufferedAudioNode;

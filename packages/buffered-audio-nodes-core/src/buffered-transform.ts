@@ -3,6 +3,7 @@ import type { BufferedAudioNode } from "./node";
 import { createProgressGate, type ProgressGate } from "./progress-gate";
 import { BufferedStream, type StreamContext, type StreamSetupContext } from "./stream";
 import type { TransformNodeProperties } from "./transform";
+import { sliceBlock } from "./utils/slice-block";
 import { toReadable } from "./utils/to-readable";
 
 export const WHOLE_FILE = Infinity;
@@ -10,17 +11,6 @@ export const WHOLE_FILE = Infinity;
 export interface BufferedTransformNodeProperties extends TransformNodeProperties {
 	readonly blockSize?: number;
 	readonly streamChunkSize?: number;
-}
-
-function slice(block: Block, offset: number, frames: number): Block {
-	if (offset === 0 && frames === (block.samples[0]?.length ?? 0)) return block;
-
-	return {
-		samples: block.samples.map((channel) => channel.subarray(offset, offset + frames)),
-		offset: block.offset + offset,
-		sampleRate: block.sampleRate,
-		bitDepth: block.bitDepth,
-	};
 }
 
 export abstract class BufferedTransformStream<N extends BufferedAudioNode<BufferedTransformNodeProperties> = BufferedAudioNode<BufferedTransformNodeProperties>> extends BufferedStream<N> {
@@ -34,7 +24,7 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 	private hasStarted = false;
 	private sourceTotalFrames?: number;
 
-	constructor(node: BufferedAudioNode, context: StreamContext) {
+	constructor(node: N, context: StreamContext) {
 		super(node, context);
 
 		const blockSize = this.properties.blockSize ?? WHOLE_FILE;
@@ -94,12 +84,14 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 				for (let offset = 0; offset < blockFrames; ) {
 					const frames = this.blockSize === WHOLE_FILE ? blockFrames : Math.min(this.blockSize - buffer.frames, blockFrames - offset);
 					const start = performance.now();
-					const prepared = await this._prepare(slice(block, offset, frames));
+					const prepared = await this._prepare(sliceBlock(block, offset, frames));
 
 					await buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
+
 					this.processingMs += performance.now() - start;
 					offset += frames;
 					this.framesBuffered += frames;
+
 					if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
 					if (this.blockSize !== WHOLE_FILE && buffer.frames >= this.blockSize) yield* this.batch(buffer, emitGate);
@@ -108,7 +100,10 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 
 			if (buffer.frames > 0) yield* this.batch(buffer, emitGate);
 
-			yield* this.chunked(this.timed(this._flush()), emitGate);
+			const flushed = this._flush();
+			const timed = this.timed(flushed);
+
+			yield* this.chunked(timed, emitGate);
 
 			this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
@@ -125,7 +120,10 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 
 		if (this.blockSize === WHOLE_FILE) this.emitProgress("process", 0, batchFrames);
 
-		yield* this.chunked(this.timed(this._transform(buffer)), emitGate);
+		const output = this._transform(buffer);
+		const timed = this.timed(output);
+
+		yield* this.chunked(timed, emitGate);
 
 		if (this.blockSize === WHOLE_FILE) this.emitProgress("process", batchFrames, batchFrames);
 
@@ -138,12 +136,13 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 			const cap = this.outputChunkSize;
 
 			if (frames > cap) {
-				for (let start = 0; start < frames; start += cap) yield slice(block, start, Math.min(cap, frames - start));
+				for (let start = 0; start < frames; start += cap) yield sliceBlock(block, start, Math.min(cap, frames - start));
 			} else {
 				yield block;
 			}
 
 			this.framesEmitted += frames;
+
 			if (emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		}
 	}
@@ -154,6 +153,7 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 		} finally {
 			if (this.buffer) {
 				await this.buffer.close();
+
 				this.buffer = undefined;
 			}
 		}

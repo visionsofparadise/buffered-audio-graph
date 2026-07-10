@@ -33,9 +33,17 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 	static readonly description: string = "";
 	static readonly schema: z.ZodType = z.object({});
 
-	static readonly Stream: new (node: BufferedAudioNode, context: StreamContext) => BufferedStream;
+	static readonly Stream: new (node: never, context: StreamContext) => BufferedStream;
 
 	properties: P;
+
+	constructor(properties?: BufferedAudioNodeInput<P>) {
+		const constructor = this.constructor as typeof BufferedAudioNode;
+
+		const parsed = parseNodeProperties<P>(constructor.schema, properties ?? {}, constructor.nodeName);
+
+		this.properties = { ...properties, ...parsed };
+	}
 
 	get id(): string | undefined {
 		return this.properties.id;
@@ -47,12 +55,5 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 
 	get children(): ReadonlyArray<BufferedAudioNode> {
 		return this.properties.children ?? [];
-	}
-
-	constructor(properties?: BufferedAudioNodeInput<P>) {
-		const ctor = this.constructor as typeof BufferedAudioNode;
-		const parsed = parseNodeProperties<P>(ctor.schema, properties ?? {}, ctor.nodeName);
-
-		this.properties = { ...properties, ...parsed };
 	}
 }

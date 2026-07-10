@@ -73,8 +73,9 @@ export class RenderJob {
 
 		path.add(node);
 
-		const ctor = node.constructor as typeof BufferedAudioNode;
-		const stream = new ctor.Stream(node, this.renderContext);
+		const constructor = node.constructor as typeof BufferedAudioNode;
+		const Stream = constructor.Stream as new (node: BufferedAudioNode, context: StreamContext) => BufferedStream;
+		const stream = new Stream(node, this.renderContext);
 
 		const existing = this.streamsMap.get(node);
 

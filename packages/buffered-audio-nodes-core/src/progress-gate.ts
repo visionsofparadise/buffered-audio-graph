@@ -15,6 +15,7 @@ export function createProgressGate(framesTotal?: number): ProgressGate {
 		if (!bucketAdvanced || !intervalPassed) return false;
 
 		if (bucket !== undefined) lastBucket = bucket;
+
 		lastEmitAt = now;
 
 		return true;

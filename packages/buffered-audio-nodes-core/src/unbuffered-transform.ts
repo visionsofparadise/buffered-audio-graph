@@ -13,6 +13,7 @@ export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<Tran
 
 	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.durationFrames;
+
 		await this._setup(context);
 
 		return this._pipe(input);
@@ -38,12 +39,19 @@ export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<Tran
 				}
 
 				this.framesBuffered += block.samples[0]?.length ?? 0;
+
 				if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
-				yield* this.emitted(this.timed(this._transform(block)), emitGate);
+				const output = this._transform(block);
+				const timed = this.timed(output);
+
+				yield* this.emitted(timed, emitGate);
 			}
 
-			yield* this.emitted(this.timed(this._flush()), emitGate);
+			const flushed = this._flush();
+			const timed = this.timed(flushed);
+
+			yield* this.emitted(timed, emitGate);
 
 			this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
@@ -58,6 +66,7 @@ export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<Tran
 			yield block;
 
 			this.framesEmitted += block.samples[0]?.length ?? 0;
+
 			if (emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		}
 	}

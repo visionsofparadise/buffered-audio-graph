@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type BufferedAudioNode, type StreamSetupContext, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type StreamSetupContext, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { ffmpeg, FfmpegStream } from "../ffmpeg";
@@ -42,7 +42,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 	private upResample?: FfmpegStream;
 	private downResample?: FfmpegStream;
 
-	constructor(node: BufferedAudioNode, context: StreamContext) {
+	constructor(node: DeepFilterNet3Node, context: StreamContext) {
 		super(node, context);
 
 		this.renderContext = context;
