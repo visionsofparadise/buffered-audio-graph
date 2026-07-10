@@ -44,10 +44,6 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         run: npx turbo check --filter=@buffered-audio/nodes
 
-      - name: Fetch audio test fixtures
-        if: steps.check.outputs.skip == 'false'
-        run: npm run fixtures:audio
-
       - name: Run unit tests
         if: steps.check.outputs.skip == 'false'
         run: npx turbo unit --filter=@buffered-audio/nodes
@@ -55,6 +51,10 @@ jobs:
       - name: Build (topo-ordered)
         if: steps.check.outputs.skip == 'false'
         run: npx turbo build --filter=@buffered-audio/nodes
+
+      - name: Run integration tests
+        if: steps.check.outputs.skip == 'false'
+        run: npx turbo run integration --filter=@buffered-audio/nodes
 
       - name: Publish to npm
         if: steps.check.outputs.skip == 'false'

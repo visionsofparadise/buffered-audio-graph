@@ -7,9 +7,11 @@ const repoRoot = resolve(packageRoot, "../..");
 const fixturesDir = resolve(repoRoot, "../fixtures");
 const binariesDir = resolve(fixturesDir, "binaries");
 
+const exe = process.platform === "win32" ? ".exe" : "";
+
 export const binaries = {
-	ffmpeg: resolve(binariesDir, "ffmpeg.exe"),
-	ffprobe: resolve(binariesDir, "ffprobe.exe"),
+	ffmpeg: resolve(binariesDir, `ffmpeg${exe}`),
+	ffprobe: resolve(binariesDir, `ffprobe${exe}`),
 	onnxAddon: resolve(binariesDir, "onnx_addon.node"),
 	vkfftAddon: resolve(binariesDir, "vkfft_addon.node"),
 	fftwAddon: resolve(binariesDir, "fftw_addon.node"),

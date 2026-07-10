@@ -52,6 +52,10 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         run: npx turbo build --filter=@buffered-audio/core
 
+      - name: Run integration tests
+        if: steps.check.outputs.skip == 'false'
+        run: npx turbo run integration --filter=@buffered-audio/core
+
       - name: Publish to npm
         if: steps.check.outputs.skip == 'false'
         run: npm publish --workspace=packages/buffered-audio-nodes-core --access public

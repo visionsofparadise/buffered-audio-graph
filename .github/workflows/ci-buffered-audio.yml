@@ -23,9 +23,17 @@ on:
       - "packages/buffered-audio-nodes-utils/**"
       - "packages/buffered-audio-nodes/**"
   workflow_dispatch:
+  # Cadence is provisional (weekly, off-hours). The first dispatched run
+  # measures the heavy suite; the per-PR/pre-publish/scheduled decision is
+  # Matt's, from that data. See plan-test-restructure 6.4.
+  schedule:
+    - cron: "0 7 * * 1"
 
 jobs:
-  buffered-audio:
+  checks:
+    # check -> unit -> build -> docs drift. The unit set is pure, so no
+    # fixture fetch. Runs on push/PR/dispatch, not on the heavy schedule.
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
     steps:
@@ -41,9 +49,6 @@ jobs:
       - name: Check (topo-ordered across all three packages)
         run: npx turbo check --filter=@buffered-audio/nodes
 
-      - name: Fetch audio test fixtures
-        run: npm run fixtures:audio
-
       - name: Unit (topo-ordered)
         run: npx turbo unit --filter=@buffered-audio/nodes
 
@@ -54,3 +59,62 @@ jobs:
         run: |
           npx turbo run docs --filter=@buffered-audio/nodes
           git diff --exit-code packages/buffered-audio-nodes/README.md
+
+  integration:
+    # The integration set is self-contained (synthetic blocks + self-generated
+    # WAVs), so it fetches nothing. Runs on push/PR/dispatch.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.14"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (topo-ordered)
+        run: npx turbo build --filter=@buffered-audio/nodes
+
+      - name: Integration (topo-ordered)
+        run: npx turbo run integration --filter=@buffered-audio/nodes
+
+  heavy:
+    # Real binaries/models + minutes-long DSP. Dispatch + weekly schedule
+    # only. Both S3 buckets are public unauthenticated GETs (no secrets).
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.14"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache binaries (content-addressed sha256 cache)
+        uses: actions/cache@v4
+        with:
+          path: .binaries-cache
+          key: binaries-linux-x64-${{ hashFiles('binaries.manifest.json') }}
+          restore-keys: |
+            binaries-linux-x64-
+
+      - name: Fetch audio test fixtures
+        run: npm run fixtures:audio
+
+      - name: Fetch binary + model test fixtures
+        run: npm run fixtures:binaries -- --target linux-x64
+
+      - name: Build (topo-ordered)
+        run: npx turbo build --filter=@buffered-audio/nodes
+
+      - name: Integration + heavy (topo-ordered)
+        run: npx turbo run integration integration:heavy --filter=@buffered-audio/nodes
