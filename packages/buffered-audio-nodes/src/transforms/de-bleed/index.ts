@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight DSP loops with bounds-checked typed array access */
 import { z } from "zod";
 import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
-import { applyDfttSmoothing, applyNlmSmoothing, getFftAddon, initFftBackend, istft, stft, type FftBackend, type StftOutput, type StftResult } from "@buffered-audio/utils";
+import { applyDfttSmoothing, getFftAddon, initFftBackend, istft, stft, type FftBackend, type StftOutput, type StftResult } from "@buffered-audio/utils";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
 import { readToBuffer } from "../../utils/read-to-buffer";
 import { accumulateTransferChunk, createTransferAccumulator, finalizeTransferFunction, findMaxRefPower, type TransferFunction } from "./utils/cross-spectral";
@@ -11,6 +11,7 @@ import { applyIspRestoration, computeMsadDecision, createIspState, createMsadCha
 import { coldStartSeed, validateTransferSeed } from "./utils/warmup";
 import { WindowReader } from "./utils/window-reader";
 import { computeChunkWindow, computeProcessGeometry, computeWriteClip } from "./utils/geometry";
+import { createNlmWorkerPool, type NlmWorkerPool } from "./nlm-worker-pool";
 
 export const schema = z.object({
 	references: z.array(z.string()).default([]).describe("References"),
@@ -107,6 +108,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 	private referenceBuffers: Array<BlockBuffer> = [];
 	private chunkFrames!: number;
 	private numBins!: number;
+	private nlmPool?: NlmWorkerPool;
 
 	override async _setup(context: StreamSetupContext): Promise<void> {
 		const fft = initFftBackend(context.executionProviders, this.properties);
@@ -175,6 +177,10 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 			throw error;
 		}
+
+		this.nlmPool = createNlmWorkerPool();
+
+		this.log("nlm smoothing pool", { mode: this.nlmPool.mode });
 	}
 
 	override async _destroy(): Promise<void> {
@@ -183,6 +189,11 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		}
 
 		this.referenceBuffers = [];
+
+		if (this.nlmPool) {
+			await this.nlmPool.close();
+			this.nlmPool = undefined;
+		}
 	}
 
 	private async warmupSeedsAllChannels(
@@ -274,10 +285,12 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		const { frames: totalFrames, channels, sampleRate, bitDepth } = buffered;
 		const { fftSize, hopSize, reductionStrength, artifactSmoothing, adaptationSpeed } = this.properties;
-		const { chunkFrames, numBins, referenceBuffers } = this;
+		const { chunkFrames, numBins, referenceBuffers, nlmPool } = this;
 		const refCount = referenceBuffers.length;
 
 		if (totalFrames === 0 || channels === 0) return;
+
+		if (!nlmPool) throw new Error("de-bleed: NLM worker pool not initialized in _setup.");
 
 		const profileEnabled = process.env.DEBLEED_PROFILE === "1";
 		const profileMs = { warmup: 0, stftRead: 0, msad: 0, kalman: 0, mwf: 0, nlm: 0, dftt: 0, applyMaskIstft: 0, write: 0 };
@@ -328,8 +341,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 		const targetStftOutputs: Array<StftOutput> = Array.from({ length: channels }, () => allocateStftOutput(windowFrames, numBins));
 		const refStftOutputs: Array<StftOutput> = Array.from({ length: refCount }, () => allocateStftOutput(windowFrames, numBins));
-		const rawMask = new Float32Array(windowFrames * numBins);
-		const nlmMask = new Float32Array(windowFrames * numBins);
+		const rawMask = new Float32Array(new SharedArrayBuffer(windowFrames * numBins * 4));
+		const nlmMask = new Float32Array(new SharedArrayBuffer(windowFrames * numBins * 4));
 		const finalMask = new Float32Array(windowFrames * numBins);
 
 		const targetReader = new WindowReader(channels, windowSamples);
@@ -477,20 +490,14 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 					const _tnlm = _profStart();
 
-					applyNlmSmoothing(
-						rawView,
-						winFrames,
-						numBins,
-						{
-							patchSize: 8,
-							searchFreqRadius: 8,
-							searchTimePre: 16,
-							searchTimePost: 4,
-							pasteBlockSize: Number(process.env.DEBLEED_NLM_PASTE) || 8,
-							threshold,
-						},
-						nlmView,
-					);
+					await nlmPool.run(rawView, nlmView, winFrames, numBins, {
+						patchSize: 8,
+						searchFreqRadius: 8,
+						searchTimePre: 16,
+						searchTimePost: 4,
+						pasteBlockSize: Number(process.env.DEBLEED_NLM_PASTE) || 8,
+						threshold,
+					});
 					_profAdd("nlm", _tnlm);
 
 					const _tdftt = _profStart();

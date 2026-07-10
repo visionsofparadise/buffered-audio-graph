@@ -32,5 +32,5 @@ export { TruePeakUpsampler } from "./true-peak-upsampler";
 export type { TruePeakUpsamplingFactor } from "./true-peak-upsampler";
 export { applyDfttSmoothing } from "./dftt-smoothing";
 export type { DfttParams } from "./dftt-smoothing";
-export { applyNlmSmoothing } from "./nlm-smoothing";
+export { applyNlmSmoothing, applyNlmSmoothingRange } from "./nlm-smoothing";
 export type { NlmParams } from "./nlm-smoothing";

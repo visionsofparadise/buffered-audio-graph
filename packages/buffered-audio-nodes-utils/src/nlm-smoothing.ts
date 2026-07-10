@@ -47,11 +47,31 @@ export function applyNlmSmoothing(
 	nlmOptions: NlmParams,
 	output: Float32Array,
 ): void {
+	applyNlmSmoothingRange(mask, numFrames, numBins, nlmOptions, output, 0, numFrames);
+}
+
+/**
+ * Range-parameterized form of {@link applyNlmSmoothing}: processes only the paste
+ * blocks whose `blockFrame` falls in `[blockFrameStart, blockFrameEnd)`. Both bounds
+ * are multiples of `pasteBlockSize` (except `blockFrameEnd` may equal `numFrames`).
+ * Reads the whole immutable `mask` and writes only the output rows it owns, so
+ * disjoint ranges can run concurrently over shared buffers. The per-block body is
+ * identical to the full-pass loop.
+ */
+export function applyNlmSmoothingRange(
+	mask: Float32Array,
+	numFrames: number,
+	numBins: number,
+	nlmOptions: NlmParams,
+	output: Float32Array,
+	blockFrameStart: number,
+	blockFrameEnd: number,
+): void {
 	const { patchSize, searchFreqRadius, searchTimePre, searchTimePost, pasteBlockSize, threshold } = nlmOptions;
 	const hSq = threshold * threshold;
 	const halfPatch = Math.floor(patchSize / 2);
 
-	for (let blockFrame = 0; blockFrame < numFrames; blockFrame += pasteBlockSize) {
+	for (let blockFrame = blockFrameStart; blockFrame < blockFrameEnd; blockFrame += pasteBlockSize) {
 		for (let blockBin = 0; blockBin < numBins; blockBin += pasteBlockSize) {
 			const centreFrame = blockFrame + Math.floor(pasteBlockSize / 2);
 			const centreBin = blockBin + Math.floor(pasteBlockSize / 2);
