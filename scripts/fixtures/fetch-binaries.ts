@@ -52,14 +52,15 @@ const KEY_TO_FIXTURE_FILENAME: Record<string, string> = {
 };
 
 // Unkeyed ONNX Runtime shared libs the addon loads by its linked soname,
-// not by the manifest's per-target distribution filename. The win32 name
-// (onnxruntime.dll) is confirmed by the hand-populated fixtures dir; the
-// linux soname (libonnxruntime.so.1.22.0) mirrors it — verify on the
-// first linux heavy dispatch. Every other unkeyed asset (DirectML.dll,
-// the provider .so files, htdemucs.onnx.data) is copied verbatim.
+// not by the manifest's per-target distribution filename. Both names are
+// confirmed by the addon's actual load-time dependency: win32 wants
+// onnxruntime.dll, linux wants the major-version soname libonnxruntime.so.1
+// (not the full libonnxruntime.so.1.22.0) — see the addon's DT_NEEDED /
+// the 2026-07-10 heavy-CI dlopen error. Every other unkeyed asset
+// (DirectML.dll, the provider .so files, htdemucs.onnx.data) is copied verbatim.
 const RUNTIME_LIB_RENAME: Record<string, string> = {
 	"onnxruntime-win32-x64.dll": "onnxruntime.dll",
-	"onnxruntime-linux-x64.so.1.22.0": "libonnxruntime.so.1.22.0",
+	"onnxruntime-linux-x64.so.1.22.0": "libonnxruntime.so.1",
 };
 
 function exeSuffix(target: Target): string {
