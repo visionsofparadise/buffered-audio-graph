@@ -14,8 +14,8 @@ export function LinesIcon({ color, size = 32, className, ref, style, ...rest }: 
 					key={`line-${ix}`}
 					style={{
 						width: `${60 + ((ix * 37) % 41)}%`,
-						height: 1,
-						backgroundColor: color,
+						height: ix === 0 ? 2 : 1,
+						backgroundColor: ix === 0 ? "var(--color-accent-primary)" : color,
 						opacity: ix % 2 === 0 ? 1 : 0.4,
 					}}
 				/>

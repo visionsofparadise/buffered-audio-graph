@@ -4,16 +4,62 @@ import {
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-	IconButton,
-} from "@buffered-audio/design-system";
-import { Download, EllipsisVertical, Square, Trash2 } from "lucide-react";
+} from "../../../DropdownMenu";
+import { IconButton } from "../../../IconButton";
+import { EllipsisVertical } from "lucide-react";
 
-export function NodeMenu({ isSource, onRender, onAbort, onDelete }: {
+export interface NodeMenuActions {
 	readonly isSource: boolean;
+	readonly bypassed: boolean;
+	readonly onBypass?: () => void;
+	readonly onReset?: () => void;
 	readonly onRender?: () => void;
 	readonly onAbort?: () => void;
 	readonly onDelete?: () => void;
-}) {
+}
+
+/**
+ * The single source of the node-action vocabulary — Bypass/Enable, Reset,
+ * Render/Abort (hidden for source nodes), Delete Node. Rendered inside both the
+ * node header's dots menu (`NodeMenu`) and the right-click node context menu
+ * (`GraphContextMenu`) so the two cannot diverge. Both mount it inside a
+ * `DropdownMenuContent`, so it emits only the item/separator rows.
+ */
+export function NodeMenuItems({ isSource, bypassed, onBypass, onReset, onRender, onAbort, onDelete }: NodeMenuActions) {
+	return (
+		<>
+			<DropdownMenuItem onSelect={() => onBypass?.()}>
+				<span>{bypassed ? "Enable" : "Bypass"}</span>
+			</DropdownMenuItem>
+
+			<DropdownMenuItem onSelect={() => onReset?.()}>
+				<span>Reset</span>
+			</DropdownMenuItem>
+
+			{!isSource && <DropdownMenuSeparator />}
+
+			{!isSource && (
+				<DropdownMenuItem onSelect={() => onRender?.()}>
+					<span>Render</span>
+				</DropdownMenuItem>
+			)}
+
+			{!isSource && (
+				<DropdownMenuItem onSelect={() => onAbort?.()}>
+					<span>Abort</span>
+				</DropdownMenuItem>
+			)}
+
+			<DropdownMenuSeparator />
+
+			<DropdownMenuItem onSelect={() => onDelete?.()}>
+				<span>Delete Node</span>
+			</DropdownMenuItem>
+		</>
+	);
+}
+
+export function NodeMenu(actions: NodeMenuActions) {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
@@ -26,29 +72,7 @@ export function NodeMenu({ isSource, onRender, onAbort, onDelete }: {
 				/>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				{!isSource && (
-					<DropdownMenuItem onSelect={() => onRender?.()}>
-						<Download size={14} strokeWidth={1.5} className="shrink-0" />
-						<span>Render</span>
-					</DropdownMenuItem>
-				)}
-
-				{!isSource && (
-					<DropdownMenuItem onSelect={() => onAbort?.()}>
-						<Square size={14} strokeWidth={1.5} className="shrink-0" />
-						<span>Abort</span>
-					</DropdownMenuItem>
-				)}
-
-				{!isSource && <DropdownMenuSeparator />}
-
-				<DropdownMenuItem
-					className="text-accent-primary"
-					onSelect={() => onDelete?.()}
-				>
-					<Trash2 size={14} strokeWidth={1.5} className="shrink-0" />
-					<span>Delete</span>
-				</DropdownMenuItem>
+				<NodeMenuItems {...actions} />
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

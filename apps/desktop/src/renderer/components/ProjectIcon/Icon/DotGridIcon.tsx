@@ -23,8 +23,8 @@ export function DotGridIcon({ color, size = 32, className, ref, style, ...rest }
 						width: 3,
 						height: 3,
 						borderRadius: "50%",
-						backgroundColor: color,
-						opacity: ix % 5 === 0 || ix < 5 || ix >= 20 || ix % 5 === 4 ? 1 : 0.4,
+						backgroundColor: ix === 12 ? "var(--color-accent-primary)" : color,
+						opacity: ix === 12 || ix % 5 === 0 || ix < 5 || ix >= 20 || ix % 5 === 4 ? 1 : 0.4,
 					}}
 				/>
 			))}

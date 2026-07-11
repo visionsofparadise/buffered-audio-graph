@@ -1,17 +1,14 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { IconButton } from "@buffered-audio/design-system";
-import { cn } from "../../../../../utils/cn";
 import { GripVertical, X } from "lucide-react";
 import type { LeafParameter } from "../utils/buildParameters";
-import { paramLabelClass } from "./utils/labels";
 import type { ParameterCallbacks } from "./ParameterField";
 import { LeafField } from "./LeafField";
 
 /**
- * One array element — a sub-form of its field params. Elements after the first
- * carry a single-edge `border-t` divider; the row is reorderable via the drag
- * handle (`@dnd-kit`) and removable via the header `x`.
+ * One array element — a sub-form of its field params. The element title reads
+ * `<Noun> N` (10px uppercase); the row is reorderable via the drag handle
+ * (`@dnd-kit`) and removable via the header `×` (hover `error`).
  */
 export function SortableArrayRow({
 	rowId,
@@ -39,14 +36,7 @@ export function SortableArrayRow({
 	};
 
 	return (
-		<div
-			ref={setNodeRef}
-			style={style}
-			className={cn(
-				"flex flex-col gap-4",
-				rowIndex > 0 && "border-t border-border pt-4",
-			)}
-		>
+		<div ref={setNodeRef} style={style} className="flex flex-col gap-2.5">
 			<div className="flex items-center justify-between gap-2">
 				{/* nodrag prevents React Flow from intercepting pointer events the sortable listeners need. */}
 				<div
@@ -55,16 +45,16 @@ export function SortableArrayRow({
 					{...listeners}
 				>
 					<GripVertical size={14} strokeWidth={1.5} />
-					<span className={paramLabelClass(true)}>{`${itemNoun} ${rowIndex + 1}`}</span>
+					<span className="type-label text-text-secondary">{`${itemNoun} ${rowIndex + 1}`}</span>
 				</div>
-				<IconButton
-					icon={X}
-					label={`Remove ${itemNoun} ${rowIndex + 1}`}
-					variant="ghost"
-					size="sm"
-					className="nodrag"
+				<button
+					type="button"
+					aria-label={`Remove ${itemNoun} ${rowIndex + 1}`}
+					className="nodrag inline-flex items-center justify-center p-1.5 text-text-secondary hover:text-error"
 					onClick={() => callbacks.onArrayRowDelete?.(paramName, rowIndex)}
-				/>
+				>
+					<X size={14} strokeWidth={1.5} />
+				</button>
 			</div>
 
 			{fields.map((field) => (

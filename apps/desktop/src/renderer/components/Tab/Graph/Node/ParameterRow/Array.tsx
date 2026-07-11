@@ -10,7 +10,6 @@ import {
 	SortableContext,
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Button } from "@buffered-audio/design-system";
 import { cn } from "../../../../../utils/cn";
 import { Plus } from "lucide-react";
 import type { ArrayParameter } from "../utils/buildParameters";
@@ -53,44 +52,45 @@ export function ArrayRow({
 	};
 
 	return (
-		<div className={cn("flex flex-col gap-4", dimmed && "opacity-40")}>
+		<div className={cn("flex flex-col gap-1", dimmed && "opacity-40")}>
 			<span className={paramLabelClass(true)}>{itemNoun}</span>
 
-			<DndContext
-				sensors={sensors}
-				collisionDetection={closestCenter}
-				onDragEnd={handleDragEnd}
-			>
-				<SortableContext
-					items={param.rows.map((row) => row.rowId)}
-					strategy={verticalListSortingStrategy}
+			<div className="flex flex-col gap-3">
+				<DndContext
+					sensors={sensors}
+					collisionDetection={closestCenter}
+					onDragEnd={handleDragEnd}
 				>
-					<div className="flex flex-col gap-4">
-						{param.rows.map((row, rowIndex) => (
-							<SortableArrayRow
-								key={row.rowId}
-								rowId={row.rowId}
-								rowIndex={rowIndex}
-								paramName={param.name}
-								itemNoun={itemNoun}
-								fields={row.fields}
-								dimmed={dimmed}
-								callbacks={callbacks}
-							/>
-						))}
-					</div>
-				</SortableContext>
-			</DndContext>
+					<SortableContext
+						items={param.rows.map((row) => row.rowId)}
+						strategy={verticalListSortingStrategy}
+					>
+						<div className="flex flex-col gap-3">
+							{param.rows.map((row, rowIndex) => (
+								<SortableArrayRow
+									key={row.rowId}
+									rowId={row.rowId}
+									rowIndex={rowIndex}
+									paramName={param.name}
+									itemNoun={itemNoun}
+									fields={row.fields}
+									dimmed={dimmed}
+									callbacks={callbacks}
+								/>
+							))}
+						</div>
+					</SortableContext>
+				</DndContext>
 
-			<Button
-				variant="ghost"
-				size="sm"
-				icon={Plus}
-				onClick={() => callbacks.onArrayRowAdd?.(param.name)}
-				className="nodrag self-start px-1"
-			>
-				{`Add ${itemNoun}`}
-			</Button>
+				<button
+					type="button"
+					onClick={() => callbacks.onArrayRowAdd?.(param.name)}
+					className="nodrag type-label inline-flex items-center gap-2 self-start p-1 text-text-secondary hover:text-text-primary"
+				>
+					<Plus size={14} strokeWidth={1.5} />
+					{`Add ${itemNoun}`}
+				</button>
+			</div>
 		</div>
 	);
 }

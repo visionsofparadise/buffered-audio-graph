@@ -1,5 +1,5 @@
 import type { Snapshot } from "valtio/vanilla";
-import { Button } from "@buffered-audio/design-system";
+import { Button } from "./Button";
 import type { NodePackageState } from "../models/State/App";
 
 interface Props {

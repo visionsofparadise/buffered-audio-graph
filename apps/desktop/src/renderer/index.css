@@ -1,21 +1,92 @@
 @import "tailwindcss";
-@import "@buffered-audio/design-system/css/tokens.css";
-@import "@buffered-audio/design-system/css/base.css";
-@import "@buffered-audio/design-system/css/utilities.css";
+@import "@fontsource/azeret-mono/400.css";
+@import "@fontsource/azeret-mono/500.css";
 
-/* Tailwind v4 only scans files in the current project root by default. The
-   design-system package's component sources (Button.tsx, IconButton.tsx, etc.)
-   live in a sibling workspace and contain utilities — `p-2.5`, `p-3`, `px-5`
-   etc. — that the renderer never references directly. Without this @source
-   line those utilities silently fail to generate (the class is set on the
-   element but no CSS rule exists), which produces buttons with `padding: 0`.
-   `@source` is placed after the `@import`s so it does not trip CSS's
-   "@import must precede all other statements" rule under Vite 5's css plugin. */
-@source "../../../../packages/design-system/src/**/*.{ts,tsx}";
+@theme {
+  /* Monochrome scale — the "Deep" profile (warm, high-contrast: near-black
+     surface, bright warm-cream text), chosen 2026-05-21 after auditioning
+     several proposals via the demo's shade switcher. */
+  --color-surface: #100F0D;
+  --color-elevated: #1D1A16;
+  --color-border: #3E3833;
+  --color-dimmed: #685F54;
+  --color-text-secondary: #918979;
+  --color-text-primary: #F5F0E6;
+
+  --color-accent-primary: #DB5836;
+  --color-accent-secondary: #47A5A5;
+  --color-error: #E5484D;
+
+  --color-category-source: #45A8A0;
+  --color-category-transform: #7B85C4;
+  --color-category-target: #C98A6C;
+
+  --color-meter-green: #4A7A5A;
+  --color-meter-yellow: #A59A4A;
+
+  --font-mono: "Azeret Mono", ui-monospace, monospace;
+
+  /* Base spacing unit. Tailwind v4 derives every `p-N` / `m-N` / `gap-N` /
+     `h-N` / `w-N` utility from this via `calc(var(--spacing) * N)`, which is
+     what enables fractional values like `p-1.5`, `p-2.5`, `p-3.5`. Without
+     this base, only utilities whose `--spacing-N` is explicitly defined work,
+     and `p-1.5` etc. silently no-op. */
+  --spacing: 0.25rem;
+
+  --text-display: 2rem;       /* 32px */
+  --text-display-lg: 3.5rem;  /* 56px */
+  --text-label: 0.625rem;     /* 10px */
+  --text-body: 0.8125rem;     /* 13px */
+
+  --breakpoint-wide: 1920px;
+}
 
 @layer base {
+  :root {
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+
+  body {
+    font-family: var(--font-mono);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    color: var(--color-text-primary);
+    background-color: var(--color-surface);
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
   *::-webkit-scrollbar { width: 6px; height: 6px; }
   *::-webkit-scrollbar-track { background: var(--color-border); }
   *::-webkit-scrollbar-thumb { background: var(--color-dimmed); }
   * { scrollbar-width: thin; scrollbar-color: var(--color-dimmed) var(--color-border); }
+}
+
+@utility type-display {
+  font-family: var(--font-mono);
+  font-size: var(--text-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+@utility type-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+}
+
+@utility type-value {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }

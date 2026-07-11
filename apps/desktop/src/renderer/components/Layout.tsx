@@ -16,9 +16,8 @@ import { useAppState, type AppState } from "../models/State/App";
 import { BinaryManager } from "./BinaryManager";
 import { LoadingScreen } from "./LoadingScreen";
 import { PackageManager } from "./PackageManager";
+import { AppBar } from "./AppBar";
 import { TabContent } from "./Tab";
-import { AppTabBar } from "./TabBar";
-import { TitleBar } from "./TitleBar";
 
 interface Props {
 	readonly initialState: Omit<AppState, "_key">;
@@ -82,7 +81,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 	if (!hasPassedLoading) {
 		return (
 			<div className="flex flex-col h-screen">
-				<TitleBar context={context} />
+				<AppBar context={context} chromeOnly />
 				<LoadingScreen
 					packages={app.packages}
 					isLoading={isLoading || hasUnresolvedPackages}
@@ -94,8 +93,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 
 	return (
 		<div className="flex flex-col h-screen">
-			<TitleBar context={context} />
-			<AppTabBar context={context} />
+			<AppBar context={context} />
 			<TabContent context={context} />
 			<PackageManager
 				isOpen={packageManagerOpen}

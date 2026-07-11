@@ -1,4 +1,4 @@
-import { FileInput } from "@buffered-audio/design-system";
+import { FileInput } from "../../../../FileInput";
 import { cn } from "../../../../../utils/cn";
 import { humanizeFieldName, paramLabelClass } from "./utils/labels";
 

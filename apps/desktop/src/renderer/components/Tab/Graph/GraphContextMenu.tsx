@@ -2,18 +2,17 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuSeparator,
 	DropdownMenuSub,
 	DropdownMenuSubContent,
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
-} from "@buffered-audio/design-system";
-import { Download, Plus, Redo2, Square, Trash2, Undo2 } from "lucide-react";
+} from "../../DropdownMenu";
 import type { Snapshot } from "valtio/vanilla";
 import type { AppState } from "../../../models/State/App";
+import { NodeMenuItems } from "./Node/Menu";
 import { PackageNodeList } from "./PackageNodeList";
 
-export type ContextMenuAction = "delete" | "render" | "abort" | "undo" | "redo";
+export type ContextMenuAction = "delete" | "render" | "abort" | "undo" | "redo" | "bypass" | "reset";
 
 export interface ContextMenuPosition {
 	readonly x: number;
@@ -29,20 +28,20 @@ interface Props {
 	readonly onClose: () => void;
 	/** True when the right-clicked node is a source node — hides Render/Abort. */
 	readonly isSourceNode?: boolean;
+	/** Current bypass state of the right-clicked node — drives the Bypass/Enable label. */
+	readonly isBypassed?: boolean;
 	readonly canUndo?: boolean;
 	readonly canRedo?: boolean;
 }
 
 /**
- * Right-click graph context menu. Built on the design-system Radix
- * `DropdownMenu*` primitives, which carry the new menu tokens (`bg-elevated`,
- * 13px rows, active-inversion on hover). Each action row carries a
- * `lucide-react` icon, matching the node menu's treatment.
+ * Right-click graph context menu. Flat `bg-elevated` Radix menu, 13px uppercase
+ * rows with hover inversion.
  *
  * Two variants:
  * - PANE right-click: Add Node, Undo, Redo, Render.
- * - NODE right-click: mirrors the per-node options menu (`Node/Menu.tsx`) —
- *   Render, Abort, Delete, with Render/Abort hidden for source nodes.
+ * - NODE right-click: the exact node-action vocabulary, rendered from the shared
+ *   `NodeMenuItems` so the dots menu and the right-click menu cannot diverge.
  */
 export function GraphContextMenu({
 	position,
@@ -51,6 +50,7 @@ export function GraphContextMenu({
 	onAddNode,
 	onClose,
 	isSourceNode = false,
+	isBypassed = false,
 	canUndo = true,
 	canRedo = true,
 }: Props) {
@@ -71,33 +71,19 @@ export function GraphContextMenu({
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="start" sideOffset={0}>
 				{isNode ? (
-					<>
-						{!isSourceNode && (
-							<DropdownMenuItem onSelect={() => onAction("render")}>
-								<Download size={14} strokeWidth={1.5} className="shrink-0" />
-								<span className="flex-1">Render</span>
-							</DropdownMenuItem>
-						)}
-						{!isSourceNode && (
-							<DropdownMenuItem onSelect={() => onAction("abort")}>
-								<Square size={14} strokeWidth={1.5} className="shrink-0" />
-								<span className="flex-1">Abort</span>
-							</DropdownMenuItem>
-						)}
-						{!isSourceNode && <DropdownMenuSeparator />}
-						<DropdownMenuItem
-							onSelect={() => onAction("delete")}
-							className="text-accent-primary data-[highlighted]:bg-accent-primary data-[highlighted]:text-surface"
-						>
-							<Trash2 size={14} strokeWidth={1.5} className="shrink-0" />
-							<span className="flex-1">Delete</span>
-						</DropdownMenuItem>
-					</>
+					<NodeMenuItems
+						isSource={isSourceNode}
+						bypassed={isBypassed}
+						onBypass={() => onAction("bypass")}
+						onReset={() => onAction("reset")}
+						onRender={() => onAction("render")}
+						onAbort={() => onAction("abort")}
+						onDelete={() => onAction("delete")}
+					/>
 				) : (
 					<>
 						<DropdownMenuSub>
 							<DropdownMenuSubTrigger>
-								<Plus size={14} strokeWidth={1.5} />
 								<span className="flex-1">Add Node</span>
 							</DropdownMenuSubTrigger>
 							<DropdownMenuSubContent className="max-h-[calc(100vh-100px)] w-80 overflow-y-auto">
@@ -105,16 +91,13 @@ export function GraphContextMenu({
 							</DropdownMenuSubContent>
 						</DropdownMenuSub>
 						<DropdownMenuItem disabled={!canUndo} onSelect={() => onAction("undo")}>
-							<Undo2 size={14} strokeWidth={1.5} className="shrink-0" />
-							<span className="flex-1">Undo</span>
+							<span>Undo</span>
 						</DropdownMenuItem>
 						<DropdownMenuItem disabled={!canRedo} onSelect={() => onAction("redo")}>
-							<Redo2 size={14} strokeWidth={1.5} className="shrink-0" />
-							<span className="flex-1">Redo</span>
+							<span>Redo</span>
 						</DropdownMenuItem>
 						<DropdownMenuItem onSelect={() => onAction("render")}>
-							<Download size={14} strokeWidth={1.5} className="shrink-0" />
-							<span className="flex-1">Render</span>
+							<span>Render</span>
 						</DropdownMenuItem>
 					</>
 				)}

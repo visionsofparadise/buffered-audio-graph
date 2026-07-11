@@ -11,8 +11,8 @@ export function DiagonalIcon({ color, size = 32, className, ref, style, ...rest 
 						y1={0}
 						x2={0}
 						y2={ix * 5}
-						stroke={color}
-						strokeWidth="1"
+						stroke={ix === 4 ? "var(--color-accent-primary)" : color}
+						strokeWidth={ix === 4 ? 2 : 1}
 						opacity={ix % 2 === 0 ? 1 : 0.4}
 					/>
 				))}

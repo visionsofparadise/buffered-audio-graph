@@ -1,4 +1,4 @@
-import { Toggle } from "@buffered-audio/design-system";
+import { Toggle } from "../../../../Toggle";
 import { cn } from "../../../../../utils/cn";
 import { humanizeFieldName, paramLabelClass } from "./utils/labels";
 

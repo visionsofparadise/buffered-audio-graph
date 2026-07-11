@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Knob } from "@buffered-audio/design-system";
+import { Knob } from "../../../../Knob";
 import { cn } from "../../../../../utils/cn";
 import { humanizeFieldName, paramLabelClass } from "./utils/labels";
 

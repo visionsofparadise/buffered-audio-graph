@@ -203,3 +203,47 @@ export function buildDefaultArrayItem(itemProperties: Readonly<Record<string, No
 
 	return result;
 }
+
+/**
+ * Resolve a single property's schema default. A property contributes a default
+ * when it declares one directly, or (for an object) when any of its children
+ * do; otherwise it has none and is left unset. Object-array properties without
+ * a declared default resolve to none — reset leaves them unset rather than
+ * inventing empty rows.
+ */
+function defaultForProperty(prop: NodeJsonSchemaProperty): { has: boolean; value: unknown } {
+	if (prop.default !== undefined) return { has: true, value: prop.default };
+
+	if (prop.type === "object" && prop.properties) {
+		const record: Record<string, unknown> = {};
+
+		for (const [fieldName, fieldProp] of Object.entries(prop.properties)) {
+			const childDefault = defaultForProperty(fieldProp);
+
+			if (childDefault.has) record[fieldName] = childDefault.value;
+		}
+
+		if (Object.keys(record).length > 0) return { has: true, value: record };
+	}
+
+	return { has: false, value: undefined };
+}
+
+/**
+ * Build the full default `parameters` record for a node from its schema —
+ * every property set to its schema default, and left unset where the schema
+ * declares none. Used by the bulk `resetNodeParameters` mutation.
+ */
+export function buildDefaultParameters(nodeSchema: NodeJsonSchema | null): Record<string, unknown> {
+	const result: Record<string, unknown> = {};
+
+	if (!nodeSchema?.properties) return result;
+
+	for (const [propertyName, prop] of Object.entries(nodeSchema.properties)) {
+		const propertyDefault = defaultForProperty(prop);
+
+		if (propertyDefault.has) result[propertyName] = propertyDefault.value;
+	}
+
+	return result;
+}

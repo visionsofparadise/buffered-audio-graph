@@ -2,7 +2,7 @@ import {
 	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
-} from "@buffered-audio/design-system";
+} from "../../DropdownMenu";
 import type { Snapshot } from "valtio/vanilla";
 import type { AppState, NodePackageState } from "../../../models/State/App";
 

@@ -8,7 +8,7 @@ export function CornersIcon({ color, size = 32, className, ref, style, ...rest }
 				<rect x="24" y="0" width="8" height="8" fill={color} />
 				<rect x="0" y="24" width="8" height="8" fill={color} />
 				<rect x="24" y="24" width="8" height="8" fill={color} />
-				<rect x="12" y="12" width="8" height="8" fill={color} opacity="0.4" />
+				<rect x="12" y="12" width="8" height="8" fill="var(--color-accent-primary)" />
 			</svg>
 		</div>
 	);

@@ -1,4 +1,5 @@
-import { ButtonSelection, Select } from "@buffered-audio/design-system";
+import { ButtonSelection } from "../../../../ButtonSelection";
+import { Select } from "../../../../Select";
 import { cn } from "../../../../../utils/cn";
 import { humanizeFieldName, paramLabelClass } from "./utils/labels";
 

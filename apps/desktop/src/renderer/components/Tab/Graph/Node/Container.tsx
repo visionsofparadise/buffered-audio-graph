@@ -1,6 +1,6 @@
 import { cn } from "../../../../utils/cn";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { TriangleAlert } from "lucide-react";
+import { Power, TriangleAlert } from "lucide-react";
 import { NodeMenu } from "./Menu";
 import type { ParameterCallbacks } from "./ParameterRow/ParameterField";
 import { ParameterField } from "./ParameterRow/ParameterField";
@@ -28,6 +28,10 @@ export interface NodeContainerData {
 	/** Content-hash staleness — computed but not painted on the node. */
 	readonly state: NodeState;
 	readonly bypassed: boolean;
+	/** Whether the node's input port has an incoming edge. */
+	readonly inputConnected: boolean;
+	/** Whether the node's output port has an outgoing edge. */
+	readonly outputConnected: boolean;
 	readonly parameters: ReadonlyArray<Parameter>;
 	/**
 	 * Non-null when the node class could not be resolved (package/version
@@ -64,6 +68,12 @@ export function NodeContainer({ data, selected }: NodeProps) {
 	const hasOutput = nodeData.category !== "target";
 	const isSource = nodeData.category === "source";
 
+	// A non-source node's single input is always required — unconnected reads as
+	// error attention; connected reads primary. Outputs are optional: connected
+	// primary, otherwise the resting secondary tone.
+	const inputColor = nodeData.inputConnected ? "bg-text-primary" : "bg-error";
+	const outputColor = nodeData.outputConnected ? "bg-text-primary" : "bg-text-secondary";
+
 	const disabled = !nodeData.onParameterChangeAtPath;
 	const callbacks: ParameterCallbacks = {
 		onParameterChangeAtPath: nodeData.onParameterChangeAtPath,
@@ -74,27 +84,47 @@ export function NodeContainer({ data, selected }: NodeProps) {
 		disabled,
 	};
 
+	const hasObjectArray = nodeData.parameters.some((param) => param.kind === "array");
+	const width = hasObjectArray ? 300 : 240;
+	const panelShadow = `${selected ? "0 0 0 2px var(--color-accent-primary)," : ""}0 2px 8px rgba(0,0,0,0.3)`;
+
 	return (
-		<div className="relative" style={{ width: 260 }}>
+		<div className="relative" style={{ width }}>
 			<div
 				className={cn(
-					"flex flex-col overflow-hidden rounded-xs border border-border bg-elevated",
+					"flex flex-col overflow-hidden rounded-[2px] bg-elevated",
 					isBypassed && "opacity-60",
-					selected && "ring-1 ring-text-primary",
 				)}
+				style={{ boxShadow: panelShadow }}
 			>
 				<div
 					className={cn(
-						"flex min-h-9 items-center justify-between gap-2 px-3 py-2",
+						"flex min-h-9 items-center justify-between gap-2 px-4 py-2",
 						CATEGORY_HEADER_BG[nodeData.category],
 					)}
 				>
 					<span className="text-body font-medium uppercase leading-tight tracking-[0.06em] text-surface">
 						{nodeData.label}
 					</span>
-					<div className="flex shrink-0 items-center gap-0.5">
+					<div className="nodrag flex shrink-0 items-center gap-1.5">
+						<button
+							type="button"
+							aria-label="Bypass"
+							onClick={() => nodeData.onBypass?.()}
+							className="inline-flex items-center justify-center p-1.5 text-surface hover:bg-[color-mix(in_srgb,var(--color-surface)_20%,transparent)]"
+							style={
+								isBypassed
+									? undefined
+									: { backgroundColor: "color-mix(in srgb, var(--color-surface) 25%, transparent)" }
+							}
+						>
+							<Power size={14} strokeWidth={1.5} />
+						</button>
 						<NodeMenu
 							isSource={isSource}
+							bypassed={isBypassed}
+							onBypass={nodeData.onBypass}
+							onReset={nodeData.onReset}
 							onRender={nodeData.onRender}
 							onAbort={nodeData.onAbort}
 							onDelete={nodeData.onDelete}
@@ -107,10 +137,10 @@ export function NodeContainer({ data, selected }: NodeProps) {
 						<TriangleAlert
 							size={14}
 							strokeWidth={1.5}
-							className="mt-0.5 shrink-0 text-accent-primary"
+							className="mt-0.5 shrink-0 text-error"
 						/>
 						<div className="flex flex-col gap-1">
-							<span className="type-label text-xs text-accent-primary">Node unavailable</span>
+							<span className="type-label text-xs text-error">Node unavailable</span>
 							<span className="text-xs leading-snug text-text-secondary">{nodeData.unresolvedReason}</span>
 						</div>
 					</div>
@@ -140,7 +170,10 @@ export function NodeContainer({ data, selected }: NodeProps) {
 					style={{ left: -10 }}
 				>
 					<span
-						className="pointer-events-none absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 bg-text-secondary"
+						className={cn(
+							"pointer-events-none absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2",
+							inputColor,
+						)}
 						style={{ clipPath: "polygon(0 0, 100% 50%, 0 100%)" }}
 					/>
 				</Handle>
@@ -154,7 +187,10 @@ export function NodeContainer({ data, selected }: NodeProps) {
 					style={{ right: -10 }}
 				>
 					<span
-						className="pointer-events-none absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 bg-text-secondary"
+						className={cn(
+							"pointer-events-none absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2",
+							outputColor,
+						)}
 						style={{ clipPath: "polygon(0 0, 100% 50%, 0 100%)" }}
 					/>
 				</Handle>

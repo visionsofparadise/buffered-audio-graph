@@ -16,9 +16,9 @@ const WINDOW_CONFIG = {
 	minHeight: 400,
 	titleBarStyle: "hidden" as const,
 	titleBarOverlay: {
-		color: "#100F0D",
+		color: "#1D1A16",
 		symbolColor: "#918979",
-		height: 40,
+		height: 48,
 	},
 };
 

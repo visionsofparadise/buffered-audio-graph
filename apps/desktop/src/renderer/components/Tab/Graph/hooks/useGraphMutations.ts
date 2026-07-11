@@ -1,6 +1,8 @@
 import type { GraphDefinition, GraphEdge, GraphNode } from "@buffered-audio/core";
 import { useMemo, useRef } from "react";
 import type { GraphContext } from "../../../../models/Context";
+import { buildDefaultParameters } from "../Node/utils/buildParameters";
+import { lookupNode } from "../Node/utils/nodeLookup";
 
 interface Position {
 	x: number;
@@ -14,6 +16,8 @@ interface GraphMutations {
 	removeEdge: (from: string, to: string) => void;
 	insertNodeOnEdge: (edge: GraphEdge, packageName: string, packageVersion: string, nodeName: string) => void;
 	toggleBypass: (nodeId: string) => void;
+	/** Reset every parameter of a node to its schema default as one history entry. */
+	resetNodeParameters: (nodeId: string) => void;
 	setGraphName: (name: string) => void;
 	/** Set a nested parameter value at a path. path[0] is the top-level parameter name. */
 	setParameterAtPath: (nodeId: string, path: ReadonlyArray<string | number>, value: unknown) => void;
@@ -213,6 +217,22 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			}));
 		}
 
+		function resetNodeParameters(nodeId: string): void {
+			const { graphDefinition } = contextRef.current;
+			const graphNode = graphDefinition.nodes.find((node) => node.id === nodeId);
+
+			if (!graphNode) return;
+
+			const packageVersion = typeof graphNode.packageVersion === "string" ? graphNode.packageVersion : "";
+			const { schema } = lookupNode(graphNode.packageName, packageVersion, graphNode.nodeName, contextRef.current);
+			const defaults = buildDefaultParameters(schema);
+
+			mutate((definition) => ({
+				...definition,
+				nodes: definition.nodes.map((node) => (node.id === nodeId ? { ...node, parameters: defaults } : node)),
+			}));
+		}
+
 		function setGraphName(name: string): void {
 			mutate((definition) => ({
 				...definition,
@@ -312,6 +332,7 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			removeEdge,
 			insertNodeOnEdge,
 			toggleBypass,
+			resetNodeParameters,
 			setGraphName,
 			setParameterAtPath,
 			addArrayRow,

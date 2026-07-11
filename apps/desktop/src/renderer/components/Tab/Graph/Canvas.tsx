@@ -56,6 +56,8 @@ function buildReactFlowNodes(
 	context: GraphContext,
 ): Array<Node<NodeContainerData>> {
 	const binaryDefaults = context.app.binaries as Record<string, string>;
+	const connectedInputs = new Set(context.graphDefinition.edges.map((edge) => edge.to));
+	const connectedOutputs = new Set(context.graphDefinition.edges.map((edge) => edge.from));
 
 	return context.graphDefinition.nodes.map((graphNode) => {
 		const packageVersion = typeof graphNode.packageVersion === "string" ? graphNode.packageVersion : "";
@@ -86,6 +88,8 @@ function buildReactFlowNodes(
 				category,
 				state,
 				bypassed: graphNode.options?.bypass ?? false,
+				inputConnected: connectedInputs.has(graphNode.id),
+				outputConnected: connectedOutputs.has(graphNode.id),
 				parameters,
 				unresolvedReason,
 				nodeId: graphNode.id,
@@ -160,6 +164,25 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 		[context, mutations],
 	);
 
+	const attachEdgeData = useCallback(
+		(builtEdges: Array<Edge>): Array<Edge> =>
+			builtEdges.map((edge) => ({
+				...edge,
+				data: {
+					app: context.app,
+					onInsert: (packageName: string, packageVersion: string, nodeName: string) => {
+						mutations.insertNodeOnEdge(
+							{ from: edge.source, to: edge.target },
+							packageName,
+							packageVersion,
+							nodeName,
+						);
+					},
+				},
+			})),
+		[context.app, mutations],
+	);
+
 	const attachCallbacks = useCallback(
 		(builtNodes: Array<Node<NodeContainerData>>): Array<Node<NodeContainerData>> =>
 			builtNodes.map((node) => ({
@@ -201,6 +224,9 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 					onBypass: () => {
 						mutations.toggleBypass(node.id);
 					},
+					onReset: () => {
+						mutations.resetNodeParameters(node.id);
+					},
 					onDelete: () => {
 						mutations.removeNode(node.id);
 					},
@@ -213,8 +239,8 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 
 	useEffect(() => {
 		setNodes(attachCallbacks(buildReactFlowNodes(nodeStates, processingNodes, errorNodes, context)));
-		setEdges(buildReactFlowEdges(context));
-	}, [context, nodeStates, processingNodes, errorNodes, setNodes, setEdges, attachCallbacks]);
+		setEdges(attachEdgeData(buildReactFlowEdges(context)));
+	}, [context, nodeStates, processingNodes, errorNodes, setNodes, setEdges, attachCallbacks, attachEdgeData]);
 
 	const handleNodesChange = useCallback(
 		(changes: Array<NodeChange<Node<NodeContainerData>>>) => {
@@ -297,6 +323,24 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 
 				case "abort": {
 					void abortRender();
+					setContextMenu(null);
+					break;
+				}
+
+				case "bypass": {
+					if (contextMenu.nodeId) {
+						mutations.toggleBypass(contextMenu.nodeId);
+					}
+
+					setContextMenu(null);
+					break;
+				}
+
+				case "reset": {
+					if (contextMenu.nodeId) {
+						mutations.resetNodeParameters(contextMenu.nodeId);
+					}
+
 					setContextMenu(null);
 					break;
 				}
@@ -467,7 +511,7 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 					pannable
 					zoomable
 					ariaLabel="Graph minimap"
-					className="!rounded-xs !border !border-border !bg-elevated"
+					className="!rounded-[2px] !bg-elevated shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
 					style={{ width: 160, height: 100, backgroundColor: "var(--color-elevated)", margin: 12 }}
 				/>
 			</ReactFlow>
@@ -477,7 +521,6 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 				onAutoOrganize={handleAutoOrganize}
 				onUndo={() => context.history.undo()}
 				onRedo={() => context.history.redo()}
-				onSave={context.onSave}
 				onRender={() => void startRender()}
 				onAbort={() => void abortRender()}
 				canUndo={canUndo}
@@ -501,6 +544,10 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 					isSourceNode={
 						contextMenu.nodeId !== undefined &&
 						nodes.find((node) => node.id === contextMenu.nodeId)?.data.category === "source"
+					}
+					isBypassed={
+						contextMenu.nodeId !== undefined &&
+						(nodes.find((node) => node.id === contextMenu.nodeId)?.data.bypassed ?? false)
 					}
 					canUndo={canUndo}
 					canRedo={canRedo}

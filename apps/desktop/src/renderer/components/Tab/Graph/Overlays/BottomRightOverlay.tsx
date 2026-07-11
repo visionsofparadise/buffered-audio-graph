@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { IconButton } from "@buffered-audio/design-system";
+import { IconButton } from "../../../IconButton";
 
 /**
  * BottomRightOverlay — render-progress toast.
@@ -25,7 +25,7 @@ export function BottomRightOverlay({ isRendering, graphName, progress, onAbort }
 	const percent = Math.round(progress * 100);
 
 	return (
-		<div className="absolute bottom-3 right-3 z-10 flex w-72 flex-col gap-2 rounded-xs border border-border bg-elevated px-4 py-3">
+		<div className="absolute bottom-3 right-3 z-10 flex w-72 flex-col gap-2 rounded-xs bg-elevated px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
 			<div className="flex items-center justify-between gap-2">
 				<span className="type-label text-text-secondary">Render</span>
 				<IconButton icon={X} label="Cancel render" variant="ghost" size="sm" onClick={onAbort} />
@@ -33,7 +33,7 @@ export function BottomRightOverlay({ isRendering, graphName, progress, onAbort }
 			<span className="text-body text-text-primary">{graphName}</span>
 			<div className="h-1 w-full overflow-hidden rounded-xs bg-surface">
 				<div
-					className="h-full bg-text-primary transition-[width] duration-200"
+					className="h-full bg-accent-primary transition-[width] duration-200"
 					style={{ width: `${String(percent)}%` }}
 				/>
 			</div>

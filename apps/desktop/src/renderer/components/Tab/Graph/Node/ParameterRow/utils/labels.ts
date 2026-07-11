@@ -11,12 +11,12 @@ export function humanizeFieldName(name: string): string {
 /**
  * Class for a parameter-row label. 12px (`text-xs`) so a param name reads at
  * the same scale as the node's other functional text. An incomplete param —
- * one the user still needs to fill — renders its label in `accent-primary`
- * (the coral attention treatment); a complete param is `text-secondary`.
+ * one the user still needs to fill — renders its label in `error` (the
+ * attention treatment); a complete param is `text-secondary`.
  */
 export function paramLabelClass(complete: boolean): string {
 	return cn(
 		"type-label text-xs",
-		complete ? "text-text-secondary" : "text-accent-primary",
+		complete ? "text-text-secondary" : "text-error",
 	);
 }

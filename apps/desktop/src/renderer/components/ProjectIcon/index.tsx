@@ -41,8 +41,8 @@ interface ProjectIconProps {
 
 /**
  * ProjectIcon — renders the geometric mark deterministically assigned to a
- * project name. Monochrome: `color` is `currentColor`, so the mark inherits
- * the surrounding text color.
+ * project name. The mark's base is `currentColor` (inherits the surrounding
+ * text color); each mark weaves in one `accent-primary` accent element.
  */
 export function ProjectIcon({ name, size = 16, className }: ProjectIconProps) {
 	const Icon = PROJECT_ICONS[hashString(name) % PROJECT_ICONS.length] ?? PrimaryIcon;

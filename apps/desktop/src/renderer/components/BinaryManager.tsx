@@ -1,4 +1,4 @@
-import { Button } from "@buffered-audio/design-system";
+import { Button } from "./Button";
 import { useCallback, useEffect, useState } from "react";
 import type { NodeJsonSchema } from "../../shared/ipc/Package/loadNodes/Renderer";
 import type { AppContext } from "../models/Context";

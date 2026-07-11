@@ -1,5 +1,6 @@
-import { Barcode, HomeGraphDecoration, barcodeWidth, type HomeGraphAnchor } from "@buffered-audio/design-system";
+import { HomeGraphDecoration, type HomeGraphAnchor } from "../HomeGraphDecoration";
 import { FolderOpen, Plus } from "lucide-react";
+import { cn } from "../../utils/cn";
 import type { AppContext } from "../../models/Context";
 import { resnapshot } from "../../models/ProxyStore/resnapshot";
 import type { RecentFile } from "../../models/State/App";
@@ -52,10 +53,13 @@ function formatRelative(ms: number): string {
 	return `On ${formatted}`;
 }
 
-const HOME_BARCODE_TEXT = "BUFFERED AUDIO GRAPH MANAGER";
-const HOME_BARCODE_NARROW = 1;
-const HOME_BARCODE_WIDE = 3;
-const HOME_BARCODE_LENGTH = barcodeWidth(HOME_BARCODE_TEXT, HOME_BARCODE_NARROW, HOME_BARCODE_WIDE, 0);
+// Fixed 62-bar vertical strip, thicknesses per the v1 mockup's `buildBarcode`.
+// Accent bars are woven in at indices 6/25/44/55; the rest are `border`.
+const HOME_BARCODE_BARS: ReadonlyArray<number> = [
+	3, 2, 5, 2, 3, 2, 4, 2, 2, 5, 3, 2, 4, 2, 3, 2, 5, 2, 2, 3, 4, 2, 3, 5, 2, 3, 2, 4, 2, 3, 5,
+	2, 3, 2, 2, 4, 3, 2, 5, 2, 3, 2, 4, 2, 3, 2, 5, 3, 2, 4, 2, 2, 3, 5, 2, 3, 2, 4, 2, 3, 2, 5,
+];
+const HOME_BARCODE_ACCENT = new Set<number>([6, 25, 44, 55]);
 
 export const HomeScreen = resnapshot<Props>(({ context }: Props) => {
 	const recentFiles: ReadonlyArray<RecentFile> = context.app.recentFiles.slice(0, 6);
@@ -77,26 +81,21 @@ export const HomeScreen = resnapshot<Props>(({ context }: Props) => {
 
 	return (
 		<div className="relative flex flex-1 flex-col overflow-hidden bg-surface p-6">
-			<div className="pointer-events-none absolute right-4 top-6 z-0 flex items-start gap-4">
+			<div className="pointer-events-none absolute right-4 top-6 z-0 flex items-start gap-3.5">
 				<span
 					className="type-label text-dimmed"
 					style={{ writingMode: "vertical-rl" }}
 				>
 					Buffered Audio Graph Manager
 				</span>
-				<div
-					className="relative w-8"
-					style={{ height: HOME_BARCODE_LENGTH }}
-				>
-					<div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90">
-						<Barcode
-							text={HOME_BARCODE_TEXT}
-							narrow={HOME_BARCODE_NARROW}
-							wide={HOME_BARCODE_WIDE}
-							height={28}
-							color="var(--color-border)"
+				<div className="flex w-[30px] flex-col gap-0.5">
+					{HOME_BARCODE_BARS.map((thickness, ix) => (
+						<div
+							key={`bar-${ix}`}
+							className={cn("w-full shrink-0", HOME_BARCODE_ACCENT.has(ix) ? "bg-accent-primary" : "bg-border")}
+							style={{ height: thickness }}
 						/>
-					</div>
+					))}
 				</div>
 			</div>
 
@@ -116,7 +115,7 @@ export const HomeScreen = resnapshot<Props>(({ context }: Props) => {
 				<button
 					type="button"
 					onClick={() => void context.newBagTab()}
-					className="flex w-fit items-center gap-2 px-4 py-2 text-body text-text-primary hover:bg-text-primary hover:text-surface"
+					className="flex w-fit items-center gap-2 px-4 py-2 text-body text-accent-primary hover:bg-accent-primary hover:text-surface"
 				>
 					<Plus size={16} strokeWidth={1.5} />
 					<span>New graph</span>

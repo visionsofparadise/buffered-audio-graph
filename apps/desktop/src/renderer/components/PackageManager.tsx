@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Input } from "@buffered-audio/design-system";
+import { Button } from "./Button";
+import { Input } from "./Input";
 import type { AppContext } from "../models/Context";
 import { resnapshot } from "../models/ProxyStore/resnapshot";
 import { usePackageManager } from "../hooks/usePackageManager";
