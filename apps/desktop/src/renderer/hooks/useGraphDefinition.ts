@@ -1,4 +1,4 @@
-import { validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
+import type { GraphDefinition } from "@buffered-audio/core";
 import { useCallback, useEffect, useRef } from "react";
 import { snapshot, subscribe, type Snapshot } from "valtio/vanilla";
 import { SUPPORTED_API_VERSIONS } from "../../shared/models/ApiVersion";
@@ -141,7 +141,7 @@ export function useGraphDefinition(
 				try {
 					const content = await main.readFile(bagPath);
 					const parsed: unknown = JSON.parse(content);
-					const validated = validateGraphDefinition(parsed);
+					const validated = await main.validateGraphDefinition(parsed);
 
 					if (!SUPPORTED_API_VERSIONS.has(validated.apiVersion)) {
 						throw new Error(`Bag API version ${String(validated.apiVersion)} is not supported`);

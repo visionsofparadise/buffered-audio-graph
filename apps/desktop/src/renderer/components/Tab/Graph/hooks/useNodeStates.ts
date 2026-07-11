@@ -147,9 +147,13 @@ export function useNodeStates(context: GraphContext): UseNodeStatesReturn {
 		setNodeStates(new Map(snapshotEntries));
 	}, [graphDefinition, main, userDataPath, bagId]);
 
-	useEffect(() => {
+	const refresh = useCallback(() => {
 		void compute();
 	}, [compute]);
 
-	return { nodeStates, refresh: () => void compute() };
+	useEffect(() => {
+		refresh();
+	}, [refresh]);
+
+	return { nodeStates, refresh };
 }

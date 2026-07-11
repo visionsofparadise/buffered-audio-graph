@@ -1,6 +1,6 @@
 import type { GraphDefinition } from "@buffered-audio/core";
 import { ReactFlowProvider } from "@xyflow/react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useSnapshot } from "valtio";
 import { useGraphDefinition } from "../../../hooks/useGraphDefinition";
 import { useGraphState } from "../../../hooks/useGraphState";
@@ -48,6 +48,10 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 		mutateDefinition.flush();
 	}, [mutateDefinition]);
 
+	const activeCommandsRef = useRef(context.activeCommands);
+
+	activeCommandsRef.current = context.activeCommands;
+
 	useEffect(() => {
 		const rename = (name: string) => {
 			mutateDefinition((definition) => ({
@@ -89,7 +93,7 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 			});
 		};
 
-		context.appStore.mutate(context.activeCommands, (proxy) => {
+		context.appStore.mutate(activeCommandsRef.current, (proxy) => {
 			proxy.undo = () => history.undo();
 			proxy.redo = () => history.redo();
 			proxy.canUndo = history.canUndo;
@@ -100,7 +104,7 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 		});
 
 		return () => {
-			context.appStore.mutate(context.activeCommands, (proxy) => {
+			context.appStore.mutate(activeCommandsRef.current, (proxy) => {
 				proxy.undo = null;
 				proxy.redo = null;
 				proxy.canUndo = false;
@@ -112,7 +116,6 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 		};
 	}, [
 		context.appStore,
-		context.activeCommands,
 		context.main,
 		history,
 		mutateDefinition,

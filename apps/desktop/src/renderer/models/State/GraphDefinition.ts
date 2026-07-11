@@ -1,4 +1,4 @@
-import { validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
+import type { GraphDefinition } from "@buffered-audio/core";
 import type { Snapshot } from "valtio/vanilla";
 import type { State } from ".";
 import type { Main } from "../Main";
@@ -11,7 +11,7 @@ export async function loadGraphDefinition(
 ): Promise<{ definition: Omit<GraphDefinitionState, "_key">; content: string }> {
 	const content = await main.readFile(bagPath);
 	const parsed: unknown = JSON.parse(content);
-	const definition = validateGraphDefinition(parsed);
+	const definition = await main.validateGraphDefinition(parsed);
 
 	return { definition, content };
 }

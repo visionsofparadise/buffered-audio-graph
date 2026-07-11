@@ -1,6 +1,7 @@
 import { AbortJobMainIpc } from "./Audio/abortJob/Main";
 import { RenderNodeMainIpc } from "./Audio/renderNode/Main";
 import { ShowOpenDialogMainIpc } from "./Dialog/showOpenDialog/Main";
+import { ValidateGraphDefinitionMainIpc } from "./Graph/validateDefinition/Main";
 import { ShowSaveDialogMainIpc } from "./Dialog/showSaveDialog/Main";
 import { DeleteFileMainIpc } from "./FileSystem/deleteFile/Main";
 import { EnsureDirectoryMainIpc } from "./FileSystem/ensureDirectory/Main";
@@ -39,6 +40,7 @@ export const ASYNC_MAIN_IPCS = [
 	InstallPackageMainIpc,
 	LoadPackageNodesMainIpc,
 	UnloadPackageNodesMainIpc,
+	ValidateGraphDefinitionMainIpc,
 	ShowOpenDialogMainIpc,
 	ShowSaveDialogMainIpc,
 	GetAllDisplaysMainIpc,
