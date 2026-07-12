@@ -1,7 +1,7 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
 import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { updateMinMax, writeMinMaxPoint } from "./utils/minmax";
 
 export const schema = z.object({
@@ -146,7 +146,6 @@ export class WaveformStream extends BufferedTargetStream<WaveformNode> {
 export class WaveformNode extends TargetNode<WaveformProperties> {
 	static override readonly nodeName = "Waveform";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Generate waveform visualization data";
 	static override readonly schema = schema;
 	static override readonly Stream = WaveformStream;

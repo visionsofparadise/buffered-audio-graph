@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
 
 export const stageSchema = z.object({
@@ -116,7 +116,6 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 export class Vst3Node<P extends Vst3Properties = Vst3Properties> extends TransformNode<P> {
 	static override readonly nodeName: string = "VST3";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description: string = "Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)";
 	static override readonly schema: z.ZodType = schema;
 	static override readonly Stream = Vst3Stream;

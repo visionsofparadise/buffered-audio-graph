@@ -2,13 +2,13 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import type { BufferedAudioNode } from "./node";
 import type { RenderJob, RenderOptions } from "./render-job";
+import { resolvePackageVersion } from "./resolve-package-version";
 import type { SourceNode } from "./source";
 import type { TransformNode } from "./transform";
 
 const graphNodeSchema = z.object({
 	id: z.string().min(1),
 	packageName: z.string().min(1),
-	packageVersion: z.string().min(1),
 	nodeName: z.string().min(1),
 	parameters: z.record(z.string(), z.unknown()).optional(),
 	options: z
@@ -23,13 +23,22 @@ const graphEdgeSchema = z.object({
 	to: z.string().min(1),
 });
 
-const graphDefinitionSchema = z.object({
-	id: z.uuid(),
-	name: z.string().default("Untitled"),
-	apiVersion: z.number().int().min(1),
-	nodes: z.array(graphNodeSchema),
-	edges: z.array(graphEdgeSchema),
-});
+const graphDefinitionSchema = z
+	.object({
+		id: z.uuid(),
+		name: z.string().default("Untitled"),
+		apiVersion: z.number().int().min(1),
+		packages: z.record(z.string(), z.string().min(1)),
+		nodes: z.array(graphNodeSchema),
+		edges: z.array(graphEdgeSchema),
+	})
+	.superRefine((definition, context) => {
+		for (const node of definition.nodes) {
+			if (!Object.prototype.hasOwnProperty.call(definition.packages, node.packageName)) {
+				context.addIssue(`Node "${node.id}" references package "${node.packageName}" which has no entry in the graph packages map`);
+			}
+		}
+	});
 
 export type GraphNode = z.infer<typeof graphNodeSchema>;
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;
@@ -91,11 +100,12 @@ export function substituteParameters(definition: GraphDefinition, parameters: Re
 	return { ...definition, nodes };
 }
 
-export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: string; id?: string }): GraphDefinition {
+export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: string; id?: string; anchor?: string }): GraphDefinition {
 	const visited = new Set<BufferedAudioNode>();
 	const nodes: Array<GraphNode> = [];
 	const edges: Array<GraphEdge> = [];
 	const apiVersions: Array<{ packageName: string; nodeName: string; apiVersion: number }> = [];
+	const packageNames = new Set<string>();
 
 	const ensureId = (node: BufferedAudioNode): string => {
 		if (node.id) return node.id;
@@ -115,6 +125,7 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 		const parameters = ctor.schema.parse(node.properties);
 
 		apiVersions.push({ packageName: ctor.packageName, nodeName: ctor.nodeName, apiVersion: ctor.apiVersion });
+		packageNames.add(ctor.packageName);
 
 		const options: { bypass?: boolean } = {};
 
@@ -123,7 +134,6 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 		const graphNode: GraphNode = {
 			id,
 			packageName: ctor.packageName,
-			packageVersion: ctor.packageVersion,
 			nodeName: ctor.nodeName,
 			...(Object.keys(parameters as Record<string, unknown>).length > 0 && { parameters: parameters as Record<string, unknown> }),
 			...(Object.keys(options).length > 0 && { options }),
@@ -153,7 +163,21 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 
 	const apiVersion = [...distinctVersions][0];
 
-	return graphDefinitionSchema.parse({ id: metadata?.id ?? randomUUID(), name: metadata?.name ?? "Untitled", apiVersion, nodes, edges });
+	const anchor = metadata?.anchor ?? process.argv[1];
+
+	if (anchor === undefined) {
+		throw new Error(
+			"Cannot resolve package versions: no anchor was provided and process.argv[1] is undefined (REPL or `node -e`). Pass `anchor: import.meta.url` to pack().",
+		);
+	}
+
+	const packages: Record<string, string> = {};
+
+	for (const packageName of packageNames) {
+		packages[packageName] = resolvePackageVersion(packageName, anchor);
+	}
+
+	return graphDefinitionSchema.parse({ id: metadata?.id ?? randomUUID(), name: metadata?.name ?? "Untitled", apiVersion, packages, nodes, edges });
 }
 
 const canConnect = (node: BufferedAudioNode): node is SourceNode | TransformNode => typeof (node as { to?: unknown }).to === "function";

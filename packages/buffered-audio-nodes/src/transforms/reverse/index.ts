@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BufferedTransformStream, type Block, type BlockBuffer, TransformNode, WHOLE_FILE } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 
 const CHUNK_FRAMES = 44100;
 
@@ -27,7 +27,6 @@ export class ReverseStream extends BufferedTransformStream {
 export class ReverseNode extends TransformNode {
 	static override readonly nodeName = "Reverse";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Reverse audio playback direction";
 	static override readonly schema = schema;
 	static override readonly Stream = ReverseStream;

@@ -43,47 +43,7 @@ await source.render();
 
 ## CLI
 
-### `process`
-
-Run pipelines from TypeScript files. The file's default export must be a `SourceNode`.
-
-```bash
-npx @buffered-audio/nodes process --pipeline pipeline.ts
-```
-
-```ts
-// pipeline.ts
-import { chain, read, normalize, trim, write } from "@buffered-audio/nodes";
-
-export default chain(read("input.wav"), normalize(), trim({ threshold: -60 }), write("output.wav"));
-```
-
-### `render`
-
-Render a `.bag` (Buffered Audio Graph) file. BAG files are JSON-serialized graph definitions.
-
-```bash
-npx @buffered-audio/nodes render pipeline.bag
-```
-
-| Flag                        | Description                                                  |
-| --------------------------- | ----------------------------------------------------------- |
-| `--chunk-size <samples>`    | Chunk size in samples                                       |
-| `--high-water-mark <count>` | Stream backpressure high water mark                         |
-| `--param <name=value>`      | Bind a `{{name}}` template placeholder (repeatable)         |
-
-#### Template parameters
-
-String values in a bag's node `parameters` may contain `{{name}}` placeholders. Each `--param name=value` binds one for that render; the same bag renders different inputs and outputs without editing the file. Every placeholder must be bound, and every `--param` must match a placeholder, or the render fails before any audio work.
-
-```json
-{ "id": "a", "packageName": "@buffered-audio/nodes", "packageVersion": "0.16.0", "nodeName": "Read",  "parameters": { "path": "{{episode}}/raw.wav" } }
-{ "id": "z", "packageName": "@buffered-audio/nodes", "packageVersion": "0.16.0", "nodeName": "Write", "parameters": { "path": "{{episode}}/master.wav" } }
-```
-
-```bash
-npx @buffered-audio/nodes render master.bag --param episode=./e260
-```
+Render `.bag` files and run pipelines from the command line with [`@buffered-audio/cli`](https://www.npmjs.com/package/@buffered-audio/cli).
 
 ## Nodes
 
@@ -438,7 +398,7 @@ Write audio to a file
 
 ## Creating Nodes
 
-Each node has two parts: a **Node** (inert descriptor) and a **Stream** (stateful runtime instance). The node is pure static declaration — `nodeName`, `description`, `schema`, `Stream`, plus `packageName`/`packageVersion` — and carries no per-render state. The executor constructs one stream per node per render.
+Each node has two parts: a **Node** (inert descriptor) and a **Stream** (stateful runtime instance). The node is pure static declaration — `nodeName`, `description`, `schema`, `Stream`, plus `packageName` — and carries no per-render state. The executor constructs one stream per node per render.
 
 Transforms extend one of two stream bases from `@buffered-audio/core`, picked by whether the node needs the whole signal (or fixed-size blocks) before it can produce output:
 
@@ -511,7 +471,6 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeNode> {
 export class NormalizeNode extends TransformNode<NormalizeProperties> {
 	static override readonly nodeName = "Normalize";
 	static override readonly packageName = "@buffered-audio/nodes";
-	static override readonly packageVersion = "0.8.0";
 	static override readonly description = "Adjust peak or loudness level to a target ceiling";
 	static override readonly schema = schema;
 	static override readonly Stream = NormalizeStream;

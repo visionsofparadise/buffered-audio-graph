@@ -85,9 +85,18 @@ export class RenderJob {
 			this.streamsMap.set(node, [stream]);
 		}
 
+		const effective = this.effectiveChildren(node.children, path);
+
+		if (effective.length === 0 && typeof (node as { to?: unknown }).to === "function") {
+			const nodeName = (node.constructor as typeof BufferedAudioNode).nodeName;
+			const suffix = node.id !== undefined ? `#${node.id}` : "";
+
+			throw new Error(`Graph leaf "${nodeName}"${suffix} is not a target — every path must end in a target node`);
+		}
+
 		const children: Array<PlanNode> = [];
 
-		for (const child of this.effectiveChildren(node.children, path)) {
+		for (const child of effective) {
 			children.push(this.build(child, path));
 		}
 

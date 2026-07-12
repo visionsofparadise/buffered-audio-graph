@@ -72,9 +72,6 @@ async function discoverNodes(): Promise<Array<DiscoveredNode>> {
 		const normalized = entry.split("\\").join("/");
 
 		if (normalized === "index.ts") continue;
-		// `src/cli.ts` is an executable script that calls `program.parse()` at
-		// module top-level. Importing it would run the CLI. Skip it explicitly.
-		if (normalized === "cli.ts") continue;
 		if (normalized.endsWith(".d.ts")) continue;
 		if (normalized.endsWith(".test.ts")) continue;
 		if (normalized.endsWith(".unit.test.ts")) continue;

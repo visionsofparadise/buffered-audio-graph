@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { findPeak, resolveScale } from "./utils/peak";
 
 export const schema = z.object({
@@ -50,7 +50,6 @@ export class NormalizeStream extends BufferedTransformStream<NormalizeNode> {
 export class NormalizeNode extends TransformNode<NormalizeProperties> {
 	static override readonly nodeName = "Normalize";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Adjust peak or loudness level to a target ceiling";
 	static override readonly schema = schema;
 	static override readonly Stream = NormalizeStream;

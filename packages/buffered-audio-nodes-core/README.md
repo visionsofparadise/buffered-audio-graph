@@ -37,7 +37,7 @@ Consumes audio. Its stream class extends `BufferedTargetStream` and writes to a 
 
 The `BufferedAudioNode` base constructor is the single defaulting and validation site. It runs `schema.parse(properties ?? {})` and merges the parsed result over the input, so schema `.default()`s apply once, on every path — both the fluent factory and BAG `unpack` flow through it. The constructor accepts the input shape `BufferedAudioNodeInput<P>` (`Partial<P> & BufferedAudioNodeProperties`); parsing strips unknown keys and preserves the base keys `id`, `bypass`, and `children`. A schema failure throws with the node name and the Zod message.
 
-Concrete nodes are pure static declaration — no methods. Each names four statics — `static readonly nodeName`, `static readonly description`, `static readonly schema`, `static readonly Stream` — plus `packageName`/`packageVersion` for serialization.
+Concrete nodes are pure static declaration — no methods. Each names four statics — `static readonly nodeName`, `static readonly description`, `static readonly schema`, `static readonly Stream` — plus `packageName` for serialization.
 
 ```ts
 import { z } from "zod";
@@ -68,7 +68,6 @@ export class GainStream extends UnbufferedTransformStream<GainNode> {
 export class GainNode extends TransformNode<GainProperties> {
 	static override readonly nodeName = "Gain";
 	static override readonly packageName = "@buffered-audio/nodes";
-	static override readonly packageVersion = "0.8.0";
 	static override readonly description = "Adjust signal level by a fixed amount in dB";
 	static override readonly schema = schema;
 	static override readonly Stream = GainStream;
@@ -277,7 +276,8 @@ BAG (Buffered Audio Graph) is a JSON format for serializing audio pipelines. A `
 - `id` — stable UUID identity, persistent across path changes
 - `name` — graph name
 - `apiVersion` — the core node-contract version every node in the graph speaks; required and uniform across the graph
-- `nodes` — flat array of `{ id, packageName, packageVersion, nodeName, parameters?, options? }`
+- `packages` — map of `packageName` → exact `version`, pinning every package the graph's nodes reference; resolution honors these pins
+- `nodes` — flat array of `{ id, packageName, nodeName, parameters?, options? }`
 - `edges` — flat array of `{ from, to }` referencing node IDs
 
 The flat nodes/edges shape represents DAGs directly. `GraphNode`, `GraphEdge`, and `GraphDefinition` are exported types.
@@ -305,6 +305,8 @@ import { pack } from "@buffered-audio/core";
 
 const definition = pack([source], { name: "my-graph" });
 ```
+
+The metadata argument is `{ name?, id?, anchor? }`. `pack` builds the `packages` map by resolving each distinct node package's exact `version` from its `package.json`, anchored at `anchor` (default `process.argv[1]`). Pass `anchor: import.meta.url` when packing from a module so resolution starts at the calling file.
 
 ### unpack
 

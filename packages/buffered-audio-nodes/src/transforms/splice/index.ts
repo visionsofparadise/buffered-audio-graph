@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { readWavSamples } from "../../utils/read-to-buffer";
 import { applyInsert, computeInsertOverlap } from "./utils/insert";
 
@@ -89,7 +89,6 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 export class SpliceNode extends TransformNode<SpliceProperties> {
 	static override readonly nodeName = "Splice";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Replace a region of audio with processed content";
 	static override readonly schema = schema;
 	static override readonly Stream = SpliceStream;

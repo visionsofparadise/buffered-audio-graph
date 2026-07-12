@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 
 export const schema = z.object({
 	gain: z.number().min(-60).max(24).multipleOf(0.1).default(0).describe("Gain (dB)"),
@@ -35,7 +35,6 @@ export class GainStream extends UnbufferedTransformStream<GainNode> {
 export class GainNode extends TransformNode<GainProperties> {
 	static override readonly nodeName = "Gain";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Adjust signal level by a fixed amount in dB";
 	static override readonly schema = schema;
 	static override readonly Stream = GainStream;

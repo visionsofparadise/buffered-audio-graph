@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { computeKeepRanges } from "./utils/regions";
 
 const cutRegionSchema = z.object({
@@ -75,7 +75,6 @@ export class CutStream extends UnbufferedTransformStream<CutNode> {
 export class CutNode extends TransformNode<CutProperties> {
 	static override readonly nodeName = "Cut";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Remove a region of audio";
 	static override readonly schema = schema;
 	static override readonly Stream = CutStream;

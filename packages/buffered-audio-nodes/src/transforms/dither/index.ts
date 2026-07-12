@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { quantizationLevels, quantizeSample } from "./utils/quantize";
 
 export const schema = z.object({
@@ -57,7 +57,6 @@ export class DitherStream extends UnbufferedTransformStream<DitherNode> {
 export class DitherNode extends TransformNode<DitherProperties> {
 	static override readonly nodeName = "Dither";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Add shaped noise to reduce quantization distortion";
 	static override readonly schema = schema;
 	static override readonly Stream = DitherStream;

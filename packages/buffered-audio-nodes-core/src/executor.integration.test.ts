@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { Block } from "./block-buffer";
 import { createRenderJobs, pack, substituteParameters, unpack, validateGraphDefinition, type GraphDefinition, type NodeRegistry } from "./graph-format";
@@ -8,6 +11,32 @@ import { BufferedSourceStream, SourceNode, type SourceMetadata } from "./source"
 import { BufferedTargetStream, TargetNode } from "./target";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
 import { TransformNode } from "./transform";
+
+function writePackageFixture(root: string, name: string, version: string): string {
+	const packageDir = join(root, "node_modules", name);
+
+	mkdirSync(packageDir, { recursive: true });
+	writeFileSync(join(packageDir, "package.json"), JSON.stringify({ name, version }));
+	writeFileSync(join(packageDir, "index.js"), "module.exports = {};");
+
+	const anchor = join(root, "anchor.js");
+
+	writeFileSync(anchor, "");
+
+	return anchor;
+}
+
+let packAnchor: string;
+let fixtureRoot: string;
+
+beforeAll(() => {
+	fixtureRoot = mkdtempSync(join(tmpdir(), "bag-pack-"));
+	packAnchor = writePackageFixture(fixtureRoot, "test", "1.0.0");
+});
+
+afterAll(() => {
+	rmSync(fixtureRoot, { recursive: true, force: true });
+});
 
 function createChunk(value: number, offset: number, frames: number): Block {
 	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
@@ -231,15 +260,53 @@ describe("RenderJob execution", () => {
 	});
 });
 
+describe("render leaf-must-be-a-target validation", () => {
+	it("throws on a leaf transform, naming it", () => {
+		const source = new MockSource([createChunk(1, 0, 100)]);
+		const transform = new MockTransform();
+
+		source.to(transform);
+
+		expect(() => source.createRenderJob()).toThrow(/Graph leaf "mock-transform" is not a target/);
+	});
+
+	it("throws on a childless source", () => {
+		const source = new MockSource([createChunk(1, 0, 100)]);
+
+		expect(() => source.createRenderJob()).toThrow(/Graph leaf "mock-source" is not a target/);
+	});
+
+	it("throws when the only target is bypassed", () => {
+		const source = new MockSource([createChunk(1, 0, 100)]);
+		const target = new MockTarget({ bypass: true });
+
+		source.to(target);
+
+		expect(() => source.createRenderJob()).toThrow(/is not a target/);
+	});
+
+	it("constructs a valid source → transform → target without throwing", () => {
+		const source = new MockSource([createChunk(1, 0, 100)]);
+		const transform = new MockTransform();
+		const target = new MockTarget();
+
+		source.to(transform);
+		transform.to(target);
+
+		expect(() => source.createRenderJob()).not.toThrow();
+	});
+});
+
 describe("graph definition validation", () => {
 	it("validates a graph definition", () => {
 		const valid = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
 			apiVersion: 1,
+			packages: { "@buffered-audio/nodes": "1.0.0" },
 			nodes: [
-				{ id: "a", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "read" },
-				{ id: "b", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "write" },
+				{ id: "a", packageName: "@buffered-audio/nodes", nodeName: "read" },
+				{ id: "b", packageName: "@buffered-audio/nodes", nodeName: "write" },
 			],
 			edges: [{ from: "a", to: "b" }],
 		});
@@ -251,7 +318,8 @@ describe("graph definition validation", () => {
 		const valid = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			apiVersion: 1,
-			nodes: [{ id: "a", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "read" }],
+			packages: { "@buffered-audio/nodes": "1.0.0" },
+			nodes: [{ id: "a", packageName: "@buffered-audio/nodes", nodeName: "read" }],
 			edges: [],
 		});
 
@@ -263,10 +331,23 @@ describe("graph definition validation", () => {
 			validateGraphDefinition({
 				id: "not-a-uuid",
 				apiVersion: 1,
-				nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read" }],
+				packages: { test: "1.0.0" },
+				nodes: [{ id: "a", packageName: "test", nodeName: "read" }],
 				edges: [],
 			}),
 		).toThrow();
+	});
+
+	it("rejects a node whose packageName has no packages entry", () => {
+		expect(() =>
+			validateGraphDefinition({
+				id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+				apiVersion: 1,
+				packages: {},
+				nodes: [{ id: "a", packageName: "test", nodeName: "read" }],
+				edges: [],
+			}),
+		).toThrow(/Node.*a.*package.*test.*no entry in the graph packages map/s);
 	});
 });
 
@@ -276,7 +357,8 @@ describe("apiVersion enforcement", () => {
 			validateGraphDefinition({
 				id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 				name: "Test",
-				nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read" }],
+				packages: { test: "1.0.0" },
+				nodes: [{ id: "a", packageName: "test", nodeName: "read" }],
 				edges: [],
 			}),
 		).toThrow();
@@ -287,7 +369,7 @@ describe("apiVersion enforcement", () => {
 		const target = new MockTarget();
 		source.to(target);
 
-		expect(pack([source]).apiVersion).toBe(1);
+		expect(pack([source], { anchor: packAnchor }).apiVersion).toBe(1);
 	});
 
 	it("pack throws naming each offending node when statics disagree", () => {
@@ -303,8 +385,8 @@ describe("apiVersion enforcement", () => {
 		const target = new VersionTwoTarget();
 		source.to(target);
 
-		expect(() => pack([source])).toThrow(/differing apiVersions/);
-		expect(() => pack([source])).toThrow(/"v2-target" \(apiVersion 2\)/);
+		expect(() => pack([source], { anchor: packAnchor })).toThrow(/differing apiVersions/);
+		expect(() => pack([source], { anchor: packAnchor })).toThrow(/"v2-target" \(apiVersion 2\)/);
 	});
 
 	it("unpack throws when a resolved class's apiVersion differs from the bag's", () => {
@@ -324,11 +406,62 @@ describe("apiVersion enforcement", () => {
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
 			apiVersion: 1,
-			nodes: [{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "v2-source" }],
+			packages: { test: "1.0.0" },
+			nodes: [{ id: "s", packageName: "test", nodeName: "v2-source" }],
 			edges: [],
 		});
 
 		expect(() => unpack(definition, registry)).toThrow(/apiVersion mismatch/);
+	});
+});
+
+describe("pack version resolution", () => {
+	let goodAnchor: string;
+	let mismatchAnchor: string;
+	let emptyDir: string;
+	let resolutionRoot: string;
+
+	beforeAll(() => {
+		resolutionRoot = mkdtempSync(join(tmpdir(), "bag-resolve-"));
+		goodAnchor = writePackageFixture(join(resolutionRoot, "good"), "test", "1.2.3");
+		mismatchAnchor = writePackageFixture(join(resolutionRoot, "mismatch"), "test", "9.9.9");
+
+		const mismatchPackageJson = join(resolutionRoot, "mismatch", "node_modules", "test", "package.json");
+
+		writeFileSync(mismatchPackageJson, JSON.stringify({ name: "not-test", version: "9.9.9" }));
+
+		emptyDir = join(resolutionRoot, "empty");
+		mkdirSync(emptyDir, { recursive: true });
+	});
+
+	afterAll(() => {
+		rmSync(resolutionRoot, { recursive: true, force: true });
+	});
+
+	it("resolves each package's version from package.json into the packages map", () => {
+		const source = new MockSource();
+		const target = new MockTarget();
+		source.to(target);
+
+		const definition = pack([source], { anchor: goodAnchor });
+
+		expect(definition.packages).toEqual({ test: "1.2.3" });
+	});
+
+	it("throws naming the package, anchor, and remedy when the name does not match", () => {
+		const source = new MockSource();
+		const target = new MockTarget();
+		source.to(target);
+
+		expect(() => pack([source], { anchor: mismatchAnchor })).toThrow(/"test".*not-test.*anchor: import\.meta\.url/s);
+	});
+
+	it("throws naming the package and remedy when the package cannot be resolved", () => {
+		const source = new MockSource();
+		const target = new MockTarget();
+		source.to(target);
+
+		expect(() => pack([source], { anchor: emptyDir })).toThrow(/resolve package "test".*anchor: import\.meta\.url/s);
 	});
 });
 
@@ -340,7 +473,7 @@ describe("pack id round-trip", () => {
 
 		const id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
-		expect(pack([source], { name: "Test", id }).id).toBe(id);
+		expect(pack([source], { name: "Test", id, anchor: packAnchor }).id).toBe(id);
 	});
 
 	it("pack generates an id when absent", () => {
@@ -348,7 +481,7 @@ describe("pack id round-trip", () => {
 		const target = new MockTarget();
 		source.to(target);
 
-		expect(pack([source], { name: "Test" }).id).toMatch(/^[0-9a-f-]{36}$/);
+		expect(pack([source], { name: "Test", anchor: packAnchor }).id).toMatch(/^[0-9a-f-]{36}$/);
 	});
 });
 
@@ -378,9 +511,10 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
 			apiVersion: 1,
+			packages: { test: "1.0.0" },
 			nodes: [
-				{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "mock-source" },
-				{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "defaulting-transform", parameters: { smoothing: 30 } },
+				{ id: "s", packageName: "test", nodeName: "mock-source" },
+				{ id: "t", packageName: "test", nodeName: "defaulting-transform", parameters: { smoothing: 30 } },
 			],
 			edges: [{ from: "s", to: "t" }],
 		});
@@ -396,7 +530,7 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 });
 
 function templatedDefinition(nodes: GraphDefinition["nodes"]): GraphDefinition {
-	return { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", name: "Test", apiVersion: 1, nodes, edges: [] };
+	return { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", name: "Test", apiVersion: 1, packages: { test: "1.0.0" }, nodes, edges: [] };
 }
 
 describe("substituteParameters", () => {
@@ -405,7 +539,6 @@ describe("substituteParameters", () => {
 			{
 				id: "a",
 				packageName: "test",
-				packageVersion: "1.0.0",
 				nodeName: "read",
 				parameters: {
 					path: "{{episode}}/{{inputFile}}.wav",
@@ -425,9 +558,7 @@ describe("substituteParameters", () => {
 	});
 
 	it("does not mutate the input definition", () => {
-		const definition = templatedDefinition([
-			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{episode}}/in.wav" } },
-		]);
+		const definition = templatedDefinition([{ id: "a", packageName: "test", nodeName: "read", parameters: { path: "{{episode}}/in.wav" } }]);
 		const snapshot = structuredClone(definition);
 
 		substituteParameters(definition, { episode: "e260" });
@@ -437,16 +568,14 @@ describe("substituteParameters", () => {
 
 	it("throws naming every unbound placeholder at once", () => {
 		const definition = templatedDefinition([
-			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{one}}/{{two}}/{{three}}.wav" } },
+			{ id: "a", packageName: "test", nodeName: "read", parameters: { path: "{{one}}/{{two}}/{{three}}.wav" } },
 		]);
 
 		expect(() => substituteParameters(definition, { two: "x" })).toThrow(/unbound placeholders: one, three/);
 	});
 
 	it("throws naming an unknown provided parameter", () => {
-		const definition = templatedDefinition([
-			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{used}}.wav" } },
-		]);
+		const definition = templatedDefinition([{ id: "a", packageName: "test", nodeName: "read", parameters: { path: "{{used}}.wav" } }]);
 
 		expect(() => substituteParameters(definition, { used: "x", extra: "y" })).toThrow(/unknown parameters: extra/);
 	});
@@ -503,9 +632,10 @@ describe("createRenderJobs parameter substitution", () => {
 		id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		name: "Test",
 		apiVersion: 1,
+		packages: { test: "1.0.0" },
 		nodes: [
-			{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "path-source", parameters: { path: "{{dir}}/in.wav" } },
-			{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "path-target", parameters: { path: "{{dir}}/out.wav" } },
+			{ id: "s", packageName: "test", nodeName: "path-source", parameters: { path: "{{dir}}/in.wav" } },
+			{ id: "t", packageName: "test", nodeName: "path-target", parameters: { path: "{{dir}}/out.wav" } },
 		],
 		edges: [{ from: "s", to: "t" }],
 	};

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type StreamSetupContext, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { ffmpeg, FfmpegStream } from "../ffmpeg";
 import { createDfnState, DFN3_HOP_SIZE, DFN3_SAMPLE_RATE, processDfnBlock, type DfnState } from "./utils/dfn";
@@ -134,7 +134,6 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 export class DeepFilterNet3Node extends TransformNode<DeepFilterNet3Properties> {
 	static override readonly nodeName = "DeepFilterNet3 (Denoiser)";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)";
 	static override readonly schema = schema;
 	static override readonly Stream = DeepFilterNet3Stream;

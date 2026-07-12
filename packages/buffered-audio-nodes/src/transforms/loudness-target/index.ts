@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { applyBaseRateChunk } from "./utils/apply";
 import { windowSamplesFromMs } from "./utils/envelope";
 import { clampLimit, iterateForTargets } from "./utils/iterate";
@@ -375,7 +375,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 export class LoudnessTargetNode extends TransformNode<LoudnessTargetProperties> {
 	static override readonly nodeName = "Loudness Target";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.";
 	static override readonly schema = schema;
 	static override readonly Stream = LoudnessTargetStream;

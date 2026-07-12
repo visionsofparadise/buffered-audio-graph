@@ -1,7 +1,9 @@
 import { Command } from "commander";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createRenderJobs, validateGraphDefinition, BufferedSourceStream, SourceNode, type StreamIdentity, type StartedPayload, type ProgressPayload, type FinishedPayload, type LogPayload, type NodeRegistry, type BufferedAudioNode, type RenderEvents, type RenderJob } from "@buffered-audio/core";
+import { createRenderJobs, validateGraphDefinition, BufferedSourceStream, SourceNode, type GraphDefinition, type StreamIdentity, type StartedPayload, type ProgressPayload, type FinishedPayload, type LogPayload, type RenderEvents, type RenderJob } from "@buffered-audio/core";
+import { resolvePackages } from "./resolve-packages";
+import { parseParams, parseResolveOverrides } from "./parse-options";
 
 const labelOf = (identity: StreamIdentity): string => (identity.nodeId !== undefined ? `${identity.nodeName}#${identity.nodeId}` : `${identity.nodeName}#${identity.streamId}`);
 
@@ -16,36 +18,6 @@ function sourceLabel(job: RenderJob): string | undefined {
 }
 
 const collect = (value: string, previous: Array<string>): Array<string> => [...previous, value];
-
-function parseParams(entries: ReadonlyArray<string>): Record<string, string> {
-	const parameters = new Map<string, string>();
-
-	for (const entry of entries) {
-		const separatorIndex = entry.indexOf("=");
-
-		if (separatorIndex === -1) {
-			process.stderr.write(`Error: --param must be in name=value form, got "${entry}"\n`);
-			process.exit(1);
-		}
-
-		const name = entry.slice(0, separatorIndex);
-		const value = entry.slice(separatorIndex + 1);
-
-		if (name === "") {
-			process.stderr.write(`Error: --param name must not be empty, got "${entry}"\n`);
-			process.exit(1);
-		}
-
-		if (parameters.has(name)) {
-			process.stderr.write(`Error: --param ${name} given more than once\n`);
-			process.exit(1);
-		}
-
-		parameters.set(name, value);
-	}
-
-	return Object.fromEntries(parameters);
-}
 
 function stamp(createdAt: number): string {
 	const date = new Date(createdAt);
@@ -122,7 +94,7 @@ function createEventSink(): EventSink {
 
 const program = new Command();
 
-program.name("buffered-audio-nodes").description("Process audio through buffered audio node pipelines");
+program.name("bag").description("Process audio through buffered audio node pipelines");
 
 program
 	.command("process")
@@ -185,7 +157,9 @@ program
 	.option("--chunk-size <samples>", "Chunk size in samples")
 	.option("--high-water-mark <count>", "Stream backpressure high water mark")
 	.option("--param <name=value>", "Bind a {{name}} template placeholder in the bag (repeatable)", collect, [])
-	.action(async (file: string, options: { chunkSize?: string; highWaterMark?: string; param: Array<string> }) => {
+	.option("--no-install", "Disable on-demand fetch of pinned packages; fail if a pin cannot be satisfied locally")
+	.option("--resolve <name=path>", "Override a package pin with a local directory (repeatable)", collect, [])
+	.action(async (file: string, options: { chunkSize?: string; highWaterMark?: string; param: Array<string>; install: boolean; resolve: Array<string> }) => {
 		const bagPath = resolve(file);
 
 		if (!existsSync(bagPath)) {
@@ -193,46 +167,35 @@ program
 			process.exit(1);
 		}
 
-		const json = JSON.parse(readFileSync(bagPath, "utf-8")) as unknown;
-		const definition = validateGraphDefinition(json);
+		let definition: GraphDefinition;
+		let overrides: Map<string, string>;
+		let parameters: Record<string, string>;
+
+		try {
+			const json = JSON.parse(readFileSync(bagPath, "utf-8")) as unknown;
+
+			definition = validateGraphDefinition(json);
+			overrides = parseResolveOverrides(options.resolve);
+			parameters = parseParams(options.param);
+		} catch (error) {
+			process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+			process.exit(1);
+		}
 
 		const { register } = await import("tsx/esm/api");
 		const unregister = register();
 
 		try {
-			const registry: NodeRegistry = new Map();
-
-			for (const nodeDef of definition.nodes) {
-				if (!registry.has(nodeDef.packageName)) {
-					const mod = (await import(nodeDef.packageName)) as Record<string, unknown>;
-					const packageMap = new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>();
-
-					// Bag node lookups go by `nodeName` (what `pack()` writes), not
-					// by export binding name. Index every export that has a string
-					// `nodeName`; ignore the rest (factory functions, types, etc.).
-					for (const value of Object.values(mod)) {
-						if (typeof value !== "function") continue;
-
-						const ctor = value as { nodeName?: unknown } & (new (options?: Record<string, unknown>) => BufferedAudioNode);
-
-						if (typeof ctor.nodeName !== "string") continue;
-
-						packageMap.set(ctor.nodeName, ctor);
-					}
-
-					registry.set(nodeDef.packageName, packageMap);
-				}
-			}
-
 			const chunkSize = options.chunkSize ? parseInt(options.chunkSize, 10) : undefined;
 			const highWaterMark = options.highWaterMark ? parseInt(options.highWaterMark, 10) : undefined;
-			const parameters = parseParams(options.param);
 
 			const sink = createEventSink();
 
-			process.stdout.write(`Rendering graph: ${definition.name}\n`);
-
 			try {
+				const registry = await resolvePackages(definition.packages, { install: options.install, overrides });
+
+				process.stdout.write(`Rendering graph: ${definition.name}\n`);
+
 				const jobs = createRenderJobs(definition, registry, { chunkSize, highWaterMark, parameters });
 
 				for (const job of jobs) sink.subscribe(job.events);

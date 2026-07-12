@@ -2,7 +2,7 @@ import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
 import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
 import { AmplitudeHistogramAccumulator, LoudnessAccumulator, TruePeakAccumulator } from "@buffered-audio/utils";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { amplitudePercentile, computeTotalSamples } from "./utils/stats";
 
 export const schema = z.object({
@@ -130,7 +130,6 @@ export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsNode>
 export class LoudnessStatsNode extends TargetNode<LoudnessStatsProperties> {
 	static override readonly nodeName = "Loudness Stats";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Measure integrated loudness, true peak, and loudness range per EBU R128, plus an amplitude-distribution histogram";
 	static override readonly schema = schema;
 	static override readonly Stream = LoudnessStatsStream;

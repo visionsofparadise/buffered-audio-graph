@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BufferedTransformStream, type BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { initFftBackend, linearToDb, type FftBackend } from "@buffered-audio/utils";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { LATTICE_ORDER } from "./utils/lattice";
 import { isPowerOfTwo } from "./utils/power-of-two";
 import { groupDelayLambda } from "./utils/search";
@@ -134,7 +134,6 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceNode> 
 export class CrestReduceNode extends TransformNode<CrestReduceProperties> {
 	static override readonly nodeName = "Crest Reduce";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor";
 	static override readonly schema = schema;
 	static override readonly Stream = CrestReduceStream;

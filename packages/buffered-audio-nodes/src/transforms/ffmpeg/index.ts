@@ -2,7 +2,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { interleave } from "@buffered-audio/utils";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { appendStderr, buildInputArgs, buildOutputArgs, parseStdoutFrames, spawnFfmpegChild } from "./utils/process";
 
 export const schema = z.object({
@@ -187,7 +187,6 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 export class FfmpegNode<P extends FfmpegProperties = FfmpegProperties> extends TransformNode<P> {
 	static override readonly nodeName: string = "FFmpeg";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description: string = "Process audio through FFmpeg filters";
 	static override readonly schema: z.ZodType = schema;
 	static override readonly Stream = FfmpegStream;

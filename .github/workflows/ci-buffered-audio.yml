@@ -12,6 +12,7 @@ on:
       - "packages/buffered-audio-nodes-core/**"
       - "packages/buffered-audio-nodes-utils/**"
       - "packages/buffered-audio-nodes/**"
+      - "packages/buffered-audio-cli/**"
   pull_request:
     paths:
       - ".github/workflows/ci-buffered-audio.yml"
@@ -22,6 +23,7 @@ on:
       - "packages/buffered-audio-nodes-core/**"
       - "packages/buffered-audio-nodes-utils/**"
       - "packages/buffered-audio-nodes/**"
+      - "packages/buffered-audio-cli/**"
   workflow_dispatch:
 
 jobs:

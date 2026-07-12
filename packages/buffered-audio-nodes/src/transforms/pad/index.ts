@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { CHUNK_FRAMES, silenceChunkSizes } from "./utils/chunk-frames";
 
 export const schema = z.object({
@@ -71,7 +71,6 @@ export class PadStream extends UnbufferedTransformStream<PadNode> {
 export class PadNode extends TransformNode<PadProperties> {
 	static override readonly nodeName = "Pad";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Add silence to start or end of audio";
 	static override readonly schema = schema;
 	static override readonly Stream = PadStream;

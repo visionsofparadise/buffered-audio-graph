@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { bandpass, ResampleStream } from "@buffered-audio/utils";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { buildTriangularWeight, computeStftScaled, reflectPad } from "./utils/dsp";
 import { buildModelInput, extractStems, mixStemsToStereo, type StftWorkspace } from "./utils/stems";
@@ -545,7 +545,6 @@ async function padTail(output: BlockBuffer, channels: number, originalFrames: nu
 export class HtdemucsNode extends TransformNode<HtdemucsProperties> {
 	static override readonly nodeName = "HTDemucs (Stem Separator)";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Rebalance stem volumes using HTDemucs source separation";
 	static override readonly schema = schema;
 	static override readonly Stream = HtdemucsStream;

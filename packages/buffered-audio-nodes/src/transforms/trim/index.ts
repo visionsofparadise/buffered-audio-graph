@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BufferedTransformStream, type BlockBuffer, TransformNode, WHOLE_FILE, type Block, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { computeTrimRegion, findFirstAbove, findLastAbove } from "./utils/silence";
 
 export const schema = z.object({
@@ -84,7 +84,6 @@ export class TrimStream extends BufferedTransformStream<TrimNode> {
 export class TrimNode extends TransformNode<TrimProperties> {
 	static override readonly nodeName = "Trim";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Remove silence from start and end";
 	static override readonly schema = schema;
 	static override readonly Stream = TrimStream;

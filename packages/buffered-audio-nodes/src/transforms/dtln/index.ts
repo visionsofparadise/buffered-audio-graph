@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { initFftBackend, ResampleStream, type FftBackend } from "@buffered-audio/utils";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { BLOCK_LEN, BLOCK_SHIFT, DtlnBlockStream } from "./utils/dtln";
@@ -274,7 +274,6 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 export class DtlnNode extends TransformNode<DtlnProperties> {
 	static override readonly nodeName = "DTLN (Denoiser)";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Remove background noise from speech using DTLN neural network";
 	static override readonly schema = schema;
 	static override readonly Stream = DtlnStream;

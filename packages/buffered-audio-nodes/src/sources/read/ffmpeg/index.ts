@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { z } from "zod";
 import { BufferedSourceStream, SourceNode, type Block, type SourceMetadata, type SourceNodeProperties } from "@buffered-audio/core";
 import { deinterleaveBuffer } from "@buffered-audio/utils";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../../package-metadata";
+import { PACKAGE_NAME } from "../../../package-metadata";
 
 export const ffmpegSchema = z.object({
 	path: z.string().default("").meta({ input: "file", mode: "open" }),
@@ -259,7 +259,6 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 export class ReadFfmpegNode extends SourceNode<ReadFfmpegProperties> {
 	static override readonly nodeName = "Read FFmpeg";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Read audio from a file using FFmpeg";
 	static override readonly schema = ffmpegSchema;
 	static override readonly Stream = ReadFfmpegStream;

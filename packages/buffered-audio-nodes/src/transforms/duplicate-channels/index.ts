@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 
 export const schema = z.object({
 	channels: z.number().int().min(2).max(8).default(2).describe("Output channel count"),
@@ -31,7 +31,6 @@ export class DuplicateChannelsStream extends UnbufferedTransformStream<Duplicate
 export class DuplicateChannelsNode extends TransformNode<DuplicateChannelsProperties> {
 	static override readonly nodeName = "Duplicate Channels";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Duplicate a mono signal into multiple identical output channels; requires exactly 1 input channel, throws otherwise";
 	static override readonly schema = schema;
 	static override readonly Stream = DuplicateChannelsStream;

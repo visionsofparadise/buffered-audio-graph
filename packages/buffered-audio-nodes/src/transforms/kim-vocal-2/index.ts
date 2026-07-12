@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { bandpass, MixedRadixFft, ResampleStream } from "@buffered-audio/utils";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { buildTransitionWindow, createSegmentWorkspace, processSegment } from "./utils/segment";
@@ -425,7 +425,6 @@ async function padTail(output: BlockBuffer, channels: number, originalFrames: nu
 export class KimVocal2Node extends TransformNode<KimVocal2Properties> {
 	static override readonly nodeName = "Kim Vocal 2 (Stem Separator)";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Isolate dialogue from background using MDX-Net vocal separation";
 	static override readonly schema = schema;
 	static override readonly Stream = KimVocal2Stream;

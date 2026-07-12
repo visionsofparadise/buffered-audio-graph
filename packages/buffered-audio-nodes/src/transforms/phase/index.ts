@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { applyAllpass, invertSamples, phaseCoefficient } from "./utils/phase-shift";
 
 export const schema = z.object({
@@ -57,7 +57,6 @@ export class PhaseStream extends UnbufferedTransformStream<PhaseNode> {
 export class PhaseNode extends TransformNode<PhaseProperties> {
 	static override readonly nodeName = "Phase";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Invert or rotate signal phase";
 	static override readonly schema = schema;
 	static override readonly Stream = PhaseStream;

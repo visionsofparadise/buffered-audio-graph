@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
-import { PACKAGE_NAME, PACKAGE_VERSION } from "../../package-metadata";
+import { PACKAGE_NAME } from "../../package-metadata";
 import { balanceScales, panGains } from "./utils/pan-law";
 
 export const schema = z.object({
@@ -58,7 +58,6 @@ export class PanStream extends UnbufferedTransformStream<PanNode> {
 export class PanNode extends TransformNode<PanProperties> {
 	static override readonly nodeName = "Pan";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly packageVersion = PACKAGE_VERSION;
 	static override readonly description = "Position mono signal in stereo field or adjust stereo balance; throws for inputs with more than 2 channels";
 	static override readonly schema = schema;
 	static override readonly Stream = PanStream;
