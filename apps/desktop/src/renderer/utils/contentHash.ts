@@ -1,3 +1,4 @@
+import { type FileParamStat, serializeFileParamStats } from "../../shared/utilities/serializeFileParamStats";
 import { sortKeysRecursive } from "../../shared/utilities/sortKeysRecursive";
 
 export { sortKeysRecursive };
@@ -9,6 +10,7 @@ export async function contentHash(
 	nodeName: string,
 	parameters: Record<string, unknown>,
 	bypass: boolean,
+	fileParamStats: ReadonlyArray<FileParamStat>,
 ): Promise<string> {
 	const input =
 		upstreamHash +
@@ -16,7 +18,8 @@ export async function contentHash(
 		packageVersion +
 		nodeName +
 		JSON.stringify(sortKeysRecursive(parameters)) +
-		String(bypass);
+		String(bypass) +
+		serializeFileParamStats(fileParamStats);
 
 	const buffer = await crypto.subtle.digest(
 		"SHA-256",

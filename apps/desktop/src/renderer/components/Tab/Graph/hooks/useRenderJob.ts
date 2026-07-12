@@ -2,6 +2,7 @@ import type { GraphDefinition } from "@buffered-audio/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AudioProgressPayload } from "../../../../../shared/utilities/emitToRenderer";
 import type { GraphContext } from "../../../../models/Context";
+import { resolveFileStatsByNode } from "./fileParamStats";
 import { buildRenderPlan, diffStaleNodes, executeRenderPlan } from "./renderCoordinator";
 
 export interface UseRenderJobReturn {
@@ -42,7 +43,8 @@ export function useRenderJob(refresh: () => void, context: GraphContext): UseRen
 		const snapshotsDir = `${context.userDataPath}/snapshots`;
 
 		try {
-			const plan = await buildRenderPlan(graphDefinition, snapshotsDir, context.bagId);
+			const fileStatsByNodeId = await resolveFileStatsByNode(graphDefinition.nodes, context);
+			const plan = await buildRenderPlan(graphDefinition, snapshotsDir, context.bagId, fileStatsByNodeId);
 			const stale = await diffStaleNodes(plan, context.main);
 
 			await executeRenderPlan(plan, stale, graphDefinition, jobId, context.main, controller.signal);

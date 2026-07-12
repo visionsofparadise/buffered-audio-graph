@@ -25,6 +25,9 @@ import { GetWindowIdRendererIpc } from "./System/getWindowId/Renderer";
 import { OpenPathRendererIpc } from "./System/openPath/Renderer";
 import { QuitAppRendererIpc } from "./System/quitApp/Renderer";
 import { SetBoundsRendererIpc } from "./System/setBounds/Renderer";
+import { Vst3GetDefaultScanRootsRendererIpc } from "./Vst3/getDefaultScanRoots/Renderer";
+import { Vst3ScanPluginsRendererIpc } from "./Vst3/scanPlugins/Renderer";
+import { Vst3LaunchEditorRendererIpc } from "./Vst3/launchEditor/Renderer";
 
 export const ASYNC_RENDERER_IPCS = [
 	AbortJobRendererIpc,
@@ -53,6 +56,9 @@ export const ASYNC_RENDERER_IPCS = [
 	OpenPathRendererIpc,
 	QuitAppRendererIpc,
 	SetBoundsRendererIpc,
+	Vst3GetDefaultScanRootsRendererIpc,
+	Vst3ScanPluginsRendererIpc,
+	Vst3LaunchEditorRendererIpc,
 ];
 
 export type AsyncIpcAction = IpcHandlerAction<InstanceType<(typeof ASYNC_RENDERER_IPCS)[number]>>;

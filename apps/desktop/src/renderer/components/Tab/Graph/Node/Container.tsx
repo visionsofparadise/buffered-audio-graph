@@ -1,10 +1,13 @@
 import { cn } from "../../../../utils/cn";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Power, TriangleAlert } from "lucide-react";
+import type { Main } from "../../../../models/Main";
+import type { MainEvents } from "../../../../models/MainEvents";
 import { NodeMenu } from "./Menu";
 import type { ParameterCallbacks } from "./ParameterRow/ParameterField";
 import { ParameterField } from "./ParameterRow/ParameterField";
 import type { Parameter } from "./utils/buildParameters";
+import { Vst3StagesEditor } from "./Vst3StagesEditor";
 
 /**
  * Per-node render staleness, derived by `useNodeStates`. It is a content-hash
@@ -24,6 +27,10 @@ const CATEGORY_HEADER_BG: Record<NodeCategory, string> = {
 
 export interface NodeContainerData {
 	readonly label: string;
+	/** The node's package identity (e.g. "@buffered-audio/nodes"). Distinct from `label`. */
+	readonly packageName: string;
+	/** The node's class name (e.g. "VST3"). Keys the custom-body branch; distinct from `label`. */
+	readonly nodeName: string;
 	readonly category: NodeCategory;
 	/** Content-hash staleness — computed but not painted on the node. */
 	readonly state: NodeState;
@@ -58,6 +65,12 @@ export interface NodeContainerData {
 	readonly onReset?: () => void;
 	/** Remove the node from the graph. */
 	readonly onDelete?: () => void;
+	/** Renderer IPC surface — threaded for node bodies (e.g. VST3) that call main directly. */
+	readonly main?: Main;
+	/** Main→renderer event bus — threaded for node bodies that subscribe to push events. */
+	readonly mainEvents?: MainEvents;
+	/** VST3 scan roots from AppState — the plugin picker scans these. */
+	readonly vst3ScanRoots?: ReadonlyArray<string>;
 	[key: string]: unknown;
 }
 
@@ -147,15 +160,41 @@ export function NodeContainer({ data, selected }: NodeProps) {
 				) : (
 					nodeData.parameters.length > 0 && (
 						<div className="nodrag nopan flex flex-col gap-4 px-3 py-4">
-							{nodeData.parameters.map((param) => (
-								<ParameterField
-									key={param.name}
-									param={param}
-									basePath={[]}
-									dimmed={isBypassed}
-									callbacks={callbacks}
-								/>
-							))}
+							{nodeData.parameters.map((param) => {
+								// The VST3 node's `stages` object-array renders as the custom stage
+								// editor (keyed on nodeName, not the package); every other param —
+								// and a foreign package reusing the name without a `stages` array —
+								// falls through to the generic ParameterField.
+								if (
+									nodeData.nodeName === "VST3" &&
+									param.kind === "array" &&
+									param.name === "stages" &&
+									nodeData.main &&
+									nodeData.mainEvents
+								) {
+									return (
+										<Vst3StagesEditor
+											key={param.name}
+											param={param}
+											dimmed={isBypassed}
+											main={nodeData.main}
+											mainEvents={nodeData.mainEvents}
+											scanRoots={nodeData.vst3ScanRoots ?? []}
+											callbacks={callbacks}
+										/>
+									);
+								}
+
+								return (
+									<ParameterField
+										key={param.name}
+										param={param}
+										basePath={[]}
+										dimmed={isBypassed}
+										callbacks={callbacks}
+									/>
+								);
+							})}
 						</div>
 					)
 				)}

@@ -10,6 +10,7 @@ export interface NodeJsonSchemaProperty {
 	readonly default?: unknown;
 	readonly description?: string;
 	readonly input?: "file" | "folder";
+	readonly mode?: "open" | "save";
 	readonly binary?: string;
 	/** For type === "object": child properties of the nested object. */
 	readonly properties?: Readonly<Record<string, NodeJsonSchemaProperty>>;

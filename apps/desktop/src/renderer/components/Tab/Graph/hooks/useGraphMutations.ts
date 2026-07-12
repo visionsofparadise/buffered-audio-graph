@@ -1,6 +1,8 @@
-import type { GraphDefinition, GraphEdge, GraphNode } from "@buffered-audio/core";
+import type { GraphEdge, GraphNode } from "@buffered-audio/core";
 import { useMemo, useRef } from "react";
 import type { GraphContext } from "../../../../models/Context";
+import type { Mutable } from "../../../../models/State";
+import type { GraphDefinitionState } from "../../../../models/State/GraphDefinition";
 import { buildDefaultParameters } from "../Node/utils/buildParameters";
 import { lookupNode } from "../Node/utils/nodeLookup";
 
@@ -30,57 +32,36 @@ interface GraphMutations {
 }
 
 /**
- * Deep-clone a plain JSON value.
- * Only handles the subset produced by BAG parameters: objects, arrays, primitives.
+ * Write `value` at `path` into `root`, creating intermediate plain
+ * objects/arrays where the path does not yet exist. Mutates `root` in place.
  */
-function deepClone(value: unknown): unknown {
-	if (value === null || typeof value !== "object") return value;
+function setNestedValue(
+	root: Record<string | number, unknown>,
+	path: ReadonlyArray<string | number>,
+	value: unknown,
+): void {
+	let container: Record<string | number, unknown> = root;
 
-	if (Array.isArray(value)) return value.map(deepClone);
+	for (let depth = 0; depth < path.length - 1; depth++) {
+		const key = path[depth];
+		const nextKey = path[depth + 1];
 
-	const cloned: Record<string, unknown> = {};
+		if (key === undefined) return;
 
-	for (const [key, fieldValue] of Object.entries(value as Record<string, unknown>)) {
-		cloned[key] = deepClone(fieldValue);
+		const existing = container[key];
+
+		if (existing === null || typeof existing !== "object") {
+			container[key] = typeof nextKey === "number" ? [] : {};
+		}
+
+		container = container[key] as Record<string | number, unknown>;
 	}
 
-	return cloned;
-}
+	const leaf = path[path.length - 1];
 
-/**
- * Return a deep-cloned copy of `root` with the nested location described by
- * `subPath` set to `newValue`. `subPath` is the path after the top-level
- * parameter name.
- */
-function withNestedValue(
-	root: unknown,
-	subPath: ReadonlyArray<string | number>,
-	newValue: unknown,
-): unknown {
-	if (subPath.length === 0) return newValue;
+	if (leaf === undefined) return;
 
-	const head = subPath[0];
-	const tail = subPath.slice(1);
-
-	if (typeof head === "number") {
-		const arr: Array<unknown> = Array.isArray(root) ? [...(root as Array<unknown>)] : [];
-
-		arr[head] = withNestedValue(arr[head], tail, newValue);
-
-		return arr;
-	}
-
-	if (typeof head === "string") {
-		const record = root !== null && typeof root === "object" && !Array.isArray(root)
-			? { ...(root as Record<string, unknown>) }
-			: {};
-
-		record[head] = withNestedValue(record[head], tail, newValue);
-
-		return record;
-	}
-
-	return root;
+	container[leaf] = value;
 }
 
 export function useGraphMutations(context: GraphContext): GraphMutations {
@@ -89,19 +70,10 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 	contextRef.current = context;
 
 	return useMemo<GraphMutations>(() => {
-		function mutate(
-			updater: (definition: GraphDefinition) => GraphDefinition,
-			transactionKey?: string,
-		): void {
-			const { history, graphDefinition, mutateDefinition } = contextRef.current;
+		function mutate(callback: (proxy: Mutable<GraphDefinitionState>) => void, transactionKey?: string): void {
+			const { history, graphDefinition } = contextRef.current;
 
-			history.mutate(
-				graphDefinition,
-				() => {
-					mutateDefinition(updater);
-				},
-				transactionKey ? { transactionKey } : undefined,
-			);
+			history.mutate(graphDefinition, callback, transactionKey ? { transactionKey } : undefined);
 		}
 
 		function addNode(packageName: string, packageVersion: string, nodeName: string, position: Position): void {
@@ -133,10 +105,9 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 				parameters: {},
 			};
 
-			mutate((definition) => ({
-				...definition,
-				nodes: [...definition.nodes, node],
-			}));
+			mutate((proxy) => {
+				proxy.nodes = [...proxy.nodes, node];
+			});
 
 			graphStore.mutate(graph, (proxy) => {
 				proxy.positions[id] = { x: position.x, y: position.y };
@@ -144,11 +115,10 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function removeNode(nodeId: string): void {
-			mutate((definition) => ({
-				...definition,
-				nodes: definition.nodes.filter((node) => node.id !== nodeId),
-				edges: definition.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId),
-			}));
+			mutate((proxy) => {
+				proxy.nodes = proxy.nodes.filter((node) => node.id !== nodeId);
+				proxy.edges = proxy.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId);
+			});
 
 			const { graphStore, graph } = contextRef.current;
 
@@ -160,17 +130,15 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function addEdge(from: string, to: string): void {
-			mutate((definition) => ({
-				...definition,
-				edges: [...definition.edges, { from, to }],
-			}));
+			mutate((proxy) => {
+				proxy.edges = [...proxy.edges, { from, to }];
+			});
 		}
 
 		function removeEdge(from: string, to: string): void {
-			mutate((definition) => ({
-				...definition,
-				edges: definition.edges.filter((edge) => !(edge.from === from && edge.to === to)),
-			}));
+			mutate((proxy) => {
+				proxy.edges = proxy.edges.filter((edge) => !(edge.from === from && edge.to === to));
+			});
 		}
 
 		function insertNodeOnEdge(edge: GraphEdge, packageName: string, packageVersion: string, nodeName: string): void {
@@ -191,15 +159,14 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 				? { x: (fromPosition.x + toPosition.x) / 2, y: (fromPosition.y + toPosition.y) / 2 }
 				: { x: 0, y: 0 };
 
-			mutate((definition) => ({
-				...definition,
-				nodes: [...definition.nodes, node],
-				edges: [
-					...definition.edges.filter((graphEdge) => !(graphEdge.from === edge.from && graphEdge.to === edge.to)),
+			mutate((proxy) => {
+				proxy.nodes = [...proxy.nodes, node];
+				proxy.edges = [
+					...proxy.edges.filter((graphEdge) => !(graphEdge.from === edge.from && graphEdge.to === edge.to)),
 					{ from: edge.from, to: id },
 					{ from: id, to: edge.to },
-				],
-			}));
+				];
+			});
 
 			graphStore.mutate(graph, (proxy) => {
 				proxy.positions[id] = { x: position.x, y: position.y };
@@ -207,14 +174,15 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function toggleBypass(nodeId: string): void {
-			mutate((definition) => ({
-				...definition,
-				nodes: definition.nodes.map((node) =>
-					node.id === nodeId
-						? { ...node, options: { ...node.options, bypass: !(node.options?.bypass ?? false) } }
-						: node,
-				),
-			}));
+			mutate((proxy) => {
+				const node = proxy.nodes.find((graphNode) => graphNode.id === nodeId);
+
+				if (!node) return;
+
+				const current = node.options?.bypass ?? false;
+
+				node.options = { ...node.options, bypass: !current };
+			});
 		}
 
 		function resetNodeParameters(nodeId: string): void {
@@ -227,102 +195,89 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			const { schema } = lookupNode(graphNode.packageName, packageVersion, graphNode.nodeName, contextRef.current);
 			const defaults = buildDefaultParameters(schema);
 
-			mutate((definition) => ({
-				...definition,
-				nodes: definition.nodes.map((node) => (node.id === nodeId ? { ...node, parameters: defaults } : node)),
-			}));
+			mutate((proxy) => {
+				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
+
+				if (!node) return;
+
+				node.parameters = defaults;
+			});
 		}
 
 		function setGraphName(name: string): void {
-			mutate((definition) => ({
-				...definition,
-				name,
-			}));
+			mutate((proxy) => {
+				proxy.name = name;
+			});
 		}
 
 		function setParameterAtPath(nodeId: string, path: ReadonlyArray<string | number>, value: unknown): void {
 			if (path.length === 0) return;
 
-			const topLevelName = path[0];
+			if (typeof path[0] !== "string") return;
 
-			if (typeof topLevelName !== "string") return;
+			mutate((proxy) => {
+				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
 
-			const subPath = path.slice(1);
+				if (!node) return;
 
-			mutate((definition) => ({
-				...definition,
-				nodes: definition.nodes.map((node) => {
-					if (node.id !== nodeId) return node;
+				node.parameters ??= {};
 
-					const previousTopValue = deepClone(node.parameters?.[topLevelName]);
-					const newTopValue = withNestedValue(previousTopValue, subPath, value);
-
-					return { ...node, parameters: { ...node.parameters, [topLevelName]: newTopValue } };
-				}),
-			}));
+				setNestedValue(node.parameters, path, value);
+			});
 		}
 
 		function addArrayRow(nodeId: string, paramName: string, defaultItem: Record<string, unknown>): void {
-			mutate((definition) => ({
-				...definition,
-				nodes: definition.nodes.map((node) => {
-					if (node.id !== nodeId) return node;
+			mutate((proxy) => {
+				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
 
-					const previousArray = Array.isArray(node.parameters?.[paramName])
-						? [...(node.parameters[paramName] as Array<unknown>)]
-						: [];
+				if (!node) return;
 
-					return {
-						...node,
-						parameters: { ...node.parameters, [paramName]: [...previousArray, defaultItem] },
-					};
-				}),
-			}));
+				node.parameters ??= {};
+
+				const existing = node.parameters[paramName];
+				const rows = Array.isArray(existing) ? (existing as Array<unknown>) : [];
+
+				node.parameters[paramName] = [...rows, defaultItem];
+			});
 		}
 
 		function deleteArrayRow(nodeId: string, paramName: string, rowIndex: number): void {
-			mutate((definition) => ({
-				...definition,
-				nodes: definition.nodes.map((node) => {
-					if (node.id !== nodeId) return node;
+			mutate((proxy) => {
+				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
 
-					const previousArray = Array.isArray(node.parameters?.[paramName])
-						? [...(node.parameters[paramName] as Array<unknown>)]
-						: [];
+				if (!node?.parameters) return;
 
-					return {
-						...node,
-						parameters: {
-							...node.parameters,
-							[paramName]: previousArray.filter((_, index) => index !== rowIndex),
-						},
-					};
-				}),
-			}));
+				const existing = node.parameters[paramName];
+
+				if (!Array.isArray(existing)) return;
+
+				const rows = existing as Array<unknown>;
+
+				if (rowIndex < 0 || rowIndex >= rows.length) return;
+
+				node.parameters[paramName] = rows.filter((_, index) => index !== rowIndex);
+			});
 		}
 
 		function reorderArrayRows(nodeId: string, paramName: string, fromIndex: number, toIndex: number): void {
-			mutate((definition) => ({
-				...definition,
-				nodes: definition.nodes.map((node) => {
-					if (node.id !== nodeId) return node;
+			mutate((proxy) => {
+				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
 
-					const previousArray = Array.isArray(node.parameters?.[paramName])
-						? [...(node.parameters[paramName] as Array<unknown>)]
-						: [];
+				if (!node?.parameters) return;
 
-					if (fromIndex < 0 || fromIndex >= previousArray.length || toIndex < 0 || toIndex >= previousArray.length) {
-						return node;
-					}
+				const existing = node.parameters[paramName];
 
-					const next = [...previousArray];
-					const [moved] = next.splice(fromIndex, 1);
+				if (!Array.isArray(existing)) return;
 
-					next.splice(toIndex, 0, moved);
+				const rows = [...(existing as Array<unknown>)];
 
-					return { ...node, parameters: { ...node.parameters, [paramName]: next } };
-				}),
-			}));
+				if (fromIndex < 0 || fromIndex >= rows.length || toIndex < 0 || toIndex >= rows.length) return;
+
+				const [moved] = rows.splice(fromIndex, 1);
+
+				rows.splice(toIndex, 0, moved);
+				node.parameters[paramName] = rows;
+			});
 		}
 
 		return {

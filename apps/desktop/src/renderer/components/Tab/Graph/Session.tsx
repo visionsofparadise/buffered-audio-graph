@@ -25,7 +25,7 @@ interface Props {
 }
 
 export function GraphSession({ initialGraphState, initialDefinition, initialContent, tab, graphStore, context }: Props) {
-	const { graphDefinition, mutateDefinition } = useGraphDefinition(initialDefinition, initialContent, graphStore, tab.bagPath, context);
+	const { graphDefinition, flushDefinition } = useGraphDefinition(initialDefinition, initialContent, graphStore, tab.bagPath, context);
 
 	const layoutAppliedState = useMemo(() => {
 		const needsLayout = Object.keys(initialGraphState.positions).length === 0 && graphDefinition.nodes.length > 0;
@@ -45,8 +45,8 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 	}, [context.tabNames, tab.id, graphDefinition.name]);
 
 	const onSave = useCallback(() => {
-		mutateDefinition.flush();
-	}, [mutateDefinition]);
+		flushDefinition();
+	}, [flushDefinition]);
 
 	const activeCommandsRef = useRef(context.activeCommands);
 
@@ -54,10 +54,9 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 
 	useEffect(() => {
 		const rename = (name: string) => {
-			mutateDefinition((definition) => ({
-				...definition,
-				name,
-			}));
+			history.mutate(graphDefinition, (proxy) => {
+				proxy.name = name;
+			});
 		};
 
 		const importBagCommand = async () => {
@@ -65,14 +64,16 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 
 			if (!imported) return;
 
-			const previousDefinition: GraphDefinition = structuredClone({
-				id: graphDefinition.id,
-				apiVersion: graphDefinition.apiVersion,
-				name: graphDefinition.name,
-				nodes: graphDefinition.nodes as GraphDefinition["nodes"],
-				edges: graphDefinition.edges as GraphDefinition["edges"],
-			});
-			const previousPositions = structuredClone(graph.positions);
+			const previousDefinition = JSON.parse(
+				JSON.stringify({
+					id: graphDefinition.id,
+					apiVersion: graphDefinition.apiVersion,
+					name: graphDefinition.name,
+					nodes: graphDefinition.nodes,
+					edges: graphDefinition.edges,
+				}),
+			) as GraphDefinition;
+			const previousPositions = JSON.parse(JSON.stringify(graph.positions)) as Record<string, { x: number; y: number }>;
 			const merged = mergeImportedBag({
 				currentDefinition: previousDefinition,
 				currentPositions: previousPositions,
@@ -81,15 +82,13 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 
 			if (merged.importedNodeCount === 0) return;
 
-			const nextDefinition = structuredClone(merged.definition);
-			const nextPositions = structuredClone(merged.positions);
-
-			history.mutate(graphDefinition, () => {
-				mutateDefinition(() => nextDefinition);
+			history.mutate(graphDefinition, (proxy) => {
+				proxy.nodes = merged.definition.nodes;
+				proxy.edges = merged.definition.edges;
 			});
 
 			graphStore.mutate(graph, (proxy) => {
-				proxy.positions = nextPositions;
+				proxy.positions = merged.positions;
 			});
 		};
 
@@ -118,7 +117,6 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 		context.appStore,
 		context.main,
 		history,
-		mutateDefinition,
 		graphDefinition,
 		graph,
 		graph.positions,
@@ -132,13 +130,13 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 			graph,
 			graphStore,
 			graphDefinition,
-			mutateDefinition,
+			flushDefinition,
 			bagPath: tab.bagPath,
 			bagId: tab.id,
 			history,
 			onSave,
 		}),
-		[context, graph, graphStore, graphDefinition, mutateDefinition, tab.bagPath, tab.id, history, onSave],
+		[context, graph, graphStore, graphDefinition, flushDefinition, tab.bagPath, tab.id, history, onSave],
 	);
 
 	return (

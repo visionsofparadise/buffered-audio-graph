@@ -4,6 +4,7 @@ import { topologicalSort } from "../../../../../shared/utilities/topologicalSort
 import type { GraphContext } from "../../../../models/Context";
 import { contentHash } from "../../../../utils/contentHash";
 import type { NodeState } from "../Node/Container";
+import { resolveFileStatsByNode } from "./fileParamStats";
 
 interface NodeStateEntry {
 	readonly state: NodeState;
@@ -79,6 +80,7 @@ export function useNodeStates(context: GraphContext): UseNodeStatesReturn {
 		}
 
 		const computedHashes = new Map<string, string>();
+		const fileStatsByNode = await resolveFileStatsByNode(nodes, context);
 
 		for (const layer of layers) {
 			await Promise.all(
@@ -106,6 +108,7 @@ export function useNodeStates(context: GraphContext): UseNodeStatesReturn {
 						node.nodeName,
 						node.parameters ?? {},
 						node.options?.bypass ?? false,
+						fileStatsByNode.get(nodeId) ?? [],
 					);
 
 					computedHashes.set(nodeId, hash);
@@ -145,7 +148,7 @@ export function useNodeStates(context: GraphContext): UseNodeStatesReturn {
 		);
 
 		setNodeStates(new Map(snapshotEntries));
-	}, [graphDefinition, main, userDataPath, bagId]);
+	}, [context, graphDefinition, main, userDataPath, bagId]);
 
 	const refresh = useCallback(() => {
 		void compute();

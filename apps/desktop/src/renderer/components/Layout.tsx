@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Logger } from "../../shared/models/Logger";
 import { useAppCallbacks } from "../hooks/useAppCallbacks";
 import { useAutosave } from "../hooks/useAutosave";
@@ -16,6 +16,7 @@ import { useAppState, type AppState } from "../models/State/App";
 import { BinaryManager } from "./BinaryManager";
 import { LoadingScreen } from "./LoadingScreen";
 import { PackageManager } from "./PackageManager";
+import { Preferences } from "./Preferences";
 import { AppBar } from "./AppBar";
 import { TabContent } from "./Tab";
 
@@ -39,10 +40,19 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 
 	const { isLoading } = usePackageLoader(app, appStore, main);
 	const hasUnresolvedPackages = app.packages.some((entry) => entry.status !== "ready" && entry.status !== "error");
+	const hasError = app.packages.some((entry) => entry.status === "error");
 
 	const [hasPassedLoading, setHasPassedLoading] = useState(false);
+
+	useEffect(() => {
+		if (!hasPassedLoading && !isLoading && !hasUnresolvedPackages && !hasError) {
+			setHasPassedLoading(true);
+		}
+	}, [hasPassedLoading, isLoading, hasUnresolvedPackages, hasError]);
+
 	const [packageManagerOpen, setPackageManagerOpen] = useState(false);
 	const [binaryManagerOpen, setBinaryManagerOpen] = useState(false);
+	const [preferencesOpen, setPreferencesOpen] = useState(false);
 
 	const callbacks = useAppCallbacks(app, appStore, main, logger, setHasPassedLoading);
 
@@ -74,6 +84,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 			},
 			setPackageManagerOpen,
 			setBinaryManagerOpen,
+			setPreferencesOpen,
 		}),
 		[app, appStore, logger, mainEvents, queryClient, userDataPath, windowId, activeCommands, callbacks],
 	);
@@ -103,6 +114,11 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 			<BinaryManager
 				isOpen={binaryManagerOpen}
 				onClose={() => setBinaryManagerOpen(false)}
+				context={context}
+			/>
+			<Preferences
+				isOpen={preferencesOpen}
+				onClose={() => setPreferencesOpen(false)}
 				context={context}
 			/>
 		</div>

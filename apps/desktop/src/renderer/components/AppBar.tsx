@@ -32,15 +32,15 @@ export const AppBar = resnapshot<Props>(({ context, chromeOnly = false }: Props)
 	const hasActiveGraphTab = app.activeTabId !== null;
 
 	const appMenuItems: ReadonlyArray<MenuItem> = [
-		{ kind: "action", label: "New graph", onClick: () => void context.newBagTab() },
-		{ kind: "action", label: "Open graph", onClick: () => void context.openBagTab() },
-		{ kind: "action", label: "Save", disabled: save === null, onClick: () => save?.() },
+		{ kind: "action", label: "New graph", disabled: chromeOnly, onClick: () => void context.newBagTab() },
+		{ kind: "action", label: "Open graph", disabled: chromeOnly, onClick: () => void context.openBagTab() },
+		{ kind: "action", label: "Save", disabled: chromeOnly ? true : save === null, onClick: () => save?.() },
 		{ kind: "action", label: "Save As", disabled: true },
 		{ kind: "separator" },
-		{ kind: "action", label: "Manage Binaries", onClick: () => context.setBinaryManagerOpen(true) },
-		{ kind: "action", label: "Manage Packages", onClick: () => context.setPackageManagerOpen(true) },
+		{ kind: "action", label: "Manage Binaries", disabled: chromeOnly, onClick: () => context.setBinaryManagerOpen(true) },
+		{ kind: "action", label: "Manage Packages", disabled: chromeOnly, onClick: () => context.setPackageManagerOpen(true) },
 		{ kind: "separator" },
-		{ kind: "action", label: "Preferences", disabled: true },
+		{ kind: "action", label: "Preferences", disabled: chromeOnly, onClick: () => context.setPreferencesOpen(true) },
 		{ kind: "action", label: "Quit", onClick: () => void context.main.quitApp() },
 	];
 
@@ -89,7 +89,7 @@ export const AppBar = resnapshot<Props>(({ context, chromeOnly = false }: Props)
 			className="relative flex h-12 shrink-0 items-center bg-elevated"
 			style={DRAG}
 		>
-			<div style={NO_DRAG}>
+			<div className="h-full" style={NO_DRAG}>
 				<DropdownButton
 					trigger={
 						<IconButton

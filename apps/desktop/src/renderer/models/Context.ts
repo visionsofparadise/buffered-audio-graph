@@ -1,4 +1,3 @@
-import type { GraphDefinition } from "@buffered-audio/core";
 import type { QueryClient } from "@tanstack/react-query";
 import type { Snapshot } from "valtio/vanilla";
 import type { Logger } from "../../shared/models/Logger";
@@ -29,13 +28,14 @@ export interface AppContext {
 	readonly importBagIntoActiveTab: () => Promise<void>;
 	readonly setPackageManagerOpen: (open: boolean) => void;
 	readonly setBinaryManagerOpen: (open: boolean) => void;
+	readonly setPreferencesOpen: (open: boolean) => void;
 }
 
 export interface GraphContext extends AppContext {
 	readonly graph: Snapshot<GraphState>;
 	readonly graphStore: ProxyStore;
 	readonly graphDefinition: Snapshot<GraphDefinitionState>;
-	readonly mutateDefinition: (updater: (definition: GraphDefinition) => GraphDefinition) => void;
+	readonly flushDefinition: () => void;
 	readonly bagPath: string;
 	readonly bagId: string;
 	readonly history: Snapshot<History>;

@@ -13,7 +13,8 @@
     "lint:fix": "eslint . --fix",
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "smoke:gui": "tsx scripts/gui-smoke.ts"
   },
   "author": {
     "name": "Matt Cavender",
@@ -34,6 +35,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.0.0",
     "electron": "40.8.0",
+    "puppeteer-core": "^25.3.0",
     "tailwindcss": "^4.2.1",
     "typescript": "*",
     "vite": "^5.4.0"

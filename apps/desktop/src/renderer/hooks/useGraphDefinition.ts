@@ -1,4 +1,3 @@
-import type { GraphDefinition } from "@buffered-audio/core";
 import { useCallback, useEffect, useRef } from "react";
 import { snapshot, subscribe, type Snapshot } from "valtio/vanilla";
 import { SUPPORTED_API_VERSIONS } from "../../shared/models/ApiVersion";
@@ -15,17 +14,10 @@ import {
 /** Disk-write debounce window for autosave (ms). */
 const SAVE_DEBOUNCE_MS = 800;
 
-/**
- * `mutateDefinition` with a `flush` method attached. `flush` writes any
- * pending debounced edit to disk immediately.
- */
-export type MutateDefinition = ((updater: (definition: GraphDefinition) => GraphDefinition) => void) & {
-	flush: () => void;
-};
-
 interface UseGraphDefinitionResult {
 	readonly graphDefinition: Snapshot<GraphDefinitionState>;
-	readonly mutateDefinition: MutateDefinition;
+	/** Force an immediate save of the pending debounced edit to disk. */
+	readonly flushDefinition: () => void;
 }
 
 async function sha256Hex(content: string): Promise<string> {
@@ -61,7 +53,7 @@ export function useGraphDefinition(
 		});
 	}, [initialContent]);
 
-	const flush = useCallback((): void => {
+	const flushDefinition = useCallback((): void => {
 		if (timerRef.current !== null) {
 			clearTimeout(timerRef.current);
 			timerRef.current = null;
@@ -111,7 +103,7 @@ export function useGraphDefinition(
 		});
 
 		const handleBeforeUnload = (): void => {
-			flush();
+			flushDefinition();
 		};
 
 		window.addEventListener("beforeunload", handleBeforeUnload);
@@ -119,9 +111,9 @@ export function useGraphDefinition(
 		return () => {
 			window.removeEventListener("beforeunload", handleBeforeUnload);
 			unsubscribe();
-			flush();
+			flushDefinition();
 		};
-	}, [graphDefinition._key, store, main, flush]);
+	}, [graphDefinition._key, store, main, flushDefinition]);
 
 	useEffect(() => {
 		void main.watchFile(bagPath);
@@ -172,29 +164,5 @@ export function useGraphDefinition(
 		};
 	}, [bagPath, mainEvents, main, store, graphDefinition]);
 
-	const mutateDefinition = useCallback(
-		((updater: (definition: GraphDefinition) => GraphDefinition) => {
-			store.mutate(graphDefinition, (proxy) => {
-				const current: GraphDefinition = {
-					id: proxy.id,
-					apiVersion: proxy.apiVersion,
-					name: proxy.name,
-					nodes: structuredClone(proxy.nodes as Array<GraphDefinition["nodes"][number]>),
-					edges: structuredClone(proxy.edges as Array<GraphDefinition["edges"][number]>),
-				};
-				const next = updater(current);
-
-				proxy.id = next.id;
-				proxy.apiVersion = next.apiVersion;
-				proxy.name = next.name;
-				proxy.nodes = next.nodes;
-				proxy.edges = next.edges;
-			});
-		}) as MutateDefinition,
-		[store, graphDefinition],
-	);
-
-	mutateDefinition.flush = flush;
-
-	return { graphDefinition, mutateDefinition };
+	return { graphDefinition, flushDefinition };
 }

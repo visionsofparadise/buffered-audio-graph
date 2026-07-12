@@ -24,6 +24,9 @@ import { GetWindowIdMainIpc } from "./System/getWindowId/Main";
 import { OpenPathMainIpc } from "./System/openPath/Main";
 import { QuitAppMainIpc } from "./System/quitApp/Main";
 import { SetBoundsMainIpc } from "./System/setBounds/Main";
+import { Vst3GetDefaultScanRootsMainIpc } from "./Vst3/getDefaultScanRoots/Main";
+import { Vst3ScanPluginsMainIpc } from "./Vst3/scanPlugins/Main";
+import { Vst3LaunchEditorMainIpc } from "./Vst3/launchEditor/Main";
 
 export const ASYNC_MAIN_IPCS = [
 	AbortJobMainIpc,
@@ -52,4 +55,7 @@ export const ASYNC_MAIN_IPCS = [
 	OpenPathMainIpc,
 	QuitAppMainIpc,
 	SetBoundsMainIpc,
+	Vst3GetDefaultScanRootsMainIpc,
+	Vst3ScanPluginsMainIpc,
+	Vst3LaunchEditorMainIpc,
 ];

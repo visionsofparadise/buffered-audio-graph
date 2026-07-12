@@ -1,4 +1,5 @@
 import type { GraphDefinition, GraphNode } from "@buffered-audio/core";
+import type { FileParamStat } from "../../../../../shared/utilities/serializeFileParamStats";
 import { topologicalSort } from "../../../../../shared/utilities/topologicalSort";
 import type { Main } from "../../../../models/Main";
 import { contentHash } from "../../../../utils/contentHash";
@@ -60,12 +61,14 @@ function resolveUpstreamNodeId(
  * Build a full render plan for a graph: topologically sort nodes, compute
  * per-node content hashes (using bypass-aware upstream-hash resolution), and
  * derive each node's snapshot directory and input audio path. The plan is
- * pure data — it does not call any IPC.
+ * pure data — it does not call any IPC; the caller supplies per-node file-param
+ * stats (gathered via IPC) so the hashes match `useNodeStates`.
  */
 export async function buildRenderPlan(
 	graphDefinition: GraphDefinition,
 	snapshotsDir: string,
 	bagId: string,
+	fileStatsByNodeId: ReadonlyMap<string, ReadonlyArray<FileParamStat>>,
 ): Promise<RenderPlan> {
 	const { nodes, edges } = graphDefinition;
 	const layers = topologicalSort([...nodes], [...edges]);
@@ -99,6 +102,7 @@ export async function buildRenderPlan(
 					node.nodeName,
 					node.parameters ?? {},
 					node.options?.bypass ?? false,
+					fileStatsByNodeId.get(nodeId) ?? [],
 				);
 
 				nodeHashes.set(nodeId, hash);

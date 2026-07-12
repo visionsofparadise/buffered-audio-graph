@@ -85,6 +85,8 @@ function buildReactFlowNodes(
 			position: context.graph.positions[graphNode.id] ?? { x: 0, y: 0 },
 			data: {
 				label: graphNode.nodeName,
+				packageName: graphNode.packageName,
+				nodeName: graphNode.nodeName,
 				category,
 				state,
 				bypassed: graphNode.options?.bypass ?? false,
@@ -189,6 +191,11 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 				...node,
 				data: {
 					...node.data,
+					// Threaded for custom node bodies (VST3 stage editor) that call main /
+					// subscribe to push events directly; Context.ts is untouched.
+					main: context.main,
+					mainEvents: context.mainEvents,
+					vst3ScanRoots: context.app.vst3ScanRoots,
 					onParameterChangeAtPath: (path: ReadonlyArray<string | number>, value: unknown) => {
 						mutations.setParameterAtPath(node.id, path, value);
 					},

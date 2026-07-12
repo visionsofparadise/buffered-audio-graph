@@ -1,10 +1,12 @@
-import { BrowserWindow } from "electron";
+import { app, BrowserWindow } from "electron";
 import path from "path";
 import { JobManager } from "../shared/utilities/JobManager";
 import { ASYNC_MAIN_IPCS } from "../shared/ipc/asyncMainIpcs";
 import type { Logger } from "../shared/models/Logger";
 import { createNodeRegistry } from "../shared/models/NodeRegistry";
 import { FileWatcherManager } from "./FileWatcherManager";
+import { getVst3CliPath } from "./bundledBinaries";
+import { Vst3Scanner } from "./vst3/scanner";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -38,9 +40,19 @@ export const createWindow = (logger: Logger): BrowserWindow => {
 	const fileWatcherManager = new FileWatcherManager(browserWindow);
 	const jobManager = new JobManager();
 	const nodeRegistry = createNodeRegistry();
+	const vst3Scanner = new Vst3Scanner({
+		cachePath: path.join(app.getPath("userData"), "vst3-scan-cache.json"),
+		resolveCliPath: () => getVst3CliPath(),
+		logger,
+		onUpdate: (entries) => {
+			if (browserWindow.isDestroyed()) return;
+
+			browserWindow.webContents.send("vst3:scanUpdate", { entries: [...entries] });
+		},
+	});
 
 	for (const AsyncMainIpc of ASYNC_MAIN_IPCS) {
-		new AsyncMainIpc().register({ browserWindow, fileWatcherManager, jobManager, logger, nodeRegistry: nodeRegistry, windowId });
+		new AsyncMainIpc().register({ browserWindow, fileWatcherManager, jobManager, logger, nodeRegistry, vst3Scanner, windowId });
 	}
 
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;

@@ -12,8 +12,8 @@ import { PackageNodeList } from "../PackageNodeList";
  * TopLeftOverlay — Add-Node trigger.
  *
  * The primary action of the graph workspace (top-left primary-action
- * position). A plain transparent ghost button — 15px uppercase label with a
- * 20px leading `Plus` icon, white hover-inversion
+ * position). A plain transparent ghost button — 13px `text-body` label with a
+ * 16px leading `Plus` icon, white hover-inversion
  * (`hover:bg-text-primary hover:text-surface`) plus the active-inversion while
  * the node menu is open. The node list itself is the desktop's
  * package-registry-driven `PackageNodeList`.
@@ -31,9 +31,9 @@ export function TopLeftOverlay({ app, onAddNode }: Props) {
 				<DropdownMenuTrigger asChild>
 					<button
 						type="button"
-						className="flex w-fit items-center gap-2 px-6 py-3 text-[15px] uppercase tracking-[0.06em] text-text-primary hover:bg-text-primary hover:text-surface data-[state=open]:bg-text-primary data-[state=open]:text-surface"
+						className="flex w-fit items-center gap-2 px-4 py-2 text-body text-text-primary hover:bg-text-primary hover:text-surface data-[state=open]:bg-text-primary data-[state=open]:text-surface"
 					>
-						<Plus size={20} strokeWidth={1.5} />
+						<Plus size={16} strokeWidth={1.5} />
 						<span>Add node</span>
 					</button>
 				</DropdownMenuTrigger>

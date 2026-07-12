@@ -27,5 +27,13 @@ export class MainEvents extends EventEmitter<MainEventMap> {
 		main.events.on("audio:progress", (_: IpcRendererEvent, ...args) => {
 			this.emit("audio:progress", ...args);
 		});
+
+		main.events.on("vst3:scanUpdate", (_: IpcRendererEvent, ...args) => {
+			this.emit("vst3:scanUpdate", ...args);
+		});
+
+		main.events.on("vst3:editorEvent", (_: IpcRendererEvent, ...args) => {
+			this.emit("vst3:editorEvent", ...args);
+		});
 	}
 }

@@ -58,9 +58,9 @@ export function LoadingScreen({ packages, isLoading, onContinue }: Props) {
 					))}
 				</ul>
 
-				{!isLoading && (
+				{!isLoading && hasError && (
 					<Button variant="default" onClick={onContinue}>
-						{hasError ? "Continue Anyway" : "Continue"}
+						Continue Anyway
 					</Button>
 				)}
 			</div>

@@ -1,5 +1,6 @@
 import type { BrowserWindow } from "electron";
 import type { FileWatcherManager } from "../../main/FileWatcherManager";
+import type { Vst3Scanner } from "../../main/vst3/scanner";
 import type { JobManager } from "../utilities/JobManager";
 import { Logger } from "./Logger";
 import type { NodeRegistryMap } from "./NodeRegistry";
@@ -10,6 +11,7 @@ export interface IpcHandlerDependencies {
 	readonly jobManager: JobManager;
 	readonly logger: Logger;
 	readonly nodeRegistry: NodeRegistryMap;
+	readonly vst3Scanner: Vst3Scanner;
 	readonly windowId: string;
 }
 

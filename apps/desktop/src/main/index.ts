@@ -7,6 +7,10 @@ if (require("electron-squirrel-startup")) {
 	app.quit();
 }
 
+if (process.env.BAG_USER_DATA) {
+	app.setPath("userData", process.env.BAG_USER_DATA);
+}
+
 app.whenReady()
 	.then(() => createWindow(logger))
 	.catch(console.error);

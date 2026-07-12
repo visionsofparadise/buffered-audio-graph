@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "bucket": "buffered-audio-binaries-345340320424",
   "region": "us-east-1",
   "assets": [
@@ -20,6 +20,15 @@
       "sha256": "2b885992d3d6fa4130d39ec84a80d7504ff52750027c547bb22c86165f19406a",
       "size": 33481272,
       "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+    },
+    {
+      "key": null,
+      "platform": "darwin",
+      "arch": "arm64",
+      "filename": "vst-demon-cli-darwin-arm64",
+      "sha256": "6948c68cf276541760732ebffa7bea338cab0667ef15628b122b37dca8334d44",
+      "size": 367408,
+      "source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-darwin-arm64.tar.gz"
     },
     {
       "key": null,
@@ -50,6 +59,15 @@
     },
     {
       "key": null,
+      "platform": "linux",
+      "arch": "x64",
+      "filename": "vst-demon-cli-linux-x64",
+      "sha256": "e771c17eb7b23c70e543dca335d64430313b2016a5ffcb1a2d9eefcba52d0aee",
+      "size": 478104,
+      "source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-linux-x64.tar.gz"
+    },
+    {
+      "key": null,
       "platform": "win32",
       "arch": "x64",
       "filename": "DirectML.dll",
@@ -65,6 +83,15 @@
       "sha256": "95366724919f4e95ecc60010912ed538ad9804b6683fbd0aad389749102834b9",
       "size": 16471584,
       "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+    },
+    {
+      "key": null,
+      "platform": "win32",
+      "arch": "x64",
+      "filename": "vst-demon-cli-win32-x64.exe",
+      "sha256": "4f1c9bd770748ed4836567f68872cb811a732dc66f0f97b99caa58f1aa533ebd",
+      "size": 566272,
+      "source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-win32-x64.zip"
     },
     {
       "key": "Kim_Vocal_2",

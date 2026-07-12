@@ -1,5 +1,5 @@
 import { app } from "electron";
-import { promises as fs, type Dirent } from "node:fs";
+import { existsSync, promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 
@@ -124,4 +124,50 @@ export async function readBundledBinaryDefaults(): Promise<Record<string, string
 	}
 
 	return resolved;
+}
+
+const VST3_CLI_FILENAMES: Record<string, string> = {
+	"win32-x64": "vst-demon-cli-win32-x64.exe",
+	"linux-x64": "vst-demon-cli-linux-x64",
+	"darwin-arm64": "vst-demon-cli-darwin-arm64",
+};
+
+/**
+ * Thrown by `getVst3CliPath` when the running platform/arch has no bundled
+ * vst-demon-cli build (only win32-x64, linux-x64, and darwin-arm64 ship).
+ */
+export class UnsupportedVst3CliPlatformError extends Error {
+	public constructor(target: string) {
+		super(`No bundled vst-demon-cli binary for platform target "${target}".`);
+
+		this.name = "UnsupportedVst3CliPlatformError";
+	}
+}
+
+/**
+ * Resolves the bundled vst-demon-cli binary for the current platform/arch.
+ *
+ * The CLI is a `key: null` manifest asset (see
+ * `projects/code/buffered-audio-graph/desktop/design-binary-pipeline.md`),
+ * so it never appears in `manifest.json`'s schema-key map and is resolved by
+ * its arch-suffixed filename in the bundled binaries directory instead.
+ *
+ * Returns the absolute path plus whether it exists on disk. Callers should
+ * surface a "binary missing — run npm run binaries:install" message when
+ * `exists` is `false` rather than letting a later `spawn` fail with ENOENT.
+ *
+ * Throws `UnsupportedVst3CliPlatformError` when no binary ships for the
+ * running platform/arch.
+ */
+export function getVst3CliPath(): { path: string; exists: boolean } {
+	const target = `${process.platform}-${process.arch}`;
+	const filename = VST3_CLI_FILENAMES[target];
+
+	if (filename === undefined) {
+		throw new UnsupportedVst3CliPlatformError(target);
+	}
+
+	const cliPath = path.join(getBundledBinariesPath(), filename);
+
+	return { path: cliPath, exists: existsSync(cliPath) };
 }

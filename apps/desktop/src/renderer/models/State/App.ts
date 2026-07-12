@@ -48,6 +48,7 @@ export const AppStateSchema = z.object({
 	recentFiles: z.array(RecentFileSchema).default([]),
 	packages: z.array(NodePackageStateSchema).default([]),
 	binaries: z.record(z.string(), z.string()).default({}),
+	vst3ScanRoots: z.array(z.string()).default([]),
 });
 
 export type TabEntry = z.infer<typeof TabEntrySchema>;
@@ -65,6 +66,10 @@ const SavedStateSchema = AppStateSchema.pick({
 })
 	.extend({
 		packages: z.array(z.unknown()).optional(),
+		// Not picked (which would inherit `.default([])`): Zod v4's `.partial()` keeps
+		// a picked field's default, so a state.json lacking the key would parse to `[]`
+		// instead of `undefined` — losing the first-run vs. user-emptied distinction.
+		vst3ScanRoots: z.array(z.string()).optional(),
 	})
 	.partial();
 
@@ -120,7 +125,7 @@ function loadSavedPackages(savedPackages: Array<unknown> | undefined): Array<Nod
 	);
 }
 
-export async function loadAppState(main: { getUserDataPath: () => Promise<string>; readFile: (path: string) => Promise<string> }): Promise<Omit<AppState, "_key">> {
+export async function loadAppState(main: { getUserDataPath: () => Promise<string>; readFile: (path: string) => Promise<string>; vst3GetDefaultScanRoots: () => Promise<Array<string>> }): Promise<Omit<AppState, "_key">> {
 	const userDataPath = await main.getUserDataPath();
 	const path = `${userDataPath}/state.json`;
 
@@ -143,6 +148,8 @@ export async function loadAppState(main: { getUserDataPath: () => Promise<string
 
 	const packages = loadSavedPackages(saved.packages);
 
+	const vst3ScanRoots = saved.vst3ScanRoots ?? (await main.vst3GetDefaultScanRoots());
+
 	return {
 		tabs,
 		activeTabId,
@@ -150,6 +157,7 @@ export async function loadAppState(main: { getUserDataPath: () => Promise<string
 		recentFiles: saved.recentFiles ?? [],
 		packages,
 		binaries: saved.binaries ?? {},
+		vst3ScanRoots,
 	};
 }
 
