@@ -9,13 +9,6 @@ import { ParameterField } from "./ParameterRow/ParameterField";
 import type { Parameter } from "./utils/buildParameters";
 import { Vst3StagesEditor } from "./Vst3StagesEditor";
 
-/**
- * Per-node render staleness, derived by `useNodeStates`. It is a content-hash
- * computation only — it no longer paints the node. The redesign moved render
- * progress to global toasts; the type is retained because `Canvas.tsx`,
- * `useNodeStates.ts`, and `nodeLookup.ts` still reference it.
- */
-export type NodeState = "rendered" | "stale" | "processing" | "pending" | "error" | "bypassed";
 export type NodeCategory = "source" | "transform" | "target";
 
 /** Full-panel-width header bar tone per category. */
@@ -32,8 +25,6 @@ export interface NodeContainerData {
 	/** The node's class name (e.g. "VST3"). Keys the custom-body branch; distinct from `label`. */
 	readonly nodeName: string;
 	readonly category: NodeCategory;
-	/** Content-hash staleness — computed but not painted on the node. */
-	readonly state: NodeState;
 	readonly bypassed: boolean;
 	/** Whether the node's input port has an incoming edge. */
 	readonly inputConnected: boolean;
@@ -50,6 +41,8 @@ export interface NodeContainerData {
 	readonly description?: string;
 	/** Path-aware leaf value change — path is [topLevelName, ...nestedKeys]. */
 	readonly onParameterChangeAtPath?: (path: ReadonlyArray<string | number>, value: unknown) => void;
+	/** Path-aware unset (delete key) for an optional leaf returned to AUTO. */
+	readonly onParameterUnsetAtPath?: (path: ReadonlyArray<string | number>) => void;
 	/** Path-aware browse dialog for file/folder parameters. */
 	readonly onParameterBrowseAtPath?: (path: ReadonlyArray<string | number>) => void;
 	/** Append a new default row to an array parameter. */
@@ -58,13 +51,17 @@ export interface NodeContainerData {
 	readonly onArrayRowDelete?: (paramName: string, rowIndex: number) => void;
 	/** Reorder array rows. */
 	readonly onArrayRowReorder?: (paramName: string, fromIndex: number, toIndex: number) => void;
-	readonly onRender?: () => void;
-	readonly onAbort?: () => void;
 	/** Toggle the node's bypass flag. */
 	readonly onBypass?: () => void;
 	readonly onReset?: () => void;
 	/** Remove the node from the graph. */
 	readonly onDelete?: () => void;
+	/** Open a save-mode file param's value in the OS default app. */
+	readonly onFileOpen?: (value: string) => void;
+	/** Resolves true when a file value names an existing file — drives the open-output button. */
+	readonly statFile?: (value: string) => Promise<boolean>;
+	/** Bumped when a render completes, re-triggering the open-output existence check. */
+	readonly renderEpoch?: number;
 	/** Renderer IPC surface — threaded for node bodies (e.g. VST3) that call main directly. */
 	readonly main?: Main;
 	/** Main→renderer event bus — threaded for node bodies that subscribe to push events. */
@@ -79,7 +76,6 @@ export function NodeContainer({ data, selected }: NodeProps) {
 	const isBypassed = nodeData.bypassed;
 	const hasInput = nodeData.category !== "source";
 	const hasOutput = nodeData.category !== "target";
-	const isSource = nodeData.category === "source";
 
 	// A non-source node's single input is always required — unconnected reads as
 	// error attention; connected reads primary. Outputs are optional: connected
@@ -90,15 +86,19 @@ export function NodeContainer({ data, selected }: NodeProps) {
 	const disabled = !nodeData.onParameterChangeAtPath;
 	const callbacks: ParameterCallbacks = {
 		onParameterChangeAtPath: nodeData.onParameterChangeAtPath,
+		onParameterUnsetAtPath: nodeData.onParameterUnsetAtPath,
 		onParameterBrowseAtPath: nodeData.onParameterBrowseAtPath,
 		onArrayRowAdd: nodeData.onArrayRowAdd,
 		onArrayRowDelete: nodeData.onArrayRowDelete,
 		onArrayRowReorder: nodeData.onArrayRowReorder,
+		onFileOpen: nodeData.onFileOpen,
+		statFile: nodeData.statFile,
+		renderEpoch: nodeData.renderEpoch,
 		disabled,
 	};
 
 	const hasObjectArray = nodeData.parameters.some((param) => param.kind === "array");
-	const width = hasObjectArray ? 300 : 240;
+	const width = hasObjectArray ? 350 : 290;
 	const panelShadow = `${selected ? "0 0 0 2px var(--color-accent-primary)," : ""}0 2px 8px rgba(0,0,0,0.3)`;
 
 	return (
@@ -112,7 +112,7 @@ export function NodeContainer({ data, selected }: NodeProps) {
 			>
 				<div
 					className={cn(
-						"flex min-h-9 items-center justify-between gap-2 px-4 py-2",
+						"flex min-h-9 cursor-grab items-center justify-between gap-2 px-4 py-2 active:cursor-grabbing",
 						CATEGORY_HEADER_BG[nodeData.category],
 					)}
 				>
@@ -134,12 +134,9 @@ export function NodeContainer({ data, selected }: NodeProps) {
 							<Power size={14} strokeWidth={1.5} />
 						</button>
 						<NodeMenu
-							isSource={isSource}
 							bypassed={isBypassed}
 							onBypass={nodeData.onBypass}
 							onReset={nodeData.onReset}
-							onRender={nodeData.onRender}
-							onAbort={nodeData.onAbort}
 							onDelete={nodeData.onDelete}
 						/>
 					</div>

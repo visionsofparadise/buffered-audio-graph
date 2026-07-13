@@ -14,7 +14,7 @@ import {
 	type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphContext } from "../../../models/Context";
 import { resnapshot } from "../../../models/ProxyStore/resnapshot";
 import { computeAutoLayout } from "../../../utils/autoLayout";
@@ -23,9 +23,8 @@ import { lookupNode, schemaPropertyAtPath } from "./Node/utils/nodeLookup";
 import { EdgeContainer } from "./EdgeContainer";
 import { GraphContextMenu, type ContextMenuAction, type ContextMenuPosition } from "./GraphContextMenu";
 import { useGraphMutations } from "./hooks/useGraphMutations";
-import type { NodeContainerData, NodeState } from "./Node/Container";
+import type { NodeContainerData } from "./Node/Container";
 import { NodeContainer } from "./Node/Container";
-import { useNodeStates } from "./hooks/useNodeStates";
 import { useRenderJob } from "./hooks/useRenderJob";
 import { BottomRightOverlay } from "./Overlays/BottomRightOverlay";
 import { TopLeftOverlay } from "./Overlays/TopLeftOverlay";
@@ -49,35 +48,20 @@ function minimapNodeColor(node: FlowNode): string {
 	return CATEGORY_COLOR[data.category];
 }
 
-function buildReactFlowNodes(
-	nodeStates: Map<string, { readonly state: NodeState; readonly hash: string }>,
-	processingNodes: Map<string, number>,
-	errorNodes: Set<string>,
-	context: GraphContext,
-): Array<Node<NodeContainerData>> {
+function buildReactFlowNodes(context: GraphContext): Array<Node<NodeContainerData>> {
 	const binaryDefaults = context.app.binaries as Record<string, string>;
 	const connectedInputs = new Set(context.graphDefinition.edges.map((edge) => edge.to));
 	const connectedOutputs = new Set(context.graphDefinition.edges.map((edge) => edge.from));
 
 	return context.graphDefinition.nodes.map((graphNode) => {
-		const packageVersion = typeof graphNode.packageVersion === "string" ? graphNode.packageVersion : "";
+		const version = context.graphDefinition.packages[graphNode.packageName] ?? "";
 		const { category, description, schema, unresolvedReason } = lookupNode(
 			graphNode.packageName,
-			packageVersion,
+			version,
 			graphNode.nodeName,
 			context,
 		);
 		const parameters: Array<Parameter> = buildParameters(graphNode, schema, binaryDefaults);
-
-		let state: NodeState = nodeStates.get(graphNode.id)?.state ?? "pending";
-		let progress: number | undefined;
-
-		if (processingNodes.has(graphNode.id)) {
-			state = "processing";
-			progress = processingNodes.get(graphNode.id);
-		} else if (errorNodes.has(graphNode.id)) {
-			state = "error";
-		}
 
 		return {
 			id: graphNode.id,
@@ -88,7 +72,6 @@ function buildReactFlowNodes(
 				packageName: graphNode.packageName,
 				nodeName: graphNode.nodeName,
 				category,
-				state,
 				bypassed: graphNode.options?.bypass ?? false,
 				inputConnected: connectedInputs.has(graphNode.id),
 				outputConnected: connectedOutputs.has(graphNode.id),
@@ -96,7 +79,6 @@ function buildReactFlowNodes(
 				unresolvedReason,
 				nodeId: graphNode.id,
 				description,
-				progress,
 			},
 		};
 	});
@@ -118,11 +100,10 @@ interface Props {
 }
 
 export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
-	const { nodeStates, refresh } = useNodeStates(context);
-	const { startRender, abortRender, processingNodes, errorNodes } = useRenderJob(refresh, context);
+	const { startRender, abortRender, clearRenderError, activeJobId, processingNodes, renderError } = useRenderJob(context);
 
 	const initialNodes = useMemo(
-		() => buildReactFlowNodes(nodeStates, processingNodes, errorNodes, context),
+		() => buildReactFlowNodes(context),
 
 		[],
 	);
@@ -139,24 +120,71 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 	const { screenToFlowPosition, getNodes } = useReactFlow();
 	const mutations = useGraphMutations(context);
 
+	const [renderEpoch, setRenderEpoch] = useState(0);
+	const wasRenderingRef = useRef(false);
+
+	useEffect(() => {
+		const rendering = activeJobId !== null;
+
+		if (wasRenderingRef.current && !rendering) {
+			setRenderEpoch((epoch) => epoch + 1);
+		}
+
+		wasRenderingRef.current = rendering;
+	}, [activeJobId]);
+
 	const handleParameterBrowseAtPath = useCallback(
 		async (nodeId: string, path: ReadonlyArray<string | number>) => {
 			const graphNode = context.graphDefinition.nodes.find((node) => node.id === nodeId);
 
 			if (!graphNode) return;
 
-			const packageVersion = typeof graphNode.packageVersion === "string" ? graphNode.packageVersion : "";
+			const version = context.graphDefinition.packages[graphNode.packageName] ?? "";
 			const { schema } = lookupNode(
 				graphNode.packageName,
-				packageVersion,
+				version,
 				graphNode.nodeName,
 				context,
 			);
 			const prop = schemaPropertyAtPath(schema, path);
+
+			const extensions = prop?.accept
+				? prop.accept.split(",").map((entry) => entry.trim().replace(/^\./, "")).filter((entry) => entry !== "")
+				: [];
+			const filters = extensions.length > 0 ? [{ name: extensions.join(", ").toUpperCase(), extensions }] : undefined;
+
+			if (prop?.mode === "save") {
+				let current: unknown = graphNode.parameters;
+
+				for (const segment of path) {
+					if (current === null || typeof current !== "object") {
+						current = undefined;
+						break;
+					}
+
+					current = (current as Record<string | number, unknown>)[segment];
+				}
+
+				const currentValue = typeof current === "string" ? current : "";
+
+				const savePath = await context.main.showSaveDialog({
+					title: `Save "${String(path[path.length - 1])}"`,
+					defaultPath: currentValue !== "" ? currentValue : undefined,
+					filters,
+				});
+
+				if (savePath === undefined) return;
+
+				mutations.setParameterAtPath(nodeId, path, savePath);
+
+				return;
+			}
+
 			const isFolder = prop?.input === "folder";
 
 			const result = await context.main.showOpenDialog({
 				properties: [isFolder ? "openDirectory" : "openFile"],
+				filters: isFolder ? undefined : filters,
 			});
 
 			if (!result?.[0]) return;
@@ -166,19 +194,26 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 		[context, mutations],
 	);
 
+	const openFileOutput = useCallback(
+		(value: string) => {
+			void context.main.openPath(value);
+		},
+		[context.main],
+	);
+
+	const statFile = useCallback(
+		(value: string) => context.main.stat(value).then((stats) => stats.isFile).catch(() => false),
+		[context.main],
+	);
+
 	const attachEdgeData = useCallback(
 		(builtEdges: Array<Edge>): Array<Edge> =>
 			builtEdges.map((edge) => ({
 				...edge,
 				data: {
 					app: context.app,
-					onInsert: (packageName: string, packageVersion: string, nodeName: string) => {
-						mutations.insertNodeOnEdge(
-							{ from: edge.source, to: edge.target },
-							packageName,
-							packageVersion,
-							nodeName,
-						);
+					onInsert: (packageName: string, nodeName: string) => {
+						mutations.insertNodeOnEdge({ from: edge.source, to: edge.target }, packageName, nodeName);
 					},
 				},
 			})),
@@ -199,6 +234,9 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 					onParameterChangeAtPath: (path: ReadonlyArray<string | number>, value: unknown) => {
 						mutations.setParameterAtPath(node.id, path, value);
 					},
+					onParameterUnsetAtPath: (path: ReadonlyArray<string | number>) => {
+						mutations.deleteParameterAtPath(node.id, path);
+					},
 					onParameterBrowseAtPath: (path: ReadonlyArray<string | number>) => {
 						void handleParameterBrowseAtPath(node.id, path);
 					},
@@ -207,10 +245,10 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 
 						if (!graphNode) return;
 
-						const packageVersion = typeof graphNode.packageVersion === "string" ? graphNode.packageVersion : "";
+						const version = context.graphDefinition.packages[graphNode.packageName] ?? "";
 						const { schema } = lookupNode(
 							graphNode.packageName,
-							packageVersion,
+							version,
 							graphNode.nodeName,
 							context,
 						);
@@ -237,17 +275,18 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 					onDelete: () => {
 						mutations.removeNode(node.id);
 					},
-					onRender: () => void startRender(),
-					onAbort: () => void abortRender(),
+					onFileOpen: openFileOutput,
+					statFile,
+					renderEpoch,
 				},
 			})),
-		[mutations, handleParameterBrowseAtPath, startRender, abortRender, context],
+		[mutations, handleParameterBrowseAtPath, context, renderEpoch, openFileOutput, statFile],
 	);
 
 	useEffect(() => {
-		setNodes(attachCallbacks(buildReactFlowNodes(nodeStates, processingNodes, errorNodes, context)));
+		setNodes(attachCallbacks(buildReactFlowNodes(context)));
 		setEdges(attachEdgeData(buildReactFlowEdges(context)));
-	}, [context, nodeStates, processingNodes, errorNodes, setNodes, setEdges, attachCallbacks, attachEdgeData]);
+	}, [context, setNodes, setEdges, attachCallbacks, attachEdgeData]);
 
 	const handleNodesChange = useCallback(
 		(changes: Array<NodeChange<Node<NodeContainerData>>>) => {
@@ -328,12 +367,6 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 					break;
 				}
 
-				case "abort": {
-					void abortRender();
-					setContextMenu(null);
-					break;
-				}
-
 				case "bypass": {
 					if (contextMenu.nodeId) {
 						mutations.toggleBypass(contextMenu.nodeId);
@@ -365,26 +398,26 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 				}
 			}
 		},
-		[contextMenu, mutations, startRender, abortRender, context],
+		[contextMenu, mutations, startRender, context],
 	);
 
 	const handleAddNodeFromContextMenu = useCallback(
-		(packageName: string, packageVersion: string, nodeName: string) => {
+		(packageName: string, nodeName: string) => {
 			if (!contextMenu) return;
 
 			const flowPosition = screenToFlowPosition({ x: contextMenu.x, y: contextMenu.y });
 
-			mutations.addNode(packageName, packageVersion, nodeName, flowPosition);
+			mutations.addNode(packageName, nodeName, flowPosition);
 			setContextMenu(null);
 		},
 		[contextMenu, mutations, screenToFlowPosition],
 	);
 
 	const handleAddNodeFromButton = useCallback(
-		(packageName: string, packageVersion: string, nodeName: string) => {
+		(packageName: string, nodeName: string) => {
 			const flowPosition = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
 
-			mutations.addNode(packageName, packageVersion, nodeName, flowPosition);
+			mutations.addNode(packageName, nodeName, flowPosition);
 		},
 		[mutations, screenToFlowPosition],
 	);
@@ -432,7 +465,7 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 
 	const canUndo = context.history.canUndo;
 	const canRedo = context.history.canRedo;
-	const isRendering = processingNodes.size > 0;
+	const isRendering = activeJobId !== null;
 	const renderProgress =
 		processingNodes.size > 0
 			? Array.from(processingNodes.values()).reduce((sum, ratio) => sum + ratio, 0) / processingNodes.size
@@ -487,6 +520,11 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 					border-radius: 2px;
 					box-shadow: none;
 					padding: 0;
+					cursor: default;
+				}
+
+				.react-flow .react-flow__node.dragging {
+					cursor: grabbing;
 				}
 
 				.react-flow .react-flow__attribution {
@@ -536,9 +574,13 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 			/>
 			<BottomRightOverlay
 				isRendering={isRendering}
+				renderError={renderError}
 				graphName={context.graphDefinition.name}
 				progress={renderProgress}
-				onAbort={() => void abortRender()}
+				onDismiss={() => {
+					void abortRender();
+					clearRenderError();
+				}}
 			/>
 
 			{contextMenu && (
@@ -548,10 +590,6 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 					onAction={handleContextMenuAction}
 					onAddNode={handleAddNodeFromContextMenu}
 					onClose={closeContextMenu}
-					isSourceNode={
-						contextMenu.nodeId !== undefined &&
-						nodes.find((node) => node.id === contextMenu.nodeId)?.data.category === "source"
-					}
 					isBypassed={
 						contextMenu.nodeId !== undefined &&
 						(nodes.find((node) => node.id === contextMenu.nodeId)?.data.bypassed ?? false)

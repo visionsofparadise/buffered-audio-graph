@@ -1,4 +1,4 @@
-import { Menu, Plus, X } from "lucide-react";
+import { FilePlus, FolderOpen, Menu, Plus, Save, SaveAll, Settings, X } from "lucide-react";
 import { cn } from "../utils/cn";
 import { DropdownButton, type MenuItem } from "./DropdownButton";
 import { IconButton } from "./IconButton";
@@ -32,16 +32,13 @@ export const AppBar = resnapshot<Props>(({ context, chromeOnly = false }: Props)
 	const hasActiveGraphTab = app.activeTabId !== null;
 
 	const appMenuItems: ReadonlyArray<MenuItem> = [
-		{ kind: "action", label: "New graph", disabled: chromeOnly, onClick: () => void context.newBagTab() },
-		{ kind: "action", label: "Open graph", disabled: chromeOnly, onClick: () => void context.openBagTab() },
-		{ kind: "action", label: "Save", disabled: chromeOnly ? true : save === null, onClick: () => save?.() },
-		{ kind: "action", label: "Save As", disabled: true },
+		{ kind: "action", label: "New graph", icon: FilePlus, disabled: chromeOnly, onClick: () => void context.newBagTab() },
+		{ kind: "action", label: "Open graph", icon: FolderOpen, disabled: chromeOnly, onClick: () => void context.openBagTab() },
+		{ kind: "action", label: "Save", icon: Save, disabled: chromeOnly ? true : save === null, onClick: () => save?.() },
+		{ kind: "action", label: "Save As", icon: SaveAll, disabled: true },
 		{ kind: "separator" },
-		{ kind: "action", label: "Manage Binaries", disabled: chromeOnly, onClick: () => context.setBinaryManagerOpen(true) },
-		{ kind: "action", label: "Manage Packages", disabled: chromeOnly, onClick: () => context.setPackageManagerOpen(true) },
-		{ kind: "separator" },
-		{ kind: "action", label: "Preferences", disabled: chromeOnly, onClick: () => context.setPreferencesOpen(true) },
-		{ kind: "action", label: "Quit", onClick: () => void context.main.quitApp() },
+		{ kind: "action", label: "Settings", icon: Settings, disabled: chromeOnly, onClick: () => context.setSettingsOpen(true) },
+		{ kind: "action", label: "Quit", icon: X, onClick: () => void context.main.quitApp() },
 	];
 
 	const tabs = app.tabs.map((tab) => ({

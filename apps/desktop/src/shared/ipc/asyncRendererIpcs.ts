@@ -1,6 +1,6 @@
 import type { IpcHandlerAction, IpcHandlerParameters, IpcHandlerReturn } from "../models/AsyncRendererIpc";
 import { AbortJobRendererIpc } from "./Audio/abortJob/Renderer";
-import { RenderNodeRendererIpc } from "./Audio/renderNode/Renderer";
+import { RenderGraphRendererIpc } from "./Audio/renderGraph/Renderer";
 import { ShowOpenDialogRendererIpc } from "./Dialog/showOpenDialog/Renderer";
 import { ValidateGraphDefinitionRendererIpc } from "./Graph/validateDefinition/Renderer";
 import { ShowSaveDialogRendererIpc } from "./Dialog/showSaveDialog/Renderer";
@@ -31,7 +31,7 @@ import { Vst3LaunchEditorRendererIpc } from "./Vst3/launchEditor/Renderer";
 
 export const ASYNC_RENDERER_IPCS = [
 	AbortJobRendererIpc,
-	RenderNodeRendererIpc,
+	RenderGraphRendererIpc,
 	DeleteFileRendererIpc,
 	EnsureDirectoryRendererIpc,
 	ReadDirectoryRendererIpc,

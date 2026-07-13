@@ -2,15 +2,19 @@
  * GUI smoke — CDP-driven end-to-end verification of the graph mutation path.
  *
  * Launches the desktop app on an isolated, persistent profile
- * (`.smoke-profile/`), seeds a single empty-bag tab, drives the real UI over
- * the Chrome DevTools Protocol, and asserts every graph mutation works and
- * persists. See design-testing.md (2026-07-12 GUI smoke harness entry).
+ * (`.smoke-profile/`), seeds a single empty packages-map bag tab, drives the
+ * real UI over the Chrome DevTools Protocol, and asserts every graph mutation
+ * works and persists. Coverage includes the cmdk add-node catalog (mouse +
+ * keyboard pick), the edge insert chip, the reduced node menu, full-graph
+ * render-to-completion through core, the version-guarded zero-target leaf
+ * error, and the Settings modal. See design-testing.md (2026-07-12 GUI smoke
+ * harness entry).
  *
  * Exit 0 on all assertions passing; 1 with a printed failure summary.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { createServer } from "node:net";
 import { join, resolve } from "node:path";
@@ -22,9 +26,16 @@ const PROFILE_DIR = join(DESKTOP_DIR, ".smoke-profile");
 const BAG_PATH = join(DESKTOP_DIR, ".smoke-seed.bag");
 const BAG_NAME = "Smoke Bag";
 const PATH_SENTINEL = "C:/smoke/input.wav";
+const INPUT_WAV_PATH = join(PROFILE_DIR, "smoke-input.wav");
+const OUTPUT_WAV_PATH = join(PROFILE_DIR, "smoke-output.wav");
+
+const BUILTIN_PACKAGE = "@buffered-audio/nodes";
+/** Core's leaf-must-be-a-target validation ships in nodes ≥ 0.21.0 (bundles core ≥ 0.10.0). */
+const ZERO_TARGET_MIN_VERSION = "0.21.0";
 
 const SOURCE_NODE = "Read WAV";
 const TRANSFORM_NODE = "Gain";
+const WRITE_NODE = "Write";
 const VST3_NODE = "VST3";
 const OTT_MATCH = "OTT";
 
@@ -134,11 +145,84 @@ function httpGetStatus(url: string): Promise<number> {
 	});
 }
 
+/** Write a 1-second 48 kHz 16-bit mono sine as a standard PCM WAV — the Read WAV input for the render assertion. */
+function writeSineWav(filePath: string): void {
+	const sampleRate = 48000;
+	const seconds = 1;
+	const frequency = 440;
+	const numSamples = sampleRate * seconds;
+	const bytesPerSample = 2;
+	const dataSize = numSamples * bytesPerSample;
+	const buffer = Buffer.alloc(44 + dataSize);
+
+	buffer.write("RIFF", 0, "ascii");
+	buffer.writeUInt32LE(36 + dataSize, 4);
+	buffer.write("WAVE", 8, "ascii");
+	buffer.write("fmt ", 12, "ascii");
+	buffer.writeUInt32LE(16, 16);
+	buffer.writeUInt16LE(1, 20); // PCM
+	buffer.writeUInt16LE(1, 22); // mono
+	buffer.writeUInt32LE(sampleRate, 24);
+	buffer.writeUInt32LE(sampleRate * bytesPerSample, 28); // byte rate
+	buffer.writeUInt16LE(bytesPerSample, 32); // block align
+	buffer.writeUInt16LE(16, 34); // bits per sample
+	buffer.write("data", 36, "ascii");
+	buffer.writeUInt32LE(dataSize, 40);
+
+	for (let index = 0; index < numSamples; index++) {
+		const sample = Math.sin((2 * Math.PI * frequency * index) / sampleRate) * 0.5;
+		const clamped = Math.max(-1, Math.min(1, sample));
+
+		buffer.writeInt16LE(Math.round(clamped * 32767), 44 + index * bytesPerSample);
+	}
+
+	writeFileSync(filePath, buffer);
+}
+
+/** The built-in nodes package version the bag resolved (written into the packages map on first add), or null. */
+function readBuiltinVersion(): string | null {
+	try {
+		const bag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as { packages?: Record<string, string> };
+
+		return bag.packages?.[BUILTIN_PACKAGE] ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/** Numeric dotted-version comparison: is `version` ≥ `target`? */
+function versionAtLeast(version: string, target: string): boolean {
+	const left = version.split(".").map((part) => Number.parseInt(part, 10) || 0);
+	const right = target.split(".").map((part) => Number.parseInt(part, 10) || 0);
+
+	for (let index = 0; index < Math.max(left.length, right.length); index++) {
+		const delta = (left[index] ?? 0) - (right[index] ?? 0);
+
+		if (delta !== 0) return delta > 0;
+	}
+
+	return true;
+}
+
+function fileSize(filePath: string): number {
+	try {
+		return statSync(filePath).size;
+	} catch {
+		return -1;
+	}
+}
+
 function seedProfile(): string {
 	mkdirSync(PROFILE_DIR, { recursive: true });
 
+	writeSineWav(INPUT_WAV_PATH);
+	rmSync(OUTPUT_WAV_PATH, { force: true });
+
 	const bagId = randomUUID();
-	const bag = { id: bagId, apiVersion: 1, name: BAG_NAME, nodes: [], edges: [] };
+	// The packages-map bag shape (core 0.10.0 schema): an empty map on the seed
+	// empty bag; adding a node through the UI writes the resolved built-in version
+	// into it. No per-node packageVersion.
+	const bag = { id: bagId, apiVersion: 1, name: BAG_NAME, packages: {}, nodes: [], edges: [] };
 
 	writeFileSync(BAG_PATH, JSON.stringify(bag, null, 2));
 
@@ -289,6 +373,27 @@ async function clickPoint(page: Page, point: Point): Promise<void> {
 	await page.mouse.click(point.x, point.y);
 }
 
+/**
+ * Zoom the React Flow canvas out by `ticks` wheel steps over the pane centre.
+ * The seeded empty bag's `fitView` zooms to maxZoom (2×) once the first node
+ * mounts; at 2× the nodes are large and a handle-to-handle connect drag spans a
+ * long diagonal that fails to register, so zooming out first keeps the drag short.
+ */
+async function zoomOut(page: Page, ticks: number): Promise<void> {
+	const pane = await rectOf(page, ".react-flow__pane");
+
+	if (!pane) return;
+
+	await page.mouse.move(pane.x, pane.y);
+
+	for (let tick = 0; tick < ticks; tick++) {
+		await page.mouse.wheel({ deltaY: 200 });
+		await sleep(80);
+	}
+
+	await sleep(200);
+}
+
 async function dragBetween(page: Page, from: Point, to: Point): Promise<void> {
 	await page.mouse.move(from.x, from.y);
 	await page.mouse.down();
@@ -302,6 +407,37 @@ async function dragBetween(page: Page, from: Point, to: Point): Promise<void> {
 		await sleep(15);
 	}
 
+	await page.mouse.up();
+}
+
+/**
+ * Drag a React Flow connection from one handle to another. More deliberate than
+ * `dragBetween`: it hovers the source handle before pressing and dwells on the
+ * target handle before releasing, so React Flow registers the drop target (a
+ * fast diagonal drag between distant handles can otherwise release with no
+ * hovered target and drop the connection).
+ */
+async function connectHandles(page: Page, from: Point, to: Point): Promise<void> {
+	await page.mouse.move(from.x, from.y);
+	await sleep(80);
+	await page.mouse.move(from.x, from.y);
+	await page.mouse.down();
+	await sleep(80);
+
+	const steps = 24;
+
+	for (let step = 1; step <= steps; step++) {
+		const ratio = step / steps;
+
+		await page.mouse.move(from.x + (to.x - from.x) * ratio, from.y + (to.y - from.y) * ratio);
+		await sleep(20);
+	}
+
+	// Dwell on the target handle so React Flow's drop-target detection latches.
+	await page.mouse.move(to.x, to.y);
+	await sleep(120);
+	await page.mouse.move(to.x, to.y);
+	await sleep(120);
 	await page.mouse.up();
 }
 
@@ -362,7 +498,7 @@ async function dumpMenuItems(page: Page): Promise<Array<string>> {
 }
 
 /**
- * The VST3 scan-root paths currently rendered in the open Preferences modal.
+ * The VST3 scan-root paths currently rendered in the open Settings modal.
  * Excludes any `Remove …` buttons inside graph nodes (a VST3 stage row's remove
  * control shares the `Remove ` prefix) so only the modal's root rows are read.
  */
@@ -374,26 +510,248 @@ async function scanRootLabels(page: Page): Promise<Array<string>> {
 	);
 }
 
-async function addNode(page: Page, nodeLabel: string, expectedCount: number): Promise<void> {
+/** Open the Add-node cmdk catalog from the TopLeftOverlay trigger; resolves once the search input is present. */
+async function openAddNodeCatalog(page: Page): Promise<void> {
 	const trigger = await rectByText(page, "button", "Add node");
 
 	if (!trigger) throw new Error("Add node trigger not found");
 
 	await clickPoint(page, trigger);
-	await page.waitForSelector('[role="menuitem"]', { timeout: 5000 });
+	await page.waitForSelector("[cmdk-input]", { timeout: 5000 });
 	await sleep(150);
+}
 
-	const clicked = await clickMenuItemByText(page, nodeLabel);
+/** The visible node rows in the open cmdk catalog (`[cmdk-item]`), trimmed. */
+async function dumpCmdkItems(page: Page): Promise<Array<string>> {
+	return page.$$eval("[cmdk-item]", (elements) =>
+		elements.map((element) => (element.textContent).replace(/\s+/g, " ").trim().slice(0, 40)),
+	);
+}
 
-	if (!clicked) {
-		const catalog = await dumpMenuItems(page);
+/** Click the cmdk row whose text contains `text` via a real mouse click; returns whether one was found. */
+async function clickCmdkItemByText(page: Page, text: string): Promise<boolean> {
+	const items = await page.$$("[cmdk-item]");
 
-		throw new Error(`Catalog item "${nodeLabel}" not found. Catalog: ${catalog.join(" | ")}`);
+	for (const item of items) {
+		const itemText = await item.evaluate((element) => element.textContent);
+
+		if (!itemText.includes(text)) continue;
+
+		await item.evaluate((element) => {
+			element.scrollIntoView({ block: "center" });
+		});
+		await sleep(60);
+
+		const box = await item.boundingBox();
+
+		if (box) {
+			await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+interface AddNodeOptions {
+	/** cmdk search query typed into the input (defaults to the node label). */
+	readonly search?: string;
+	/** "click" picks the matching row with the mouse; "keyboard" uses ArrowDown+Enter (the cmdk-in-Radix focus check). */
+	readonly method?: "click" | "keyboard";
+}
+
+async function addNode(page: Page, nodeLabel: string, expectedCount: number, options: AddNodeOptions = {}): Promise<void> {
+	const search = options.search ?? nodeLabel;
+	const method = options.method ?? "click";
+
+	await openAddNodeCatalog(page);
+	await page.keyboard.type(search, { delay: 20 });
+	await sleep(250);
+
+	if (method === "keyboard") {
+		await page.keyboard.press("ArrowDown");
+		await sleep(100);
+		await page.keyboard.press("Enter");
+	} else {
+		const clicked = await clickCmdkItemByText(page, nodeLabel);
+
+		if (!clicked) {
+			const catalog = await dumpCmdkItems(page);
+
+			throw new Error(`Catalog item "${nodeLabel}" not found. Catalog: ${catalog.join(" | ")}`);
+		}
 	}
 
 	const reached = await waitForNodeCount(page, expectedCount, 8000);
 
-	check(reached, `add "${nodeLabel}" — node count reaches ${expectedCount}`);
+	check(reached, `add "${nodeLabel}" (${method}) — node count reaches ${expectedCount}`);
+}
+
+/** Set a node's first text param (its file-path input) via the native value setter + input event. */
+async function setNodePathParam(page: Page, nodeId: string, value: string): Promise<void> {
+	const selector = `.react-flow__node[data-id="${nodeId}"] input[type="text"]`;
+
+	await page.waitForSelector(selector, { timeout: 5000 });
+	await page.$eval(
+		selector,
+		(element, pathValue: string) => {
+			const input = element as HTMLInputElement;
+			const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
+
+			descriptor?.set?.call(input, pathValue);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+			input.dispatchEvent(new Event("blur", { bubbles: true }));
+		},
+		value,
+	);
+	await sleep(200);
+}
+
+/** Click a plain `<button>` (not a menuitem) whose text contains `text` — used for the Settings left-nav rows. */
+async function clickButtonByText(page: Page, text: string): Promise<boolean> {
+	const buttons = await page.$$("button");
+
+	for (const button of buttons) {
+		const buttonText = await button.evaluate((element) => element.textContent);
+
+		if (!buttonText.includes(text)) continue;
+
+		await button.evaluate((element) => {
+			element.scrollIntoView({ block: "center" });
+		});
+		await sleep(60);
+
+		const box = await button.boundingBox();
+
+		if (box) {
+			await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+interface RenderToastState {
+	readonly present: boolean;
+	readonly failed: boolean;
+	readonly error: string | null;
+}
+
+/** The render toast's live state, keyed off its unique "In progress"/"Failed" footer status span. */
+async function renderToastState(page: Page): Promise<RenderToastState> {
+	return page.evaluate((): RenderToastState => {
+		const spans = Array.from(document.querySelectorAll("span"));
+		const status = spans.find((span) => span.textContent === "In progress" || span.textContent === "Failed");
+
+		if (!status) return { present: false, failed: false, error: null };
+
+		const failed = status.textContent === "Failed";
+		const errorSpan = spans.find(
+			(span) => span.className.includes("text-error") && span.className.includes("text-body"),
+		);
+
+		return { present: true, failed, error: failed ? (errorSpan?.textContent ?? "") : null };
+	});
+}
+
+/** Wait until a render settles with its output present and the toast gone, or the toast reports failure. */
+async function waitForRenderOutput(
+	page: Page,
+	outputPath: string,
+	timeoutMs: number,
+): Promise<{ ok: boolean; error: string | null }> {
+	const deadline = Date.now() + timeoutMs;
+
+	while (Date.now() < deadline) {
+		const state = await renderToastState(page);
+
+		if (state.failed) return { ok: false, error: state.error };
+
+		if (fileSize(outputPath) > 0 && !state.present) return { ok: true, error: null };
+
+		await sleep(200);
+	}
+
+	return { ok: false, error: "timed out waiting for render completion" };
+}
+
+/** Wait for the render toast to report failure and return its error text, or null on timeout. */
+async function waitForRenderError(page: Page, timeoutMs: number): Promise<string | null> {
+	const deadline = Date.now() + timeoutMs;
+
+	while (Date.now() < deadline) {
+		const state = await renderToastState(page);
+
+		if (state.failed) return state.error ?? "";
+
+		await sleep(150);
+	}
+
+	return null;
+}
+
+/** Right-click a node, read its context-menu vocabulary, and leave the menu open for inspection. */
+async function openNodeMenuAndDump(page: Page, nodeId: string): Promise<Array<string>> {
+	const nodeOrigin = await page.$eval(`.react-flow__node[data-id="${nodeId}"]`, (element): { x: number; y: number } => {
+		const rect = element.getBoundingClientRect();
+
+		return { x: rect.x, y: rect.y };
+	});
+
+	await page.mouse.click(nodeOrigin.x + 40, nodeOrigin.y + 14, { button: "right" });
+
+	try {
+		await page.waitForSelector('[role="menuitem"]', { timeout: 3000 });
+	} catch {
+		return [];
+	}
+
+	await sleep(120);
+
+	return dumpMenuItems(page);
+}
+
+/** Drag a node clear of the canvas centre by its header, so a subsequent add lands without overlap. */
+async function dragNodeBy(page: Page, nodeId: string, deltaX: number, deltaY: number): Promise<void> {
+	const origin = await page.$eval(`.react-flow__node[data-id="${nodeId}"]`, (element): { x: number; y: number } => {
+		const rect = element.getBoundingClientRect();
+
+		return { x: rect.x, y: rect.y };
+	});
+
+	await dragBetween(page, { x: origin.x + 40, y: origin.y + 14 }, { x: origin.x + 40 + deltaX, y: origin.y + 14 + deltaY });
+	await sleep(300);
+}
+
+/** Select each node (header click) and press Delete until the graph is empty, resolving whether it cleared. */
+async function clearGraph(page: Page): Promise<boolean> {
+	for (let attempt = 0; attempt < 6; attempt++) {
+		const ids = await page.$$eval(".react-flow__node", (elements) =>
+			elements.map((element) => element.getAttribute("data-id")).filter((id): id is string => id !== null),
+		);
+
+		if (ids.length === 0) return true;
+
+		for (const id of ids) {
+			const origin = await page.$eval(`.react-flow__node[data-id="${id}"]`, (element): { x: number; y: number } => {
+				const rect = element.getBoundingClientRect();
+
+				return { x: rect.x, y: rect.y };
+			});
+
+			await page.mouse.click(origin.x + 40, origin.y + 8);
+			await sleep(100);
+			await page.keyboard.press("Delete");
+			await sleep(200);
+		}
+
+		if (await waitForNodeCount(page, 0, 2000)) return true;
+	}
+
+	return (await nodeCount(page)) === 0;
 }
 
 /**
@@ -622,6 +980,106 @@ async function runVst3Section(page: Page, expectedNodeCount: number): Promise<vo
 	check(presetSize > 0, `VST3 — preset file exists and is non-empty (${presetSize} bytes)`);
 }
 
+/** Click the toolbar Render action (present as "Render" while idle, "Abort" while running). */
+async function clickRender(page: Page): Promise<void> {
+	const render = await rectByText(page, "button", "Render");
+
+	if (!render) throw new Error("Render button not found");
+
+	await clickPoint(page, render);
+}
+
+/** Dismiss the render toast (its `×` clears a shown error or aborts a running render). */
+async function dismissRenderToast(page: Page): Promise<void> {
+	const dismiss = (await rectOf(page, 'button[aria-label="Dismiss"]')) ?? (await rectOf(page, 'button[aria-label="Cancel render"]'));
+
+	if (dismiss) await clickPoint(page, dismiss);
+
+	await sleep(200);
+}
+
+/**
+ * Full-graph render coverage (Phase 4.1). Runs on a fresh graph and clears it
+ * afterward: builds Read WAV → Write against a seeded input WAV and asserts the
+ * output materializes; version-guards the zero-target leaf-validation assertion
+ * on the built-in's actual capability (core ≥ 0.10.0, i.e. nodes ≥ 0.21.0).
+ */
+async function runRenderSection(page: Page): Promise<void> {
+	log("Render — full-graph execution through core:");
+
+	await addNode(page, SOURCE_NODE, 1, { search: "read" });
+
+	const readId = await nodeIdByLabel(page, SOURCE_NODE);
+
+	if (!readId) throw new Error("Could not resolve the Read WAV node id");
+
+	// Move Read WAV well clear of centre while it is the only node (unambiguous
+	// drag), so the Write node added next lands to its right without overlap.
+	await dragNodeBy(page, readId, -450, 0);
+
+	await setNodePathParam(page, readId, INPUT_WAV_PATH);
+
+	// The built-in version resolved into the bag drives the zero-target guard.
+	await sleep(DEBOUNCE_WAIT_MS);
+
+	const builtinVersion = readBuiltinVersion();
+
+	log(`  INFO  render assertions exercise ${BUILTIN_PACKAGE}@${builtinVersion ?? "unknown"}`);
+
+	const zeroTargetSupported = builtinVersion !== null && versionAtLeast(builtinVersion, ZERO_TARGET_MIN_VERSION);
+
+	// Zero-target: a lone Read WAV is a leaf that is not a target. Only packages
+	// bundling core ≥ 0.10.0 carry the leaf validation — guard on the capability.
+	if (zeroTargetSupported) {
+		await clickRender(page);
+
+		const errorText = await waitForRenderError(page, 20000);
+
+		check(
+			errorText !== null && /is not a target|end in a target/i.test(errorText),
+			`zero-target — render toast shows core's leaf-validation error ("${String(errorText)}")`,
+		);
+
+		await dismissRenderToast(page);
+	} else {
+		log(
+			`  SKIP  zero-target error — ${BUILTIN_PACKAGE}@${builtinVersion ?? "unknown"} predates the leaf validation (needs ≥ ${ZERO_TARGET_MIN_VERSION}); asserted once the 0.21.0 built-in publishes.`,
+		);
+	}
+
+	await addNode(page, WRITE_NODE, 2, { search: "write" });
+
+	const writeId = await nodeIdByLabel(page, WRITE_NODE);
+
+	if (!writeId) throw new Error("Could not resolve the Write node id");
+
+	await setNodePathParam(page, writeId, OUTPUT_WAV_PATH);
+
+	await zoomOut(page, 4);
+
+	const sourceHandle = await rectOf(page, `.react-flow__node[data-id="${readId}"] .react-flow__handle-right`);
+	const targetHandle = await rectOf(page, `.react-flow__node[data-id="${writeId}"] .react-flow__handle-left`);
+
+	if (!sourceHandle || !targetHandle) throw new Error("Could not locate render-graph connection handles");
+
+	await connectHandles(page, sourceHandle, targetHandle);
+
+	check(await waitForEdgeCount(page, 1, 8000), "render graph — Read WAV → Write connected (edge = 1)");
+
+	rmSync(OUTPUT_WAV_PATH, { force: true });
+
+	await clickRender(page);
+
+	const outcome = await waitForRenderOutput(page, OUTPUT_WAV_PATH, 60000);
+
+	check(outcome.ok, `render to completion — output written and toast settled (${outcome.error ?? "ok"})`);
+	check(fileSize(OUTPUT_WAV_PATH) > 0, `render to completion — output file exists and is non-empty (${fileSize(OUTPUT_WAV_PATH)} bytes)`);
+
+	await dismissRenderToast(page);
+
+	check(await clearGraph(page), "render section — graph cleared for the mutation flow (nodes = 0)");
+}
+
 async function run(): Promise<void> {
 	const bagId = seedProfile();
 
@@ -715,12 +1173,22 @@ async function run(): Promise<void> {
 			`Render height matches icon buttons (render ${String(renderHeight)} vs icon ${String(iconButtonHeight)})`,
 		);
 
-		// 1 + 2: add two nodes.
-		await addNode(page, SOURCE_NODE, 1);
-		await addNode(page, TRANSFORM_NODE, 2);
+		// Full-graph render (Phase 4.1): runs first on a fresh graph and clears it,
+		// so the mutation flow below still starts from an empty canvas.
+		await runRenderSection(page);
+
+		// 1 + 2: add two nodes through the cmdk catalog — Read WAV picked by mouse,
+		// Gain picked by keyboard (ArrowDown+Enter) to exercise cmdk-in-Radix focus.
+		await addNode(page, SOURCE_NODE, 1, { search: "read" });
+		await addNode(page, TRANSFORM_NODE, 2, { search: "gain", method: "keyboard" });
 
 		const sourceId = await nodeIdByLabel(page, SOURCE_NODE);
 		const transformId = await nodeIdByLabel(page, TRANSFORM_NODE);
+
+		check(
+			transformId !== null,
+			"cmdk keyboard nav — type-to-filter then ArrowDown+Enter adds the node (Radix focus check)",
+		);
 
 		if (!sourceId || !transformId) throw new Error("Could not resolve node ids after add");
 
@@ -747,9 +1215,48 @@ async function run(): Promise<void> {
 
 		if (!sourceHandle || !targetHandle) throw new Error("Could not locate connection handles");
 
-		await dragBetween(page, sourceHandle, targetHandle);
+		await connectHandles(page, sourceHandle, targetHandle);
 
 		check(await waitForEdgeCount(page, 1, 8000), "connect nodes — edge count reaches 1");
+
+		// 4b: edge insert chip — hovering the edge reveals the `+` chip; clicking it
+		// opens the insert catalog and must NOT delete the edge (the Phase-3 3.4 fix).
+		const chipMid = { x: (sourceHandle.x + targetHandle.x) / 2, y: (sourceHandle.y + targetHandle.y) / 2 };
+		let chipShown = false;
+
+		for (const dy of [0, -8, 8, -16, 16]) {
+			await page.mouse.move(chipMid.x, chipMid.y + dy);
+			await sleep(200);
+
+			if ((await page.$("[data-edge-insert]")) !== null) {
+				chipShown = true;
+				break;
+			}
+		}
+
+		check(chipShown, "edge chip — hovering the edge reveals the insert chip");
+
+		if (chipShown) {
+			const chipButton = await page.$('[data-edge-insert] button[aria-label="Insert node"]');
+			const chipBox = chipButton ? await chipButton.boundingBox() : null;
+
+			if (chipBox) {
+				await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
+
+				const catalogOpened = await page
+					.waitForSelector("[cmdk-input]", { timeout: 3000 })
+					.then(() => true)
+					.catch(() => false);
+
+				check(catalogOpened, "edge chip — clicking the + chip opens the insert catalog");
+				check(await edgeCount(page) === 1, "edge chip — the edge survives the chip click (still 1)");
+
+				await page.keyboard.press("Escape");
+				await sleep(200);
+			} else {
+				check(false, "edge chip — insert button had no bounding box");
+			}
+		}
 
 		// 5 + 6: structural undo x2 / redo x2 — node/edge counts follow.
 		// (Placed on structural ops so the counts observably track undo/redo,
@@ -811,7 +1318,22 @@ async function run(): Promise<void> {
 
 		check(isBypassed, "toggle bypass — node shows opacity-60");
 
-		// 9: delete the transform node via its header menu.
+		// 9: the node menu is exactly Bypass/Enable, Reset, Delete Node (Phase 3.2 —
+		// Render/Abort dropped), then delete through the same menu.
+		const nodeMenuItems = await openNodeMenuAndDump(page, transformId);
+		const hasBypass = nodeMenuItems.some((item) => /bypass|enable/i.test(item));
+		const hasReset = nodeMenuItems.some((item) => /reset/i.test(item));
+		const hasDelete = nodeMenuItems.some((item) => item.includes("Delete Node"));
+		const hasRenderAbort = nodeMenuItems.some((item) => /render|abort/i.test(item));
+
+		check(
+			nodeMenuItems.length === 3 && hasBypass && hasReset && hasDelete && !hasRenderAbort,
+			`node menu is exactly Bypass/Reset/Delete Node (${nodeMenuItems.join(" | ")})`,
+		);
+
+		await page.keyboard.press("Escape");
+		await sleep(150);
+
 		const deleted = await deleteNodeViaMenu(page, transformId);
 
 		check(deleted, "delete node — opened node menu and selected Delete Node");
@@ -833,11 +1355,13 @@ async function run(): Promise<void> {
 			`persisted param path equals typed value ("${String(persistedPath)}")`,
 		);
 
-		// 11: VST3 stage editor (Phase 7.3). Runs before the Preferences remove-flow
+		// 11: VST3 stage editor (Phase 7.3). Runs before the Settings remove-flow
 		// so both seeded scan roots are still present when the picker scans.
 		await runVst3Section(page, 2);
 
-		// 12: Preferences — VST3 scan roots seed, render, and remove-flow persistence.
+		// 12: Settings — VST3 scan roots seed, render, and remove-flow persistence.
+		// The three former manager modals merged into one Settings modal (Phase 2):
+		// open it from the app menu, then click the "VST3 scan roots" left-nav row.
 		// The two seeded Windows roots come from Vst3/getDefaultScanRoots on first boot
 		// (state.json had no vst3ScanRoots). Adding a root uses a native folder dialog
 		// (undriveable over CDP), so only the remove flow is automated.
@@ -852,9 +1376,15 @@ async function run(): Promise<void> {
 		await page.waitForSelector('[role="menuitem"]', { timeout: 5000 });
 		await sleep(150);
 
-		const openedPreferences = await clickMenuItemByText(page, "Preferences");
+		const openedSettings = await clickMenuItemByText(page, "Settings");
 
-		check(openedPreferences, "open Preferences from the app menu");
+		check(openedSettings, "open Settings from the app menu");
+
+		await sleep(200);
+
+		const openedScanRootsSection = await clickButtonByText(page, "VST3 scan roots");
+
+		check(openedScanRootsSection, "Settings — open the VST3 scan roots section from the left nav");
 
 		// Wait for a modal (non-graph) Remove button — a VST3 stage row also carries a
 		// `Remove …` button on the canvas, so plain presence is not a modal-ready signal.
@@ -871,7 +1401,7 @@ async function run(): Promise<void> {
 
 		check(
 			seededRoots.length === expectedRoots.length && expectedRoots.every((root) => seededRoots.includes(root)),
-			`Preferences renders the ${expectedRoots.length} seeded scan roots (${seededRoots.join(" | ")})`,
+			`Settings renders the ${expectedRoots.length} seeded scan roots (${seededRoots.join(" | ")})`,
 		);
 		log(`  INFO  seeded VST3 scan roots: ${seededRoots.join(" | ")}`);
 

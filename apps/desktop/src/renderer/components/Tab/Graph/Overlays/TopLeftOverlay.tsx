@@ -1,4 +1,5 @@
 import { Plus } from "lucide-react";
+import { useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -21,13 +22,15 @@ import { PackageNodeList } from "../PackageNodeList";
 
 interface Props {
 	readonly app: Snapshot<AppState>;
-	readonly onAddNode: (packageName: string, packageVersion: string, nodeName: string) => void;
+	readonly onAddNode: (packageName: string, nodeName: string) => void;
 }
 
 export function TopLeftOverlay({ app, onAddNode }: Props) {
+	const [open, setOpen] = useState(false);
+
 	return (
 		<div className="absolute left-3 top-3 z-10">
-			<DropdownMenu>
+			<DropdownMenu open={open} onOpenChange={setOpen}>
 				<DropdownMenuTrigger asChild>
 					<button
 						type="button"
@@ -42,7 +45,13 @@ export function TopLeftOverlay({ app, onAddNode }: Props) {
 					align="start"
 					className="max-h-[calc(100vh-120px)] w-80 overflow-y-auto"
 				>
-					<PackageNodeList app={app} onSelect={onAddNode} />
+					<PackageNodeList
+						app={app}
+						onSelect={(packageName, nodeName) => {
+							onAddNode(packageName, nodeName);
+							setOpen(false);
+						}}
+					/>
 				</DropdownMenuContent>
 			</DropdownMenu>
 		</div>

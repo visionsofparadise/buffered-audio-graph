@@ -68,6 +68,7 @@ export async function newBag(main: Main): Promise<{ bagPath: string; definition:
 		id: crypto.randomUUID(),
 		apiVersion: CURRENT_API_VERSION,
 		name,
+		packages: {},
 		nodes: [],
 		edges: [],
 	};

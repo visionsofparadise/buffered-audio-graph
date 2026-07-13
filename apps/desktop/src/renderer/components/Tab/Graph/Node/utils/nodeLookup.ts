@@ -3,7 +3,7 @@ import type { GraphContext } from "../../../../../models/Context";
 import type { NodeCategory } from "../Container";
 
 /**
- * Resolve a node class by (packageName, packageVersion, nodeName) from the
+ * Resolve a node class by (packageName, version, nodeName) from the
  * graph context. On success `unresolvedReason` is null and `schema` is the
  * node's JSON Schema. On failure `schema` is null and `unresolvedReason`
  * carries a human-readable reason — the node body renders it in place of the
@@ -13,14 +13,14 @@ import type { NodeCategory } from "../Container";
  */
 export function lookupNode(
 	packageName: string,
-	packageVersion: string,
+	version: string,
 	nodeName: string,
 	context: GraphContext,
 ): { category: NodeCategory; description: string; schema: NodeJsonSchema | null; unresolvedReason: string | null } {
 	let packageFound = false;
 
 	for (const nodePackage of context.app.packages) {
-		if (nodePackage.name === packageName && nodePackage.version === packageVersion) {
+		if (nodePackage.name === packageName && nodePackage.version === version) {
 			packageFound = true;
 
 			if (nodePackage.status === "error") {
@@ -28,7 +28,7 @@ export function lookupNode(
 					category: "transform",
 					description: "",
 					schema: null,
-					unresolvedReason: nodePackage.error ?? `Package ${packageName}@${packageVersion} failed to load`,
+					unresolvedReason: nodePackage.error ?? `Package ${packageName}@${version} failed to load`,
 				};
 			}
 
@@ -46,8 +46,8 @@ export function lookupNode(
 	}
 
 	const unresolvedReason = packageFound
-		? `Node "${nodeName}" is not in ${packageName}@${packageVersion}`
-		: `Package not installed: ${packageName}@${packageVersion}`;
+		? `Node "${nodeName}" is not in ${packageName}@${version}`
+		: `Package not installed: ${packageName}@${version}`;
 
 	return { category: "transform", description: "", schema: null, unresolvedReason };
 }

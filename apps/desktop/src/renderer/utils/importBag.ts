@@ -81,6 +81,23 @@ export function mergeImportedBag({
 		);
 	}
 
+	// Merge the imported `packages` map into the open bag's, holding the
+	// one-version-per-package invariant: a conflicting pin (same package, other
+	// version) aborts the import.
+	const mergedPackages: Record<string, string> = { ...currentDefinition.packages };
+
+	for (const [packageName, version] of Object.entries(importedDefinition.packages)) {
+		const existing = mergedPackages[packageName];
+
+		if (existing !== undefined && existing !== version) {
+			throw new Error(
+				`Cannot import bag: package "${packageName}" is pinned to ${existing} here but to ${version} in the imported bag`,
+			);
+		}
+
+		mergedPackages[packageName] = version;
+	}
+
 	const idMap = new Map<string, string>();
 	const importedNodes: Array<GraphNode> = importedDefinition.nodes.map((node) => {
 		const nextId = crypto.randomUUID();
@@ -108,6 +125,7 @@ export function mergeImportedBag({
 	return {
 		definition: {
 			...currentDefinition,
+			packages: mergedPackages,
 			nodes: [...currentDefinition.nodes, ...importedNodes],
 			edges: [...currentDefinition.edges, ...importedEdges],
 		},

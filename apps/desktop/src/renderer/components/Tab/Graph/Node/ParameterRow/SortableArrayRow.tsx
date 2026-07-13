@@ -69,6 +69,9 @@ export function SortableArrayRow({
 					onParameterBrowse={(fieldName) => {
 						callbacks.onParameterBrowseAtPath?.([paramName, rowIndex, fieldName]);
 					}}
+					onParameterUnset={(fieldName) => {
+						callbacks.onParameterUnsetAtPath?.([paramName, rowIndex, fieldName]);
+					}}
 				/>
 			))}
 		</div>

@@ -94,3 +94,6 @@ out/
 # GUI smoke harness (persistent warm profile + seeded bag)
 .smoke-profile/
 .smoke-seed.bag
+
+# Throwaway diagnostic profiles
+.probe-profile/

@@ -7,12 +7,13 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "../../DropdownMenu";
+import { Download, Plus, Redo2, Undo2 } from "lucide-react";
 import type { Snapshot } from "valtio/vanilla";
 import type { AppState } from "../../../models/State/App";
 import { NodeMenuItems } from "./Node/Menu";
 import { PackageNodeList } from "./PackageNodeList";
 
-export type ContextMenuAction = "delete" | "render" | "abort" | "undo" | "redo" | "bypass" | "reset";
+export type ContextMenuAction = "delete" | "render" | "undo" | "redo" | "bypass" | "reset";
 
 export interface ContextMenuPosition {
 	readonly x: number;
@@ -24,10 +25,8 @@ interface Props {
 	readonly position: ContextMenuPosition;
 	readonly app: Snapshot<AppState>;
 	readonly onAction: (action: ContextMenuAction) => void;
-	readonly onAddNode: (packageName: string, packageVersion: string, nodeName: string) => void;
+	readonly onAddNode: (packageName: string, nodeName: string) => void;
 	readonly onClose: () => void;
-	/** True when the right-clicked node is a source node — hides Render/Abort. */
-	readonly isSourceNode?: boolean;
 	/** Current bypass state of the right-clicked node — drives the Bypass/Enable label. */
 	readonly isBypassed?: boolean;
 	readonly canUndo?: boolean;
@@ -49,7 +48,6 @@ export function GraphContextMenu({
 	onAction,
 	onAddNode,
 	onClose,
-	isSourceNode = false,
 	isBypassed = false,
 	canUndo = true,
 	canRedo = true,
@@ -72,18 +70,16 @@ export function GraphContextMenu({
 			<DropdownMenuContent align="start" sideOffset={0}>
 				{isNode ? (
 					<NodeMenuItems
-						isSource={isSourceNode}
 						bypassed={isBypassed}
 						onBypass={() => onAction("bypass")}
 						onReset={() => onAction("reset")}
-						onRender={() => onAction("render")}
-						onAbort={() => onAction("abort")}
 						onDelete={() => onAction("delete")}
 					/>
 				) : (
 					<>
 						<DropdownMenuSub>
 							<DropdownMenuSubTrigger>
+								<Plus size={14} strokeWidth={1.5} />
 								<span className="flex-1">Add Node</span>
 							</DropdownMenuSubTrigger>
 							<DropdownMenuSubContent className="max-h-[calc(100vh-100px)] w-80 overflow-y-auto">
@@ -91,12 +87,15 @@ export function GraphContextMenu({
 							</DropdownMenuSubContent>
 						</DropdownMenuSub>
 						<DropdownMenuItem disabled={!canUndo} onSelect={() => onAction("undo")}>
+							<Undo2 size={14} strokeWidth={1.5} />
 							<span>Undo</span>
 						</DropdownMenuItem>
 						<DropdownMenuItem disabled={!canRedo} onSelect={() => onAction("redo")}>
+							<Redo2 size={14} strokeWidth={1.5} />
 							<span>Redo</span>
 						</DropdownMenuItem>
 						<DropdownMenuItem onSelect={() => onAction("render")}>
+							<Download size={14} strokeWidth={1.5} />
 							<span>Render</span>
 						</DropdownMenuItem>
 					</>

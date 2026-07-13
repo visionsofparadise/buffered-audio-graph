@@ -69,20 +69,31 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 					id: graphDefinition.id,
 					apiVersion: graphDefinition.apiVersion,
 					name: graphDefinition.name,
+					packages: graphDefinition.packages,
 					nodes: graphDefinition.nodes,
 					edges: graphDefinition.edges,
 				}),
 			) as GraphDefinition;
 			const previousPositions = JSON.parse(JSON.stringify(graph.positions)) as Record<string, { x: number; y: number }>;
-			const merged = mergeImportedBag({
-				currentDefinition: previousDefinition,
-				currentPositions: previousPositions,
-				importedDefinition: imported.definition,
-			});
+
+			let merged;
+
+			try {
+				merged = mergeImportedBag({
+					currentDefinition: previousDefinition,
+					currentPositions: previousPositions,
+					importedDefinition: imported.definition,
+				});
+			} catch (error) {
+				context.logger.error("Bag import failed", error as Error, { namespace: "graph" });
+
+				return;
+			}
 
 			if (merged.importedNodeCount === 0) return;
 
 			history.mutate(graphDefinition, (proxy) => {
+				proxy.packages = merged.definition.packages;
 				proxy.nodes = merged.definition.nodes;
 				proxy.edges = merged.definition.edges;
 			});

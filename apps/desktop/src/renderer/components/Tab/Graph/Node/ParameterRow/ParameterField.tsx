@@ -10,6 +10,8 @@ import { ObjectRow } from "./Object";
 export interface ParameterCallbacks {
 	/** Called when any leaf value changes. Path is [topLevelName, ...nested]. */
 	readonly onParameterChangeAtPath?: (path: ReadonlyArray<string | number>, value: unknown) => void;
+	/** Called when an optional leaf is toggled to AUTO — the key is deleted. Path is [topLevelName, ...nested]. */
+	readonly onParameterUnsetAtPath?: (path: ReadonlyArray<string | number>) => void;
 	/** Called when a file/folder leaf requests a browse dialog. */
 	readonly onParameterBrowseAtPath?: (path: ReadonlyArray<string | number>) => void;
 	/** Called when a new array row should be appended. */
@@ -18,6 +20,12 @@ export interface ParameterCallbacks {
 	readonly onArrayRowDelete?: (paramName: string, rowIndex: number) => void;
 	/** Called when array rows should be reordered. */
 	readonly onArrayRowReorder?: (paramName: string, fromIndex: number, toIndex: number) => void;
+	/** Open a save-mode file param's current value in the OS default app. */
+	readonly onFileOpen?: (value: string) => void;
+	/** Resolves true when a file value names an existing file — drives the open-output button. */
+	readonly statFile?: (value: string) => Promise<boolean>;
+	/** Bumped when a render completes, re-triggering the open-output existence check. */
+	readonly renderEpoch?: number;
 	/** When true, number knobs render as disabled (no callbacks available). */
 	readonly disabled?: boolean;
 }
@@ -71,6 +79,12 @@ export function ParameterField({
 					onParameterBrowse={() => {
 						callbacks.onParameterBrowseAtPath?.(leafPath);
 					}}
+					onParameterUnset={() => {
+						callbacks.onParameterUnsetAtPath?.(leafPath);
+					}}
+					onFileOpen={callbacks.onFileOpen}
+					statFile={callbacks.statFile}
+					renderEpoch={callbacks.renderEpoch}
 				/>
 			);
 		}

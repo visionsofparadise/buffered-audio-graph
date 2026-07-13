@@ -181,7 +181,7 @@ export function Vst3StagesEditor({
 		};
 	}, [mainEvents, callbacks]);
 
-	// Scans run on picker open (and on scan-root changes via Preferences); the
+	// Scans run on picker open (and on scan-root changes via Settings); the
 	// return is cached + pending immediately, then `vst3:scanUpdate` fills in.
 	const handleScanOpen = useCallback(() => {
 		void main

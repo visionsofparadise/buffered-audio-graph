@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Knob } from "../../../../Knob";
 import { cn } from "../../../../../utils/cn";
-import { humanizeFieldName, paramLabelClass } from "./utils/labels";
+import { FieldLabel } from "./FieldLabel";
 
 export interface NumberParameter {
 	readonly kind: "number";
@@ -10,7 +10,9 @@ export interface NumberParameter {
 	readonly min: number;
 	readonly max: number;
 	readonly step: number;
-	readonly unit: string;
+	readonly description: string;
+	readonly optional: boolean;
+	readonly defined: boolean;
 }
 
 function snapToStep(value: number, step: number): number {
@@ -31,11 +33,13 @@ export function NumberRow({
 	dimmed,
 	disabled,
 	onParameterChange,
+	onParameterUnset,
 }: {
 	readonly param: NumberParameter;
 	readonly dimmed?: boolean;
 	readonly disabled?: boolean;
 	readonly onParameterChange?: (name: string, value: unknown) => void;
+	readonly onParameterUnset?: (name: string) => void;
 }) {
 	const range = param.max - param.min;
 	const normalize = (raw: number) => (range === 0 ? 0 : (raw - param.min) / range);
@@ -49,11 +53,23 @@ export function NumberRow({
 	}, [param.value]);
 
 	const normalized = normalize(localValue);
+	const controlDisabled = (disabled ?? false) || (param.optional && !param.defined);
+	const setDefinedHandler = onParameterChange || onParameterUnset
+		? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
+		: undefined;
 
 	return (
-		<div className={cn("flex items-center justify-between gap-3", dimmed && "opacity-40")}>
-			<span className={paramLabelClass(true)}>{humanizeFieldName(param.name)}</span>
-			<div className="flex shrink-0 flex-col items-center gap-1">
+		<div
+			className={cn("flex items-center justify-between gap-3", dimmed && "opacity-40")}
+			title={param.description || undefined}
+		>
+			<FieldLabel
+				name={param.name}
+				optional={param.optional}
+				defined={param.defined}
+				onSetDefined={setDefinedHandler}
+			/>
+			<div className={cn("flex shrink-0 flex-col items-center gap-1", controlDisabled && "pointer-events-none opacity-40")}>
 				<span className="type-value w-12 text-center text-label text-text-secondary">
 					{formatParamValue(localValue, param.step)}
 				</span>
@@ -61,7 +77,7 @@ export function NumberRow({
 					value={normalized}
 					size={32}
 					hideValue
-					disabled={disabled}
+					disabled={controlDisabled}
 					onChange={(norm: number) => {
 						draggingRef.current = true;
 						setLocalValue(snapToStep(denormalize(norm), param.step));
@@ -74,9 +90,6 @@ export function NumberRow({
 						onParameterChange?.(param.name, committed);
 					}}
 				/>
-				{param.unit !== "" && (
-					<span className="type-label text-text-secondary">{param.unit}</span>
-				)}
 			</div>
 		</div>
 	);

@@ -53,16 +53,22 @@ export function useAppCallbacks(
 
 			setHasPassedLoading(false);
 
-			try {
-				await ensureGraphPackagesInstalled(definition, app, appStore, main);
-			} catch (error) {
-				logger.error("Failed to install exact package versions required by bag", error as Error, {
-					namespace: "packages",
-					bagPath,
-				});
-			} finally {
-				setHasPassedLoading(true);
+			// Dependency satisfaction is automatic and bag-driven, gated by the
+			// auto-install setting. With it off, an unsatisfiable pin lands the bag
+			// in the existing degraded state (nodeLookup surfaces the missing
+			// package on each node).
+			if (app.installBagPackagesAutomatically) {
+				try {
+					await ensureGraphPackagesInstalled(definition, app, appStore, main);
+				} catch (error) {
+					logger.error("Failed to install exact package versions required by bag", error as Error, {
+						namespace: "packages",
+						bagPath,
+					});
+				}
 			}
+
+			setHasPassedLoading(true);
 
 			addTab(definition.id, bagPath, definition.name);
 		},
@@ -96,10 +102,10 @@ export function useAppCallbacks(
 					{ namespace: "graph" },
 				);
 			} else {
+				result.definition.packages = { "@buffered-audio/nodes": latest.version ?? "" };
 				result.definition.nodes.push({
 					id: crypto.randomUUID(),
 					packageName: "@buffered-audio/nodes",
-					packageVersion: latest.version ?? "",
 					nodeName: "Read WAV",
 				});
 

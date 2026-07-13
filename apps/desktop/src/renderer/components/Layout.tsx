@@ -13,10 +13,8 @@ import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
 import { useCreateState } from "../models/ProxyStore/hooks/useCreateState";
 import type { ActiveCommands } from "../models/State/ActiveCommands";
 import { useAppState, type AppState } from "../models/State/App";
-import { BinaryManager } from "./BinaryManager";
 import { LoadingScreen } from "./LoadingScreen";
-import { PackageManager } from "./PackageManager";
-import { Preferences } from "./Preferences";
+import { Settings } from "./Settings";
 import { AppBar } from "./AppBar";
 import { TabContent } from "./Tab";
 
@@ -50,9 +48,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 		}
 	}, [hasPassedLoading, isLoading, hasUnresolvedPackages, hasError]);
 
-	const [packageManagerOpen, setPackageManagerOpen] = useState(false);
-	const [binaryManagerOpen, setBinaryManagerOpen] = useState(false);
-	const [preferencesOpen, setPreferencesOpen] = useState(false);
+	const [settingsOpen, setSettingsOpen] = useState(false);
 
 	const callbacks = useAppCallbacks(app, appStore, main, logger, setHasPassedLoading);
 
@@ -82,9 +78,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 			importBagIntoActiveTab: async () => {
 				await activeCommands.importBag?.();
 			},
-			setPackageManagerOpen,
-			setBinaryManagerOpen,
-			setPreferencesOpen,
+			setSettingsOpen,
 		}),
 		[app, appStore, logger, mainEvents, queryClient, userDataPath, windowId, activeCommands, callbacks],
 	);
@@ -106,19 +100,9 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 		<div className="flex flex-col h-screen">
 			<AppBar context={context} />
 			<TabContent context={context} />
-			<PackageManager
-				isOpen={packageManagerOpen}
-				onClose={() => setPackageManagerOpen(false)}
-				context={context}
-			/>
-			<BinaryManager
-				isOpen={binaryManagerOpen}
-				onClose={() => setBinaryManagerOpen(false)}
-				context={context}
-			/>
-			<Preferences
-				isOpen={preferencesOpen}
-				onClose={() => setPreferencesOpen(false)}
+			<Settings
+				isOpen={settingsOpen}
+				onClose={() => setSettingsOpen(false)}
 				context={context}
 			/>
 		</div>

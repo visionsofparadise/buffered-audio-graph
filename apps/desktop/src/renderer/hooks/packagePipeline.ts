@@ -12,8 +12,8 @@ export function comparePackageVersions(left: string, right: string): number {
 	});
 }
 
-export function packageInstallDirectory(userDataPath: string, packageName: string, packageVersion: string): string {
-	return `${userDataPath}/packages/${encodeURIComponent(packageName)}/${packageVersion}`;
+export function packageInstallDirectory(userDataPath: string, packageName: string, version: string): string {
+	return `${userDataPath}/packages/${encodeURIComponent(packageName)}/${version}`;
 }
 
 export function mutatePackageAt(
@@ -109,14 +109,8 @@ export async function ensureGraphPackagesInstalled(
 	appStore: ProxyStore,
 	main: Main,
 ): Promise<void> {
-	const requestedSpecs = Array.from(
-		new Set(
-			graphDefinition.nodes.map((node) => {
-				const packageVersion = typeof node.packageVersion === "string" ? node.packageVersion : "";
-
-				return packageSpecFromNameAndVersion(node.packageName, packageVersion);
-			}),
-		),
+	const requestedSpecs = Object.entries(graphDefinition.packages).map(([packageName, version]) =>
+		packageSpecFromNameAndVersion(packageName, version),
 	);
 
 	for (const requestedSpec of requestedSpecs) {

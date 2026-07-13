@@ -49,6 +49,7 @@ export const AppStateSchema = z.object({
 	packages: z.array(NodePackageStateSchema).default([]),
 	binaries: z.record(z.string(), z.string()).default({}),
 	vst3ScanRoots: z.array(z.string()).default([]),
+	installBagPackagesAutomatically: z.boolean().default(true),
 });
 
 export type TabEntry = z.infer<typeof TabEntrySchema>;
@@ -63,6 +64,7 @@ const SavedStateSchema = AppStateSchema.pick({
 	windowBounds: true,
 	recentFiles: true,
 	binaries: true,
+	installBagPackagesAutomatically: true,
 })
 	.extend({
 		packages: z.array(z.unknown()).optional(),
@@ -158,6 +160,7 @@ export async function loadAppState(main: { getUserDataPath: () => Promise<string
 		packages,
 		binaries: saved.binaries ?? {},
 		vst3ScanRoots,
+		installBagPackagesAutomatically: saved.installBagPackagesAutomatically ?? true,
 	};
 }
 

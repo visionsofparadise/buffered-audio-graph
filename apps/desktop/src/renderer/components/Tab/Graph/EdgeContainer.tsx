@@ -25,7 +25,7 @@ const EDGE_HIT_CURSOR =
 
 export interface EdgeContainerData {
 	readonly app: Snapshot<AppState>;
-	readonly onInsert: (packageName: string, packageVersion: string, nodeName: string) => void;
+	readonly onInsert: (packageName: string, nodeName: string) => void;
 	[key: string]: unknown;
 }
 
@@ -85,6 +85,7 @@ export function EdgeContainer({
 				{chipVisible && edgeData && (
 					<div
 						className="nodrag nopan"
+						data-edge-insert
 						style={{
 							position: "absolute",
 							transform: `translate(-50%, -50%) translate(${String(labelX)}px, ${String(labelY)}px)`,
@@ -93,6 +94,9 @@ export function EdgeContainer({
 						}}
 						onMouseEnter={enter}
 						onMouseLeave={leave}
+						onClick={(event) => event.stopPropagation()}
+						onPointerDown={(event) => event.stopPropagation()}
+						onMouseDown={(event) => event.stopPropagation()}
 					>
 						<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 							<DropdownMenuTrigger asChild>
@@ -106,7 +110,13 @@ export function EdgeContainer({
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="center" side="bottom" className="max-h-[calc(100vh-160px)] w-80 overflow-y-auto">
 								<DropdownMenuLabel className="text-dimmed">Insert node here</DropdownMenuLabel>
-								<PackageNodeList app={edgeData.app} onSelect={edgeData.onInsert} />
+								<PackageNodeList
+									app={edgeData.app}
+									onSelect={(packageName, nodeName) => {
+										edgeData.onInsert(packageName, nodeName);
+										setMenuOpen(false);
+									}}
+								/>
 							</DropdownMenuContent>
 						</DropdownMenu>
 					</div>

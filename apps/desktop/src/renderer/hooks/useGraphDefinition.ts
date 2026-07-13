@@ -147,6 +147,7 @@ export function useGraphDefinition(
 						proxy.id = validated.id;
 						proxy.apiVersion = validated.apiVersion;
 						proxy.name = validated.name;
+						proxy.packages = validated.packages;
 						proxy.nodes = validated.nodes;
 						proxy.edges = validated.edges;
 					});

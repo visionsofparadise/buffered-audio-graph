@@ -2,28 +2,33 @@ import type { GraphDefinition } from "@buffered-audio/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AudioProgressPayload } from "../../../../../shared/utilities/emitToRenderer";
 import type { GraphContext } from "../../../../models/Context";
-import { resolveFileStatsByNode } from "./fileParamStats";
-import { buildRenderPlan, diffStaleNodes, executeRenderPlan } from "./renderCoordinator";
 
 export interface UseRenderJobReturn {
 	readonly startRender: () => Promise<void>;
 	readonly abortRender: () => Promise<void>;
+	readonly clearRenderError: () => void;
 	readonly activeJobId: string | null;
 	readonly processingNodes: Map<string, number>;
-	readonly errorNodes: Set<string>;
+	readonly renderError: string | null;
 }
 
 function mintJobId(): string {
 	return crypto.randomUUID();
 }
 
-export function useRenderJob(refresh: () => void, context: GraphContext): UseRenderJobReturn {
+/**
+ * Thin IPC driver for full-graph rendering. `startRender` mints a jobId,
+ * snapshots the current definition, and awaits `audioRenderGraph`; a rejection
+ * (core's leaf-must-be-a-target validation, a missing package, or a DSP
+ * failure) is stored as `renderError` for the render toast. `audio:progress`
+ * events update the per-node fraction map used for the aggregate bar.
+ */
+export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 	const [activeJobId, setActiveJobId] = useState<string | null>(null);
 	const [processingNodes, setProcessingNodes] = useState<Map<string, number>>(() => new Map());
-	const [errorNodes, setErrorNodes] = useState<Set<string>>(() => new Set());
+	const [renderError, setRenderError] = useState<string | null>(null);
 
 	const activeJobIdRef = useRef<string | null>(null);
-	const abortControllerRef = useRef<AbortController | null>(null);
 
 	useEffect(() => {
 		activeJobIdRef.current = activeJobId;
@@ -31,58 +36,41 @@ export function useRenderJob(refresh: () => void, context: GraphContext): UseRen
 
 	const startRender = useCallback(async () => {
 		const jobId = mintJobId();
-		const controller = new AbortController();
 
-		abortControllerRef.current = controller;
 		setActiveJobId(jobId);
 		setProcessingNodes(new Map());
-		setErrorNodes(new Set());
+		setRenderError(null);
 
 		const { _key, ...rest } = context.graphDefinition;
-		const graphDefinition = structuredClone(rest) as GraphDefinition;
-		const snapshotsDir = `${context.userDataPath}/snapshots`;
+		const definition = structuredClone(rest) as GraphDefinition;
 
 		try {
-			const fileStatsByNodeId = await resolveFileStatsByNode(graphDefinition.nodes, context);
-			const plan = await buildRenderPlan(graphDefinition, snapshotsDir, context.bagId, fileStatsByNodeId);
-			const stale = await diffStaleNodes(plan, context.main);
-
-			await executeRenderPlan(plan, stale, graphDefinition, jobId, context.main, controller.signal);
+			await context.main.audioRenderGraph({ jobId, definition });
 
 			if (activeJobIdRef.current !== jobId) return;
 
 			setActiveJobId(null);
 			setProcessingNodes(new Map());
-			refresh();
 		} catch (error) {
 			if (activeJobIdRef.current !== jobId) return;
 
-			const isAbort = error instanceof DOMException && error.name === "AbortError";
-
-			if (isAbort) {
-				setActiveJobId(null);
-				setProcessingNodes(new Map());
-
-				return;
-			}
-
-			setProcessingNodes((previous) => {
-				setErrorNodes(new Set(previous.keys()));
-
-				return new Map();
-			});
 			setActiveJobId(null);
+			setProcessingNodes(new Map());
+			setRenderError(error instanceof Error ? error.message : String(error));
 		}
-	}, [context, refresh]);
+	}, [context]);
 
 	const abortRender = useCallback(async () => {
 		if (activeJobIdRef.current === null) return;
 
-		abortControllerRef.current?.abort();
 		await context.main.audioAbortJob(activeJobIdRef.current);
 		setActiveJobId(null);
 		setProcessingNodes(new Map());
 	}, [context.main]);
+
+	const clearRenderError = useCallback(() => {
+		setRenderError(null);
+	}, []);
 
 	useEffect(() => {
 		const handler = (payload: AudioProgressPayload): void => {
@@ -108,5 +96,5 @@ export function useRenderJob(refresh: () => void, context: GraphContext): UseRen
 		};
 	}, [context.mainEvents]);
 
-	return { startRender, abortRender, activeJobId, processingNodes, errorNodes };
+	return { startRender, abortRender, clearRenderError, activeJobId, processingNodes, renderError };
 }

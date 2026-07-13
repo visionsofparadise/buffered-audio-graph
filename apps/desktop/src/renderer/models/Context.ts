@@ -26,9 +26,7 @@ export interface AppContext {
 	readonly newBagTab: () => Promise<void>;
 	readonly renameTab: (tabId: string, newName: string) => void;
 	readonly importBagIntoActiveTab: () => Promise<void>;
-	readonly setPackageManagerOpen: (open: boolean) => void;
-	readonly setBinaryManagerOpen: (open: boolean) => void;
-	readonly setPreferencesOpen: (open: boolean) => void;
+	readonly setSettingsOpen: (open: boolean) => void;
 }
 
 export interface GraphContext extends AppContext {

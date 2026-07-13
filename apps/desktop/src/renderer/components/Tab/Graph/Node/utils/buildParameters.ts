@@ -39,9 +39,14 @@ export type Parameter = LeafParameter | ObjectParameter | ArrayParameter;
 function buildLeafParameter(
 	name: string,
 	prop: NodeJsonSchemaProperty,
-	currentValue: unknown,
+	rawValue: unknown,
 	binaryDefaults: Record<string, string>,
+	requiredSet: ReadonlySet<string>,
 ): LeafParameter | null {
+	const optional = !requiredSet.has(name);
+	const defined = !optional || rawValue !== undefined;
+	const currentValue = rawValue ?? prop.default;
+
 	if (prop.enum) {
 		const enumValue = typeof currentValue === "string" ? currentValue : (prop.enum[0] ?? "");
 
@@ -50,6 +55,8 @@ function buildLeafParameter(
 			name,
 			value: enumValue,
 			options: [...prop.enum],
+			optional,
+			defined,
 		};
 	}
 
@@ -62,7 +69,9 @@ function buildLeafParameter(
 				min: prop.minimum ?? 0,
 				max: prop.maximum ?? 1,
 				step: prop.multipleOf ?? 0.01,
-				unit: prop.description ?? "",
+				description: prop.description ?? "",
+				optional,
+				defined,
 			};
 		}
 
@@ -71,6 +80,8 @@ function buildLeafParameter(
 				kind: "boolean",
 				name,
 				value: typeof currentValue === "boolean" ? currentValue : false,
+				optional,
+				defined,
 			};
 		}
 
@@ -86,6 +97,9 @@ function buildLeafParameter(
 					kind: "file",
 					name,
 					value: fileValue,
+					optional,
+					defined,
+					mode: prop.mode,
 				};
 			}
 
@@ -93,6 +107,8 @@ function buildLeafParameter(
 				kind: "string",
 				name,
 				value: typeof currentValue === "string" ? currentValue : "",
+				optional,
+				defined,
 			};
 		}
 
@@ -106,6 +122,7 @@ function buildObjectChildren(
 	properties: Readonly<Record<string, NodeJsonSchemaProperty>>,
 	currentValue: unknown,
 	binaryDefaults: Record<string, string>,
+	requiredSet: ReadonlySet<string>,
 ): ReadonlyArray<Parameter> {
 	const record = currentValue !== null && typeof currentValue === "object" && !Array.isArray(currentValue)
 		? (currentValue as Record<string, unknown>)
@@ -113,8 +130,7 @@ function buildObjectChildren(
 	const children: Array<Parameter> = [];
 
 	for (const [fieldName, fieldProp] of Object.entries(properties)) {
-		const fieldValue = record[fieldName] ?? fieldProp.default;
-		const child = buildSingleParameter(fieldName, fieldProp, fieldValue, binaryDefaults);
+		const child = buildSingleParameter(fieldName, fieldProp, record[fieldName], binaryDefaults, requiredSet);
 
 		if (child !== null) children.push(child);
 	}
@@ -126,6 +142,7 @@ function buildArrayRow(
 	itemProperties: Readonly<Record<string, NodeJsonSchemaProperty>>,
 	rowValue: unknown,
 	binaryDefaults: Record<string, string>,
+	requiredSet: ReadonlySet<string>,
 ): ArrayRow {
 	const record = rowValue !== null && typeof rowValue === "object" && !Array.isArray(rowValue)
 		? (rowValue as Record<string, unknown>)
@@ -133,8 +150,7 @@ function buildArrayRow(
 	const fields: Array<LeafParameter> = [];
 
 	for (const [fieldName, fieldProp] of Object.entries(itemProperties)) {
-		const fieldValue = record[fieldName] ?? fieldProp.default;
-		const leaf = buildLeafParameter(fieldName, fieldProp, fieldValue, binaryDefaults);
+		const leaf = buildLeafParameter(fieldName, fieldProp, record[fieldName], binaryDefaults, requiredSet);
 
 		if (leaf !== null) fields.push(leaf);
 	}
@@ -145,21 +161,26 @@ function buildArrayRow(
 function buildSingleParameter(
 	name: string,
 	prop: NodeJsonSchemaProperty,
-	currentValue: unknown,
+	rawValue: unknown,
 	binaryDefaults: Record<string, string>,
+	requiredSet: ReadonlySet<string>,
 ): Parameter | null {
 	if (prop.type === "object" && prop.properties) {
+		const containerValue = rawValue ?? prop.default;
+
 		return {
 			kind: "object",
 			name,
-			children: buildObjectChildren(prop.properties, currentValue, binaryDefaults),
+			children: buildObjectChildren(prop.properties, containerValue, binaryDefaults, new Set(prop.required ?? [])),
 		};
 	}
 
 	if (prop.type === "array" && prop.items?.type === "object" && prop.items.properties) {
 		const itemProperties = prop.items.properties;
-		const rawArray = Array.isArray(currentValue) ? currentValue : [];
-		const rows = rawArray.map((rowValue) => buildArrayRow(itemProperties, rowValue, binaryDefaults));
+		const itemRequiredSet = new Set(prop.items.required ?? []);
+		const containerValue = rawValue ?? prop.default;
+		const rawArray = Array.isArray(containerValue) ? containerValue : [];
+		const rows = rawArray.map((rowValue) => buildArrayRow(itemProperties, rowValue, binaryDefaults, itemRequiredSet));
 
 		return {
 			kind: "array",
@@ -175,17 +196,17 @@ function buildSingleParameter(
 		return null;
 	}
 
-	return buildLeafParameter(name, prop, currentValue, binaryDefaults);
+	return buildLeafParameter(name, prop, rawValue, binaryDefaults, requiredSet);
 }
 
 export function buildParameters(graphNode: GraphNode, nodeSchema: NodeJsonSchema | null, binaryDefaults: Record<string, string>): Array<Parameter> {
 	if (!nodeSchema?.properties) return [];
 
+	const requiredSet = new Set(nodeSchema.required ?? []);
 	const parameters: Array<Parameter> = [];
 
 	for (const [propertyName, prop] of Object.entries(nodeSchema.properties)) {
-		const currentValue = graphNode.parameters?.[propertyName] ?? prop.default;
-		const param = buildSingleParameter(propertyName, prop, currentValue, binaryDefaults);
+		const param = buildSingleParameter(propertyName, prop, graphNode.parameters?.[propertyName], binaryDefaults, requiredSet);
 
 		if (param !== null) parameters.push(param);
 	}

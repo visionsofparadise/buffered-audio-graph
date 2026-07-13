@@ -41,8 +41,7 @@
     "vite": "^5.4.0"
   },
   "dependencies": {
-    "@buffered-audio/core": "*",
-    "@buffered-audio/nodes": "*",
+    "@buffered-audio/core": "0.10.0",
     "@dagrejs/dagre": "^2.0.4",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -55,6 +54,7 @@
     "@use-gesture/react": "^10.3.1",
     "@xyflow/react": "^12.10.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "electron-squirrel-startup": "^1.0.1",
     "lucide-react": "^0.577.0",
     "pacote": "^21.5.0",

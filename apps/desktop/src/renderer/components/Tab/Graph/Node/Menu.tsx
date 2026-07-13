@@ -6,53 +6,39 @@ import {
 	DropdownMenuTrigger,
 } from "../../../DropdownMenu";
 import { IconButton } from "../../../IconButton";
-import { EllipsisVertical } from "lucide-react";
+import { EllipsisVertical, Power, RotateCcw, Trash2 } from "lucide-react";
 
 export interface NodeMenuActions {
-	readonly isSource: boolean;
 	readonly bypassed: boolean;
 	readonly onBypass?: () => void;
 	readonly onReset?: () => void;
-	readonly onRender?: () => void;
-	readonly onAbort?: () => void;
 	readonly onDelete?: () => void;
 }
 
 /**
  * The single source of the node-action vocabulary — Bypass/Enable, Reset,
- * Render/Abort (hidden for source nodes), Delete Node. Rendered inside both the
- * node header's dots menu (`NodeMenu`) and the right-click node context menu
+ * Delete Node — with 14px leading icons. Rendered inside both the node header's
+ * dots menu (`NodeMenu`) and the right-click node context menu
  * (`GraphContextMenu`) so the two cannot diverge. Both mount it inside a
  * `DropdownMenuContent`, so it emits only the item/separator rows.
  */
-export function NodeMenuItems({ isSource, bypassed, onBypass, onReset, onRender, onAbort, onDelete }: NodeMenuActions) {
+export function NodeMenuItems({ bypassed, onBypass, onReset, onDelete }: NodeMenuActions) {
 	return (
 		<>
 			<DropdownMenuItem onSelect={() => onBypass?.()}>
+				<Power size={14} strokeWidth={1.5} />
 				<span>{bypassed ? "Enable" : "Bypass"}</span>
 			</DropdownMenuItem>
 
 			<DropdownMenuItem onSelect={() => onReset?.()}>
+				<RotateCcw size={14} strokeWidth={1.5} />
 				<span>Reset</span>
 			</DropdownMenuItem>
-
-			{!isSource && <DropdownMenuSeparator />}
-
-			{!isSource && (
-				<DropdownMenuItem onSelect={() => onRender?.()}>
-					<span>Render</span>
-				</DropdownMenuItem>
-			)}
-
-			{!isSource && (
-				<DropdownMenuItem onSelect={() => onAbort?.()}>
-					<span>Abort</span>
-				</DropdownMenuItem>
-			)}
 
 			<DropdownMenuSeparator />
 
 			<DropdownMenuItem onSelect={() => onDelete?.()}>
+				<Trash2 size={14} strokeWidth={1.5} />
 				<span>Delete Node</span>
 			</DropdownMenuItem>
 		</>
