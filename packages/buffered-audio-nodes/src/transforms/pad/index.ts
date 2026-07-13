@@ -4,8 +4,8 @@ import { PACKAGE_NAME } from "../../package-metadata";
 import { CHUNK_FRAMES, silenceChunkSizes } from "./utils/chunk-frames";
 
 export const schema = z.object({
-	before: z.number().min(0).multipleOf(0.001).default(0).describe("Before"),
-	after: z.number().min(0).multipleOf(0.001).default(0).describe("After"),
+	before: z.number().min(0).max(300).multipleOf(0.001).default(0).describe("Before"),
+	after: z.number().min(0).max(300).multipleOf(0.001).default(0).describe("After"),
 });
 
 export interface PadProperties extends z.infer<typeof schema>, TransformNodeProperties {}

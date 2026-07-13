@@ -5,7 +5,7 @@ import { PACKAGE_NAME } from "../../package-metadata";
 import { resolveTruePeakGain } from "./utils/gain";
 
 export const schema = z.object({
-	target: z.number().lt(0).default(-1).describe("Target true peak (dBTP). Must be < 0."),
+	target: z.number().min(-24).lt(0).default(-1).describe("Target true peak (dBTP). Must be < 0."),
 });
 
 export interface TruePeakNormalizeProperties extends z.infer<typeof schema>, TransformNodeProperties {}

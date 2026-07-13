@@ -11,15 +11,15 @@ const FLOOR_PIVOT_EPSILON_DB = 0.01;
 
 export const schema = z.object({
 	targetLufs:    z.number().min(-50).max(0).multipleOf(0.1).default(-16).describe("Target integrated loudness (LUFS)"),
-	pivot:         z.number().lt(0).optional().describe("Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1."),
-	floor:         z.number().lt(0).optional().describe("Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating."),
+	pivot:         z.number().min(-80).lt(0).optional().describe("Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1."),
+	floor:         z.number().min(-100).lt(0).optional().describe("Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating."),
 	limitPercentile: z.number().min(0.5).max(1.0).default(0.995).describe("Top-1−p fraction of detection samples to brick-wall. Default 0.995 brick-walls the top 0.5%."),
-	limitDb:       z.number().lt(0).optional().describe("Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor."),
+	limitDb:       z.number().min(-60).lt(0).optional().describe("Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor."),
 	maxAttempts:   z.number().int().min(1).default(10).describe("Hard cap on iteration attempts."),
-	targetTp:      z.number().lt(0).optional().describe("True-peak target (dBTP). Default: source true peak (peaks unchanged)."),
+	targetTp:      z.number().min(-24).lt(0).optional().describe("True-peak target (dBTP). Default: source true peak (peaks unchanged)."),
 	smoothing:     z.number().min(0.01).max(200).default(1).describe("Peak-respecting envelope time constant (ms)."),
-	tolerance:     z.number().gt(0).default(0.5).describe("Iteration exit threshold (LUFS dB)."),
-	peakTolerance: z.number().gt(0).default(0.1).describe("One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored)."),
+	tolerance:     z.number().gt(0).max(6).default(0.5).describe("Iteration exit threshold (LUFS dB)."),
+	peakTolerance: z.number().gt(0).max(6).default(0.1).describe("One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored)."),
 }).refine(
 	({ floor, pivot }) => floor === undefined || pivot === undefined || floor < pivot,
 	{ message: "loudnessTarget requires floor < pivot when floor is set" },

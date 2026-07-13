@@ -6,7 +6,7 @@ import { applyInsert, computeInsertOverlap } from "./utils/insert";
 
 export const schema = z.object({
 	insertPath: z.string().default("").meta({ input: "file", mode: "open", accept: ".wav" }).describe("Insert File Path"),
-	insertAt: z.number().min(0).default(0).describe("Insert At (frames)"),
+	insertAt: z.number().min(0).max(1_000_000_000).default(0).describe("Insert At (frames)"),
 });
 
 export interface SpliceProperties extends z.infer<typeof schema>, TransformNodeProperties {

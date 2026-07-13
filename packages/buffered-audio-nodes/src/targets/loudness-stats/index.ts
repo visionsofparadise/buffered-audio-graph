@@ -7,7 +7,7 @@ import { amplitudePercentile, computeTotalSamples } from "./utils/stats";
 
 export const schema = z.object({
 	bucketCount: z.number().int().positive().default(1024).describe("Amplitude histogram bucket count"),
-	outputPath: z.string().default("").meta({ input: "file", mode: "save" }).describe("Output Path (JSON sidecar). Empty string disables file output."),
+	outputPath: z.string().default("").meta({ input: "file", mode: "save", accept: ".json" }).describe("Output Path (JSON sidecar). Empty string disables file output."),
 });
 
 export interface LoudnessStatsProperties extends z.infer<typeof schema>, TargetNodeProperties {}

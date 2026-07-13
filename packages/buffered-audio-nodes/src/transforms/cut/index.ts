@@ -4,8 +4,8 @@ import { PACKAGE_NAME } from "../../package-metadata";
 import { computeKeepRanges } from "./utils/regions";
 
 const cutRegionSchema = z.object({
-	start: z.number().min(0).describe("Start (seconds)"),
-	end: z.number().min(0).describe("End (seconds)"),
+	start: z.number().min(0).max(86400).describe("Start (seconds)"),
+	end: z.number().min(0).max(86400).describe("End (seconds)"),
 });
 
 export const schema = z.object({

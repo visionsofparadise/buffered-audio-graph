@@ -31,12 +31,12 @@ export interface EncodingOptions {
 export const encodingSchema = z.object({
 	format: z.enum(["wav", "flac", "mp3", "aac"]),
 	bitrate: z.string().optional(),
-	vbr: z.number().optional(),
+	vbr: z.number().min(0).max(9).optional(),
 	sampleRate: z.number().int().positive().optional().describe("Output sample rate (Hz). When set, ffmpeg resamples on encode."),
 });
 
 export const schema = z.object({
-	path: z.string().default("").meta({ input: "file", mode: "save" }),
+	path: z.string().default("").meta({ input: "file", mode: "save", accept: ".wav,.flac,.mp3,.aac" }),
 	ffmpegPath: z.string().default("").meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" }).describe("FFmpeg — audio/video processing tool"),
 	bitDepth: z.enum(["16", "24", "32", "32f"]).default("16"),
 	encoding: encodingSchema.optional().describe("Encode through ffmpeg to a non-WAV format. Requires `ffmpegPath`."),

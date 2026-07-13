@@ -5,7 +5,7 @@ import { PACKAGE_NAME } from "../../package-metadata";
 import { updateMinMax, writeMinMaxPoint } from "./utils/minmax";
 
 export const schema = z.object({
-	outputPath: z.string().default("").meta({ input: "file", mode: "save" }).describe("Output Path"),
+	outputPath: z.string().default("").meta({ input: "file", mode: "save", accept: ".bin" }).describe("Output Path"),
 	resolution: z.number().min(100).max(10000).multipleOf(100).default(1000).describe("Resolution"),
 });
 

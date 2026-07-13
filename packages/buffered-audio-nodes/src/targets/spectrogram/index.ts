@@ -8,7 +8,7 @@ import { computeSpectrogramFrames } from "./utils/frames";
 import { FREQUENCY_SCALE_BYTE, computeMelBandMappings, computeErbBandMappings, computeLogBandMappings } from "./utils/frequency";
 
 export const schema = z.object({
-	outputPath: z.string().default("").meta({ input: "file", mode: "save" }).describe("Output Path"),
+	outputPath: z.string().default("").meta({ input: "file", mode: "save", accept: ".bin" }).describe("Output Path"),
 	fftSize: z.number().min(256).max(8192).multipleOf(256).default(2048).describe("FFT Size"),
 	hopSize: z.number().min(64).max(8192).multipleOf(64).default(512).describe("Hop Size"),
 	fftwAddonPath: z.string().default("").meta({ input: "file", mode: "open", binary: "fftw-addon" }).describe("FFTW Addon"),
