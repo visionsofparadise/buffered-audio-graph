@@ -121,7 +121,7 @@ export function NumberRow({
 				) : (
 					<>
 						<span className="type-value w-12 text-center text-label text-text-secondary">
-							{formatParamValue(localValue, param.step)}
+							{param.optional && !param.defined ? "AUTO" : formatParamValue(localValue, param.step)}
 						</span>
 						<Knob
 							value={normalized}

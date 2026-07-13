@@ -62,13 +62,22 @@ function buildLeafParameter(
 
 	switch (prop.type) {
 		case "number": {
+			const step = prop.multipleOf ?? 0.01;
+			// Exclusive bounds keep the knob one step inside the excluded endpoint so it can never
+			// commit a schema-invalid value (0 for `.lt(0)`, 0 for `.gt(0)`).
+			const min = prop.minimum ?? (prop.exclusiveMinimum !== undefined ? prop.exclusiveMinimum + step : 0);
+			const max = prop.maximum ?? (prop.exclusiveMaximum !== undefined ? prop.exclusiveMaximum - step : 1);
+			// Seed an unset value in-range: 0 when the range spans it, else the range midpoint. A hardcoded 0
+			// would land out of range (and at the knob ceiling) for a negative-only range like targetTp's.
+			const seed = min <= 0 && 0 <= max ? 0 : Math.round((min + max) / 2 / step) * step;
+
 			return {
 				kind: "number",
 				name,
-				value: typeof currentValue === "number" ? currentValue : 0,
-				min: prop.minimum ?? prop.exclusiveMinimum ?? 0,
-				max: prop.maximum ?? prop.exclusiveMaximum ?? 1,
-				step: prop.multipleOf ?? 0.01,
+				value: typeof currentValue === "number" ? currentValue : seed,
+				min,
+				max,
+				step,
 				description: prop.description ?? "",
 				optional,
 				defined,
