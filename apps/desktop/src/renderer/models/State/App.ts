@@ -129,7 +129,22 @@ function loadSavedPackages(savedPackages: Array<unknown> | undefined): Array<Nod
 	);
 }
 
-export async function loadAppState(main: { getUserDataPath: () => Promise<string>; readFile: (path: string) => Promise<string>; vst3GetDefaultScanRoots: () => Promise<Array<string>> }): Promise<Omit<AppState, "_key">> {
+async function bagFileExists(main: { stat: (filePath: string) => Promise<{ isFile: boolean }> }, bagPath: string): Promise<boolean> {
+	try {
+		const stats = await main.stat(bagPath);
+
+		return stats.isFile;
+	} catch {
+		return false;
+	}
+}
+
+export async function loadAppState(main: {
+	getUserDataPath: () => Promise<string>;
+	readFile: (path: string) => Promise<string>;
+	vst3GetDefaultScanRoots: () => Promise<Array<string>>;
+	stat: (filePath: string) => Promise<{ isFile: boolean }>;
+}): Promise<Omit<AppState, "_key">> {
 	const userDataPath = await main.getUserDataPath();
 	const path = `${userDataPath}/state.json`;
 
@@ -146,7 +161,16 @@ export async function loadAppState(main: { getUserDataPath: () => Promise<string
 		saved = {};
 	}
 
-	const tabs = saved.tabs ?? [];
+	const savedTabs = saved.tabs ?? [];
+	const savedRecentFiles = saved.recentFiles ?? [];
+
+	const [tabExists, recentExists] = await Promise.all([
+		Promise.all(savedTabs.map((tab) => bagFileExists(main, tab.bagPath))),
+		Promise.all(savedRecentFiles.map((file) => bagFileExists(main, file.bagPath))),
+	]);
+
+	const tabs = savedTabs.filter((_, index) => tabExists[index]);
+	const recentFiles = savedRecentFiles.filter((_, index) => recentExists[index]);
 
 	const activeTabId = tabs.some((tab) => tab.id === saved.activeTabId) ? (saved.activeTabId ?? null) : (tabs[0]?.id ?? null);
 
@@ -158,7 +182,7 @@ export async function loadAppState(main: { getUserDataPath: () => Promise<string
 		tabs,
 		activeTabId,
 		windowBounds: saved.windowBounds,
-		recentFiles: saved.recentFiles ?? [],
+		recentFiles,
 		packages,
 		binaries: saved.binaries ?? {},
 		vst3ScanRoots,
