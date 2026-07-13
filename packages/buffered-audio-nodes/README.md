@@ -69,8 +69,8 @@ Remove a region of audio
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `regions` | Object[] | `[]` | Regions |
-| `regions[].start` | number (min 0) | — | Start (seconds) |
-| `regions[].end` | number (min 0) | — | End (seconds) |
+| `regions[].start` | number (0 to 86400) | — | Start (seconds) |
+| `regions[].end` | number (0 to 86400) | — | End (seconds) |
 
 ### De-Bleed Adaptive
 
@@ -226,15 +226,15 @@ Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single co
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `targetLufs` | number (-50 to 0, step 0.1) | `-16` | Target integrated loudness (LUFS) |
-| `pivot` | number (max 0), optional | — | Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1. |
-| `floor` | number (max 0), optional | — | Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating. |
+| `pivot` | number (-80 to 0), optional | — | Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1. |
+| `floor` | number (-100 to 0), optional | — | Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating. |
 | `limitPercentile` | number (0.5 to 1) | `0.995` | Top-1−p fraction of detection samples to brick-wall. Default 0.995 brick-walls the top 0.5%. |
-| `limitDb` | number (max 0), optional | — | Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor. |
+| `limitDb` | number (-60 to 0), optional | — | Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor. |
 | `maxAttempts` | number (min 1) | `10` | Hard cap on iteration attempts. |
-| `targetTp` | number (max 0), optional | — | True-peak target (dBTP). Default: source true peak (peaks unchanged). |
+| `targetTp` | number (-24 to 0), optional | — | True-peak target (dBTP). Default: source true peak (peaks unchanged). |
 | `smoothing` | number (0.01 to 200) | `1` | Peak-respecting envelope time constant (ms). |
-| `tolerance` | number (min 0) | `0.5` | Iteration exit threshold (LUFS dB). |
-| `peakTolerance` | number (min 0) | `0.1` | One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored). |
+| `tolerance` | number (0 to 6) | `0.5` | Iteration exit threshold (LUFS dB). |
+| `peakTolerance` | number (0 to 6) | `0.1` | One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored). |
 
 ### Normalize
 
@@ -254,8 +254,8 @@ Add silence to start or end of audio
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `before` | number (min 0, step 0.001) | `0` | Before |
-| `after` | number (min 0, step 0.001) | `0` | After |
+| `before` | number (0 to 300, step 0.001) | `0` | Before |
+| `after` | number (0 to 300, step 0.001) | `0` | After |
 
 ### Pan
 
@@ -328,7 +328,7 @@ Replace a region of audio with processed content
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `insertPath` | string | `""` | Insert File Path |
-| `insertAt` | number (min 0) | `0` | Insert At (frames) |
+| `insertAt` | number (0 to 1000000000) | `0` | Insert At (frames) |
 
 ### Trim
 
@@ -351,7 +351,7 @@ Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single lin
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `target` | number (max 0) | `-1` | Target true peak (dBTP). Must be < 0. |
+| `target` | number (-24 to 0) | `-1` | Target true peak (dBTP). Must be < 0. |
 
 ### VST3
 
@@ -393,7 +393,7 @@ Write audio to a file
 | `encoding` | Object, optional | — | Encode through ffmpeg to a non-WAV format. Requires `ffmpegPath`. |
 | `encoding.format` | "wav" \| "flac" \| "mp3" \| "aac" | — |  |
 | `encoding.bitrate` | string, optional | — |  |
-| `encoding.vbr` | number, optional | — |  |
+| `encoding.vbr` | number (0 to 9), optional | — |  |
 | `encoding.sampleRate` | number (min 0), optional | — | Output sample rate (Hz). When set, ffmpeg resamples on encode. |
 
 ## Creating Nodes
