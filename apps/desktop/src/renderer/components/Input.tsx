@@ -33,7 +33,7 @@ export function Input({
 				placeholder={placeholder}
 				onChange={onChange ? (event) => onChange(event.target.value) : undefined}
 				className={cn(
-					"bg-surface text-text-primary border border-border rounded-xs px-2 py-1 outline-none focus:ring-1 focus:ring-accent-primary",
+					"h-9 bg-surface text-text-primary rounded-xs px-2.5 outline-none placeholder:text-dimmed focus:ring-1 focus:ring-accent-primary",
 					type === "number" && "tabular-nums",
 				)}
 			/>

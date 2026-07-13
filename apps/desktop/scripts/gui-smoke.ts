@@ -510,27 +510,27 @@ async function scanRootLabels(page: Page): Promise<Array<string>> {
 	);
 }
 
-/** Open the Add-node cmdk catalog from the TopLeftOverlay trigger; resolves once the search input is present. */
+/** Open the Add-node catalog from the TopLeftOverlay trigger; resolves once the search input is present. */
 async function openAddNodeCatalog(page: Page): Promise<void> {
 	const trigger = await rectByText(page, "button", "Add node");
 
 	if (!trigger) throw new Error("Add node trigger not found");
 
 	await clickPoint(page, trigger);
-	await page.waitForSelector("[cmdk-input]", { timeout: 5000 });
+	await page.waitForSelector("[data-catalog-input]", { timeout: 5000 });
 	await sleep(150);
 }
 
-/** The visible node rows in the open cmdk catalog (`[cmdk-item]`), trimmed. */
+/** The visible node rows in the open catalog (`[data-catalog-item]`), trimmed. */
 async function dumpCmdkItems(page: Page): Promise<Array<string>> {
-	return page.$$eval("[cmdk-item]", (elements) =>
+	return page.$$eval("[data-catalog-item]", (elements) =>
 		elements.map((element) => (element.textContent).replace(/\s+/g, " ").trim().slice(0, 40)),
 	);
 }
 
-/** Click the cmdk row whose text contains `text` via a real mouse click; returns whether one was found. */
+/** Click the catalog row whose text contains `text` via a real mouse click; returns whether one was found. */
 async function clickCmdkItemByText(page: Page, text: string): Promise<boolean> {
-	const items = await page.$$("[cmdk-item]");
+	const items = await page.$$("[data-catalog-item]");
 
 	for (const item of items) {
 		const itemText = await item.evaluate((element) => element.textContent);
@@ -570,8 +570,7 @@ async function addNode(page: Page, nodeLabel: string, expectedCount: number, opt
 	await sleep(250);
 
 	if (method === "keyboard") {
-		await page.keyboard.press("ArrowDown");
-		await sleep(100);
+		// Type-and-Enter picks the first (here, only) match from the search field.
 		await page.keyboard.press("Enter");
 	} else {
 		const clicked = await clickCmdkItemByText(page, nodeLabel);
@@ -1177,8 +1176,8 @@ async function run(): Promise<void> {
 		// so the mutation flow below still starts from an empty canvas.
 		await runRenderSection(page);
 
-		// 1 + 2: add two nodes through the cmdk catalog — Read WAV picked by mouse,
-		// Gain picked by keyboard (ArrowDown+Enter) to exercise cmdk-in-Radix focus.
+		// 1 + 2: add two nodes through the catalog — Read WAV picked by mouse, Gain
+		// picked by keyboard (type-to-filter then Enter selects the first match).
 		await addNode(page, SOURCE_NODE, 1, { search: "read" });
 		await addNode(page, TRANSFORM_NODE, 2, { search: "gain", method: "keyboard" });
 
@@ -1187,7 +1186,7 @@ async function run(): Promise<void> {
 
 		check(
 			transformId !== null,
-			"cmdk keyboard nav — type-to-filter then ArrowDown+Enter adds the node (Radix focus check)",
+			"catalog keyboard nav — type-to-filter then Enter adds the first match",
 		);
 
 		if (!sourceId || !transformId) throw new Error("Could not resolve node ids after add");
@@ -1244,7 +1243,7 @@ async function run(): Promise<void> {
 				await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
 
 				const catalogOpened = await page
-					.waitForSelector("[cmdk-input]", { timeout: 3000 })
+					.waitForSelector("[data-catalog-input]", { timeout: 3000 })
 					.then(() => true)
 					.catch(() => false);
 

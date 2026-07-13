@@ -51,7 +51,7 @@ export const PackagesSection = resnapshot<Props>(({ context }: Props) => {
 
 	return (
 		<div className="flex flex-col">
-			<div className="flex items-center justify-between gap-3 pb-3">
+			<div className="flex items-center justify-between gap-3 pb-4">
 				<span className="text-body text-text-primary">Install bag packages automatically</span>
 				<Toggle
 					value={app.installBagPackagesAutomatically}
@@ -65,7 +65,7 @@ export const PackagesSection = resnapshot<Props>(({ context }: Props) => {
 					const isExpanded = expandedPackages.has(entry.requestedSpec);
 
 					return (
-						<li key={entry.requestedSpec} className="bg-surface p-2 rounded-xs">
+						<li key={entry.requestedSpec} className="bg-surface p-3 rounded-xs">
 							<div className="flex items-center gap-2">
 								{entry.nodes.length > 0 && (
 									<button
@@ -156,15 +156,14 @@ export const PackagesSection = resnapshot<Props>(({ context }: Props) => {
 				})}
 			</ul>
 
-			<div className="flex items-end gap-2 mt-3">
+			<div className="flex items-center gap-2 mt-4">
 				<Input
-					label="Package Spec"
 					value={packageSpec}
 					placeholder="@buffered-audio/nodes@latest"
 					onChange={setPackageSpec}
 					className="flex-1"
 				/>
-				<Button variant="default" onClick={() => void handleAdd()}>
+				<Button variant="default" className="h-9" onClick={() => void handleAdd()}>
 					Add
 				</Button>
 			</div>

@@ -112,7 +112,7 @@ export function NodeContainer({ data, selected }: NodeProps) {
 			>
 				<div
 					className={cn(
-						"flex min-h-9 cursor-grab items-center justify-between gap-2 px-4 py-2 active:cursor-grabbing",
+						"flex min-h-9 cursor-grab items-center justify-between gap-2 px-4 py-2.5 active:cursor-grabbing",
 						CATEGORY_HEADER_BG[nodeData.category],
 					)}
 				>
@@ -143,7 +143,7 @@ export function NodeContainer({ data, selected }: NodeProps) {
 				</div>
 
 				{nodeData.unresolvedReason !== null ? (
-					<div className="nodrag nopan flex items-start gap-2 px-3 py-4">
+					<div className="nodrag nopan flex items-start gap-2 px-4 py-4">
 						<TriangleAlert
 							size={14}
 							strokeWidth={1.5}
@@ -156,7 +156,7 @@ export function NodeContainer({ data, selected }: NodeProps) {
 					</div>
 				) : (
 					nodeData.parameters.length > 0 && (
-						<div className="nodrag nopan flex flex-col gap-4 px-3 py-4">
+						<div className="nodrag nopan flex flex-col gap-4 px-4 py-4">
 							{nodeData.parameters.map((param) => {
 								// The VST3 node's `stages` object-array renders as the custom stage
 								// editor (keyed on nodeName, not the package); every other param —

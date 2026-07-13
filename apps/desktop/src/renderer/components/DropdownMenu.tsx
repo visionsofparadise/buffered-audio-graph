@@ -20,7 +20,7 @@ export function DropdownMenuContent({
 				sideOffset={sideOffset}
 				collisionPadding={collisionPadding}
 				className={cn(
-					"z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-1 outline-none",
+					"z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-2 outline-none",
 					className,
 				)}
 				{...props}
@@ -36,7 +36,7 @@ export function DropdownMenuItem({
 	return (
 		<DropdownMenuPrimitive.Item
 			className={cn(
-				"type-label flex cursor-pointer items-center gap-2 px-3 py-2 text-body text-left text-text-primary outline-none",
+				"type-label flex cursor-pointer items-center gap-2 px-4 py-2.5 text-body text-left text-text-primary outline-none",
 				"data-[highlighted]:bg-text-primary data-[highlighted]:text-surface",
 				"data-[disabled]:cursor-default data-[disabled]:text-dimmed",
 				className,
@@ -53,7 +53,7 @@ export function DropdownMenuLabel({
 	return (
 		<DropdownMenuPrimitive.Label
 			className={cn(
-				"type-label px-3 py-1.5 text-xs text-text-secondary",
+				"type-label px-4 py-2 text-xs text-text-secondary",
 				className,
 			)}
 			{...props}
@@ -80,7 +80,7 @@ export function DropdownMenuSubTrigger({
 	return (
 		<DropdownMenuPrimitive.SubTrigger
 			className={cn(
-				"type-label flex cursor-pointer items-center gap-2 px-3 py-2 text-body text-left text-text-primary outline-none",
+				"type-label flex cursor-pointer items-center gap-2 px-4 py-2.5 text-body text-left text-text-primary outline-none",
 				"data-[highlighted]:bg-text-primary data-[highlighted]:text-surface",
 				"data-[state=open]:bg-text-primary data-[state=open]:text-surface",
 				"data-[disabled]:cursor-default data-[disabled]:text-dimmed",
@@ -99,7 +99,7 @@ export function DropdownMenuSubContent({
 		<DropdownMenuPrimitive.Portal>
 			<DropdownMenuPrimitive.SubContent
 				className={cn(
-					"z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-1 outline-none",
+					"z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-2 outline-none",
 					className,
 				)}
 				{...props}

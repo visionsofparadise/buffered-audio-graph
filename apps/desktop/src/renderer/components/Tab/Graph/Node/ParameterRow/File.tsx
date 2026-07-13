@@ -86,14 +86,13 @@ export function FileRow({
 					onChange={onParameterChange ? (next) => onParameterChange(param.name, next) : undefined}
 					onBrowse={onParameterBrowse ? () => onParameterBrowse(param.name) : undefined}
 				/>
-				{isSaveMode && (
+				{isSaveMode && openEnabled && onOpen && (
 					<IconButton
 						icon={ExternalLink}
 						label="Open output"
 						variant="ghost"
 						size="md"
-						disabled={!openEnabled || !onOpen}
-						onClick={() => onOpen?.(param.value)}
+						onClick={() => onOpen(param.value)}
 					/>
 				)}
 			</div>

@@ -59,8 +59,8 @@ export const Settings = resnapshot<Props>(({ isOpen, onClose, context }: Props) 
 			className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
 			onClick={handleOverlayClick}
 		>
-			<div className="bg-elevated w-[640px] max-h-[80vh] flex flex-col overflow-hidden rounded-xs border border-border">
-				<div className="flex items-center justify-between px-4 py-3 border-b border-border">
+			<div className="bg-elevated w-[640px] max-h-[80vh] min-h-[480px] flex flex-col overflow-hidden rounded-xs shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
+				<div className="flex items-center justify-between px-6 py-4">
 					<h2 className="type-label text-body text-text-primary">Settings</h2>
 					<Button variant="ghost" size="sm" onClick={onClose}>
 						Close
@@ -68,14 +68,14 @@ export const Settings = resnapshot<Props>(({ isOpen, onClose, context }: Props) 
 				</div>
 
 				<div className="flex flex-1 min-h-0">
-					<nav className="w-40 shrink-0 border-r border-border py-2">
+					<nav className="w-40 shrink-0 py-3 pl-2">
 						{SECTIONS.map((section) => (
 							<button
 								key={section.id}
 								type="button"
 								onClick={() => setActiveSection(section.id)}
 								className={cn(
-									"w-full text-left px-4 py-1.5 text-body",
+									"w-full text-left px-4 py-2 text-body",
 									section.id === activeSection
 										? "bg-text-primary text-surface"
 										: "text-text-secondary hover:text-text-primary",
@@ -86,7 +86,7 @@ export const Settings = resnapshot<Props>(({ isOpen, onClose, context }: Props) 
 						))}
 					</nav>
 
-					<div className="flex-1 overflow-y-auto px-4 py-3">
+					<div className="flex-1 overflow-y-auto px-6 py-5">
 						{activeSection === "packages" && <PackagesSection context={context} />}
 						{activeSection === "binaries" && <BinariesSection context={context} />}
 						{activeSection === "vst3ScanRoots" && <Vst3ScanRootsSection context={context} />}
