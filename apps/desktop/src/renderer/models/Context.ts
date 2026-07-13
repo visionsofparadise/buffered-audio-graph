@@ -27,6 +27,8 @@ export interface AppContext {
 	readonly renameTab: (tabId: string, newName: string) => void;
 	readonly importBagIntoActiveTab: () => Promise<void>;
 	readonly setSettingsOpen: (open: boolean) => void;
+	/** Toggle the startup loading gate — used by definition-ingress paths (import) to block the UI behind the LoadingScreen while dependency installs run. */
+	readonly setHasPassedLoading: (value: boolean) => void;
 }
 
 export interface GraphContext extends AppContext {

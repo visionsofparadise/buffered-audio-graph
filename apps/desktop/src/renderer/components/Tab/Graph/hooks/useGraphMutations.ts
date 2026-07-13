@@ -1,5 +1,6 @@
 import type { GraphEdge, GraphNode } from "@buffered-audio/core";
 import { useMemo, useRef } from "react";
+import { comparePackageVersions } from "../../../../hooks/packagePipeline";
 import type { GraphContext } from "../../../../models/Context";
 import type { Mutable } from "../../../../models/State";
 import type { GraphDefinitionState } from "../../../../models/State/GraphDefinition";
@@ -108,27 +109,21 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		/**
-		 * Resolve the version a newly-added node binds to: the bag's `packages`
-		 * pin when present, else the latest installed ready version (which the
-		 * caller then writes into the map). Returns null when no version of the
-		 * package is installed.
+		 * Resolve the version a newly-added node binds to: the latest ready
+		 * catalog entry for the package (its pin dies with the node — the bag
+		 * carries no map). Returns null when no catalog version is installed.
 		 */
 		function resolveAddVersion(packageName: string): string | null {
-			const { graphDefinition, app } = contextRef.current;
-			const pinned = graphDefinition.packages[packageName];
-
-			if (typeof pinned === "string") return pinned;
+			const { app } = contextRef.current;
 
 			const ready = app.packages.filter(
-				(entry) => entry.name === packageName && entry.status === "ready" && entry.version !== null,
+				(entry) => entry.name === packageName && entry.origin === "catalog" && entry.status === "ready" && entry.version !== null,
 			);
 
 			if (ready.length === 0) return null;
 
 			const latest = ready.reduce((winner, candidate) =>
-				(candidate.version ?? "").localeCompare(winner.version ?? "", undefined, { numeric: true, sensitivity: "base" }) > 0
-					? candidate
-					: winner,
+				comparePackageVersions(candidate.version ?? "", winner.version ?? "") > 0 ? candidate : winner,
 			);
 
 			return latest.version;
@@ -164,12 +159,12 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			const node: GraphNode = {
 				id,
 				packageName,
+				packageVersion: version,
 				nodeName,
 				parameters: {},
 			};
 
 			mutate((proxy) => {
-				proxy.packages = { ...proxy.packages, [packageName]: version };
 				proxy.nodes = [...proxy.nodes, node];
 			});
 
@@ -221,6 +216,7 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			const node: GraphNode = {
 				id,
 				packageName,
+				packageVersion: version,
 				nodeName,
 				parameters: {},
 			};
@@ -232,7 +228,6 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 				: { x: 0, y: 0 };
 
 			mutate((proxy) => {
-				proxy.packages = { ...proxy.packages, [packageName]: version };
 				proxy.nodes = [...proxy.nodes, node];
 				proxy.edges = [
 					...proxy.edges.filter((graphEdge) => !(graphEdge.from === edge.from && graphEdge.to === edge.to)),
@@ -264,8 +259,7 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 
 			if (!graphNode) return;
 
-			const version = graphDefinition.packages[graphNode.packageName] ?? "";
-			const { schema } = lookupNode(graphNode.packageName, version, graphNode.nodeName, contextRef.current);
+			const { schema } = lookupNode(graphNode.packageName, graphNode.packageVersion, graphNode.nodeName, contextRef.current);
 			const defaults = buildDefaultParameters(schema);
 
 			mutate((proxy) => {

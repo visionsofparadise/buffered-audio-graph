@@ -13,7 +13,7 @@ import { Download, LayoutGrid, Redo2, Square, Undo2 } from "lucide-react";
 const ICON_BUTTON =
 	"flex items-center justify-center p-2.5 text-text-primary hover:bg-text-primary hover:text-surface disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-primary";
 const RENDER_BUTTON =
-	"flex w-fit items-center gap-2 px-4 py-2 text-body text-accent-primary hover:bg-accent-primary hover:text-surface";
+	"flex w-fit items-center gap-2 px-4 py-2 text-body text-accent-primary hover:bg-accent-primary hover:text-surface disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-accent-primary";
 
 interface Props {
 	readonly onAutoOrganize: () => void;
@@ -24,6 +24,10 @@ interface Props {
 	readonly canUndo: boolean;
 	readonly canRedo: boolean;
 	readonly isRendering: boolean;
+	/** Render is enabled only when every pinned package pair in the bag is installed and ready. */
+	readonly isRenderReady: boolean;
+	/** Tooltip naming the not-ready pairs, shown when Render is gated closed. */
+	readonly renderDisabledReason?: string;
 }
 
 export function TopRightOverlay({
@@ -35,6 +39,8 @@ export function TopRightOverlay({
 	canUndo,
 	canRedo,
 	isRendering,
+	isRenderReady,
+	renderDisabledReason,
 }: Props) {
 	return (
 		<div className="absolute right-3 top-3 z-10 flex items-center gap-2">
@@ -53,7 +59,13 @@ export function TopRightOverlay({
 					<span>Abort</span>
 				</button>
 			) : (
-				<button type="button" className={RENDER_BUTTON} onClick={onRender}>
+				<button
+					type="button"
+					className={RENDER_BUTTON}
+					onClick={onRender}
+					disabled={!isRenderReady}
+					title={isRenderReady ? undefined : renderDisabledReason}
+				>
 					<Download size={16} strokeWidth={1.5} />
 					<span>Render</span>
 				</button>

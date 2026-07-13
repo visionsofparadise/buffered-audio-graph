@@ -12,8 +12,7 @@ import { StatMainIpc } from "./FileSystem/stat/Main";
 import { UnwatchFileMainIpc } from "./FileSystem/unwatchFile/Main";
 import { WatchFileMainIpc } from "./FileSystem/watchFile/Main";
 import { WriteFileMainIpc } from "./FileSystem/writeFile/Main";
-import { InstallPackageMainIpc } from "./Package/install/Main";
-import { LoadPackageNodesMainIpc } from "./Package/loadNodes/Main";
+import { EnsurePackageMainIpc } from "./Package/ensure/Main";
 import { UnloadPackageNodesMainIpc } from "./Package/unloadNodes/Main";
 import { GetAllDisplaysMainIpc } from "./System/getAllDisplays/Main";
 import { GetAppVersionMainIpc } from "./System/getAppVersion/Main";
@@ -40,8 +39,7 @@ export const ASYNC_MAIN_IPCS = [
 	UnwatchFileMainIpc,
 	WatchFileMainIpc,
 	WriteFileMainIpc,
-	InstallPackageMainIpc,
-	LoadPackageNodesMainIpc,
+	EnsurePackageMainIpc,
 	UnloadPackageNodesMainIpc,
 	ValidateGraphDefinitionMainIpc,
 	ShowOpenDialogMainIpc,

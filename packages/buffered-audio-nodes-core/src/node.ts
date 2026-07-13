@@ -3,6 +3,7 @@ import type { BufferedStream, StreamContext } from "./stream";
 
 export interface BufferedAudioNodeProperties {
 	readonly id?: string;
+	readonly packageVersion?: string;
 	readonly bypass?: boolean;
 	readonly children?: ReadonlyArray<BufferedAudioNode>;
 }
@@ -47,6 +48,10 @@ export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = 
 
 	get id(): string | undefined {
 		return this.properties.id;
+	}
+
+	get packageVersion(): string | undefined {
+		return this.properties.packageVersion;
 	}
 
 	get isBypassed(): boolean {

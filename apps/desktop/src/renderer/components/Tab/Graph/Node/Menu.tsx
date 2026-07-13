@@ -2,6 +2,7 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../../../DropdownMenu";
@@ -10,6 +11,9 @@ import { EllipsisVertical, Power, RotateCcw, Trash2 } from "lucide-react";
 
 export interface NodeMenuActions {
 	readonly bypassed: boolean;
+	/** The node's package identity — surfaced as a read-only `package@version` label. */
+	readonly packageName: string;
+	readonly packageVersion: string;
 	readonly onBypass?: () => void;
 	readonly onReset?: () => void;
 	readonly onDelete?: () => void;
@@ -22,9 +26,21 @@ export interface NodeMenuActions {
  * (`GraphContextMenu`) so the two cannot diverge. Both mount it inside a
  * `DropdownMenuContent`, so it emits only the item/separator rows.
  */
-export function NodeMenuItems({ bypassed, onBypass, onReset, onDelete }: NodeMenuActions) {
+export function NodeMenuItems({ bypassed, packageName, packageVersion, onBypass, onReset, onDelete }: NodeMenuActions) {
 	return (
 		<>
+			{packageName !== "" && (
+				<>
+					<DropdownMenuLabel
+						title={`${packageName}@${packageVersion}`}
+						className="max-w-64 truncate text-dimmed"
+					>
+						{packageName}@{packageVersion}
+					</DropdownMenuLabel>
+					<DropdownMenuSeparator />
+				</>
+			)}
+
 			<DropdownMenuItem onSelect={() => onBypass?.()}>
 				<Power size={14} strokeWidth={1.5} />
 				<span>{bypassed ? "Enable" : "Bypass"}</span>

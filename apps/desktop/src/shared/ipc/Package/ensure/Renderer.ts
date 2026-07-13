@@ -30,12 +30,6 @@ export interface NodeJsonSchema {
 	readonly required?: ReadonlyArray<string>;
 }
 
-export interface LoadPackageNodesInput {
-	readonly loadEntryPath: string;
-	readonly packageName: string;
-	readonly packageVersion: string;
-}
-
 export interface LoadedNodeInfo {
 	readonly nodeName: string;
 	readonly description: string;
@@ -43,19 +37,25 @@ export interface LoadedNodeInfo {
 	readonly category: "source" | "transform" | "target";
 }
 
-export interface LoadPackageNodesResult {
+export interface EnsurePackageInput {
+	readonly packageSpec: string;
+}
+
+export interface EnsurePackageResult {
+	readonly packageName: string;
+	readonly packageVersion: string;
 	readonly apiVersion: number;
 	readonly nodes: ReadonlyArray<LoadedNodeInfo>;
 }
 
-export type LoadPackageNodesIpcParameters = [input: LoadPackageNodesInput];
-export type LoadPackageNodesIpcReturn = LoadPackageNodesResult;
-export const LOAD_PACKAGE_NODES_ACTION = "loadPackageNodes" as const;
+export type EnsurePackageIpcParameters = [input: EnsurePackageInput];
+export type EnsurePackageIpcReturn = EnsurePackageResult;
+export const ENSURE_PACKAGE_ACTION = "ensurePackage" as const;
 
-export class LoadPackageNodesRendererIpc extends AsyncRendererIpc<
-	typeof LOAD_PACKAGE_NODES_ACTION,
-	LoadPackageNodesIpcParameters,
-	LoadPackageNodesIpcReturn
+export class EnsurePackageRendererIpc extends AsyncRendererIpc<
+	typeof ENSURE_PACKAGE_ACTION,
+	EnsurePackageIpcParameters,
+	EnsurePackageIpcReturn
 > {
-	action = LOAD_PACKAGE_NODES_ACTION;
+	action = ENSURE_PACKAGE_ACTION;
 }

@@ -10,6 +10,7 @@ import {
 	serializeGraphDefinition,
 	type GraphDefinitionState,
 } from "../models/State/GraphDefinition";
+import { ensureGraphPackagesInstalled } from "./packagePipeline";
 
 /** Disk-write debounce window for autosave (ms). */
 const SAVE_DEBOUNCE_MS = 800;
@@ -39,6 +40,10 @@ export function useGraphDefinition(
 ): UseGraphDefinitionResult {
 	const { main, mainEvents } = context;
 	const graphDefinition = useCreateState<GraphDefinitionState>(initialDefinition, store);
+
+	const contextRef = useRef(context);
+
+	contextRef.current = context;
 
 	const hashRef = useRef<string | null>(null);
 	const pendingJsonRef = useRef<string | null>(null);
@@ -147,10 +152,23 @@ export function useGraphDefinition(
 						proxy.id = validated.id;
 						proxy.apiVersion = validated.apiVersion;
 						proxy.name = validated.name;
-						proxy.packages = validated.packages;
 						proxy.nodes = validated.nodes;
 						proxy.edges = validated.edges;
 					});
+
+					// External-reconcile is a definition-ingress path: satisfy the
+					// reconciled nodes' dependency pins, gated by the auto-install
+					// toggle. Non-blocking (the render gate covers the interim);
+					// errors are logged.
+					const { app, appStore, logger } = contextRef.current;
+
+					if (app.installBagPackagesAutomatically) {
+						void ensureGraphPackagesInstalled(validated, app, appStore, main).catch((error: unknown) => {
+							logger.error("Failed to install packages for externally-edited bag", error as Error, {
+								namespace: "packages",
+							});
+						});
+					}
 				} catch {
 					// External edit produced invalid JSON or schema; let the
 					// next valid write reconcile.

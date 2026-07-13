@@ -13,8 +13,7 @@ import { StatRendererIpc } from "./FileSystem/stat/Renderer";
 import { UnwatchFileRendererIpc } from "./FileSystem/unwatchFile/Renderer";
 import { WatchFileRendererIpc } from "./FileSystem/watchFile/Renderer";
 import { WriteFileRendererIpc } from "./FileSystem/writeFile/Renderer";
-import { InstallPackageRendererIpc } from "./Package/install/Renderer";
-import { LoadPackageNodesRendererIpc } from "./Package/loadNodes/Renderer";
+import { EnsurePackageRendererIpc } from "./Package/ensure/Renderer";
 import { UnloadPackageNodesRendererIpc } from "./Package/unloadNodes/Renderer";
 import { GetAllDisplaysRendererIpc } from "./System/getAllDisplays/Renderer";
 import { GetAppVersionRendererIpc } from "./System/getAppVersion/Renderer";
@@ -41,8 +40,7 @@ export const ASYNC_RENDERER_IPCS = [
 	UnwatchFileRendererIpc,
 	WatchFileRendererIpc,
 	WriteFileRendererIpc,
-	InstallPackageRendererIpc,
-	LoadPackageNodesRendererIpc,
+	EnsurePackageRendererIpc,
 	UnloadPackageNodesRendererIpc,
 	ValidateGraphDefinitionRendererIpc,
 	ShowOpenDialogRendererIpc,

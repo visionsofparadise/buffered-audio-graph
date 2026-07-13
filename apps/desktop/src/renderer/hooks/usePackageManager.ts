@@ -11,6 +11,7 @@ export interface PackageManager {
 	addPackage: (packageSpec: string) => Promise<void>;
 	removePackage: (requestedSpec: string) => Promise<void>;
 	updatePackage: (requestedSpec: string) => Promise<void>;
+	clearDependencies: () => Promise<void>;
 }
 
 export function usePackageManager(context: AppContext): PackageManager {
@@ -124,5 +125,36 @@ export function usePackageManager(context: AppContext): PackageManager {
 		[app, appStore, main, userDataPath],
 	);
 
-	return { addPackage, removePackage, updatePackage };
+	const clearDependencies = useCallback(async (): Promise<void> => {
+		const dependencies = app.packages.filter((entry) => entry.origin === "dependency");
+
+		if (dependencies.length === 0) {
+			return;
+		}
+
+		await Promise.all(
+			dependencies.map(async (entry) => {
+				if (!entry.version) {
+					return;
+				}
+
+				await main.unloadPackageNodes({
+					packageName: entry.name,
+					packageVersion: entry.version,
+				});
+
+				await main.deleteFile(packageInstallDirectory(userDataPath, entry.name, entry.version));
+			}),
+		);
+
+		appStore.mutate(app, (proxy) => {
+			for (let index = proxy.packages.length - 1; index >= 0; index -= 1) {
+				if (proxy.packages[index]?.origin === "dependency") {
+					proxy.packages.splice(index, 1);
+				}
+			}
+		});
+	}, [app, appStore, main, userDataPath]);
+
+	return { addPackage, removePackage, updatePackage, clearDependencies };
 }

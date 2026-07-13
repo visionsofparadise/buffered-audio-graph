@@ -154,13 +154,23 @@ async function resolvePackage(name: string, version: string, options: { install:
 	return importPackageDir(cacheDir);
 }
 
-export async function resolvePackages(packages: Record<string, string>, options: { install: boolean; overrides: Map<string, string> }): Promise<NodeRegistry> {
+export async function resolvePackages(
+	pairs: ReadonlyArray<{ packageName: string; packageVersion: string }>,
+	options: { install: boolean; overrides: Map<string, string> },
+): Promise<NodeRegistry> {
 	const registry: NodeRegistry = new Map();
 
-	for (const [name, version] of Object.entries(packages)) {
-		const mod = await resolvePackage(name, version, options);
+	for (const { packageName, packageVersion } of pairs) {
+		const mod = await resolvePackage(packageName, packageVersion, options);
 
-		registry.set(name, indexExports(mod));
+		let versions = registry.get(packageName);
+
+		if (versions === undefined) {
+			versions = new Map();
+			registry.set(packageName, versions);
+		}
+
+		versions.set(packageVersion, indexExports(mod));
 	}
 
 	return registry;

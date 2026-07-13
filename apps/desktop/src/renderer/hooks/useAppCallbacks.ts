@@ -88,7 +88,9 @@ export function useAppCallbacks(
 
 		if (!result) return;
 
-		const readyBufferedAudioNodes = app.packages.filter((entry) => entry.name === "@buffered-audio/nodes" && entry.status === "ready" && entry.version !== null);
+		const readyBufferedAudioNodes = app.packages.filter(
+			(entry) => entry.name === "@buffered-audio/nodes" && entry.origin === "catalog" && entry.status === "ready" && entry.version !== null,
+		);
 
 		if (readyBufferedAudioNodes.length > 0) {
 			const latest = readyBufferedAudioNodes.reduce((winner, candidate) =>
@@ -102,10 +104,10 @@ export function useAppCallbacks(
 					{ namespace: "graph" },
 				);
 			} else {
-				result.definition.packages = { "@buffered-audio/nodes": latest.version ?? "" };
 				result.definition.nodes.push({
 					id: crypto.randomUUID(),
 					packageName: "@buffered-audio/nodes",
+					packageVersion: latest.version ?? "",
 					nodeName: "Read WAV",
 				});
 

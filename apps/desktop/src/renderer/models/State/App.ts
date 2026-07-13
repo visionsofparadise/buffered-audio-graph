@@ -35,10 +35,11 @@ const NodePackageStateSchema = z.object({
 	name: z.string(),
 	version: z.string().nullable().default(null),
 	apiVersion: z.number().nullable().default(null),
-	status: z.enum(["pending", "installing", "loading", "ready", "error"]).default("pending"),
+	status: z.enum(["pending", "installing", "ready", "error"]).default("pending"),
 	error: z.string().nullable().default(null),
 	nodes: z.array(LoadedNodeInfoSchema).default([]),
 	isBuiltIn: z.boolean().default(false),
+	origin: z.enum(["catalog", "dependency"]).default("catalog"),
 });
 
 export const AppStateSchema = z.object({
@@ -87,6 +88,7 @@ const BUILT_IN_PACKAGE_ENTRY: NodePackageState = {
 	error: null,
 	nodes: [],
 	isBuiltIn: true,
+	origin: "catalog",
 };
 
 function resetPackageLifecycle(entry: NodePackageState): NodePackageState {

@@ -192,7 +192,19 @@ program
 			const sink = createEventSink();
 
 			try {
-				const registry = await resolvePackages(definition.packages, { install: options.install, overrides });
+				const seen = new Set<string>();
+				const pairs: Array<{ packageName: string; packageVersion: string }> = [];
+
+				for (const node of definition.nodes) {
+					const key = `${node.packageName}@${node.packageVersion}`;
+
+					if (seen.has(key)) continue;
+
+					seen.add(key);
+					pairs.push({ packageName: node.packageName, packageVersion: node.packageVersion });
+				}
+
+				const registry = await resolvePackages(pairs, { install: options.install, overrides });
 
 				process.stdout.write(`Rendering graph: ${definition.name}\n`);
 

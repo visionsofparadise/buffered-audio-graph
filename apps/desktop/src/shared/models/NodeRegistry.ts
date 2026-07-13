@@ -10,6 +10,7 @@ export interface NodeClass {
 	new (properties?: Record<string, unknown>): BufferedAudioNode;
 }
 
+// Core's `NodeRegistry` shape (packageName → packageVersion → nodeName), carrying `NodeClass` values here.
 export type NodeRegistry = ReadonlyMap<string, ReadonlyMap<string, ReadonlyMap<string, NodeClass>>>;
 
 export type NodeRegistryMap = Map<string, Map<string, Map<string, NodeClass>>>;

@@ -29,8 +29,13 @@ interface Props {
 	readonly onClose: () => void;
 	/** Current bypass state of the right-clicked node — drives the Bypass/Enable label. */
 	readonly isBypassed?: boolean;
+	/** Package identity of the right-clicked node — surfaced read-only in the node variant. */
+	readonly packageName?: string;
+	readonly packageVersion?: string;
 	readonly canUndo?: boolean;
 	readonly canRedo?: boolean;
+	/** Gate the pane-variant Render item closed when the bag's pinned pairs are not all ready. */
+	readonly renderDisabled?: boolean;
 }
 
 /**
@@ -49,8 +54,11 @@ export function GraphContextMenu({
 	onAddNode,
 	onClose,
 	isBypassed = false,
+	packageName = "",
+	packageVersion = "",
 	canUndo = true,
 	canRedo = true,
+	renderDisabled = false,
 }: Props) {
 	const isNode = position.nodeId !== undefined;
 
@@ -71,6 +79,8 @@ export function GraphContextMenu({
 				{isNode ? (
 					<NodeMenuItems
 						bypassed={isBypassed}
+						packageName={packageName}
+						packageVersion={packageVersion}
 						onBypass={() => onAction("bypass")}
 						onReset={() => onAction("reset")}
 						onDelete={() => onAction("delete")}
@@ -94,7 +104,7 @@ export function GraphContextMenu({
 							<Redo2 size={14} strokeWidth={1.5} />
 							<span>Redo</span>
 						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => onAction("render")}>
+						<DropdownMenuItem disabled={renderDisabled} onSelect={() => onAction("render")}>
 							<Download size={14} strokeWidth={1.5} />
 							<span>Render</span>
 						</DropdownMenuItem>

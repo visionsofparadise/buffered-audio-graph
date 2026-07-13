@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useSnapshot } from "valtio";
 import { useGraphDefinition } from "../../../hooks/useGraphDefinition";
 import { useGraphState } from "../../../hooks/useGraphState";
+import { ensureGraphPackagesInstalled } from "../../../hooks/packagePipeline";
 import type { AppContext, GraphContext } from "../../../models/Context";
 import type { ProxyStore } from "../../../models/ProxyStore/ProxyStore";
 import type { TabEntry } from "../../../models/State/App";
@@ -69,7 +70,6 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 					id: graphDefinition.id,
 					apiVersion: graphDefinition.apiVersion,
 					name: graphDefinition.name,
-					packages: graphDefinition.packages,
 					nodes: graphDefinition.nodes,
 					edges: graphDefinition.edges,
 				}),
@@ -93,7 +93,6 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 			if (merged.importedNodeCount === 0) return;
 
 			history.mutate(graphDefinition, (proxy) => {
-				proxy.packages = merged.definition.packages;
 				proxy.nodes = merged.definition.nodes;
 				proxy.edges = merged.definition.edges;
 			});
@@ -101,6 +100,23 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 			graphStore.mutate(graph, (proxy) => {
 				proxy.positions = merged.positions;
 			});
+
+			// Import is a definition-ingress path: satisfy the merged nodes'
+			// dependency pins, gated by the auto-install consent toggle, blocking
+			// the app behind the loading screen exactly as the open path does.
+			if (context.app.installBagPackagesAutomatically) {
+				context.setHasPassedLoading(false);
+
+				try {
+					await ensureGraphPackagesInstalled(merged.definition, context.app, context.appStore, context.main);
+				} catch (error) {
+					context.logger.error("Failed to install packages required by imported bag", error as Error, {
+						namespace: "packages",
+					});
+				}
+
+				context.setHasPassedLoading(true);
+			}
 		};
 
 		context.appStore.mutate(activeCommandsRef.current, (proxy) => {

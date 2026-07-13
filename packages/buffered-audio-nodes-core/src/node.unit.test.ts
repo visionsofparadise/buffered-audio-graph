@@ -36,13 +36,20 @@ describe("BufferedAudioNode constructor parsing", () => {
 		expect(transform.properties.gain).toBe(3);
 	});
 
-	it("preserves base keys id/bypass/children through the parse merge", () => {
+	it("preserves base keys id/packageVersion/bypass/children through the parse merge", () => {
 		const child = new MockTarget();
-		const transform = new MockTransform({ id: "abc", bypass: true, children: [child] });
+		const transform = new MockTransform({ id: "abc", packageVersion: "1.2.3", bypass: true, children: [child] });
 
 		expect(transform.id).toBe("abc");
+		expect(transform.packageVersion).toBe("1.2.3");
 		expect(transform.isBypassed).toBe(true);
 		expect(transform.children).toContain(child);
+	});
+
+	it("leaves packageVersion undefined when not provided", () => {
+		const transform = new MockTransform();
+
+		expect(transform.packageVersion).toBeUndefined();
 	});
 
 	it("throws naming the node when a parameter fails validation", () => {

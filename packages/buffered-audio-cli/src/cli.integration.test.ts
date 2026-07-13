@@ -37,15 +37,14 @@ function writeWav(path: string, samples: ReadonlyArray<number>, sampleRate: numb
 	writeFileSync(path, buffer);
 }
 
-function writeBag(path: string, packages: Record<string, string>, inputPath: string, outputPath: string): void {
+function writeBag(path: string, packageVersion: string, inputPath: string, outputPath: string): void {
 	const definition = {
 		id: randomUUID(),
 		name: "cli-integration",
 		apiVersion: 1,
-		packages,
 		nodes: [
-			{ id: "read", packageName: "@buffered-audio/nodes", nodeName: "Read WAV", parameters: { path: inputPath } },
-			{ id: "write", packageName: "@buffered-audio/nodes", nodeName: "Write", parameters: { path: outputPath, bitDepth: "16" } },
+			{ id: "read", packageName: "@buffered-audio/nodes", packageVersion, nodeName: "Read WAV", parameters: { path: inputPath } },
+			{ id: "write", packageName: "@buffered-audio/nodes", packageVersion, nodeName: "Write", parameters: { path: outputPath, bitDepth: "16" } },
 		],
 		edges: [{ from: "read", to: "write" }],
 	};
@@ -70,7 +69,7 @@ describe("bag render", () => {
 		const bagPath = join(workDir, "graph.bag");
 
 		writeWav(inputPath, Array.from({ length: 256 }, (_, i) => Math.round(Math.sin(i / 8) * 10000)), 8000);
-		writeBag(bagPath, { "@buffered-audio/nodes": nodesVersion }, inputPath, outputPath);
+		writeBag(bagPath, nodesVersion, inputPath, outputPath);
 
 		const result = spawnSync(process.execPath, [cliPath, "render", bagPath, "--resolve", `@buffered-audio/nodes=${nodesDir}`], { encoding: "utf-8" });
 
@@ -85,7 +84,7 @@ describe("bag render", () => {
 		const bagPath = join(workDir, "graph2.bag");
 
 		writeWav(inputPath, Array.from({ length: 64 }, () => 0), 8000);
-		writeBag(bagPath, { "@buffered-audio/nodes": "999.0.0" }, inputPath, outputPath);
+		writeBag(bagPath, "999.0.0", inputPath, outputPath);
 
 		const result = spawnSync(process.execPath, [cliPath, "render", bagPath, "--no-install"], { encoding: "utf-8" });
 

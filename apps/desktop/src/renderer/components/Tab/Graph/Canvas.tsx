@@ -25,7 +25,7 @@ import { GraphContextMenu, type ContextMenuAction, type ContextMenuPosition } fr
 import { useGraphMutations } from "./hooks/useGraphMutations";
 import type { NodeContainerData } from "./Node/Container";
 import { NodeContainer } from "./Node/Container";
-import { useRenderJob } from "./hooks/useRenderJob";
+import { unreadyRenderPairs, useRenderJob } from "./hooks/useRenderJob";
 import { BottomRightOverlay } from "./Overlays/BottomRightOverlay";
 import { TopLeftOverlay } from "./Overlays/TopLeftOverlay";
 import { TopRightOverlay } from "./Overlays/TopRightOverlay";
@@ -54,10 +54,9 @@ function buildReactFlowNodes(context: GraphContext): Array<Node<NodeContainerDat
 	const connectedOutputs = new Set(context.graphDefinition.edges.map((edge) => edge.from));
 
 	return context.graphDefinition.nodes.map((graphNode) => {
-		const version = context.graphDefinition.packages[graphNode.packageName] ?? "";
 		const { category, description, schema, unresolvedReason } = lookupNode(
 			graphNode.packageName,
-			version,
+			graphNode.packageVersion,
 			graphNode.nodeName,
 			context,
 		);
@@ -70,6 +69,7 @@ function buildReactFlowNodes(context: GraphContext): Array<Node<NodeContainerDat
 			data: {
 				label: graphNode.nodeName,
 				packageName: graphNode.packageName,
+				packageVersion: graphNode.packageVersion,
 				nodeName: graphNode.nodeName,
 				category,
 				bypassed: graphNode.options?.bypass ?? false,
@@ -139,10 +139,9 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 
 			if (!graphNode) return;
 
-			const version = context.graphDefinition.packages[graphNode.packageName] ?? "";
 			const { schema } = lookupNode(
 				graphNode.packageName,
-				version,
+				graphNode.packageVersion,
 				graphNode.nodeName,
 				context,
 			);
@@ -245,10 +244,9 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 
 						if (!graphNode) return;
 
-						const version = context.graphDefinition.packages[graphNode.packageName] ?? "";
 						const { schema } = lookupNode(
 							graphNode.packageName,
-							version,
+							graphNode.packageVersion,
 							graphNode.nodeName,
 							context,
 						);
@@ -463,6 +461,18 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 		};
 	}, [context, getNodes, mutations]);
 
+	const renderReadiness = useMemo(() => {
+		const missing = unreadyRenderPairs(context.graphDefinition.nodes, context.app.packages);
+
+		return {
+			ready: missing.length === 0,
+			reason: missing.length > 0 ? `Packages not ready: ${missing.join(", ")}` : undefined,
+		};
+	}, [context.graphDefinition.nodes, context.app.packages]);
+
+	const contextMenuNode =
+		contextMenu?.nodeId !== undefined ? nodes.find((node) => node.id === contextMenu.nodeId) : undefined;
+
 	const canUndo = context.history.canUndo;
 	const canRedo = context.history.canRedo;
 	const isRendering = activeJobId !== null;
@@ -571,6 +581,8 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 				canUndo={canUndo}
 				canRedo={canRedo}
 				isRendering={isRendering}
+				isRenderReady={renderReadiness.ready}
+				renderDisabledReason={renderReadiness.reason}
 			/>
 			<BottomRightOverlay
 				isRendering={isRendering}
@@ -590,12 +602,12 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 					onAction={handleContextMenuAction}
 					onAddNode={handleAddNodeFromContextMenu}
 					onClose={closeContextMenu}
-					isBypassed={
-						contextMenu.nodeId !== undefined &&
-						(nodes.find((node) => node.id === contextMenu.nodeId)?.data.bypassed ?? false)
-					}
+					isBypassed={contextMenuNode?.data.bypassed ?? false}
+					packageName={contextMenuNode?.data.packageName ?? ""}
+					packageVersion={contextMenuNode?.data.packageVersion ?? ""}
 					canUndo={canUndo}
 					canRedo={canRedo}
+					renderDisabled={!renderReadiness.ready}
 				/>
 			)}
 		</div>

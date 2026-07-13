@@ -303,10 +303,9 @@ describe("graph definition validation", () => {
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
 			apiVersion: 1,
-			packages: { "@buffered-audio/nodes": "1.0.0" },
 			nodes: [
-				{ id: "a", packageName: "@buffered-audio/nodes", nodeName: "read" },
-				{ id: "b", packageName: "@buffered-audio/nodes", nodeName: "write" },
+				{ id: "a", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "read" },
+				{ id: "b", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "write" },
 			],
 			edges: [{ from: "a", to: "b" }],
 		});
@@ -318,8 +317,7 @@ describe("graph definition validation", () => {
 		const valid = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			apiVersion: 1,
-			packages: { "@buffered-audio/nodes": "1.0.0" },
-			nodes: [{ id: "a", packageName: "@buffered-audio/nodes", nodeName: "read" }],
+			nodes: [{ id: "a", packageName: "@buffered-audio/nodes", packageVersion: "1.0.0", nodeName: "read" }],
 			edges: [],
 		});
 
@@ -331,23 +329,21 @@ describe("graph definition validation", () => {
 			validateGraphDefinition({
 				id: "not-a-uuid",
 				apiVersion: 1,
-				packages: { test: "1.0.0" },
-				nodes: [{ id: "a", packageName: "test", nodeName: "read" }],
+				nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read" }],
 				edges: [],
 			}),
 		).toThrow();
 	});
 
-	it("rejects a node whose packageName has no packages entry", () => {
+	it("rejects a node missing packageVersion", () => {
 		expect(() =>
 			validateGraphDefinition({
 				id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 				apiVersion: 1,
-				packages: {},
 				nodes: [{ id: "a", packageName: "test", nodeName: "read" }],
 				edges: [],
 			}),
-		).toThrow(/Node.*a.*package.*test.*no entry in the graph packages map/s);
+		).toThrow();
 	});
 });
 
@@ -357,8 +353,7 @@ describe("apiVersion enforcement", () => {
 			validateGraphDefinition({
 				id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 				name: "Test",
-				packages: { test: "1.0.0" },
-				nodes: [{ id: "a", packageName: "test", nodeName: "read" }],
+				nodes: [{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read" }],
 				edges: [],
 			}),
 		).toThrow();
@@ -399,15 +394,17 @@ describe("apiVersion enforcement", () => {
 		}
 
 		const registry: NodeRegistry = new Map([
-			["test", new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([["v2-source", VersionTwoSource as never]])],
+			[
+				"test",
+				new Map([["1.0.0", new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([["v2-source", VersionTwoSource as never]])]]),
+			],
 		]);
 
 		const definition = validateGraphDefinition({
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
 			apiVersion: 1,
-			packages: { test: "1.0.0" },
-			nodes: [{ id: "s", packageName: "test", nodeName: "v2-source" }],
+			nodes: [{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "v2-source" }],
 			edges: [],
 		});
 
@@ -438,14 +435,14 @@ describe("pack version resolution", () => {
 		rmSync(resolutionRoot, { recursive: true, force: true });
 	});
 
-	it("resolves each package's version from package.json into the packages map", () => {
+	it("resolves each package's version from package.json onto each node", () => {
 		const source = new MockSource();
 		const target = new MockTarget();
 		source.to(target);
 
 		const definition = pack([source], { anchor: goodAnchor });
 
-		expect(definition.packages).toEqual({ test: "1.2.3" });
+		expect(definition.nodes.map((node) => node.packageVersion)).toEqual(["1.2.3", "1.2.3"]);
 	});
 
 	it("throws naming the package, anchor, and remedy when the name does not match", () => {
@@ -500,9 +497,14 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 		const registry: NodeRegistry = new Map([
 			[
 				"test",
-				new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
-					["mock-source", MockSource as never],
-					["defaulting-transform", DefaultingTransform as never],
+				new Map([
+					[
+						"1.0.0",
+						new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
+							["mock-source", MockSource as never],
+							["defaulting-transform", DefaultingTransform as never],
+						]),
+					],
 				]),
 			],
 		]);
@@ -511,10 +513,9 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			name: "Test",
 			apiVersion: 1,
-			packages: { test: "1.0.0" },
 			nodes: [
-				{ id: "s", packageName: "test", nodeName: "mock-source" },
-				{ id: "t", packageName: "test", nodeName: "defaulting-transform", parameters: { smoothing: 30 } },
+				{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "mock-source" },
+				{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "defaulting-transform", parameters: { smoothing: 30 } },
 			],
 			edges: [{ from: "s", to: "t" }],
 		});
@@ -529,8 +530,92 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 	});
 });
 
+describe("mixed-version bags — per-node pins", () => {
+	class VersionedSource extends SourceNode {
+		static readonly packageName = "test";
+		static readonly nodeName = "versioned-source";
+		static override readonly schema = z.object({});
+		static override readonly Stream = MockSourceStream;
+	}
+
+	class VersionedTarget extends TargetNode {
+		static readonly packageName = "test";
+		static readonly nodeName = "versioned-target";
+		static override readonly schema = z.object({});
+		static override readonly Stream = MockTargetStream;
+	}
+
+	function versionMap(): Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode> {
+		return new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
+			["versioned-source", VersionedSource as never],
+			["versioned-target", VersionedTarget as never],
+		]);
+	}
+
+	const registry: NodeRegistry = new Map([
+		[
+			"test",
+			new Map([
+				["0.20.0", versionMap()],
+				["0.22.0", versionMap()],
+			]),
+		],
+	]);
+
+	const mixedDefinition = validateGraphDefinition({
+		id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		name: "Test",
+		apiVersion: 1,
+		nodes: [
+			{ id: "s", packageName: "test", packageVersion: "0.20.0", nodeName: "versioned-source" },
+			{ id: "t", packageName: "test", packageVersion: "0.22.0", nodeName: "versioned-target" },
+		],
+		edges: [{ from: "s", to: "t" }],
+	});
+
+	it("unpack resolves two versions of one package in a single bag and injects each pin", () => {
+		const sources = unpack(mixedDefinition, registry);
+		const source = sources[0];
+		const target = source?.children[0];
+
+		expect(source?.packageVersion).toBe("0.20.0");
+		expect(target?.packageVersion).toBe("0.22.0");
+	});
+
+	it("unpack→pack round-trips each carried version without an anchor (carried wins, no detection)", () => {
+		const sources = unpack(mixedDefinition, registry);
+
+		const definition = pack(sources);
+
+		expect(definition.nodes.find((node) => node.id === "s")?.packageVersion).toBe("0.20.0");
+		expect(definition.nodes.find((node) => node.id === "t")?.packageVersion).toBe("0.22.0");
+	});
+
+	it("pack of a freshly constructed version-less node detects via the anchor", () => {
+		const source = new MockSource();
+		const target = new MockTarget();
+		source.to(target);
+
+		const definition = pack([source], { anchor: packAnchor });
+
+		expect(definition.nodes.every((node) => node.packageVersion === "1.0.0")).toBe(true);
+	});
+
+	it("unpack names the name@version pair when the pinned version is unknown", () => {
+		const definition = validateGraphDefinition({
+			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			name: "Test",
+			apiVersion: 1,
+			nodes: [{ id: "s", packageName: "test", packageVersion: "9.9.9", nodeName: "versioned-source" }],
+			edges: [],
+		});
+
+		expect(() => unpack(definition, registry)).toThrow(/Unknown package: "test@9\.9\.9"/);
+	});
+});
+
 function templatedDefinition(nodes: GraphDefinition["nodes"]): GraphDefinition {
-	return { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", name: "Test", apiVersion: 1, packages: { test: "1.0.0" }, nodes, edges: [] };
+	return { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", name: "Test", apiVersion: 1, nodes, edges: [] };
 }
 
 describe("substituteParameters", () => {
@@ -539,6 +624,7 @@ describe("substituteParameters", () => {
 			{
 				id: "a",
 				packageName: "test",
+				packageVersion: "1.0.0",
 				nodeName: "read",
 				parameters: {
 					path: "{{episode}}/{{inputFile}}.wav",
@@ -558,7 +644,7 @@ describe("substituteParameters", () => {
 	});
 
 	it("does not mutate the input definition", () => {
-		const definition = templatedDefinition([{ id: "a", packageName: "test", nodeName: "read", parameters: { path: "{{episode}}/in.wav" } }]);
+		const definition = templatedDefinition([{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{episode}}/in.wav" } }]);
 		const snapshot = structuredClone(definition);
 
 		substituteParameters(definition, { episode: "e260" });
@@ -568,14 +654,14 @@ describe("substituteParameters", () => {
 
 	it("throws naming every unbound placeholder at once", () => {
 		const definition = templatedDefinition([
-			{ id: "a", packageName: "test", nodeName: "read", parameters: { path: "{{one}}/{{two}}/{{three}}.wav" } },
+			{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{one}}/{{two}}/{{three}}.wav" } },
 		]);
 
 		expect(() => substituteParameters(definition, { two: "x" })).toThrow(/unbound placeholders: one, three/);
 	});
 
 	it("throws naming an unknown provided parameter", () => {
-		const definition = templatedDefinition([{ id: "a", packageName: "test", nodeName: "read", parameters: { path: "{{used}}.wav" } }]);
+		const definition = templatedDefinition([{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{used}}.wav" } }]);
 
 		expect(() => substituteParameters(definition, { used: "x", extra: "y" })).toThrow(/unknown parameters: extra/);
 	});
@@ -621,9 +707,14 @@ describe("createRenderJobs parameter substitution", () => {
 	const registry: NodeRegistry = new Map([
 		[
 			"test",
-			new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
-				["path-source", PathSource as never],
-				["path-target", PathTarget as never],
+			new Map([
+				[
+					"1.0.0",
+					new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
+						["path-source", PathSource as never],
+						["path-target", PathTarget as never],
+					]),
+				],
 			]),
 		],
 	]);
@@ -632,10 +723,9 @@ describe("createRenderJobs parameter substitution", () => {
 		id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		name: "Test",
 		apiVersion: 1,
-		packages: { test: "1.0.0" },
 		nodes: [
-			{ id: "s", packageName: "test", nodeName: "path-source", parameters: { path: "{{dir}}/in.wav" } },
-			{ id: "t", packageName: "test", nodeName: "path-target", parameters: { path: "{{dir}}/out.wav" } },
+			{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "path-source", parameters: { path: "{{dir}}/in.wav" } },
+			{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "path-target", parameters: { path: "{{dir}}/out.wav" } },
 		],
 		edges: [{ from: "s", to: "t" }],
 	};

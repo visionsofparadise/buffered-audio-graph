@@ -12,10 +12,13 @@ interface Props {
 
 export const PackagesSection = resnapshot<Props>(({ context }: Props) => {
 	const { app, appStore } = context;
-	const { addPackage, removePackage, updatePackage } = usePackageManager(context);
+	const { addPackage, removePackage, updatePackage, clearDependencies } = usePackageManager(context);
 
 	const [packageSpec, setPackageSpec] = useState("");
 	const [expandedPackages, setExpandedPackages] = useState<Set<string>>(new Set());
+
+	const catalogPackages = app.packages.filter((entry) => entry.origin === "catalog");
+	const dependencyCount = app.packages.filter((entry) => entry.origin === "dependency").length;
 
 	const handleAdd = useCallback(async () => {
 		if (!packageSpec.trim()) return;
@@ -61,7 +64,7 @@ export const PackagesSection = resnapshot<Props>(({ context }: Props) => {
 			</div>
 
 			<ul className="flex flex-col gap-2">
-				{app.packages.map((entry) => {
+				{catalogPackages.map((entry) => {
 					const isExpanded = expandedPackages.has(entry.requestedSpec);
 
 					return (
@@ -155,6 +158,17 @@ export const PackagesSection = resnapshot<Props>(({ context }: Props) => {
 					);
 				})}
 			</ul>
+
+			{dependencyCount > 0 && (
+				<div className="flex items-center justify-between gap-3 mt-3">
+					<span className="text-body text-text-secondary">
+						{dependencyCount} bag {dependencyCount === 1 ? "dependency" : "dependencies"} cached
+					</span>
+					<Button variant="ghost" size="sm" onClick={() => void clearDependencies()}>
+						Clear
+					</Button>
+				</div>
+			)}
 
 			<div className="flex items-center gap-2 mt-4">
 				<Input

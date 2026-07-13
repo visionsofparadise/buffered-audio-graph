@@ -1,4 +1,4 @@
-import type { NodeJsonSchema, NodeJsonSchemaProperty } from "../../../../../../shared/ipc/Package/loadNodes/Renderer";
+import type { NodeJsonSchema, NodeJsonSchemaProperty } from "../../../../../../shared/ipc/Package/ensure/Renderer";
 import type { GraphContext } from "../../../../../models/Context";
 import type { NodeCategory } from "../Container";
 

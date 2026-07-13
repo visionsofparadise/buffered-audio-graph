@@ -1,12 +1,17 @@
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { app } from "electron";
+import { toJSONSchema } from "zod";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { SUPPORTED_API_VERSIONS } from "../../../models/ApiVersion";
+import { registerPackage, type NodeClass } from "../../../models/NodeRegistry";
 import {
-	INSTALL_PACKAGE_ACTION,
-	type InstallPackageInput,
-	type InstallPackageIpcParameters,
-	type InstallPackageIpcReturn,
+	ENSURE_PACKAGE_ACTION,
+	type EnsurePackageInput,
+	type EnsurePackageIpcParameters,
+	type EnsurePackageIpcReturn,
+	type LoadedNodeInfo,
 } from "./Renderer";
 
 type PackageExports = string | Array<PackageExports> | { [key: string]: PackageExports } | null | undefined;
@@ -123,10 +128,27 @@ async function loadPacote(): Promise<PacoteModule> {
 	return pacoteModule.default;
 }
 
-export class InstallPackageMainIpc extends AsyncMainIpc<InstallPackageIpcParameters, InstallPackageIpcReturn> {
-	action = INSTALL_PACKAGE_ACTION;
+function isNodeClass(value: unknown): value is NodeClass {
+	return (
+		typeof value === "function" && "nodeName" in value && typeof value.nodeName === "string" && "description" in value && typeof value.description === "string" && "schema" in value
+	);
+}
 
-	async handler(input: InstallPackageInput, _dependencies: IpcHandlerDependencies): Promise<InstallPackageIpcReturn> {
+function getNodeCategory(value: NodeClass): "source" | "transform" | "target" {
+	const prototype: unknown = value.prototype;
+
+	if (typeof prototype === "object" && prototype !== null) {
+		if ("createRenderJob" in prototype && typeof prototype.createRenderJob === "function") return "source";
+		if ("to" in prototype && typeof prototype.to === "function") return "transform";
+	}
+
+	return "target";
+}
+
+export class EnsurePackageMainIpc extends AsyncMainIpc<EnsurePackageIpcParameters, EnsurePackageIpcReturn> {
+	action = ENSURE_PACKAGE_ACTION;
+
+	async handler(input: EnsurePackageInput, dependencies: IpcHandlerDependencies): Promise<EnsurePackageIpcReturn> {
 		assertRegistryPackageSpec(input.packageSpec);
 
 		const pacote = await loadPacote();
@@ -149,12 +171,46 @@ export class InstallPackageMainIpc extends AsyncMainIpc<InstallPackageIpcParamet
 		}
 
 		const loadEntryPath = await resolveLoadEntryPath(installDirectory);
+		const url = `${pathToFileURL(loadEntryPath).href}?t=${Date.now()}`;
+		const exports = (await import(url)) as Record<string, unknown>;
+		const nodes = new Map<string, NodeClass>();
+		const result: Array<LoadedNodeInfo> = [];
+		const apiVersions = new Set<number>();
 
-		return {
-			packageName,
-			packageVersion,
-			installDirectory,
-			loadEntryPath,
-		};
+		for (const value of Object.values(exports)) {
+			if (isNodeClass(value)) {
+				nodes.set(value.nodeName, value);
+				apiVersions.add(value.apiVersion);
+
+				result.push({
+					nodeName: value.nodeName,
+					description: value.description,
+					schema: toJSONSchema(value.schema) as LoadedNodeInfo["schema"],
+					category: getNodeCategory(value),
+				});
+			}
+		}
+
+		if (nodes.size === 0) {
+			throw new Error(`Package "${packageName}" exports no node classes`);
+		}
+
+		if (apiVersions.size > 1) {
+			throw new Error(`Package "${packageName}" has mixed API versions: ${[...apiVersions].join(", ")}`);
+		}
+
+		const [apiVersion] = apiVersions;
+
+		if (apiVersion === undefined) {
+			throw new Error(`Package "${packageName}" predates the apiVersion marker and cannot load`);
+		}
+
+		if (!SUPPORTED_API_VERSIONS.has(apiVersion)) {
+			throw new Error(`Package "${packageName}" has unsupported API version ${apiVersion}`);
+		}
+
+		registerPackage(dependencies.nodeRegistry, packageName, packageVersion, nodes);
+
+		return { packageName, packageVersion, apiVersion, nodes: result };
 	}
 }

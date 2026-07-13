@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "../Button";
-import type { NodeJsonSchema } from "../../../shared/ipc/Package/loadNodes/Renderer";
+import type { NodeJsonSchema } from "../../../shared/ipc/Package/ensure/Renderer";
 import type { AppContext } from "../../models/Context";
 import { resnapshot } from "../../models/ProxyStore/resnapshot";
 

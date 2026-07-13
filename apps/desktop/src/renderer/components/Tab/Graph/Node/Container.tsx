@@ -22,6 +22,8 @@ export interface NodeContainerData {
 	readonly label: string;
 	/** The node's package identity (e.g. "@buffered-audio/nodes"). Distinct from `label`. */
 	readonly packageName: string;
+	/** The node's pinned package version — surfaced read-only in the node menu. */
+	readonly packageVersion: string;
 	/** The node's class name (e.g. "VST3"). Keys the custom-body branch; distinct from `label`. */
 	readonly nodeName: string;
 	readonly category: NodeCategory;
@@ -135,6 +137,8 @@ export function NodeContainer({ data, selected }: NodeProps) {
 						</button>
 						<NodeMenu
 							bypassed={isBypassed}
+							packageName={nodeData.packageName}
+							packageVersion={nodeData.packageVersion}
 							onBypass={nodeData.onBypass}
 							onReset={nodeData.onReset}
 							onDelete={nodeData.onDelete}

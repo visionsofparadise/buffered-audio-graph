@@ -14,6 +14,6 @@ describe("pack resolves the nodes package version", () => {
 
 		const definition = pack([source], { anchor: import.meta.url });
 
-		expect(definition.packages["@buffered-audio/nodes"]).toBe(packageJson.version);
+		expect(definition.nodes.every((node) => node.packageVersion === packageJson.version)).toBe(true);
 	});
 });

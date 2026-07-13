@@ -2,7 +2,7 @@
  * GUI smoke — CDP-driven end-to-end verification of the graph mutation path.
  *
  * Launches the desktop app on an isolated, persistent profile
- * (`.smoke-profile/`), seeds a single empty packages-map bag tab, drives the
+ * (`.smoke-profile/`), seeds a single empty per-node-pin bag tab, drives the
  * real UI over the Chrome DevTools Protocol, and asserts every graph mutation
  * works and persists. Coverage includes the cmdk add-node catalog (mouse +
  * keyboard pick), the edge insert chip, the reduced node menu, full-graph
@@ -48,6 +48,7 @@ interface Point {
 
 interface PersistedNode {
 	readonly nodeName?: string;
+	readonly packageVersion?: string;
 	readonly parameters?: Record<string, unknown>;
 }
 
@@ -179,12 +180,12 @@ function writeSineWav(filePath: string): void {
 	writeFileSync(filePath, buffer);
 }
 
-/** The built-in nodes package version the bag resolved (written into the packages map on first add), or null. */
+/** The built-in nodes package version carried by the first added node in the saved bag (per-node `packageVersion`), or null. */
 function readBuiltinVersion(): string | null {
 	try {
-		const bag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as { packages?: Record<string, string> };
+		const bag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
 
-		return bag.packages?.[BUILTIN_PACKAGE] ?? null;
+		return bag.nodes.find((node) => typeof node.packageVersion === "string" && node.packageVersion.length > 0)?.packageVersion ?? null;
 	} catch {
 		return null;
 	}
@@ -219,10 +220,10 @@ function seedProfile(): string {
 	rmSync(OUTPUT_WAV_PATH, { force: true });
 
 	const bagId = randomUUID();
-	// The packages-map bag shape (core 0.10.0 schema): an empty map on the seed
-	// empty bag; adding a node through the UI writes the resolved built-in version
-	// into it. No per-node packageVersion.
-	const bag = { id: bagId, apiVersion: 1, name: BAG_NAME, packages: {}, nodes: [], edges: [] };
+	// The per-node-pin bag shape (core 0.11.0 schema): no graph-level packages map;
+	// each node added through the UI carries its own `packageVersion` (the installed
+	// catalog version). The empty seed has no nodes.
+	const bag = { id: bagId, apiVersion: 1, name: BAG_NAME, nodes: [], edges: [] };
 
 	writeFileSync(BAG_PATH, JSON.stringify(bag, null, 2));
 
@@ -497,6 +498,15 @@ async function dumpMenuItems(page: Page): Promise<Array<string>> {
 	);
 }
 
+/** The full text of the currently open dropdown menu (`[role="menu"]`) — captures non-item rows like the read-only version label. */
+async function openMenuText(page: Page): Promise<string> {
+	return page.evaluate((): string => {
+		const menu = document.querySelector('[role="menu"]');
+
+		return menu ? (menu.textContent).replace(/\s+/g, " ").trim() : "";
+	});
+}
+
 /**
  * The VST3 scan-root paths currently rendered in the open Settings modal.
  * Excludes any `Remove …` buttons inside graph nodes (a VST3 stage row's remove
@@ -587,24 +597,37 @@ async function addNode(page: Page, nodeLabel: string, expectedCount: number, opt
 	check(reached, `add "${nodeLabel}" (${method}) — node count reaches ${expectedCount}`);
 }
 
-/** Set a node's first text param (its file-path input) via the native value setter + input event. */
+/**
+ * Set a node's first text param (its file-path input) via the native value setter
+ * + input event, then confirm the value committed. The file input is uncontrolled
+ * (`key={param.value}`, so it remounts to the committed value); a set that fails to
+ * commit reverts to empty on the next remount, so this retries until the round-trip
+ * sticks — hardening against a transient post-interaction remount race.
+ */
 async function setNodePathParam(page: Page, nodeId: string, value: string): Promise<void> {
 	const selector = `.react-flow__node[data-id="${nodeId}"] input[type="text"]`;
 
 	await page.waitForSelector(selector, { timeout: 5000 });
-	await page.$eval(
-		selector,
-		(element, pathValue: string) => {
-			const input = element as HTMLInputElement;
-			const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
 
-			descriptor?.set?.call(input, pathValue);
-			input.dispatchEvent(new Event("input", { bubbles: true }));
-			input.dispatchEvent(new Event("blur", { bubbles: true }));
-		},
-		value,
-	);
-	await sleep(200);
+	for (let attempt = 0; attempt < 6; attempt++) {
+		await page.$eval(
+			selector,
+			(element, pathValue: string) => {
+				const input = element as HTMLInputElement;
+				const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
+
+				descriptor?.set?.call(input, pathValue);
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+				input.dispatchEvent(new Event("blur", { bubbles: true }));
+			},
+			value,
+		);
+		await sleep(300);
+
+		const committed = await page.$eval(selector, (element) => (element as HTMLInputElement).value).catch(() => "");
+
+		if (committed === value) return;
+	}
 }
 
 /** Click a plain `<button>` (not a menuitem) whose text contains `text` — used for the Settings left-nav rows. */
@@ -979,6 +1002,17 @@ async function runVst3Section(page: Page, expectedNodeCount: number): Promise<vo
 	check(presetSize > 0, `VST3 — preset file exists and is non-empty (${presetSize} bytes)`);
 }
 
+/** Whether the toolbar Render button is enabled (the render gate open — every pinned pair installed and ready). */
+async function isRenderEnabled(page: Page): Promise<boolean> {
+	return page.evaluate((): boolean => {
+		const button = Array.from(document.querySelectorAll("button")).find((candidate) =>
+			(candidate.textContent).includes("Render"),
+		);
+
+		return button instanceof HTMLButtonElement ? !button.disabled : false;
+	});
+}
+
 /** Click the toolbar Render action (present as "Render" while idle, "Abort" while running). */
 async function clickRender(page: Page): Promise<void> {
 	const render = await rectByText(page, "button", "Render");
@@ -1012,11 +1046,14 @@ async function runRenderSection(page: Page): Promise<void> {
 
 	if (!readId) throw new Error("Could not resolve the Read WAV node id");
 
+	// Set the input path before moving the node: a drag leaves React Flow's node
+	// in a state where the file input's change does not commit, so set-then-drag
+	// (the commit survives the position change) rather than drag-then-set.
+	await setNodePathParam(page, readId, INPUT_WAV_PATH);
+
 	// Move Read WAV well clear of centre while it is the only node (unambiguous
 	// drag), so the Write node added next lands to its right without overlap.
 	await dragNodeBy(page, readId, -450, 0);
-
-	await setNodePathParam(page, readId, INPUT_WAV_PATH);
 
 	// The built-in version resolved into the bag drives the zero-target guard.
 	await sleep(DEBOUNCE_WAIT_MS);
@@ -1064,6 +1101,10 @@ async function runRenderSection(page: Page): Promise<void> {
 	await connectHandles(page, sourceHandle, targetHandle);
 
 	check(await waitForEdgeCount(page, 1, 8000), "render graph — Read WAV → Write connected (edge = 1)");
+
+	// Render gate happy path: both nodes were added at the installed catalog version,
+	// so every pinned pair is ready and the Render button is enabled before click.
+	check(await isRenderEnabled(page), "render gate — Render button enabled once both pinned packages are ready");
 
 	rmSync(OUTPUT_WAV_PATH, { force: true });
 
@@ -1318,8 +1359,11 @@ async function run(): Promise<void> {
 		check(isBypassed, "toggle bypass — node shows opacity-60");
 
 		// 9: the node menu is exactly Bypass/Enable, Reset, Delete Node (Phase 3.2 —
-		// Render/Abort dropped), then delete through the same menu.
+		// Render/Abort dropped) plus a read-only package@version label (Phase 5.1 —
+		// a DropdownMenuLabel, not an item, so the item count stays 3), then delete
+		// through the same menu.
 		const nodeMenuItems = await openNodeMenuAndDump(page, transformId);
+		const menuText = await openMenuText(page);
 		const hasBypass = nodeMenuItems.some((item) => /bypass|enable/i.test(item));
 		const hasReset = nodeMenuItems.some((item) => /reset/i.test(item));
 		const hasDelete = nodeMenuItems.some((item) => item.includes("Delete Node"));
@@ -1328,6 +1372,14 @@ async function run(): Promise<void> {
 		check(
 			nodeMenuItems.length === 3 && hasBypass && hasReset && hasDelete && !hasRenderAbort,
 			`node menu is exactly Bypass/Reset/Delete Node (${nodeMenuItems.join(" | ")})`,
+		);
+
+		const menuVersion = readBuiltinVersion();
+		const expectedLabel = `${BUILTIN_PACKAGE}@${menuVersion ?? ""}`;
+
+		check(
+			menuVersion !== null && menuText.includes(expectedLabel),
+			`node menu shows the read-only version label "${expectedLabel}" (menu text: ${menuText})`,
 		);
 
 		await page.keyboard.press("Escape");

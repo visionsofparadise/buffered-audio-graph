@@ -99,7 +99,9 @@ export function PackageNodeList({ app, onSelect }: Props) {
 				app.packages
 					.filter(
 						(nodePackage): nodePackage is ReadyPackage =>
-							nodePackage.status === "ready" && nodePackage.version !== null,
+							nodePackage.status === "ready" &&
+							nodePackage.version !== null &&
+							nodePackage.origin === "catalog",
 					)
 					.reduce((packagesByName, nodePackage) => {
 						const current = packagesByName.get(nodePackage.name);

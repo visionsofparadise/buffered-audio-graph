@@ -35,7 +35,7 @@ export function ensurePackageState(
 	app: Snapshot<AppState>,
 	appStore: ProxyStore,
 	requestedSpec: string,
-	options?: { readonly isBuiltIn?: boolean },
+	options?: { readonly isBuiltIn?: boolean; readonly origin?: NodePackageState["origin"] },
 ): { index: number; entry: NodePackageState } {
 	const existingIndex = app.packages.findIndex((entry) => entry.requestedSpec === requestedSpec);
 
@@ -55,13 +55,16 @@ export function ensurePackageState(
 		error: null,
 		nodes: [],
 		isBuiltIn: options?.isBuiltIn ?? false,
+		origin: options?.origin ?? "catalog",
 	};
 
+	let newIndex = -1;
+
 	appStore.mutate(app, (proxy) => {
-		proxy.packages.push(newEntry);
+		newIndex = proxy.packages.push(newEntry) - 1;
 	});
 
-	return { index: app.packages.length, entry: newEntry };
+	return { index: newIndex, entry: newEntry };
 }
 
 export async function runPackagePipeline(
@@ -79,27 +82,15 @@ export async function runPackagePipeline(
 		target.apiVersion = null;
 	});
 
-	const install = await main.installPackage({ packageSpec: entry.requestedSpec });
+	const result = await main.ensurePackage({ packageSpec: entry.requestedSpec });
 
 	mutatePackageAt(appStore, app, index, (target) => {
-		target.name = install.packageName;
-		target.version = install.packageVersion;
-		target.status = "loading";
-	});
-
-	const { apiVersion, nodes } = await main.loadPackageNodes({
-		loadEntryPath: install.loadEntryPath,
-		packageName: install.packageName,
-		packageVersion: install.packageVersion,
-	});
-
-	mutatePackageAt(appStore, app, index, (target) => {
-		target.name = install.packageName;
-		target.version = install.packageVersion;
-		target.apiVersion = apiVersion;
+		target.name = result.packageName;
+		target.version = result.packageVersion;
+		target.apiVersion = result.apiVersion;
 		target.status = "ready";
 		target.error = null;
-		target.nodes = [...nodes];
+		target.nodes = [...result.nodes];
 	});
 }
 
@@ -109,22 +100,31 @@ export async function ensureGraphPackagesInstalled(
 	appStore: ProxyStore,
 	main: Main,
 ): Promise<void> {
-	const requestedSpecs = Object.entries(graphDefinition.packages).map(([packageName, version]) =>
-		packageSpecFromNameAndVersion(packageName, version),
-	);
+	const seen = new Set<string>();
+	const pairs: Array<{ packageName: string; packageVersion: string }> = [];
 
-	for (const requestedSpec of requestedSpecs) {
-		const targetName = packageNameFromSpec(requestedSpec);
-		const targetVersion = requestedSpec.slice(targetName.length + 1);
-		const readyEntry = app.packages.find(
-			(entry) => entry.status === "ready" && entry.name === targetName && entry.version === targetVersion,
-		);
+	for (const node of graphDefinition.nodes) {
+		const key = packageSpecFromNameAndVersion(node.packageName, node.packageVersion);
 
-		if (readyEntry) {
+		if (seen.has(key)) {
 			continue;
 		}
 
-		const { index, entry } = ensurePackageState(app, appStore, requestedSpec);
+		seen.add(key);
+		pairs.push({ packageName: node.packageName, packageVersion: node.packageVersion });
+	}
+
+	for (const { packageName, packageVersion } of pairs) {
+		const satisfied = app.packages.some(
+			(entry) => entry.status === "ready" && entry.name === packageName && entry.version === packageVersion,
+		);
+
+		if (satisfied) {
+			continue;
+		}
+
+		const requestedSpec = packageSpecFromNameAndVersion(packageName, packageVersion);
+		const { index, entry } = ensurePackageState(app, appStore, requestedSpec, { origin: "dependency" });
 
 		if (entry.status === "ready") {
 			continue;

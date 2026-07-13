@@ -79,6 +79,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 				await activeCommands.importBag?.();
 			},
 			setSettingsOpen,
+			setHasPassedLoading,
 		}),
 		[app, appStore, logger, mainEvents, queryClient, userDataPath, windowId, activeCommands, callbacks],
 	);

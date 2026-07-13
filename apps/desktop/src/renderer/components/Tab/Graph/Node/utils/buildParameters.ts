@@ -1,5 +1,5 @@
 import type { GraphNode } from "@buffered-audio/core";
-import type { NodeJsonSchema, NodeJsonSchemaProperty } from "../../../../../../shared/ipc/Package/loadNodes/Renderer";
+import type { NodeJsonSchema, NodeJsonSchemaProperty } from "../../../../../../shared/ipc/Package/ensure/Renderer";
 import type { BooleanParameter } from "../ParameterRow/Boolean";
 import type { EnumParameter } from "../ParameterRow/Enum";
 import type { FileParameter } from "../ParameterRow/File";

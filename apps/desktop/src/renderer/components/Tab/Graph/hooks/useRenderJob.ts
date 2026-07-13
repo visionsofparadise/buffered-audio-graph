@@ -17,6 +17,35 @@ function mintJobId(): string {
 }
 
 /**
+ * The distinct `packageName@packageVersion` pairs pinned by the graph's nodes
+ * that lack a `ready` `app.packages` entry (any origin). Empty ⇔ every pinned
+ * pair is installed and the graph is render-ready.
+ */
+export function unreadyRenderPairs(
+	nodes: ReadonlyArray<{ readonly packageName: string; readonly packageVersion: string }>,
+	packages: ReadonlyArray<{ readonly name: string; readonly version: string | null; readonly status: string }>,
+): Array<string> {
+	const seen = new Set<string>();
+	const missing: Array<string> = [];
+
+	for (const node of nodes) {
+		const key = `${node.packageName}@${node.packageVersion}`;
+
+		if (seen.has(key)) continue;
+
+		seen.add(key);
+
+		const ready = packages.some(
+			(entry) => entry.name === node.packageName && entry.version === node.packageVersion && entry.status === "ready",
+		);
+
+		if (!ready) missing.push(key);
+	}
+
+	return missing;
+}
+
+/**
  * Thin IPC driver for full-graph rendering. `startRender` mints a jobId,
  * snapshots the current definition, and awaits `audioRenderGraph`; a rejection
  * (core's leaf-must-be-a-target validation, a missing package, or a DSP
@@ -35,6 +64,11 @@ export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 	}, [activeJobId]);
 
 	const startRender = useCallback(async () => {
+		// Defense in depth behind the UI render gates: never render while a
+		// pinned pair is missing from the registry (a post-gate miss would be a
+		// real error, but the gate should have prevented reaching here).
+		if (unreadyRenderPairs(context.graphDefinition.nodes, context.app.packages).length > 0) return;
+
 		const jobId = mintJobId();
 
 		setActiveJobId(jobId);

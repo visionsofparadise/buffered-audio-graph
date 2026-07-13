@@ -12,8 +12,6 @@ function statusText(status: NodePackageState["status"]): string {
 	switch (status) {
 		case "installing":
 			return "Installing";
-		case "loading":
-			return "Loading";
 		default:
 			return "";
 	}
@@ -39,7 +37,7 @@ export function LoadingScreen({ packages, isLoading, onContinue }: Props) {
 								{entry.status === "pending" && (
 									<span className="type-label text-dimmed">Pending</span>
 								)}
-								{(entry.status === "installing" || entry.status === "loading") && (
+								{entry.status === "installing" && (
 									<span className="type-label text-text-secondary">
 										{statusText(entry.status)}
 									</span>
