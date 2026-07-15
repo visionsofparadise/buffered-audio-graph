@@ -27,6 +27,8 @@ class RecordingTransformStream extends BufferedTransformStream {
 	}
 }
 
+class IdentityTransformStream extends BufferedTransformStream {}
+
 describe("BufferedTransformStream block-mode firing", () => {
 	it("block mode fires at exactly blockSize frames, then a trailing short block at end", async () => {
 		const { context } = createTestStreamContext();
@@ -52,7 +54,7 @@ describe("BufferedTransformStream block-mode firing", () => {
 describe("BufferedTransformStream default transform (drain identity)", () => {
 	it("passes buffered audio through unchanged in WHOLE_FILE mode", async () => {
 		const { context } = createTestStreamContext();
-		const stream = new BufferedTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 50 }), context);
+		const stream = new IdentityTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 50 }), context);
 		const input = [createBlock(0.5, 0, 100)];
 
 		const output = await drainBlocks(await stream.setup(readableFrom(input), createTestSetupContext()));
@@ -105,12 +107,12 @@ describe("BufferedTransformStream.blockSize validation", () => {
 	it("throws when blockSize is 0", () => {
 		const { context } = createTestStreamContext();
 
-		expect(() => new BufferedTransformStream(nodeWith({ blockSize: 0 }), context)).toThrow(/blockSize/);
+		expect(() => new IdentityTransformStream(nodeWith({ blockSize: 0 }), context)).toThrow(/blockSize/);
 	});
 
 	it("defaults to WHOLE_FILE when blockSize is absent", () => {
 		const { context } = createTestStreamContext();
-		const stream = new BufferedTransformStream(nodeWith({}), context);
+		const stream = new IdentityTransformStream(nodeWith({}), context);
 
 		expect(stream.blockSize).toBe(WHOLE_FILE);
 	});
@@ -224,7 +226,7 @@ describe("BufferedTransformStream pull-paced serving", () => {
 describe("BufferedTransformStream progress shape", () => {
 	it("emits buffer/emit progress with monotonic framesDone, completions at true totals, createdAt present", async () => {
 		const { context, events } = createTestStreamContext();
-		const stream = new BufferedTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 10 }), context);
+		const stream = new IdentityTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 10 }), context);
 		const progress = collectProgress(events);
 
 		await drainBlocks(await stream.setup(readableFrom([createBlock(0.5, 0, 100)]), createTestSetupContext({ durationFrames: 100 })));

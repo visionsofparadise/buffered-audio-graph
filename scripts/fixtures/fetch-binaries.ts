@@ -165,7 +165,7 @@ async function main(): Promise<void> {
 	}
 
 	if (dryRun) {
-		const names = entries.map((entry) => entry.destFilename).sort((a, b) => a.localeCompare(b));
+		const names = entries.map((entry) => entry.destFilename).sort((left, right) => left.localeCompare(right));
 
 		console.warn(`[fixtures:binaries] dry-run — ${names.length} destination file(s):`);
 		console.warn(names.join("\n"));

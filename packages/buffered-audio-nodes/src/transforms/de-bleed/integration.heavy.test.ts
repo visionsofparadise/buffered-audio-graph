@@ -45,18 +45,6 @@ function encodeWavFloat32(samples: Float32Array, sampleRate: number): Buffer {
 	return buffer;
 }
 
-function rms(signal: Float32Array): number {
-	let sum = 0;
-
-	for (let index = 0; index < signal.length; index++) {
-		const sample = signal[index] ?? 0;
-
-		sum += sample * sample;
-	}
-
-	return Math.sqrt(sum / Math.max(signal.length, 1));
-}
-
 function meanAbs(signal: Float32Array): number {
 	let sum = 0;
 
@@ -118,64 +106,6 @@ function inspectQuality(signal: Float32Array): FrameQualityReport {
 		maxAbs: maxAbs(signal),
 		clippedSamples,
 	};
-}
-
-function frameMaxAbs(signal: Float32Array, frameSize: number): Array<number> {
-	const out: Array<number> = [];
-
-	for (let start = 0; start < signal.length; start += frameSize) {
-		const end = Math.min(start + frameSize, signal.length);
-		let frameMax = 0;
-
-		for (let index = start; index < end; index++) {
-			const value = Math.abs(signal[index] ?? 0);
-
-			if (value > frameMax) frameMax = value;
-		}
-
-		out.push(frameMax);
-	}
-
-	return out;
-}
-
-function spectralCentroidHz(signal: Float32Array, sampleRate: number): number {
-	const windowSize = Math.min(8192, signal.length);
-
-	if (windowSize < 64) return 0;
-
-	const start = Math.floor((signal.length - windowSize) / 2);
-	const window = new Float32Array(windowSize);
-
-	for (let n = 0; n < windowSize; n++) {
-		const w = 0.5 * (1 - Math.cos((2 * Math.PI * n) / (windowSize - 1)));
-
-		window[n] = (signal[start + n] ?? 0) * w;
-	}
-
-	const numBins = windowSize / 2;
-	let weightedSum = 0;
-	let magnitudeSum = 0;
-
-	for (let k = 0; k < numBins; k++) {
-		let real = 0;
-		let imag = 0;
-
-		for (let n = 0; n < windowSize; n++) {
-			const angle = (-2 * Math.PI * k * n) / windowSize;
-
-			real += (window[n] ?? 0) * Math.cos(angle);
-			imag += (window[n] ?? 0) * Math.sin(angle);
-		}
-
-		const magnitude = Math.sqrt(real * real + imag * imag);
-		const frequency = (k * sampleRate) / windowSize;
-
-		weightedSum += frequency * magnitude;
-		magnitudeSum += magnitude;
-	}
-
-	return magnitudeSum > 0 ? weightedSum / magnitudeSum : 0;
 }
 
 interface SyntheticMixOptions {

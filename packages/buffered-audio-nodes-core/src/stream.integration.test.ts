@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { Block } from "./block-buffer";
 import type { BufferedAudioNode } from "./node";
-import { BufferedSourceStream, SourceNode, type SourceMetadata } from "./source";
+import { BufferedSourceStream, SourceNode, type SourceMetadata, type SourceNodeProperties } from "./source";
 import { BufferedTargetStream, TargetNode } from "./target";
 import { createBlock, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "./testing";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
@@ -13,7 +13,11 @@ function fakeNode(nodeName: string, id?: string): BufferedAudioNode {
 	return { id, properties: { id }, constructor: { nodeName } } as unknown as BufferedAudioNode;
 }
 
-class LifeSourceStream extends BufferedSourceStream {
+interface LifeSourceProperties extends SourceNodeProperties {
+	readonly chunks: Array<Block>;
+}
+
+class LifeSourceStream extends BufferedSourceStream<LifeSource> {
 	private index = 0;
 
 	override async getMetadata(): Promise<SourceMetadata> {
@@ -21,7 +25,7 @@ class LifeSourceStream extends BufferedSourceStream {
 	}
 
 	override async _read(): Promise<Block | undefined> {
-		const chunks = this.properties.chunks as Array<Block>;
+		const chunks = this.properties.chunks;
 		const chunk = chunks[this.index];
 
 		if (!chunk) return undefined;
@@ -31,14 +35,14 @@ class LifeSourceStream extends BufferedSourceStream {
 	}
 }
 
-class LifeSource extends SourceNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "life-source";
+class LifeSource extends SourceNode<LifeSourceProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "life-source";
 	static override readonly schema = z.object({});
 	static override readonly Stream = LifeSourceStream;
 
 	constructor(chunks: Array<Block>) {
-		super({ chunks } as never);
+		super({ chunks });
 	}
 }
 
@@ -49,8 +53,8 @@ class LifeTransformStream extends UnbufferedTransformStream {
 }
 
 class LifeTransform extends TransformNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "life-transform";
+	static override readonly packageName = "test";
+	static override readonly nodeName = "life-transform";
 	static override readonly schema = z.object({});
 	static override readonly Stream = LifeTransformStream;
 }
@@ -61,8 +65,8 @@ class LifeTargetStream extends BufferedTargetStream {
 }
 
 class LifeTarget extends TargetNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "life-target";
+	static override readonly packageName = "test";
+	static override readonly nodeName = "life-target";
 	static override readonly schema = z.object({});
 	static override readonly Stream = LifeTargetStream;
 }

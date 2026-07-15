@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import { getFftAddon, detectFftBackend, vkfftDeviceAvailable } from "./fft-backend";
 import { fixtures, requireFixture } from "./test-fixtures";
 

@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import { interleave, deinterleaveBuffer } from "./interleave";
 
 function float32ToBuffer(data: Float32Array): Buffer {

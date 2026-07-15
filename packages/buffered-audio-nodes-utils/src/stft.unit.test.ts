@@ -1,4 +1,5 @@
-import { fft, ifft, stft, istft, hanningWindow, createFftWorkspace } from "./stft";
+import { describe, expect, it } from "vitest";
+import { fft, ifft, stft, istft, hanningWindow } from "./stft";
 
 describe("fft/ifft round-trip", () => {
 	for (const size of [64, 256, 1024]) {

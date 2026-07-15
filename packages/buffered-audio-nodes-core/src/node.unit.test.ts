@@ -3,23 +3,27 @@ import { z } from "zod";
 import { type Composition } from "./node";
 import { SourceNode } from "./source";
 import { TargetNode } from "./target";
-import { TransformNode } from "./transform";
+import { TransformNode, type TransformNodeProperties } from "./transform";
 
 class MockSource extends SourceNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "mock-source";
+	static override readonly packageName = "test";
+	static override readonly nodeName = "mock-source";
 	static override readonly schema = z.object({});
 }
 
-class MockTransform extends TransformNode<{ gain?: number } & Record<string, unknown>> {
-	static readonly packageName = "test";
-	static readonly nodeName = "mock-transform";
+interface MockTransformProperties extends TransformNodeProperties {
+	readonly gain?: number;
+}
+
+class MockTransform extends TransformNode<MockTransformProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "mock-transform";
 	static override readonly schema = z.object({ gain: z.number().default(1) });
 }
 
 class MockTarget extends TargetNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "mock-target";
+	static override readonly packageName = "test";
+	static override readonly nodeName = "mock-target";
 	static override readonly schema = z.object({});
 }
 

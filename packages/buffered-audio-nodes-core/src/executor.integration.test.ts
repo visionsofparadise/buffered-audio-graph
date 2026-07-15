@@ -7,10 +7,10 @@ import type { Block } from "./block-buffer";
 import { createRenderJobs, pack, substituteParameters, unpack, validateGraphDefinition, type GraphDefinition, type NodeRegistry } from "./graph-format";
 import type { BufferedAudioNode } from "./node";
 import { RenderJob } from "./render-job";
-import { BufferedSourceStream, SourceNode, type SourceMetadata } from "./source";
-import { BufferedTargetStream, TargetNode } from "./target";
+import { BufferedSourceStream, SourceNode, type SourceMetadata, type SourceNodeProperties } from "./source";
+import { BufferedTargetStream, TargetNode, type TargetNodeProperties } from "./target";
 import { UnbufferedTransformStream } from "./unbuffered-transform";
-import { TransformNode } from "./transform";
+import { TransformNode, type TransformNodeProperties } from "./transform";
 
 function writePackageFixture(root: string, name: string, version: string): string {
 	const packageDir = join(root, "node_modules", name);
@@ -42,15 +42,20 @@ function createChunk(value: number, offset: number, frames: number): Block {
 	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
 }
 
-class MockSourceStream extends BufferedSourceStream {
+interface MockSourceProperties extends SourceNodeProperties {
+	readonly chunks: Array<Block>;
+	readonly meta: SourceMetadata;
+}
+
+class MockSourceStream extends BufferedSourceStream<MockSource> {
 	private index = 0;
 
 	override async getMetadata(): Promise<SourceMetadata> {
-		return (this.properties.meta as SourceMetadata | undefined) ?? { sampleRate: 44100, channels: 1 };
+		return this.properties.meta;
 	}
 
 	override async _read(): Promise<Block | undefined> {
-		const chunks = (this.properties.chunks as Array<Block> | undefined) ?? [];
+		const chunks = this.properties.chunks;
 		const chunk = chunks[this.index];
 
 		if (!chunk) return undefined;
@@ -60,14 +65,14 @@ class MockSourceStream extends BufferedSourceStream {
 	}
 }
 
-class MockSource extends SourceNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "mock-source";
+class MockSource extends SourceNode<MockSourceProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "mock-source";
 	static override readonly schema = z.object({});
 	static override readonly Stream = MockSourceStream;
 
 	constructor(chunks: Array<Block> = [], meta: SourceMetadata = { sampleRate: 44100, channels: 1 }) {
-		super({ chunks, meta } as never);
+		super({ chunks, meta });
 	}
 }
 
@@ -78,8 +83,8 @@ class MockTransformStream extends UnbufferedTransformStream {
 }
 
 class MockTransform extends TransformNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "mock-transform";
+	static override readonly packageName = "test";
+	static override readonly nodeName = "mock-transform";
 	static override readonly schema = z.object({});
 	static override readonly Stream = MockTransformStream;
 }
@@ -98,8 +103,8 @@ class MockTargetStream extends BufferedTargetStream {
 }
 
 class MockTarget extends TargetNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "mock-target";
+	static override readonly packageName = "test";
+	static override readonly nodeName = "mock-target";
 	static override readonly schema = z.object({});
 	static override readonly Stream = MockTargetStream;
 }
@@ -119,8 +124,8 @@ class FailingTargetStream extends BufferedTargetStream {
 }
 
 class FailingTarget extends TargetNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "failing-target";
+	static override readonly packageName = "test";
+	static override readonly nodeName = "failing-target";
 	static override readonly schema = z.object({});
 	static override readonly Stream = FailingTargetStream;
 }
@@ -369,8 +374,8 @@ describe("apiVersion enforcement", () => {
 
 	it("pack throws naming each offending node when statics disagree", () => {
 		class VersionTwoTarget extends TargetNode {
-			static readonly packageName = "test";
-			static readonly nodeName = "v2-target";
+			static override readonly packageName = "test";
+			static override readonly nodeName = "v2-target";
 			static override readonly apiVersion = 2;
 			static override readonly schema = z.object({});
 			static override readonly Stream = MockTargetStream;
@@ -386,8 +391,8 @@ describe("apiVersion enforcement", () => {
 
 	it("unpack throws when a resolved class's apiVersion differs from the bag's", () => {
 		class VersionTwoSource extends SourceNode {
-			static readonly packageName = "test";
-			static readonly nodeName = "v2-source";
+			static override readonly packageName = "test";
+			static override readonly nodeName = "v2-source";
 			static override readonly apiVersion = 2;
 			static override readonly schema = z.object({});
 			static override readonly Stream = MockSourceStream;
@@ -484,9 +489,14 @@ describe("pack id round-trip", () => {
 
 describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 	it("applies a defaulted field the bag omits, keeps explicit values, and injects the id", () => {
-		class DefaultingTransform extends TransformNode {
-			static readonly packageName = "test";
-			static readonly nodeName = "defaulting-transform";
+		interface DefaultingTransformProperties extends TransformNodeProperties {
+			readonly frameSize: number;
+			readonly smoothing: number;
+		}
+
+		class DefaultingTransform extends TransformNode<DefaultingTransformProperties> {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "defaulting-transform";
 			static override readonly schema = z.object({
 				frameSize: z.number().default(2048),
 				smoothing: z.number().default(100),
@@ -532,15 +542,15 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 
 describe("mixed-version bags — per-node pins", () => {
 	class VersionedSource extends SourceNode {
-		static readonly packageName = "test";
-		static readonly nodeName = "versioned-source";
+		static override readonly packageName = "test";
+		static override readonly nodeName = "versioned-source";
 		static override readonly schema = z.object({});
 		static override readonly Stream = MockSourceStream;
 	}
 
 	class VersionedTarget extends TargetNode {
-		static readonly packageName = "test";
-		static readonly nodeName = "versioned-target";
+		static override readonly packageName = "test";
+		static override readonly nodeName = "versioned-target";
 		static override readonly schema = z.object({});
 		static override readonly Stream = MockTargetStream;
 	}
@@ -667,38 +677,47 @@ describe("substituteParameters", () => {
 	});
 });
 
-class PathSourceStream extends BufferedSourceStream {
+interface PathSourceProperties extends SourceNodeProperties {
+	readonly path: string;
+	done?: boolean;
+}
+
+class PathSourceStream extends BufferedSourceStream<PathSource> {
 	override async getMetadata(): Promise<SourceMetadata> {
 		return { sampleRate: 44100, channels: 1 };
 	}
 
 	override async _read(): Promise<Block | undefined> {
 		if (this.properties.done) return undefined;
-		(this.properties as Record<string, unknown>).done = true;
+		this.properties.done = true;
 
 		return createChunk(1, 0, 10);
 	}
 }
 
-class PathSource extends SourceNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "path-source";
+class PathSource extends SourceNode<PathSourceProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "path-source";
 	static override readonly schema = z.object({ path: z.string() });
 	static override readonly Stream = PathSourceStream;
 }
 
 const capturedPaths: Array<string> = [];
 
-class PathTargetStream extends BufferedTargetStream {
+interface PathTargetProperties extends TargetNodeProperties {
+	readonly path: string;
+}
+
+class PathTargetStream extends BufferedTargetStream<PathTarget> {
 	override async _write(): Promise<void> {}
 	override async _close(): Promise<void> {
-		capturedPaths.push(this.properties.path as string);
+		capturedPaths.push(this.properties.path);
 	}
 }
 
-class PathTarget extends TargetNode {
-	static readonly packageName = "test";
-	static readonly nodeName = "path-target";
+class PathTarget extends TargetNode<PathTargetProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "path-target";
 	static override readonly schema = z.object({ path: z.string() });
 	static override readonly Stream = PathTargetStream;
 }

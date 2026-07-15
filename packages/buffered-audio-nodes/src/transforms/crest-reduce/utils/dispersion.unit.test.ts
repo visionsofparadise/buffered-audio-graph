@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { betaForBand, designDispersionAllpass, poleRadius, schroederTargetToDelay } from "./dispersion";
 import { stepDownToReflection } from "./lattice";
 
-const SAMPLE_RATE = 48_000;
-
 function makeDenseMagnitude(bins: number): Float32Array {
 	// A non-flat magnitude spectrum (energy concentrated low, tapering up).
 	const mag = new Float32Array(bins);

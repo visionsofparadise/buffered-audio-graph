@@ -1,4 +1,5 @@
-import { stft, istft } from "./stft";
+import { describe, expect, it } from "vitest";
+import { stft, istft, type StftResult } from "./stft";
 import type { FftBackend } from "./fft-backend";
 import { getFftAddon, vkfftDeviceAvailable } from "./fft-backend";
 import { fixtures, requireFixture } from "./test-fixtures";
@@ -50,23 +51,16 @@ function getAddonOptions(backend: FftBackend): { vkfftPath?: string; fftwPath?: 
 	return {};
 }
 
-function maxFrameError(jsResult: { real: Array<Float32Array>; imag: Array<Float32Array>; frames: number }, nativeResult: { real: Array<Float32Array>; imag: Array<Float32Array>; frames: number }): number {
+function maxFrameError(jsResult: StftResult, nativeResult: StftResult): number {
 	let maxError = 0;
-	const frames = Math.min(jsResult.frames, nativeResult.frames);
+	const bins = Math.min(jsResult.real.length, nativeResult.real.length, jsResult.imag.length, nativeResult.imag.length);
 
-	for (let f = 0; f < frames; f++) {
-		const jsRe = jsResult.real[f]!;
-		const jsIm = jsResult.imag[f]!;
-		const natRe = nativeResult.real[f]!;
-		const natIm = nativeResult.imag[f]!;
-		const len = Math.min(jsRe.length, natRe.length);
+	for (let index = 0; index < bins; index++) {
+		const realError = Math.abs(jsResult.real[index]! - nativeResult.real[index]!);
+		const imaginaryError = Math.abs(jsResult.imag[index]! - nativeResult.imag[index]!);
 
-		for (let i = 0; i < len; i++) {
-			const reErr = Math.abs(jsRe[i]! - natRe[i]!);
-			const imErr = Math.abs(jsIm[i]! - natIm[i]!);
-			if (reErr > maxError) maxError = reErr;
-			if (imErr > maxError) maxError = imErr;
-		}
+		if (realError > maxError) maxError = realError;
+		if (imaginaryError > maxError) maxError = imaginaryError;
 	}
 
 	return maxError;

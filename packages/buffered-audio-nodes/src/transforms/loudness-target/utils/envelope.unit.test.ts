@@ -6,15 +6,6 @@ import { applyBackwardPassOverChunkBuffer, windowSamplesFromMs } from "./envelop
 
 const SAMPLE_RATE = 48000;
 
-const baseAnchors = (overrides: Partial<Anchors> = {}): Anchors => ({
-	floorDb: null,
-	pivotDb: -30,
-	limitDb: -3,
-	B: 6,
-	peakGainDb: 2,
-	...overrides,
-});
-
 /**
  * Tests for the disk-backed backward-IIR helper introduced in Phase 3
  * of `plan-loudness-target-stream-caching`. The "reverse twice" trick

@@ -8,18 +8,24 @@ import {
 	TransformNode,
 	type Block,
 	type SourceMetadata,
+	type SourceNodeProperties,
 } from "@buffered-audio/core";
 import { chain } from "./chain";
 
-class MockSourceStream extends BufferedSourceStream {
+interface MockSourceProperties extends SourceNodeProperties {
+	readonly chunks: Array<Block>;
+	readonly meta: SourceMetadata;
+}
+
+class MockSourceStream extends BufferedSourceStream<MockSource> {
 	private index = 0;
 
 	override async getMetadata(): Promise<SourceMetadata> {
-		return this.properties.meta as SourceMetadata;
+		return this.properties.meta;
 	}
 
 	override async _read(): Promise<Block | undefined> {
-		const chunks = this.properties.chunks as Array<Block>;
+		const chunks = this.properties.chunks;
 		const chunk = chunks[this.index];
 
 		if (chunk) {
@@ -32,11 +38,11 @@ class MockSourceStream extends BufferedSourceStream {
 	}
 }
 
-class MockSource extends SourceNode {
+class MockSource extends SourceNode<MockSourceProperties> {
 	static override readonly Stream = MockSourceStream;
 
 	constructor(chunks: Array<Block> = [], meta: SourceMetadata = { sampleRate: 44100, channels: 1 }) {
-		super({ chunks, meta } as never);
+		super({ chunks, meta });
 	}
 }
 

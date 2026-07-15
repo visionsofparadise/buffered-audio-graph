@@ -308,7 +308,6 @@ describe("iterateForTargets", () => {
 		// `peakGainDb` within 4 attempts produces a 2-dp-perfect result
 		// on both axes.
 		const source = makeSyntheticSource(0xC0FFEE, 0.1, 0.4);
-		const metrics = measureSourceMetrics(source);
 		const buffer = await makeBufferFromChannels(source);
 
 		const result = await iterateForTargets({
@@ -751,7 +750,6 @@ describe("iterateForTargets", () => {
 			// Force non-convergence so we exercise the fallback path:
 			// tight tolerances + a tight maxAttempts.
 			const source = makeSyntheticSource(0xFACE_F00D, 0.1, 0.4);
-			const metrics = measureSourceMetrics(source);
 			const buffer = await makeBufferFromChannels(source);
 
 			const result = await iterateForTargets({

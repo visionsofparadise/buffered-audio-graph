@@ -18,6 +18,8 @@ export default tseslint.config(
       "**/build/**",
       "**/*.config.js",
       "**/*.config.ts",
+      "agent-eslint.js",
+      "agent-tsc.js",
       "**/vite.config.*",
       "**/tailwind.config.*",
       "**/postcss.config.*",
