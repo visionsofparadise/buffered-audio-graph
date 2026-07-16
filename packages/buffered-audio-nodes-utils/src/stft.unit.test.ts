@@ -1,143 +1,211 @@
 import { describe, expect, it } from "vitest";
-import { fft, ifft, stft, istft, hanningWindow } from "./stft";
+import {
+	bitReverse,
+	butterflyStages,
+	createFftWorkspace,
+	fft,
+	hanningWindow,
+	ifft,
+	istft,
+	stft,
+	type FftWorkspace,
+} from "./stft";
 
-describe("fft/ifft round-trip", () => {
-	for (const size of [64, 256, 1024]) {
-		it(`reconstructs signal of size ${size} within 1e-6`, () => {
-			const signal = new Float32Array(size);
-			for (let i = 0; i < size; i++) {
-				signal[i] = Math.sin(2 * Math.PI * 3 * i / size) + 0.5 * Math.cos(2 * Math.PI * 7 * i / size);
-			}
+interface ComplexResult {
+	readonly real: Float64Array;
+	readonly imag: Float64Array;
+}
 
-			const { re, im } = fft(signal);
-			const reconstructed = ifft(re, im);
+function directTransform(real: ArrayLike<number>, imag: ArrayLike<number>, inverse = false): ComplexResult {
+	const size = real.length;
+	const outputReal = new Float64Array(size);
+	const outputImag = new Float64Array(size);
+	const direction = inverse ? 1 : -1;
+	const scale = inverse ? 1 / size : 1;
 
-			for (let i = 0; i < size; i++) {
-				expect(Math.abs(reconstructed[i]! - signal[i]!)).toBeLessThan(1e-6);
-			}
-		});
+	for (let bin = 0; bin < size; bin++) {
+		let sumReal = 0;
+		let sumImag = 0;
+
+		for (let index = 0; index < size; index++) {
+			const angle = direction * 2 * Math.PI * bin * index / size;
+			const cosine = Math.cos(angle);
+			const sine = Math.sin(angle);
+			const inputReal = real[index] ?? 0;
+			const inputImag = imag[index] ?? 0;
+
+			sumReal += inputReal * cosine - inputImag * sine;
+			sumImag += inputReal * sine + inputImag * cosine;
+		}
+
+		outputReal[bin] = sumReal * scale;
+		outputImag[bin] = sumImag * scale;
 	}
-});
 
-describe("fft known signal", () => {
-	it("pure sine at bin frequency produces a dominant peak", () => {
-		const fftSize = 256;
-		const binIndex = 10;
-		const signal = new Float32Array(fftSize);
+	return { real: outputReal, imag: outputImag };
+}
 
-		for (let i = 0; i < fftSize; i++) {
-			signal[i] = Math.sin(2 * Math.PI * binIndex * i / fftSize);
-		}
+function createSignal(size: number): Float32Array {
+	const signal = new Float32Array(size);
 
-		const { re, im } = fft(signal);
-		const halfSize = fftSize / 2 + 1;
-		const magnitudes = new Float32Array(halfSize);
+	for (let index = 0; index < size; index++) {
+		signal[index] = Math.sin(index * 0.71) + 0.3 * Math.cos(index * 1.19) + index * 0.01;
+	}
 
-		for (let i = 0; i < halfSize; i++) {
-			magnitudes[i] = Math.sqrt(re[i]! * re[i]! + im[i]! * im[i]!);
-		}
+	return signal;
+}
 
-		const peakMagnitude = magnitudes[binIndex]!;
-		expect(peakMagnitude).toBeGreaterThan(fftSize / 4);
+function expectComplexClose(actualReal: ArrayLike<number>, actualImag: ArrayLike<number>, expected: ComplexResult, tolerance: number): void {
+	let maxError = 0;
 
-		for (let i = 0; i < halfSize; i++) {
-			if (i !== binIndex && i !== fftSize - binIndex) {
-				expect(magnitudes[i]!).toBeLessThan(peakMagnitude * 0.01);
-			}
-		}
+	for (let index = 0; index < expected.real.length; index++) {
+		maxError = Math.max(
+			maxError,
+			Math.abs((actualReal[index] ?? 0) - (expected.real[index] ?? 0)),
+			Math.abs((actualImag[index] ?? 0) - (expected.imag[index] ?? 0)),
+		);
+	}
+
+	expect(maxError).toBeLessThan(tolerance);
+}
+
+describe("radix-2 FFT", () => {
+	it.each([1, 2, 4, 8, 16])("matches a direct Float64 DFT for real input of size %i", (size) => {
+		const input = createSignal(size);
+		const expected = directTransform(input, new Float64Array(size));
+		const actual = fft(input);
+
+		expectComplexClose(actual.re, actual.im, expected, 1e-5);
 	});
-});
 
-describe("Parseval's theorem", () => {
-	it("energy is conserved through fft", () => {
-		const size = 256;
-		const signal = new Float32Array(size);
-		for (let i = 0; i < size; i++) {
-			signal[i] = Math.sin(2 * Math.PI * 5 * i / size) + 0.3 * Math.cos(2 * Math.PI * 20 * i / size);
-		}
+	it.each([1, 2, 4, 8, 16])("matches a direct Float64 DFT for complex input of size %i", (size) => {
+		const real = createSignal(size);
+		const imag = new Float32Array(size);
 
-		let timeEnergy = 0;
-		for (let i = 0; i < size; i++) {
-			timeEnergy += signal[i]! * signal[i]!;
-		}
+		for (let index = 0; index < size; index++) imag[index] = Math.cos(index * 0.43) * 0.25;
 
-		const { re, im } = fft(signal);
-		let freqEnergy = 0;
-		for (let i = 0; i < size; i++) {
-			freqEnergy += re[i]! * re[i]! + im[i]! * im[i]!;
-		}
-		freqEnergy /= size;
+		const expected = directTransform(real, imag);
+		const actualReal = Float32Array.from(real);
+		const actualImag = Float32Array.from(imag);
 
-		expect(freqEnergy).toBeCloseTo(timeEnergy, 4);
+		bitReverse(actualReal, actualImag, size);
+		butterflyStages(actualReal, actualImag, size);
+
+		expectComplexClose(actualReal, actualImag, expected, 1e-5);
 	});
-});
 
-describe("stft/istft round-trip", () => {
-	it("reconstructs a multi-component signal within 1e-5 after trimming edges", () => {
-		const sampleRate = 48000;
-		const duration = 0.1;
-		const length = Math.floor(sampleRate * duration);
-		const signal = new Float32Array(length);
+	it.each([1, 2, 4, 8, 16])("matches a direct Float64 inverse for complex spectrum of size %i", (size) => {
+		const real = createSignal(size);
+		const imag = new Float32Array(size);
 
-		for (let i = 0; i < length; i++) {
-			const t = i / sampleRate;
-			signal[i] = Math.sin(2 * Math.PI * 440 * t)
-				+ 0.7 * Math.sin(2 * Math.PI * 1000 * t)
-				+ 0.5 * Math.sin(2 * Math.PI * 2500 * t);
-		}
+		for (let index = 0; index < size; index++) imag[index] = Math.sin(index * 0.53) * 0.4;
 
-		const fftSize = 1024;
-		const hopSize = 256;
-		const result = stft(signal, fftSize, hopSize);
-		const reconstructed = istft(result, hopSize, length);
-
-		const trimStart = fftSize;
-		const trimEnd = length - fftSize;
+		const expected = directTransform(real, imag, true);
+		const actual = ifft(real, imag);
 		let maxError = 0;
 
-		for (let i = trimStart; i < trimEnd; i++) {
-			const error = Math.abs(reconstructed[i]! - signal[i]!);
-			if (error > maxError) maxError = error;
+		for (let index = 0; index < size; index++) {
+			maxError = Math.max(maxError, Math.abs((actual[index] ?? 0) - (expected.real[index] ?? 0)));
 		}
 
 		expect(maxError).toBeLessThan(1e-5);
 	});
 });
 
-describe("hanningWindow", () => {
-	it("has correct length, edges near 0, center near 1, and is symmetric", () => {
-		const size = 256;
-		const window = hanningWindow(size);
+describe("radix-2 validation", () => {
+	it.each([0, -2, 1.5, 3, 6, 2 ** 32 + 1])("rejects invalid declared size %s across declared-size owners", (size) => {
+		const values = new Float32Array(8);
 
-		expect(window).toHaveLength(size);
-		expect(window[0]).toBeCloseTo(0, 4);
-		expect(window[size / 2]!).toBeCloseTo(1, 1);
-
-		for (let i = 1; i < size / 2; i++) {
-			expect(window[i]).toBeCloseTo(window[size - i]!, 6);
-		}
+		expect(() => createFftWorkspace(size)).toThrow("positive power-of-two integer");
+		expect(() => stft(values, size, 1)).toThrow("positive power-of-two integer");
+		expect(() => istft({ real: values, imag: values, frames: 0, fftSize: size }, 1, 0)).toThrow("positive power-of-two integer");
+		expect(() => bitReverse(values, values, size)).toThrow("positive power-of-two integer");
+		expect(() => butterflyStages(values, values, size)).toThrow("positive power-of-two integer");
 	});
 
-	it("returns the same instance for the same size (caching)", () => {
-		const a = hanningWindow(512);
-		const b = hanningWindow(512);
-		expect(a).toBe(b);
+	it("rejects invalid input-derived FFT sizes", () => {
+		expect(() => fft(new Float32Array(0))).toThrow("positive power-of-two integer");
+		expect(() => fft(new Float32Array(3))).toThrow("positive power-of-two integer");
+		expect(() => ifft(new Float32Array(3), new Float32Array(3))).toThrow("positive power-of-two integer");
+	});
+
+	it.each([0, -1, 1.5])("rejects invalid hop size %s", (hopSize) => {
+		const result = { real: new Float32Array(3), imag: new Float32Array(3), frames: 1, fftSize: 4 };
+
+		expect(() => stft(new Float32Array(8), 4, hopSize)).toThrow("positive integer");
+		expect(() => istft(result, hopSize, 4)).toThrow("positive integer");
+	});
+
+	it("rejects mismatched complex arrays before mutation", () => {
+		const real = new Float32Array([1, 2, 3, 4]);
+		const reference = Float32Array.from(real);
+
+		expect(() => ifft(real, new Float32Array(3))).toThrow("lengths must match");
+		expect(() => bitReverse(real, new Float32Array(3), 4)).toThrow("complex-array capacity");
+		expect(() => butterflyStages(real, new Float32Array(3), 4)).toThrow("complex-array capacity");
+		expect(real).toEqual(reference);
+	});
+
+	it("rejects undersized workspaces before mutation", () => {
+		const input = new Float32Array([1, 2, 3, 4]);
+		const workspace: FftWorkspace = {
+			re: new Float32Array(3),
+			im: new Float32Array(4),
+			outRe: new Float32Array(4),
+			outIm: new Float32Array(4),
+		};
+
+		workspace.im.fill(9);
+
+		expect(() => fft(input, workspace)).toThrow("workspace re capacity");
+		expect(workspace.im).toEqual(new Float32Array([9, 9, 9, 9]));
+	});
+
+	it("rejects undersized STFT and ISTFT arrays", () => {
+		const output = { real: new Float32Array(8), imag: new Float32Array(8) };
+		const result = { real: new Float32Array(5), imag: new Float32Array(5), frames: 2, fftSize: 4 };
+
+		expect(() => stft(new Float32Array(8), 4, 2, output)).toThrow("output capacity");
+		expect(() => istft(result, 2, 8)).toThrow("spectrum capacity");
 	});
 });
 
-describe("stft output shape", () => {
-	it("has correct frame count and frame lengths", () => {
-		const signalLength = 4096;
-		const fftSize = 512;
-		const hopSize = 128;
-		const signal = new Float32Array(signalLength);
-		const expectedFrames = Math.floor((signalLength - fftSize) / hopSize) + 1;
-		const halfSize = fftSize / 2 + 1;
+describe("Hann window", () => {
+	it("defines both size-one modes as one", () => {
+		expect(hanningWindow(1, true)).toEqual(new Float32Array([1]));
+		expect(hanningWindow(1, false)).toEqual(new Float32Array([1]));
+	});
 
-		const result = stft(signal, fftSize, hopSize);
+	it.each([0, -1, 1.5])("rejects invalid size %s", (size) => {
+		expect(() => hanningWindow(size)).toThrow("positive integer");
+	});
 
-		expect(result.frames).toBe(expectedFrames);
-		expect(result.real).toHaveLength(expectedFrames * halfSize);
-		expect(result.imag).toHaveLength(expectedFrames * halfSize);
+	it("returns the same cached instance", () => {
+		expect(hanningWindow(512)).toBe(hanningWindow(512));
+	});
+});
+
+describe("STFT and ISTFT", () => {
+	it("produce an exact one-bin size-one transform and reconstruction", () => {
+		const signal = new Float32Array([0.75]);
+		const result = stft(signal, 1, 1);
+
+		expect(result.frames).toBe(1);
+		expect(result.real).toEqual(new Float32Array([0.75]));
+		expect(result.imag).toEqual(new Float32Array([0]));
+		expect(istft(result, 1, 1)).toEqual(signal);
+	});
+
+	it("reconstructs a multi-component signal within 1e-5 away from the edges", () => {
+		const signal = createSignal(4096);
+		const result = stft(signal, 256, 64);
+		const reconstructed = istft(result, 64, signal.length);
+		let maxError = 0;
+
+		for (let index = 256; index < signal.length - 256; index++) {
+			maxError = Math.max(maxError, Math.abs((reconstructed[index] ?? 0) - (signal[index] ?? 0)));
+		}
+
+		expect(maxError).toBeLessThan(1e-5);
 	});
 });

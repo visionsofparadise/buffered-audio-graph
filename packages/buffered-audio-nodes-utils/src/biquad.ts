@@ -25,6 +25,7 @@ export function biquadFilter(samples: Float32Array, fb: [number, number, number]
 }
 
 export function zeroPhaseBiquadFilter(signal: Float32Array, coefficients: BiquadCoefficients): void {
+	// Zero-state forward/backward magnitude-squared filtering; this is not Gustafsson filtfilt.
 	const { fb, fa } = coefficients;
 
 	let x1 = 0,
@@ -60,6 +61,7 @@ export function zeroPhaseBiquadFilter(signal: Float32Array, coefficients: Biquad
 	}
 }
 
+// Low/high-pass coefficient forms follow Robert Bristow-Johnson's Audio EQ Cookbook (W3C copy).
 export function lowPassCoefficients(sampleRate: number, frequency: number, quality: number = Math.SQRT1_2): BiquadCoefficients {
 	const w0 = (2 * Math.PI * frequency) / sampleRate;
 	const cosW0 = Math.cos(w0);

@@ -3,18 +3,7 @@
 import { createFftWorkspace, fft, hanningWindow, ifft, type FftWorkspace } from "./stft";
 import { getFftAddon, type FftBackend } from "./fft-backend";
 
-/**
- * DFT-thresholding (DFTT) post-smoothing of a 2D gain mask. See design-de-bleed.md
- * (2026-04-21 "DFTT batched via addon 2D FFT").
- *
- * @see Lukin, A. & Todd, J. (2007). "Suppression of Musical Noise Artifacts
- *   in Audio Noise Reduction by Adaptive 2D Filtering." 123rd AES Convention,
- *   Paper 7168. PDF: http://imaging.cs.msu.ru/pub/MusicalNoise07.pdf
- * @see Buades, A., Coll, B., Morel, J. (2005). "Image Denoising By Non-Local
- *   Averaging." IEEE ICASSP 2005, vol. 2, pp. 25–28.
- */
-
-// Default values match Lukin & Todd 2007, Section 4.3 exactly.
+// Gain-mask adaptation of Buades, Coll, and Morel, "A Non-Local Algorithm for Image Denoising" (2005), and Lukin and Todd, "Suppression of Musical Noise Artifacts in Audio Noise Reduction by Adaptive 2D Filtering" (2007).
 export interface DfttParams {
 	/** Block size along the frequency axis (32 bins). */
 	readonly blockFreq: number;
@@ -24,8 +13,38 @@ export interface DfttParams {
 	readonly hopFreq: number;
 	/** Hop size along the time axis (4 frames). */
 	readonly hopTime: number;
-	/** Spectral subtraction threshold, same scale as NlmParams.threshold. */
+	/** Wiener noise-floor standard deviation σ in |NLM|² / (|NLM|² + σ²), on the shared user-tuned scale. */
 	readonly threshold: number;
+}
+
+export interface DfttExecutionOptions {
+	readonly maxBatchBytes?: number;
+}
+
+const MAX_DFTT_BATCH_BYTES = 32 * 1024 * 1024;
+
+export function getDfttBatchBlockCount(blockSize: number, complexBlockSize: number, maxBatchBytes: number): number {
+	if (!Number.isSafeInteger(blockSize) || blockSize <= 0 || !Number.isSafeInteger(complexBlockSize) || complexBlockSize <= 0) {
+		throw new Error("DFTT block sizes must be positive integers");
+	}
+
+	if (!Number.isFinite(maxBatchBytes) || maxBatchBytes <= 0 || maxBatchBytes > MAX_DFTT_BATCH_BYTES) {
+		throw new Error(`DFTT maxBatchBytes must be finite and in (0, ${MAX_DFTT_BATCH_BYTES}]`);
+	}
+
+	const bytesPerBlock = Float32Array.BYTES_PER_ELEMENT * (3 * blockSize + 4 * complexBlockSize);
+
+	if (!Number.isSafeInteger(bytesPerBlock)) {
+		throw new Error("DFTT block geometry exceeds the safe integer range");
+	}
+
+	const blockCount = Math.floor(maxBatchBytes / bytesPerBlock);
+
+	if (blockCount < 1) {
+		throw new Error(`One DFTT block requires ${bytesPerBlock} bytes, exceeding the ${maxBatchBytes}-byte batch budget`);
+	}
+
+	return blockCount;
 }
 
 // Packs two real FFTs into one complex FFT via DFT linearity.
@@ -47,20 +66,32 @@ function complexFft(
 	}
 }
 
-/**
- * @param nlmSmoothed     - Output of applyNlmSmoothing — used for SNR estimation.
- * @param rawMask         - Pre-NLM gain mask — subject to analysis and synthesis.
- * @param numFrames       - Number of STFT frames.
- * @param numBins         - Number of frequency bins per frame.
- * @param dfttOptions     - DFTT algorithm parameters (see DfttParams).
- * @param output          - Pre-allocated output array, same shape as rawMask.
- * @param fftBackend      - Backend selected by the pipeline; undefined forces JS.
- * @param fftAddonOptions - Addon paths (same shape the main STFT receives).
- *
- * @see Lukin, A. & Todd, J. (2007). "Suppression of Musical Noise Artifacts
- *   in Audio Noise Reduction by Adaptive 2D Filtering." 123rd AES Convention,
- *   Paper 7168. PDF: http://imaging.cs.msu.ru/pub/MusicalNoise07.pdf
- */
+function complexIfft(
+	inRe: Float32Array,
+	inIm: Float32Array,
+	outRe: Float32Array,
+	outIm: Float32Array,
+	negativeReal: Float32Array,
+	workspaceA: FftWorkspace,
+	workspaceB: FftWorkspace,
+): void {
+	const realResult = ifft(inRe, inIm, workspaceA);
+
+	outRe.set(realResult);
+
+	for (let index = 0; index < inRe.length; index++) negativeReal[index] = -inRe[index]!;
+
+	const imaginaryResult = ifft(inIm, negativeReal, workspaceB);
+
+	outIm.set(imaginaryResult);
+}
+
+function getWienerGain(signalMagnitudeSquared: number, noiseMagnitudeSquared: number): number {
+	if (noiseMagnitudeSquared === 0) return signalMagnitudeSquared === 0 ? 0 : 1;
+
+	return signalMagnitudeSquared / (signalMagnitudeSquared + noiseMagnitudeSquared);
+}
+
 export interface DfttProfileMs {
 	fill: number;
 	forward: number;
@@ -80,10 +111,53 @@ export function applyDfttSmoothing(
 	fftBackend: FftBackend | undefined,
 	fftAddonOptions: { vkfftPath?: string; fftwPath?: string } | undefined,
 	profileMs?: DfttProfileMs,
+	executionOptions?: DfttExecutionOptions,
 ): void {
+	const { blockFreq, blockTime, hopFreq, hopTime, threshold } = dfttOptions;
+	const maskLength = numFrames * numBins;
+
+	assertPositiveSafeInteger(numFrames, "DFTT numFrames");
+	assertPositiveSafeInteger(numBins, "DFTT numBins");
+
+	if (!Number.isSafeInteger(maskLength)) {
+		throw new Error("DFTT mask dimensions exceed the safe integer range");
+	}
+
+	if (nlmSmoothed.length !== maskLength || rawMask.length !== maskLength || output.length !== maskLength) {
+		throw new Error(`DFTT input and output lengths must equal ${maskLength}`);
+	}
+
+	assertPowerOfTwo(blockFreq, "DFTT blockFreq");
+	assertPowerOfTwo(blockTime, "DFTT blockTime");
+	assertPositiveSafeInteger(hopFreq, "DFTT hopFreq");
+	assertPositiveSafeInteger(hopTime, "DFTT hopTime");
+
+	if (hopFreq > blockFreq || hopTime > blockTime) {
+		throw new Error("DFTT hops must be no larger than their block dimensions");
+	}
+
+	if (!Number.isFinite(threshold) || threshold < 0) {
+		throw new Error(`DFTT threshold must be finite and nonnegative, got ${threshold}`);
+	}
+
+	const blockSize = blockTime * blockFreq;
+	const complexBlockSize = blockTime * (Math.floor(blockFreq / 2) + 1);
+	const maxBatchBytes = executionOptions?.maxBatchBytes ?? MAX_DFTT_BATCH_BYTES;
+	const batchBlockCapacity = getDfttBatchBlockCount(blockSize, complexBlockSize, maxBatchBytes);
+
+	if (threshold === 0) {
+		output.set(rawMask);
+
+		return;
+	}
+
+	if (typedArraysOverlap(output, rawMask) || typedArraysOverlap(output, nlmSmoothed)) {
+		throw new Error("DFTT output must not overlap either input for non-bypass processing");
+	}
+
 	const addon = fftBackend ? getFftAddon(fftBackend, fftAddonOptions) : null;
 
-	if (!addon || typeof addon.batchFft2D !== "function") {
+	if (!addon || typeof addon.batchFft2D !== "function" || typeof addon.batchIfft2D !== "function") {
 		applyDfttSmoothingJs(nlmSmoothed, rawMask, numFrames, numBins, dfttOptions, output);
 
 		return;
@@ -99,11 +173,9 @@ export function applyDfttSmoothing(
 		profileMark = now;
 	};
 
-	const { blockFreq, blockTime, hopFreq, hopTime, threshold } = dfttOptions;
-
 	const winFreq = hanningWindow(blockFreq, false);
 	const winTime = hanningWindow(blockTime, false);
-	const win2d = new Float32Array(blockTime * blockFreq);
+	const win2d = new Float32Array(blockSize);
 
 	for (let tf = 0; tf < blockTime; tf++) {
 		for (let bf = 0; bf < blockFreq; bf++) {
@@ -115,115 +187,109 @@ export function applyDfttSmoothing(
 	const blocksPerFrame = Math.ceil(numFrames / hopTime);
 	const blocksPerBin = Math.ceil(numBins / hopFreq);
 	const totalBlocks = blocksPerFrame * blocksPerBin;
-	const blockSize = blockTime * blockFreq;
-	const complexBinsPerRow = blockFreq / 2 + 1;
-	const complexBlockSize = blockTime * complexBinsPerRow;
-
-	// Block-major batched input buffers; inside each block row-major with
-	// blockTime (rows) outer and blockFreq (cols) inner — matches the addon's
-	// batchFft2D(input, rows=blockTime, cols=blockFreq, batchCount) layout.
-	const rawBatch = new Float32Array(totalBlocks * blockSize);
-	const nlmBatch = new Float32Array(totalBlocks * blockSize);
-
-	for (let frameIdx = 0; frameIdx < blocksPerFrame; frameIdx++) {
-		const frameStart = frameIdx * hopTime;
-
-		for (let binIdx = 0; binIdx < blocksPerBin; binIdx++) {
-			const binStart = binIdx * hopFreq;
-			const blockIdx = frameIdx * blocksPerBin + binIdx;
-			const blockOffset = blockIdx * blockSize;
-
-			for (let tf = 0; tf < blockTime; tf++) {
-				const srcFrame = frameStart + tf < numFrames ? frameStart + tf : numFrames - 1;
-
-				for (let bf = 0; bf < blockFreq; bf++) {
-					const srcBin = binStart + bf < numBins ? binStart + bf : numBins - 1;
-					const winVal = win2d[tf * blockFreq + bf]!;
-					const srcPos = srcFrame * numBins + srcBin;
-					const dstPos = blockOffset + tf * blockFreq + bf;
-
-					rawBatch[dstPos] = rawMask[srcPos]! * winVal;
-					nlmBatch[dstPos] = nlmSmoothed[srcPos]! * winVal;
-				}
-			}
-		}
-	}
-
-	profileAdd("fill");
-
-	const rawFft = addon.batchFft2D(rawBatch, blockTime, blockFreq, totalBlocks);
-	const nlmFft = addon.batchFft2D(nlmBatch, blockTime, blockFreq, totalBlocks);
-
-	profileAdd("forward");
-
 	const sigmaSq = threshold * threshold;
-	const totalComplex = totalBlocks * complexBlockSize;
-	const rawRe = rawFft.re;
-	const rawIm = rawFft.im;
-	const nlmRe = nlmFft.re;
-	const nlmIm = nlmFft.im;
+	const windowSumSq = new Float32Array(maskLength);
 
-	for (let flatIdx = 0; flatIdx < totalComplex; flatIdx++) {
-		const nRe = nlmRe[flatIdx]!;
-		const nIm = nlmIm[flatIdx]!;
-		const nMagSq = nRe * nRe + nIm * nIm;
-		const gain = nMagSq / (nMagSq + sigmaSq);
+	output.fill(0);
 
-		rawRe[flatIdx] = rawRe[flatIdx]! * gain;
-		rawIm[flatIdx] = rawIm[flatIdx]! * gain;
-	}
+	for (let firstGlobalBlock = 0; firstGlobalBlock < totalBlocks; firstGlobalBlock += batchBlockCapacity) {
+		const batchCount = Math.min(batchBlockCapacity, totalBlocks - firstGlobalBlock);
+		const rawBatch = new Float32Array(batchCount * blockSize);
+		const nlmBatch = new Float32Array(batchCount * blockSize);
 
-	profileAdd("gain");
-
-	const synth = addon.batchIfft2D(rawRe, rawIm, blockTime, blockFreq, totalBlocks);
-
-	profileAdd("inverse");
-
-	// win2d applied again at OLA time → effective window is analysis·synthesis = win².
-	const accumulator = new Float32Array(numFrames * numBins);
-	const windowSumSq = new Float32Array(numFrames * numBins);
-
-	for (let frameIdx = 0; frameIdx < blocksPerFrame; frameIdx++) {
-		const frameStart = frameIdx * hopTime;
-
-		for (let binIdx = 0; binIdx < blocksPerBin; binIdx++) {
-			const binStart = binIdx * hopFreq;
-			const blockIdx = frameIdx * blocksPerBin + binIdx;
-			const blockOffset = blockIdx * blockSize;
+		for (let localBlock = 0; localBlock < batchCount; localBlock++) {
+			const globalBlock = firstGlobalBlock + localBlock;
+			const frameIndex = Math.floor(globalBlock / blocksPerBin);
+			const binIndex = globalBlock % blocksPerBin;
+			const frameStart = frameIndex * hopTime;
+			const binStart = binIndex * hopFreq;
+			const blockOffset = localBlock * blockSize;
 
 			for (let tf = 0; tf < blockTime; tf++) {
-				const destFrame = frameStart + tf;
-
-				if (destFrame >= numFrames) break;
+				const srcFrame = Math.min(frameStart + tf, numFrames - 1);
 
 				for (let bf = 0; bf < blockFreq; bf++) {
-					const destBin = binStart + bf;
+					const srcBin = Math.min(binStart + bf, numBins - 1);
+					const windowValue = win2d[tf * blockFreq + bf]!;
+					const sourcePosition = srcFrame * numBins + srcBin;
+					const batchPosition = blockOffset + tf * blockFreq + bf;
 
-					if (destBin >= numBins) break;
-
-					const winVal = win2d[tf * blockFreq + bf]!;
-					const destPos = destFrame * numBins + destBin;
-					const srcVal = synth[blockOffset + tf * blockFreq + bf]!;
-
-					accumulator[destPos] = accumulator[destPos]! + srcVal * winVal;
-					windowSumSq[destPos] = windowSumSq[destPos]! + winVal * winVal;
+					rawBatch[batchPosition] = rawMask[sourcePosition]! * windowValue;
+					nlmBatch[batchPosition] = nlmSmoothed[sourcePosition]! * windowValue;
 				}
 			}
 		}
-	}
 
-	profileAdd("ola");
+		profileAdd("fill");
+
+		const rawFft = addon.batchFft2D(rawBatch, blockTime, blockFreq, batchCount);
+		const nlmFft = addon.batchFft2D(nlmBatch, blockTime, blockFreq, batchCount);
+		const batchComplexLength = batchCount * complexBlockSize;
+
+		assertArrayLength(rawFft.re, batchComplexLength, "DFTT addon raw real output");
+		assertArrayLength(rawFft.im, batchComplexLength, "DFTT addon raw imaginary output");
+		assertArrayLength(nlmFft.re, batchComplexLength, "DFTT addon NLM real output");
+		assertArrayLength(nlmFft.im, batchComplexLength, "DFTT addon NLM imaginary output");
+		profileAdd("forward");
+
+		for (let flatIndex = 0; flatIndex < batchComplexLength; flatIndex++) {
+			const nlmReal = nlmFft.re[flatIndex]!;
+			const nlmImaginary = nlmFft.im[flatIndex]!;
+			const nlmMagnitudeSquared = nlmReal * nlmReal + nlmImaginary * nlmImaginary;
+			const gain = getWienerGain(nlmMagnitudeSquared, sigmaSq);
+
+			rawFft.re[flatIndex] = rawFft.re[flatIndex]! * gain;
+			rawFft.im[flatIndex] = rawFft.im[flatIndex]! * gain;
+		}
+
+		profileAdd("gain");
+
+		const synth = addon.batchIfft2D(rawFft.re, rawFft.im, blockTime, blockFreq, batchCount);
+
+		assertArrayLength(synth, batchCount * blockSize, "DFTT addon inverse output");
+		profileAdd("inverse");
+
+		for (let localBlock = 0; localBlock < batchCount; localBlock++) {
+			const globalBlock = firstGlobalBlock + localBlock;
+			const frameIndex = Math.floor(globalBlock / blocksPerBin);
+			const binIndex = globalBlock % blocksPerBin;
+			const frameStart = frameIndex * hopTime;
+			const binStart = binIndex * hopFreq;
+			const blockOffset = localBlock * blockSize;
+
+			for (let tf = 0; tf < blockTime; tf++) {
+				const destinationFrame = frameStart + tf;
+
+				if (destinationFrame >= numFrames) break;
+
+				for (let bf = 0; bf < blockFreq; bf++) {
+					const destinationBin = binStart + bf;
+
+					if (destinationBin >= numBins) break;
+
+					const windowValue = win2d[tf * blockFreq + bf]!;
+					const destinationPosition = destinationFrame * numBins + destinationBin;
+					const sourceValue = synth[blockOffset + tf * blockFreq + bf]!;
+
+					output[destinationPosition] = output[destinationPosition]! + sourceValue * windowValue;
+					windowSumSq[destinationPosition] = windowSumSq[destinationPosition]! + windowValue * windowValue;
+				}
+			}
+		}
+
+		profileAdd("ola");
+	}
 
 	// Clamp to [0,1] — output is a gain mask.
-	for (let flatIdx = 0; flatIdx < numFrames * numBins; flatIdx++) {
-		const ws = windowSumSq[flatIdx]!;
+	for (let flatIndex = 0; flatIndex < maskLength; flatIndex++) {
+		const windowWeight = windowSumSq[flatIndex]!;
 
-		if (ws > 1e-8) {
-			const normalisedVal = accumulator[flatIdx]! / ws;
+		if (windowWeight > 1e-8) {
+			const normalizedValue = output[flatIndex]! / windowWeight;
 
-			output[flatIdx] = normalisedVal < 0 ? 0 : normalisedVal > 1 ? 1 : normalisedVal;
+			output[flatIndex] = normalizedValue < 0 ? 0 : normalizedValue > 1 ? 1 : normalizedValue;
 		} else {
-			output[flatIdx] = rawMask[flatIdx]!;
+			output[flatIndex] = rawMask[flatIndex]!;
 		}
 	}
 
@@ -251,8 +317,9 @@ function applyDfttSmoothingJs(
 		}
 	}
 
-	const accumulator = new Float32Array(numFrames * numBins);
 	const windowSumSq = new Float32Array(numFrames * numBins);
+
+	output.fill(0);
 
 	const blockRaw = new Float32Array(blockTime * blockFreq);
 	const blockNlm = new Float32Array(blockTime * blockFreq);
@@ -281,6 +348,7 @@ function applyDfttSmoothingJs(
 	const scratchIm = new Float32Array(blockTime);
 	const scratchOutRe = new Float32Array(blockTime);
 	const scratchOutIm = new Float32Array(blockTime);
+	const scratchNegativeReal = new Float32Array(blockTime);
 
 	const rowScratch = new Float32Array(blockFreq);
 	const rowScratchRe = new Float32Array(blockFreq);
@@ -293,7 +361,8 @@ function applyDfttSmoothingJs(
 	const rowFwdWorkspace = createFftWorkspace(blockFreq);
 	const colFwdWorkspaceA = createFftWorkspace(blockTime);
 	const colFwdWorkspaceB = createFftWorkspace(blockTime);
-	const colInvWorkspace = createFftWorkspace(blockTime);
+	const colInvWorkspaceA = createFftWorkspace(blockTime);
+	const colInvWorkspaceB = createFftWorkspace(blockTime);
 	const rowInvWorkspace = createFftWorkspace(blockFreq);
 
 	for (let frameStart = 0; frameStart < numFrames; frameStart += hopTime) {
@@ -388,7 +457,7 @@ function applyDfttSmoothingJs(
 					const nlmRe = nlmColRe[flatIdx]!;
 					const nlmIm = nlmColIm[flatIdx]!;
 					const nlmMagSq = nlmRe * nlmRe + nlmIm * nlmIm;
-					const gain = nlmMagSq / (nlmMagSq + sigmaSq);
+					const gain = getWienerGain(nlmMagSq, sigmaSq);
 
 					gainColRe[flatIdx] = rawColRe[flatIdx]! * gain;
 					gainColIm[flatIdx] = rawColIm[flatIdx]! * gain;
@@ -401,17 +470,26 @@ function applyDfttSmoothingJs(
 					scratchIm[tf] = gainColIm[bf * blockTime + tf]!;
 				}
 
-				const icolResult = ifft(scratchRe, scratchIm, colInvWorkspace);
+				complexIfft(
+					scratchRe,
+					scratchIm,
+					scratchOutRe,
+					scratchOutIm,
+					scratchNegativeReal,
+					colInvWorkspaceA,
+					colInvWorkspaceB,
+				);
 
 				for (let tf = 0; tf < blockTime; tf++) {
-					colInRe[bf * blockTime + tf] = icolResult[tf]!;
+					colInRe[bf * blockTime + tf] = scratchOutRe[tf]!;
+					colInIm[bf * blockTime + tf] = scratchOutIm[tf]!;
 				}
 			}
 
 			for (let tf = 0; tf < blockTime; tf++) {
 				for (let bf = 0; bf < blockFreq; bf++) {
 					rowScratchRe[bf] = colInRe[bf * blockTime + tf]!;
-					rowScratchIm[bf] = 0;
+					rowScratchIm[bf] = colInIm[bf * blockTime + tf]!;
 				}
 
 				const irowResult = ifft(rowScratchRe, rowScratchIm, rowInvWorkspace);
@@ -434,7 +512,7 @@ function applyDfttSmoothingJs(
 					const winVal = win2d[tf * blockFreq + bf]!;
 					const destPos = destFrame * numBins + destBin;
 
-					accumulator[destPos] = accumulator[destPos]! + synthBlock[tf * blockFreq + bf]! * winVal;
+					output[destPos] = output[destPos]! + synthBlock[tf * blockFreq + bf]! * winVal;
 					windowSumSq[destPos] = windowSumSq[destPos]! + winVal * winVal;
 				}
 			}
@@ -446,11 +524,40 @@ function applyDfttSmoothingJs(
 		const ws = windowSumSq[flatIdx]!;
 
 		if (ws > 1e-8) {
-			const normalisedVal = accumulator[flatIdx]! / ws;
+			const normalisedVal = output[flatIdx]! / ws;
 
 			output[flatIdx] = normalisedVal < 0 ? 0 : normalisedVal > 1 ? 1 : normalisedVal;
 		} else {
 			output[flatIdx] = rawMask[flatIdx]!;
 		}
+	}
+}
+
+function assertPositiveSafeInteger(value: number, name: string): void {
+	if (!Number.isSafeInteger(value) || value <= 0) {
+		throw new Error(`${name} must be a positive integer, got ${value}`);
+	}
+}
+
+function assertPowerOfTwo(value: number, name: string): void {
+	assertPositiveSafeInteger(value, name);
+
+	if (!Number.isInteger(Math.log2(value))) {
+		throw new Error(`${name} must be a power of two, got ${value}`);
+	}
+}
+
+function typedArraysOverlap(left: Float32Array, right: Float32Array): boolean {
+	if (left.buffer !== right.buffer) return false;
+
+	const leftEnd = left.byteOffset + left.byteLength;
+	const rightEnd = right.byteOffset + right.byteLength;
+
+	return left.byteOffset < rightEnd && right.byteOffset < leftEnd;
+}
+
+function assertArrayLength(values: Float32Array, expectedLength: number, name: string): void {
+	if (values.length !== expectedLength) {
+		throw new Error(`${name} length must equal ${expectedLength}, got ${values.length}`);
 	}
 }

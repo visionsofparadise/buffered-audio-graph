@@ -1,17 +1,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight DSP loop with bounds-checked typed array access */
 
-/**
- * Patch size, search range, and paste block size are the exact values reported
- * by iZotope's principal DSP engineer (Lukin & Todd 2007).
- *
- * @see Lukin, A. & Todd, J. (2007). "Suppression of Musical Noise Artifacts
- *   in Audio Noise Reduction by Adaptive 2D Filtering." 123rd AES Convention,
- *   Paper 7168. PDF: http://imaging.cs.msu.ru/pub/MusicalNoise07.pdf
- * @see Buades, A., Coll, B., Morel, J. (2005). "Image Denoising By Non-Local
- *   Averaging." IEEE ICASSP 2005, vol. 2, pp. 25–28.
- */
+// Gain-mask adaptation of Buades, Coll, and Morel, "A Non-Local Algorithm for Image Denoising" (2005), and Lukin and Todd, "Suppression of Musical Noise Artifacts in Audio Noise Reduction by Adaptive 2D Filtering" (2007).
 
-// Default values match Lukin & Todd 2007, Section 4.3 exactly.
 export interface NlmParams {
 	/** Patch size for similarity comparison (8). */
 	readonly patchSize: number;
@@ -21,25 +11,12 @@ export interface NlmParams {
 	readonly searchTimePre: number;
 	/** Search range into the future along the time axis, in frames (4). */
 	readonly searchTimePost: number;
-	/** Paste block size — one weight is computed per pasteBlockSize×pasteBlockSize region (4). */
+	/** Paste block size; the paper uses 4x4 and de-bleed uses a measured 8x8 adaptation. */
 	readonly pasteBlockSize: number;
 	/** Smoothing threshold h in W = exp(-||v - v'||² / h²). Scaled from user artifactSmoothing. */
 	readonly threshold: number;
 }
 
-/**
- * @param mask      - Input gain mask, numFrames × numBins, flat row-major (frame-major).
- * @param numFrames - Number of STFT frames.
- * @param numBins   - Number of frequency bins per frame.
- * @param nlmOptions - NLM algorithm parameters (see NlmParams).
- * @param output     - Pre-allocated output array, same shape as mask.
- *
- * @see Lukin, A. & Todd, J. (2007). "Suppression of Musical Noise Artifacts
- *   in Audio Noise Reduction by Adaptive 2D Filtering." 123rd AES Convention,
- *   Paper 7168. PDF: http://imaging.cs.msu.ru/pub/MusicalNoise07.pdf
- * @see Buades, A., Coll, B., Morel, J. (2005). "Image Denoising By Non-Local
- *   Averaging." IEEE ICASSP 2005, vol. 2, pp. 25–28.
- */
 export function applyNlmSmoothing(
 	mask: Float32Array,
 	numFrames: number,
@@ -50,14 +27,7 @@ export function applyNlmSmoothing(
 	applyNlmSmoothingRange(mask, numFrames, numBins, nlmOptions, output, 0, numFrames);
 }
 
-/**
- * Range-parameterized form of {@link applyNlmSmoothing}: processes only the paste
- * blocks whose `blockFrame` falls in `[blockFrameStart, blockFrameEnd)`. Both bounds
- * are multiples of `pasteBlockSize` (except `blockFrameEnd` may equal `numFrames`).
- * Reads the whole immutable `mask` and writes only the output rows it owns, so
- * disjoint ranges can run concurrently over shared buffers. The per-block body is
- * identical to the full-pass loop.
- */
+// Writes only its aligned block-frame range, so disjoint ranges can share the input and output buffers.
 export function applyNlmSmoothingRange(
 	mask: Float32Array,
 	numFrames: number,
@@ -68,6 +38,60 @@ export function applyNlmSmoothingRange(
 	blockFrameEnd: number,
 ): void {
 	const { patchSize, searchFreqRadius, searchTimePre, searchTimePost, pasteBlockSize, threshold } = nlmOptions;
+	const maskLength = numFrames * numBins;
+
+	assertNonnegativeSafeInteger(numFrames, "NLM numFrames");
+	assertNonnegativeSafeInteger(numBins, "NLM numBins");
+
+	if (!Number.isSafeInteger(maskLength)) {
+		throw new Error("NLM mask dimensions exceed the safe integer range");
+	}
+
+	if (mask.length !== maskLength || output.length !== maskLength) {
+		throw new Error(`NLM mask and output lengths must equal ${maskLength}`);
+	}
+
+	if (!Number.isSafeInteger(patchSize) || patchSize <= 0 || patchSize % 2 !== 0) {
+		throw new Error(`NLM patchSize must be a positive even integer, got ${patchSize}`);
+	}
+
+	assertNonnegativeSafeInteger(searchFreqRadius, "NLM searchFreqRadius");
+	assertNonnegativeSafeInteger(searchTimePre, "NLM searchTimePre");
+	assertNonnegativeSafeInteger(searchTimePost, "NLM searchTimePost");
+
+	if (!Number.isSafeInteger(pasteBlockSize) || pasteBlockSize <= 0) {
+		throw new Error(`NLM pasteBlockSize must be a positive integer, got ${pasteBlockSize}`);
+	}
+
+	if (!Number.isFinite(threshold) || threshold < 0) {
+		throw new Error(`NLM threshold must be finite and nonnegative, got ${threshold}`);
+	}
+
+	assertNonnegativeSafeInteger(blockFrameStart, "NLM blockFrameStart");
+	assertNonnegativeSafeInteger(blockFrameEnd, "NLM blockFrameEnd");
+
+	if (
+		blockFrameStart > blockFrameEnd ||
+		blockFrameEnd > numFrames ||
+		blockFrameStart % pasteBlockSize !== 0 ||
+		(blockFrameEnd !== numFrames && blockFrameEnd % pasteBlockSize !== 0)
+	) {
+		throw new Error("NLM frame range must be ordered, in bounds, and aligned to pasteBlockSize");
+	}
+
+	if (threshold === 0) {
+		if (blockFrameStart === 0 && blockFrameEnd === numFrames) {
+			output.set(mask);
+		} else {
+			const outputStart = blockFrameStart * numBins;
+			const outputEnd = blockFrameEnd * numBins;
+
+			output.set(mask.subarray(outputStart, outputEnd), outputStart);
+		}
+
+		return;
+	}
+
 	const hSq = threshold * threshold;
 	const halfPatch = Math.floor(patchSize / 2);
 
@@ -120,7 +144,10 @@ export function applyNlmSmoothingRange(
 				}
 			}
 
-			const smoothed = weightSum > 0 ? valueSum / weightSum : mask[centreFrame * numBins + centreBin]!;
+			const clampedCentreFrame = Math.min(centreFrame, numFrames - 1);
+			const clampedCentreBin = Math.min(centreBin, numBins - 1);
+			const smoothed = weightSum > 0 ? valueSum / weightSum : mask[clampedCentreFrame * numBins + clampedCentreBin]!;
+			const clampedSmoothed = smoothed < 0 ? 0 : smoothed > 1 ? 1 : smoothed;
 
 			for (let pf = 0; pf < pasteBlockSize; pf++) {
 				const outFrame = blockFrame + pf;
@@ -132,9 +159,15 @@ export function applyNlmSmoothingRange(
 
 					if (outBin >= numBins) break;
 
-					output[outFrame * numBins + outBin] = smoothed;
+					output[outFrame * numBins + outBin] = clampedSmoothed;
 				}
 			}
 		}
+	}
+}
+
+function assertNonnegativeSafeInteger(value: number, name: string): void {
+	if (!Number.isSafeInteger(value) || value < 0) {
+		throw new Error(`${name} must be a nonnegative integer, got ${value}`);
 	}
 }

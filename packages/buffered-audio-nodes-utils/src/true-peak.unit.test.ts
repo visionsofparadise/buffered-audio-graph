@@ -5,8 +5,8 @@ function generateSine(frequency: number, amplitude: number, sampleRate: number, 
 	const length = Math.floor(sampleRate * durationSeconds);
 	const buffer = new Float32Array(length);
 
-	for (let i = 0; i < length; i++) {
-		buffer[i] = amplitude * Math.sin((2 * Math.PI * frequency * i) / sampleRate);
+	for (let index = 0; index < length; index++) {
+		buffer[index] = amplitude * Math.sin((2 * Math.PI * frequency * index) / sampleRate);
 	}
 
 	return buffer;
@@ -21,98 +21,72 @@ function measure(channels: ReadonlyArray<Float32Array>, sampleRate: number): num
 }
 
 describe("TruePeakAccumulator", () => {
-	// DC has no intersample structure, so upsampled max should match the input amplitude (within filter-startup transient); catches a bug that would scale/invert the input.
-	it("DC at 0.5 returns true peak ≈ 0.5 (no intersample lift)", () => {
-		const sampleRate = 48000;
-		const length = sampleRate; // 1 s
-		const dc = new Float32Array(length);
+	it("includes the raw sample peak when every FIR phase is below it", () => {
+		const impulse = new Float32Array([1]);
 
-		for (let i = 0; i < length; i++) dc[i] = 0.5;
-
-		const result = measure([dc], sampleRate);
-
-		// Modest tolerance for filter ramp-up at the leading edge.
-		expect(result).toBeGreaterThan(0.4);
-		expect(result).toBeLessThan(0.6);
+		expect(measure([impulse], 48000)).toBe(1);
 	});
 
-	// A 1 kHz sine at 0 dBFS sample peak should yield upsampled true peak ≥ 1.0; tests SHAPE (≥ sample peak) not the precise value (depends on AA filter design).
-	it("0 dBFS sine: true peak is at least the sample peak", () => {
-		const sampleRate = 48000;
-		// 997 Hz at 48 kHz has non-integer samples-per-cycle, exposing intersample peak lift; amplitude 1.0 = 0 dBFS sample peak.
-		const sine = generateSine(997, 1.0, sampleRate, 1);
-		const result = measure([sine], sampleRate);
+	it("includes a maximum that occurs only in the flushed FIR tail", () => {
+		const input = new Float32Array([
+			-0.08388812094926834,
+			0.6030386090278625,
+			-0.7042242288589478,
+		]);
 
-		expect(result).toBeGreaterThanOrEqual(1.0 - 1e-3);
+		expect(Math.abs(measure([input], 48000) - 0.7503057227)).toBeLessThan(1e-6);
 	});
 
-	it("silence returns 0", () => {
-		const sampleRate = 48000;
-		const silence = new Float32Array(sampleRate);
-		const result = measure([silence], sampleRate);
+	it("measures a steady 997 Hz sine at or above its sample peak", () => {
+		const sine = generateSine(997, 1, 48000, 1);
 
-		expect(result).toBe(0);
+		expect(measure([sine], 48000)).toBeGreaterThanOrEqual(1 - 1e-3);
 	});
 
-	// Multi-channel true peak is a single max across ALL channels; per-channel tracking returning channel 0 would give 0.3 not 0.7.
-	it("multi-channel max is single value across channels", () => {
-		const sampleRate = 48000;
-		const length = sampleRate;
-		const left = new Float32Array(length);
-		const right = new Float32Array(length);
+	it("takes one maximum across all channels", () => {
+		const left = new Float32Array(1000).fill(0.3);
+		const right = new Float32Array(1000).fill(0.7);
 
-		for (let i = 0; i < length; i++) {
-			left[i] = 0.3;
-			right[i] = 0.7;
-		}
+		const result = measure([left, right], 48000);
 
-		const result = measure([left, right], sampleRate);
-
-		expect(result).toBeGreaterThan(0.6);
+		expect(result).toBeGreaterThanOrEqual(0.7);
 		expect(result).toBeLessThan(0.8);
 	});
 
-	// Streaming-equivalence catches biquad-state drift across push() boundaries.
-	it("chunked input matches whole-buffer input", () => {
-		const sampleRate = 48000;
-		const sine = generateSine(997, 0.8, sampleRate, 1);
-		const oneShot = measure([sine], sampleRate);
+	it("arbitrary input chunks match a whole-buffer measurement", () => {
+		const input = generateSine(997, 0.8, 48000, 1);
+		const whole = measure([input], 48000);
+		const chunked = new TruePeakAccumulator(48000, 1);
+		let offset = 0;
 
-		const chunked = new TruePeakAccumulator(sampleRate, 1);
-		const chunkFrames = 4096;
-
-		for (let offset = 0; offset < sine.length; offset += chunkFrames) {
-			const frames = Math.min(chunkFrames, sine.length - offset);
-			const slice = sine.subarray(offset, offset + frames);
-
-			chunked.push([slice], frames);
+		for (const end of [1, 19, 4096, 11003, 32001, input.length]) {
+			chunked.push([input.subarray(offset, end)], end - offset);
+			offset = end;
 		}
 
-		const streamed = chunked.finalize();
-
-		expect(Math.abs(streamed - oneShot)).toBeLessThan(1e-6);
+		expect(Math.abs(chunked.finalize() - whole)).toBeLessThan(1e-6);
 	});
 
-	it("re-finalize is idempotent: second call returns the same value", () => {
-		const sampleRate = 48000;
-		const sine = generateSine(997, 0.8, sampleRate, 1);
-		const accumulator = new TruePeakAccumulator(sampleRate, 1);
-
-		accumulator.push([sine], sine.length);
-
-		const first = accumulator.finalize();
-		const second = accumulator.finalize();
-
-		expect(second).toBe(first);
-	});
-
-	it("empty input (no push) returns 0", () => {
+	it("finalize is idempotent and rejects every later push", () => {
 		const accumulator = new TruePeakAccumulator(48000, 1);
 
-		expect(accumulator.finalize()).toBe(0);
+		accumulator.push([new Float32Array([0.5])], 1);
+
+		const first = accumulator.finalize();
+
+		expect(accumulator.finalize()).toBe(first);
+		expect(() => accumulator.push([new Float32Array([0.25])], 1)).toThrow("push after finalize");
+		expect(() => accumulator.push([new Float32Array(0)], 0)).toThrow("push after finalize");
 	});
 
-	it("push with zero frames is a no-op", () => {
+	it("empty and silent finite inputs return zero", () => {
+		const empty = new TruePeakAccumulator(48000, 1);
+
+		expect(empty.finalize()).toBe(0);
+		expect(measure([new Float32Array(1000)], 48000)).toBe(0);
+	});
+
+	it("zero input frames do not change an active accumulator", () => {
 		const accumulator = new TruePeakAccumulator(48000, 1);
 
 		accumulator.push([new Float32Array(0)], 0);

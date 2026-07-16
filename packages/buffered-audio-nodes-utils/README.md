@@ -20,23 +20,20 @@ import { stft, istft, fft, ifft, hanningWindow, MixedRadixFft } from "@buffered-
 
 | Function | Description |
 | --- | --- |
-| `stft(signal, fftSize, hopSize, window?)` | Short-Time Fourier Transform with tiered backend dispatch |
-| `istft(frames, fftSize, hopSize, window?)` | Inverse STFT (overlap-add reconstruction) |
-| `fft(real, imag)` | Forward FFT (Cooley-Tukey radix-2, in-place) |
-| `ifft(real, imag)` | Inverse FFT (in-place) |
-| `hanningWindow(size)` | Generate a Hann window of the given size |
-| `MixedRadixFft` | FFT class for non-power-of-2 sizes |
+| `stft(signal, fftSize, hopSize, output?, backend?, fftAddonOptions?)` | Short-time Fourier transform, optionally into caller-owned output with a selected backend |
+| `istft(result, hopSize, outputLength, backend?, fftAddonOptions?)` | Inverse STFT with overlap-add reconstruction |
+| `fft(input, workspace?)` | Radix-2 forward FFT returning real and imaginary arrays |
+| `ifft(re, im, workspace?)` | Radix-2 inverse FFT returning the real time-domain array |
+| `hanningWindow(size, periodic?)` | Return a periodic or symmetric Hann window |
+| `new MixedRadixFft(size)` | Create an FFT for sizes factored only by 2, 3, and 5 |
 | `createFftWorkspace(size)` | Allocate reusable FFT scratch buffers |
-| `bitReverse(...)` | Bit-reversal permutation |
-| `butterflyStages(...)` | Radix-2 butterfly computation |
 
 ```ts
-const window = hanningWindow(2048);
-const frames = stft(signal, 2048, 512, window);
+const frames = stft(signal, 2048, 512);
 
 // ... process frames ...
 
-const reconstructed = istft(frames, 2048, 512, window);
+const reconstructed = istft(frames, 512, signal.length);
 ```
 
 ### FFT Backend
@@ -48,9 +45,9 @@ import type { FftBackend, FftBackendConfig } from "@buffered-audio/utils";
 
 | Function | Description |
 | --- | --- |
-| `initFftBackend(config)` | Initialize the native FFT backend |
-| `detectFftBackend(config)` | Auto-detect the best available backend |
-| `getFftAddon(config)` | Get the loaded native addon |
+| `initFftBackend(executionProviders, properties)` | Select a backend and translate addon paths into STFT options |
+| `detectFftBackend(executionProviders, options?)` | Select the first available requested backend |
+| `getFftAddon(backend, options?)` | Load the selected native addon, or return `null` for JavaScript |
 
 The FFT backend uses tiered dispatch to select the fastest available implementation:
 
@@ -58,10 +55,15 @@ The FFT backend uses tiered dispatch to select the fastest available implementat
 2. **FFTW** (native CPU) -- optimized native fallback
 3. **JavaScript** -- pure JS fallback, always available
 
-`stft` and `istft` automatically use the best initialized backend.
+Pass the returned backend and addon options to `stft` or `istft`; omitting them uses JavaScript.
 
 ```ts
-await initFftBackend({ backend: "vkfft" });
+const fftConfig = initFftBackend(["gpu", "cpu-native", "cpu"], {
+	vkfftAddonPath,
+	fftwAddonPath,
+});
+
+const frames = stft(signal, 2048, 512, undefined, fftConfig.backend, fftConfig.addonOptions);
 ```
 
 Native addon repositories:
@@ -84,18 +86,17 @@ import {
 
 | Function | Description |
 | --- | --- |
-| `biquadFilter(samples, coefficients, state)` | Apply a biquad IIR filter |
-| `zeroPhaseBiquadFilter(samples, coefficients)` | Zero-phase (forward-backward) biquad filter |
-| `highPassCoefficients(frequency, sampleRate, Q?)` | Design a high-pass biquad filter |
-| `lowPassCoefficients(frequency, sampleRate, Q?)` | Design a low-pass biquad filter |
-| `preFilterCoefficients(sampleRate)` | BS.1770-4 pre-filter (high shelf at ~1500 Hz) |
-| `rlbFilterCoefficients(sampleRate)` | BS.1770-4 RLB weighting filter |
-| `bandpass(signal, low, high, sampleRate)` | Convenience bandpass using cascaded biquads |
+| `biquadFilter(samples, fb, fa)` | Apply a zero-state biquad and return a new array |
+| `zeroPhaseBiquadFilter(signal, coefficients)` | Apply zero-state forward/backward magnitude-squared filtering in place |
+| `highPassCoefficients(sampleRate, frequency, quality?)` | Design a high-pass biquad filter |
+| `lowPassCoefficients(sampleRate, frequency, quality?)` | Design a low-pass biquad filter |
+| `preFilterCoefficients(sampleRate)` | Return the ITU-R BS.1770-5 K-weighting pre-filter |
+| `rlbFilterCoefficients(sampleRate)` | Return the ITU-R BS.1770-5 RLB weighting filter |
+| `bandpass(channels, sampleRate, highPass?, lowPass?)` | Apply optional high- and low-pass stages to planar channels in place |
 
 ```ts
-const coeffs = lowPassCoefficients(1000, 48000);
-const state = { x1: 0, x2: 0, y1: 0, y2: 0 };
-const filtered = biquadFilter(samples, coeffs, state);
+const { fb, fa } = lowPassCoefficients(48000, 1000);
+const filtered = biquadFilter(samples, fb, fa);
 ```
 
 ### Channel Operations
@@ -113,12 +114,16 @@ import { interleave, deinterleaveBuffer, replaceChannel } from "@buffered-audio/
 ### Resampling
 
 ```ts
-import { resampleDirect } from "@buffered-audio/utils";
+import { ResampleStream } from "@buffered-audio/utils";
 ```
 
-| Function | Description |
+| API | Description |
 | --- | --- |
-| `resampleDirect(signal, fromRate, toRate)` | Sample rate conversion via direct resampling |
+| `new ResampleStream(ffmpegPath, options)` | Start an FFmpeg/SoXR resampler for `sourceSampleRate`, `targetSampleRate`, and `channels` |
+| `write(channels)` | Write equal-length planar `Float32Array` channel samples with stdin backpressure |
+| `read(frames)` | Read up to the requested number of output frames per channel |
+| `end()` | Finish the input and let FFmpeg drain its filter tail |
+| `close()` | Terminate the child process and release queued output |
 
 ## License
 

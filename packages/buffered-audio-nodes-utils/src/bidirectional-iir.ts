@@ -3,25 +3,40 @@ export interface BidirectionalIirOptions {
 	sampleRate: number;
 }
 
+export function getBidirectionalIirAlphas(sampleRate: number, smoothingMs: number): { readonly causal: number; readonly bidirectional: number } {
+	if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
+		throw new Error(`BidirectionalIir: sampleRate must be positive and finite, got ${sampleRate}`);
+	}
+
+	if (!Number.isFinite(smoothingMs)) {
+		throw new Error(`BidirectionalIir: smoothingMs must be finite, got ${smoothingMs}`);
+	}
+
+	if (smoothingMs <= 0) return { causal: 1, bidirectional: 1 };
+
+	const ratio = 1000 / sampleRate / smoothingMs;
+	const causalPole = Math.exp(-ratio);
+	const causal = -Math.expm1(-ratio);
+	const omega = Math.min(ratio, Math.PI);
+	const sinHalf = Math.sin(omega / 2);
+	const causalMagnitude = causal / Math.hypot(causal, 2 * Math.sqrt(causalPole) * sinHalf);
+	const transformedFrequency = 2 * sinHalf * Math.sqrt(causalMagnitude / (1 - causalMagnitude));
+	const bidirectional = -Math.expm1(-2 * Math.asinh(transformedFrequency / 2));
+
+	return { causal, bidirectional };
+}
+
 export class BidirectionalIir {
 	private readonly smoothingMs: number;
-	private readonly sampleRate: number;
 	private readonly alphaBidirectional: number;
 	private readonly alphaCausal: number;
 
 	constructor(options: BidirectionalIirOptions) {
 		this.smoothingMs = options.smoothingMs;
-		this.sampleRate = options.sampleRate;
+		const alphas = getBidirectionalIirAlphas(options.sampleRate, options.smoothingMs);
 
-		const samplePeriod = 1 / this.sampleRate;
-
-		const tauBidirectional = (this.smoothingMs / 1000) * Math.SQRT2;
-
-		this.alphaBidirectional = tauBidirectional > 0 ? 1 - Math.exp(-samplePeriod / tauBidirectional) : 1;
-
-		const tauCausal = this.smoothingMs / 1000;
-
-		this.alphaCausal = tauCausal > 0 ? 1 - Math.exp(-samplePeriod / tauCausal) : 1;
+		this.alphaBidirectional = alphas.bidirectional;
+		this.alphaCausal = alphas.causal;
 	}
 
 	applyBidirectional(input: Float32Array): Float32Array {

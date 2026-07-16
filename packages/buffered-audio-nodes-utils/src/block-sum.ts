@@ -29,7 +29,6 @@ export class BlockSumAccumulator {
 		this.activeBlockSums = new Float64Array(this.ringSize);
 	}
 
-	// Consumes `frames` per-frame sums from `perFrameSums[0]` (needs length >= `frames`); block-boundary accounting advances as if appended to one contiguous stream.
 	push(perFrameSums: Float64Array, frames: number): void {
 		if (this.finalized) {
 			throw new Error("BlockSumAccumulator: push() called after finalize()");
@@ -46,10 +45,7 @@ export class BlockSumAccumulator {
 		const ringSize = this.ringSize;
 		const activeBlockSums = this.activeBlockSums;
 
-		// Open blocks are exactly [nextBlockToClose, nextBlockToOpen): a sample at index i belongs to
-		// blocks ceil((i−size+1)/step)..floor(i/step); the close loop has already advanced
-		// nextBlockToClose to that minimum and the open loop advances nextBlockToOpen past that
-		// maximum, so per-sample ceil/floor reduce to two boundary counters.
+		// Open blocks are exactly [nextBlockToClose, nextBlockToOpen); each counter advances only at its next sample boundary.
 		let samplesProcessed = this.samplesProcessed;
 		let nextBlockToOpen = this.nextBlockToOpen;
 		let nextBlockToClose = this.nextBlockToClose;

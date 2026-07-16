@@ -1,8 +1,8 @@
-// All state is per-instance — instances are safe for concurrent use.
+// Mixed-radix transforms follow Cooley and Tukey, "An Algorithm for the Machine Calculation of Complex Fourier Series" (1965); all state is per-instance.
 export class MixedRadixFft {
 	private readonly size: number;
 	private readonly radices: Array<number>;
-	private readonly permutation: Uint16Array;
+	private readonly permutation: Uint32Array;
 	private readonly twiddleRe: Float32Array;
 	private readonly twiddleIm: Float32Array;
 
@@ -13,6 +13,10 @@ export class MixedRadixFft {
 	private readonly auxIm: Float32Array;
 
 	constructor(size: number) {
+		if (!Number.isSafeInteger(size) || size <= 0) {
+			throw new Error(`MixedRadixFft: size must be a positive integer, got ${size}`);
+		}
+
 		this.size = size;
 		this.radices = factorize(size);
 
@@ -30,6 +34,8 @@ export class MixedRadixFft {
 	}
 
 	fft(xRe: Float32Array, xIm: Float32Array, outRe: Float32Array, outIm: Float32Array): void {
+		this.assertArrayCapacities(xRe, xIm, outRe, outIm);
+
 		const perm = this.permutation;
 		const nn = this.size;
 
@@ -58,6 +64,8 @@ export class MixedRadixFft {
 	}
 
 	ifft(xRe: Float32Array, xIm: Float32Array, outRe: Float32Array, outIm: Float32Array): void {
+		this.assertArrayCapacities(xRe, xIm, outRe, outIm);
+
 		const auxIm = this.auxIm;
 		const nn = this.size;
 
@@ -70,6 +78,19 @@ export class MixedRadixFft {
 		for (let index = 0; index < nn; index++) {
 			outRe[index] = (outRe[index] ?? 0) / nn;
 			outIm[index] = -(outIm[index] ?? 0) / nn;
+		}
+	}
+
+	private assertArrayCapacities(xRe: Float32Array, xIm: Float32Array, outRe: Float32Array, outIm: Float32Array): void {
+		this.assertArrayCapacity("xRe", xRe);
+		this.assertArrayCapacity("xIm", xIm);
+		this.assertArrayCapacity("outRe", outRe);
+		this.assertArrayCapacity("outIm", outIm);
+	}
+
+	private assertArrayCapacity(name: string, values: Float32Array): void {
+		if (values.length < this.size) {
+			throw new Error(`MixedRadixFft: ${name} capacity must be at least ${this.size}, got ${values.length}`);
 		}
 	}
 
@@ -231,8 +252,8 @@ function factorize(size: number): Array<number> {
 	return factors;
 }
 
-function computePermutation(size: number, radices: Array<number>): Uint16Array {
-	const permutation = new Uint16Array(size);
+function computePermutation(size: number, radices: Array<number>): Uint32Array {
+	const permutation = new Uint32Array(size);
 
 	for (let index = 0; index < size; index++) {
 		let remainder = index;

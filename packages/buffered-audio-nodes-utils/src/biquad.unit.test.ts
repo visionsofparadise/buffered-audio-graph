@@ -37,7 +37,7 @@ describe("coefficient functions at 48kHz", () => {
 });
 
 describe("preFilterCoefficients", () => {
-	it("returns hardcoded BS.1770-4 constants at 48kHz", () => {
+	it("returns hardcoded BS.1770-5 constants at 48kHz", () => {
 		const { fb, fa } = preFilterCoefficients(48000);
 		expect(fb).toEqual([1.53512485958697, -2.69169618940638, 1.19839281085285]);
 		expect(fa).toEqual([1.0, -1.69065929318241, 0.73248077421585]);

@@ -1,197 +1,194 @@
 import { describe, expect, it } from "vitest";
 import { MixedRadixFft } from "./mixed-radix-fft";
-import { fft } from "./stft";
 
-describe("MixedRadixFft construction", () => {
-	it("constructs for sizes 12, 30, 60, 8", () => {
-		for (const size of [12, 30, 60, 8]) {
-			expect(() => new MixedRadixFft(size)).not.toThrow();
+const ORACLE_SIZES = [1, 2, 3, 5, 6, 10, 12, 15, 30, 60];
+
+interface ComplexResult {
+	readonly real: Float64Array;
+	readonly imag: Float64Array;
+}
+
+function createComplexInput(size: number): { real: Float32Array; imag: Float32Array } {
+	const real = new Float32Array(size);
+	const imag = new Float32Array(size);
+
+	for (let index = 0; index < size; index++) {
+		real[index] = Math.sin(index * 0.37) + 0.2 * Math.cos(index * 1.13) + index * 0.003;
+		imag[index] = 0.35 * Math.cos(index * 0.61) - 0.1 * Math.sin(index * 0.17);
+	}
+
+	return { real, imag };
+}
+
+function directTransform(real: ArrayLike<number>, imag: ArrayLike<number>, inverse = false): ComplexResult {
+	const size = real.length;
+	const outputReal = new Float64Array(size);
+	const outputImag = new Float64Array(size);
+	const direction = inverse ? 1 : -1;
+	const scale = inverse ? 1 / size : 1;
+
+	for (let bin = 0; bin < size; bin++) {
+		let sumReal = 0;
+		let sumImag = 0;
+
+		for (let index = 0; index < size; index++) {
+			const angle = direction * 2 * Math.PI * bin * index / size;
+			const cosine = Math.cos(angle);
+			const sine = Math.sin(angle);
+			const inputReal = real[index] ?? 0;
+			const inputImag = imag[index] ?? 0;
+
+			sumReal += inputReal * cosine - inputImag * sine;
+			sumImag += inputReal * sine + inputImag * cosine;
 		}
+
+		outputReal[bin] = sumReal * scale;
+		outputImag[bin] = sumImag * scale;
+	}
+
+	return { real: outputReal, imag: outputImag };
+}
+
+function expectComplexClose(actualReal: ArrayLike<number>, actualImag: ArrayLike<number>, expected: ComplexResult, tolerance: number): void {
+	let maxError = 0;
+
+	for (let index = 0; index < expected.real.length; index++) {
+		maxError = Math.max(
+			maxError,
+			Math.abs((actualReal[index] ?? 0) - (expected.real[index] ?? 0)),
+			Math.abs((actualImag[index] ?? 0) - (expected.imag[index] ?? 0)),
+		);
+	}
+
+	expect(maxError).toBeLessThan(tolerance);
+}
+
+describe("MixedRadixFft validation", () => {
+	it.each([0, -1, 1.5, Number.POSITIVE_INFINITY, Number.NaN])("rejects invalid size %s", (size) => {
+		expect(() => new MixedRadixFft(size)).toThrow("positive integer");
 	});
 
-	it("throws for size 7 (unsupported prime factor)", () => {
-		expect(() => new MixedRadixFft(7)).toThrow();
+	it.each([7, 14, 22])("rejects unsupported prime factors in size %i", (size) => {
+		expect(() => new MixedRadixFft(size)).toThrow("unsupported prime factor");
+	});
+
+	it("allows size one", () => {
+		const fft = new MixedRadixFft(1);
+		const outputReal = new Float32Array(1);
+		const outputImag = new Float32Array(1);
+
+		fft.fft(new Float32Array([0.75]), new Float32Array([-0.25]), outputReal, outputImag);
+
+		expect(outputReal).toEqual(new Float32Array([0.75]));
+		expect(outputImag).toEqual(new Float32Array([-0.25]));
+	});
+
+	it("rejects every undersized FFT array before output mutation", () => {
+		const fft = new MixedRadixFft(6);
+		const full = new Float32Array(6);
+		const short = new Float32Array(5);
+		const outputReal = new Float32Array(6).fill(9);
+		const outputImag = new Float32Array(6).fill(8);
+
+		expect(() => fft.fft(short, full, outputReal, outputImag)).toThrow("xRe capacity");
+		expect(() => fft.fft(full, short, outputReal, outputImag)).toThrow("xIm capacity");
+		expect(() => fft.fft(full, full, short, outputImag)).toThrow("outRe capacity");
+		expect(() => fft.fft(full, full, outputReal, short)).toThrow("outIm capacity");
+		expect(outputReal).toEqual(new Float32Array(6).fill(9));
+		expect(outputImag).toEqual(new Float32Array(6).fill(8));
+	});
+
+	it("rejects every undersized inverse array before output mutation", () => {
+		const fft = new MixedRadixFft(6);
+		const full = new Float32Array(6);
+		const short = new Float32Array(5);
+		const outputReal = new Float32Array(6).fill(9);
+		const outputImag = new Float32Array(6).fill(8);
+
+		expect(() => fft.ifft(short, full, outputReal, outputImag)).toThrow("xRe capacity");
+		expect(() => fft.ifft(full, short, outputReal, outputImag)).toThrow("xIm capacity");
+		expect(() => fft.ifft(full, full, short, outputImag)).toThrow("outRe capacity");
+		expect(() => fft.ifft(full, full, outputReal, short)).toThrow("outIm capacity");
+		expect(outputReal).toEqual(new Float32Array(6).fill(9));
+		expect(outputImag).toEqual(new Float32Array(6).fill(8));
+	});
+
+	it("accepts oversized arrays and leaves suffix capacity untouched", () => {
+		const size = 6;
+		const fft = new MixedRadixFft(size);
+		const input = createComplexInput(8);
+		const expected = directTransform(input.real.subarray(0, size), input.imag.subarray(0, size));
+		const outputReal = new Float32Array(8).fill(99);
+		const outputImag = new Float32Array(8).fill(98);
+
+		fft.fft(input.real, input.imag, outputReal, outputImag);
+
+		expectComplexClose(outputReal, outputImag, expected, 1e-4);
+		expect(outputReal.subarray(size)).toEqual(new Float32Array([99, 99]));
+		expect(outputImag.subarray(size)).toEqual(new Float32Array([98, 98]));
 	});
 });
 
-describe("MixedRadixFft fft forward transform", () => {
-	it("produces finite output for sizes 12, 30, 60", () => {
-		for (const size of [12, 30, 60]) {
-			const mrfft = new MixedRadixFft(size);
-			const signal = new Float32Array(size);
+describe("MixedRadixFft direct oracles", () => {
+	it.each(ORACLE_SIZES)("matches every direct Float64 DFT bin for size %i", (size) => {
+		const fft = new MixedRadixFft(size);
+		const input = createComplexInput(size);
+		const expected = directTransform(input.real, input.imag);
+		const outputReal = new Float32Array(size);
+		const outputImag = new Float32Array(size);
 
-			for (let i = 0; i < size; i++) {
-				signal[i] = Math.sin(2 * Math.PI * 2 * i / size);
-			}
+		fft.fft(input.real, input.imag, outputReal, outputImag);
 
-			const zeroIm = new Float32Array(size);
-			const fftRe = new Float32Array(size);
-			const fftIm = new Float32Array(size);
-			mrfft.fft(signal, zeroIm, fftRe, fftIm);
+		expectComplexClose(outputReal, outputImag, expected, 1e-4);
+	});
 
-			for (let i = 0; i < size; i++) {
-				expect(Number.isFinite(fftRe[i])).toBe(true);
-				expect(Number.isFinite(fftIm[i])).toBe(true);
-			}
-		}
+	it.each(ORACLE_SIZES)("matches every direct Float64 inverse bin for size %i", (size) => {
+		const fft = new MixedRadixFft(size);
+		const input = createComplexInput(size);
+		const expected = directTransform(input.real, input.imag, true);
+		const outputReal = new Float32Array(size);
+		const outputImag = new Float32Array(size);
+
+		fft.ifft(input.real, input.imag, outputReal, outputImag);
+
+		expectComplexClose(outputReal, outputImag, expected, 1e-4);
 	});
 });
 
-describe("MixedRadixFft known signal", () => {
-	it("sine at bin frequency produces peak at expected bin for size 30", () => {
-		const size = 30;
-		const binIndex = 3;
-		const mrfft = new MixedRadixFft(size);
-		const signal = new Float32Array(size);
+describe("MixedRadixFft wide permutation", () => {
+	it("matches analytical bins and inverse round-trip at size 75,000", () => {
+		const size = 75000;
+		const fft = new MixedRadixFft(size);
+		const inputReal = new Float32Array(size);
+		const inputImag = new Float32Array(size);
+		const spectrumReal = new Float32Array(size);
+		const spectrumImag = new Float32Array(size);
 
-		for (let i = 0; i < size; i++) {
-			signal[i] = Math.sin(2 * Math.PI * binIndex * i / size);
+		inputReal[1] = 1;
+		fft.fft(inputReal, inputImag, spectrumReal, spectrumImag);
+
+		for (const bin of [0, 1, 2, 123, 32767, 65535, 74999]) {
+			const angle = -2 * Math.PI * bin / size;
+
+			expect(Math.abs((spectrumReal[bin] ?? 0) - Math.cos(angle))).toBeLessThan(1e-4);
+			expect(Math.abs((spectrumImag[bin] ?? 0) - Math.sin(angle))).toBeLessThan(1e-4);
 		}
 
-		const zeroIm = new Float32Array(size);
-		const fftRe = new Float32Array(size);
-		const fftIm = new Float32Array(size);
-		mrfft.fft(signal, zeroIm, fftRe, fftIm);
+		const reconstructedReal = new Float32Array(size);
+		const reconstructedImag = new Float32Array(size);
 
-		const magnitudes = new Float32Array(size);
-		for (let i = 0; i < size; i++) {
-			magnitudes[i] = Math.sqrt(fftRe[i]! * fftRe[i]! + fftIm[i]! * fftIm[i]!);
+		fft.ifft(spectrumReal, spectrumImag, reconstructedReal, reconstructedImag);
+
+		let maxError = 0;
+
+		for (let index = 0; index < size; index++) {
+			maxError = Math.max(
+				maxError,
+				Math.abs((reconstructedReal[index] ?? 0) - (inputReal[index] ?? 0)),
+				Math.abs(reconstructedImag[index] ?? 0),
+			);
 		}
 
-		const peakMagnitude = magnitudes[binIndex]!;
-		const mirrorMagnitude = magnitudes[size - binIndex]!;
-		const peakMax = Math.max(peakMagnitude, mirrorMagnitude);
-		expect(peakMax).toBeGreaterThan(size / 4);
-	});
-});
-
-describe("MixedRadixFft Parseval's theorem", () => {
-	it("conserves energy for size 60", () => {
-		const size = 60;
-		const mrfft = new MixedRadixFft(size);
-		const signal = new Float32Array(size);
-
-		for (let i = 0; i < size; i++) {
-			signal[i] = Math.sin(2 * Math.PI * 4 * i / size) + 0.3 * Math.cos(2 * Math.PI * 11 * i / size);
-		}
-
-		let timeEnergy = 0;
-		for (let i = 0; i < size; i++) {
-			timeEnergy += signal[i]! * signal[i]!;
-		}
-
-		const zeroIm = new Float32Array(size);
-		const fftRe = new Float32Array(size);
-		const fftIm = new Float32Array(size);
-		mrfft.fft(signal, zeroIm, fftRe, fftIm);
-
-		let freqEnergy = 0;
-		for (let i = 0; i < size; i++) {
-			freqEnergy += fftRe[i]! * fftRe[i]! + fftIm[i]! * fftIm[i]!;
-		}
-		freqEnergy /= size;
-
-		expect(freqEnergy).toBeCloseTo(timeEnergy, 4);
-	});
-});
-
-describe("MixedRadixFft cross-check against power-of-2 FFT", () => {
-	it("size 8 produces same total energy as fft() from stft.ts", () => {
-		const size = 8;
-		const mrfft = new MixedRadixFft(size);
-		const signal = new Float32Array(size);
-
-		for (let i = 0; i < size; i++) {
-			signal[i] = Math.sin(2 * Math.PI * 2 * i / size) + 0.7 * Math.cos(2 * Math.PI * 3 * i / size);
-		}
-
-		const zeroIm = new Float32Array(size);
-		const mrRe = new Float32Array(size);
-		const mrIm = new Float32Array(size);
-		mrfft.fft(signal, zeroIm, mrRe, mrIm);
-
-		const { re: stdRe, im: stdIm } = fft(signal);
-
-		let mrTotalEnergy = 0;
-		let stdTotalEnergy = 0;
-		for (let i = 0; i < size; i++) {
-			mrTotalEnergy += mrRe[i]! * mrRe[i]! + mrIm[i]! * mrIm[i]!;
-			stdTotalEnergy += stdRe[i]! * stdRe[i]! + stdIm[i]! * stdIm[i]!;
-		}
-
-		expect(mrTotalEnergy).toBeCloseTo(stdTotalEnergy, 4);
-	});
-});
-
-describe("MixedRadixFft ifft", () => {
-	it("ifft produces finite output", () => {
-		const size = 30;
-		const mrfft = new MixedRadixFft(size);
-		const signal = new Float32Array(size);
-
-		for (let i = 0; i < size; i++) {
-			signal[i] = Math.sin(2 * Math.PI * 2 * i / size);
-		}
-
-		const zeroIm = new Float32Array(size);
-		const fftRe = new Float32Array(size);
-		const fftIm = new Float32Array(size);
-		mrfft.fft(signal, zeroIm, fftRe, fftIm);
-
-		const outRe = new Float32Array(size);
-		const outIm = new Float32Array(size);
-		mrfft.ifft(fftRe, fftIm, outRe, outIm);
-
-		for (let i = 0; i < size; i++) {
-			expect(Number.isFinite(outRe[i])).toBe(true);
-			expect(Number.isFinite(outIm[i])).toBe(true);
-		}
-	});
-
-	it("fft/ifft round-trip reconstructs signal for sizes 12, 30, 60", () => {
-		for (const size of [12, 30, 60]) {
-			const mrfft = new MixedRadixFft(size);
-			const signal = new Float32Array(size);
-
-			for (let i = 0; i < size; i++) {
-				signal[i] = Math.sin(2 * Math.PI * 2 * i / size) + 0.5 * Math.cos(2 * Math.PI * 5 * i / size);
-			}
-
-			const zeroIm = new Float32Array(size);
-			const fftRe = new Float32Array(size);
-			const fftIm = new Float32Array(size);
-			mrfft.fft(signal, zeroIm, fftRe, fftIm);
-
-			const outRe = new Float32Array(size);
-			const outIm = new Float32Array(size);
-			mrfft.ifft(fftRe, fftIm, outRe, outIm);
-
-			for (let i = 0; i < size; i++) {
-				expect(outRe[i]).toBeCloseTo(signal[i]!, 4);
-			}
-		}
-	});
-
-	it("real-valued input produces near-zero imaginary output", () => {
-		const size = 30;
-		const mrfft = new MixedRadixFft(size);
-		const signal = new Float32Array(size);
-
-		for (let i = 0; i < size; i++) {
-			signal[i] = Math.sin(2 * Math.PI * 3 * i / size);
-		}
-
-		const zeroIm = new Float32Array(size);
-		const fftRe = new Float32Array(size);
-		const fftIm = new Float32Array(size);
-		mrfft.fft(signal, zeroIm, fftRe, fftIm);
-
-		const outRe = new Float32Array(size);
-		const outIm = new Float32Array(size);
-		mrfft.ifft(fftRe, fftIm, outRe, outIm);
-
-		for (let i = 0; i < size; i++) {
-			expect(Math.abs(outIm[i]!)).toBeLessThan(1e-5);
-		}
+		expect(maxError).toBeLessThan(1e-4);
 	});
 });

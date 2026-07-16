@@ -1,5 +1,6 @@
 import { preFilterCoefficients, rlbFilterCoefficients } from "./biquad";
 
+// K-weighting filter cascade and channel summation follow ITU-R BS.1770-5.
 export class KWeightedSquaredSum {
 	private readonly channelCount: number;
 

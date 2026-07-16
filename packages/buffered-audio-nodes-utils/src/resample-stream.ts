@@ -2,6 +2,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { deinterleaveBuffer, interleave } from "./interleave";
 
 const STDERR_CAP_BYTES = 64 * 1024;
+const OUTPUT_HIGH_WATER_FRAMES = 65_536;
+const OUTPUT_LOW_WATER_FRAMES = 32_768;
 
 interface PendingRead {
 	readonly resolve: (value: Array<Float32Array>) => void;
@@ -22,12 +24,15 @@ export class ResampleStream {
 	private readonly chunks: Array<Buffer> = [];
 	private chunkedBytes = 0;
 	private pendingDrain?: Promise<void>;
+	private pendingDrainResolve?: () => void;
+	private pendingDrainReject?: (error: Error) => void;
 	private stdoutEnded = false;
 	private exited = false;
 	private exitError?: Error;
 	private stderr = "";
 	private pendingRead?: PendingRead;
 	private closed = false;
+	private stdoutPaused = false;
 
 	constructor(ffmpegPath: string, options: ResampleStreamOptions) {
 		const { sourceSampleRate, targetSampleRate, channels } = options;
@@ -69,15 +74,19 @@ export class ResampleStream {
 			this.onExit();
 		});
 		this.child.stdin.on("error", (error: Error & { code?: string }) => {
-			// EPIPE is expected when ffmpeg exits early; surface other errors via the write path or close().
-			if (error.code === "EPIPE") return;
+			if (error.code === "EPIPE") {
+				this.settlePendingDrain(error);
+
+				return;
+			}
+
 			this.exitError ??= error;
+			this.settlePendingDrain(error);
 		});
 	}
 
 	async write(samples: Array<Float32Array>): Promise<void> {
-		if (this.closed) throw new Error("ResampleStream: write after close");
-		if (this.exitError) throw this.exitError;
+		this.assertCanWrite();
 
 		const frames = samples[0]?.length ?? 0;
 
@@ -86,17 +95,18 @@ export class ResampleStream {
 		const interleaved = interleave(samples, frames, this.channels);
 		const buf = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
 
-		if (this.pendingDrain) await this.pendingDrain;
+		while (this.pendingDrain) {
+			await this.pendingDrain;
+			this.assertCanWrite();
+		}
+
+		this.assertCanWrite();
 
 		const ok = this.child.stdin.write(buf);
 
 		if (!ok) {
-			this.pendingDrain = new Promise<void>((resolve) => {
-				this.child.stdin.once("drain", () => {
-					this.pendingDrain = undefined;
-					resolve();
-				});
-			});
+			await this.waitForStdinDrain();
+			this.assertCanWrite();
 		}
 	}
 
@@ -131,6 +141,11 @@ export class ResampleStream {
 			this.pendingRead.reject(new Error("ResampleStream: close while read pending"));
 			this.pendingRead = undefined;
 		}
+
+		this.settlePendingDrain(new Error("ResampleStream: close while write pending"));
+
+		this.chunks.length = 0;
+		this.chunkedBytes = 0;
 
 		try {
 			if (!this.child.stdin.writableEnded) {
@@ -170,9 +185,16 @@ export class ResampleStream {
 	}
 
 	private onStdoutData(bytes: Buffer): void {
+		if (this.closed) return;
+
 		if (bytes.length > 0) {
 			this.chunks.push(bytes);
 			this.chunkedBytes += bytes.length;
+		}
+
+		if (!this.stdoutPaused && this.chunkedBytes >= OUTPUT_HIGH_WATER_FRAMES * this.bytesPerFrame) {
+			this.stdoutPaused = true;
+			this.child.stdout.pause();
 		}
 
 		this.maybeSatisfyPendingRead();
@@ -195,7 +217,51 @@ export class ResampleStream {
 	private onExit(error?: Error): void {
 		this.exited = true;
 		if (error) this.exitError ??= error;
+		this.settlePendingDrain(error ?? new Error("ResampleStream: ffmpeg exited while waiting for stdin drain"));
 		this.maybeSatisfyPendingRead();
+	}
+
+	private waitForStdinDrain(): Promise<void> {
+		if (!this.pendingDrain) {
+			this.pendingDrain = new Promise<void>((resolve, reject) => {
+				this.pendingDrainResolve = resolve;
+				this.pendingDrainReject = reject;
+			});
+			this.child.stdin.once("drain", this.onStdinDrain);
+		}
+
+		return this.pendingDrain;
+	}
+
+	private assertCanWrite(): void {
+		if (this.closed) throw new Error("ResampleStream: write after close");
+		if (this.exitError) throw this.exitError;
+		if (this.exited) throw new Error("ResampleStream: write after ffmpeg exit");
+		if (this.child.stdin.writableEnded) throw new Error("ResampleStream: write after end");
+	}
+
+	private readonly onStdinDrain = (): void => {
+		this.settlePendingDrain();
+	};
+
+	private settlePendingDrain(error?: Error): void {
+		if (!this.pendingDrain) return;
+
+		const resolve = this.pendingDrainResolve;
+		const reject = this.pendingDrainReject;
+
+		this.pendingDrain = undefined;
+		this.pendingDrainResolve = undefined;
+		this.pendingDrainReject = undefined;
+		this.child.stdin.off("drain", this.onStdinDrain);
+
+		if (error) {
+			reject?.(error);
+
+			return;
+		}
+
+		resolve?.();
 	}
 
 	private maybeSatisfyPendingRead(): void {
@@ -210,15 +276,15 @@ export class ResampleStream {
 			return;
 		}
 
+		if (this.exitError) {
+			this.pendingRead = undefined;
+			reject(this.exitError);
+
+			return;
+		}
+
 		if (this.stdoutEnded && this.exited) {
 			this.pendingRead = undefined;
-
-			if (this.exitError) {
-				reject(this.exitError);
-
-				return;
-			}
-
 			resolve(this.emptyChannels());
 		}
 	}
@@ -254,6 +320,11 @@ export class ResampleStream {
 		}
 
 		this.chunkedBytes -= completeBytes;
+
+		if (this.stdoutPaused && this.chunkedBytes <= OUTPUT_LOW_WATER_FRAMES * this.bytesPerFrame) {
+			this.stdoutPaused = false;
+			this.child.stdout.resume();
+		}
 
 		return deinterleaveBuffer(aligned, this.channels);
 	}

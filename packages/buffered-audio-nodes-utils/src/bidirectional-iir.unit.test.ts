@@ -1,5 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { BidirectionalIir } from "./bidirectional-iir";
+import { BidirectionalIir, getBidirectionalIirAlphas } from "./bidirectional-iir";
+
+function getCausalMagnitude(sampleRate: number, smoothingMs: number): number {
+	const ratio = 1000 / sampleRate / smoothingMs;
+	const causalPole = Math.exp(-ratio);
+	const causal = -Math.expm1(-ratio);
+	const sinHalf = Math.sin(Math.min(ratio, Math.PI) / 2);
+
+	return causal / Math.hypot(causal, 2 * Math.sqrt(causalPole) * sinHalf);
+}
+
+function getOnePoleMagnitude(alpha: number, omega: number): number {
+	return alpha / Math.hypot(alpha, 2 * Math.sqrt(1 - alpha) * Math.sin(omega / 2));
+}
+
+function projectSineAmplitude(input: Float32Array, omega: number, start: number, end: number): number {
+	let sineSquare = 0;
+	let cosineSquare = 0;
+	let sineCosine = 0;
+	let inputSine = 0;
+	let inputCosine = 0;
+
+	for (let index = start; index < end; index++) {
+		const sine = Math.sin(omega * index);
+		const cosine = Math.cos(omega * index);
+		const sample = input[index] ?? 0;
+
+		sineSquare += sine * sine;
+		cosineSquare += cosine * cosine;
+		sineCosine += sine * cosine;
+		inputSine += sample * sine;
+		inputCosine += sample * cosine;
+	}
+
+	const determinant = sineSquare * cosineSquare - sineCosine * sineCosine;
+	const sineAmplitude = (inputSine * cosineSquare - inputCosine * sineCosine) / determinant;
+	const cosineAmplitude = (inputCosine * sineSquare - inputSine * sineCosine) / determinant;
+
+	return Math.hypot(sineAmplitude, cosineAmplitude);
+}
 
 describe("BidirectionalIir", () => {
 	describe("identity at smoothingMs = 0", () => {
@@ -31,67 +70,62 @@ describe("BidirectionalIir", () => {
 				expect(output[i]).toBe(input[i]);
 			}
 		});
+
+		it("finite negative smoothing is also identity", () => {
+			const input = new Float32Array([0.25, -0.5, 1]);
+			const iir = new BidirectionalIir({ smoothingMs: -1, sampleRate: 48000 });
+
+			expect(iir.applyBidirectional(input)).toEqual(input);
+			expect(getBidirectionalIirAlphas(48000, -1)).toEqual({ causal: 1, bidirectional: 1 });
+		});
 	});
 
-	describe("step response settles toward 1", () => {
-		it("bidirectional output settles toward 1 after the step and matches the expected -3 dB cutoff", () => {
-			const sampleRate = 48000;
-			const smoothingMs = 10;
-			const iir = new BidirectionalIir({ smoothingMs, sampleRate });
-
-			const length = 8192;
-			const stepStart = length / 4;
+	describe("digital cutoff response", () => {
+		it.each([
+			{ sampleRate: 48000, smoothingMs: 10 },
+			{ sampleRate: 1000, smoothingMs: 1 },
+		])("matches the causal one-pole magnitude at $sampleRate Hz and $smoothingMs ms", ({ sampleRate, smoothingMs }) => {
+			const ratio = 1000 / sampleRate / smoothingMs;
+			const omega = Math.min(ratio, Math.PI);
+			const periodSamples = 2 * Math.PI / omega;
+			const length = Math.max(16384, Math.ceil(periodSamples * 64));
 			const input = new Float32Array(length);
 
-			for (let i = stepStart; i < length; i++) input[i] = 1;
+			for (let index = 0; index < length; index++) {
+				input[index] = Math.sin(omega * index);
+			}
 
-			const output = iir.applyBidirectional(input);
+			const output = new BidirectionalIir({ sampleRate, smoothingMs }).applyBidirectional(input);
+			const actual = projectSineAmplitude(output, omega, Math.floor(length / 4), Math.floor(length * 3 / 4));
+			const expected = getCausalMagnitude(sampleRate, smoothingMs);
 
-			const tail = output[length - 1] ?? 0;
-			expect(tail).toBeGreaterThan(0.99);
-			expect(tail).toBeLessThan(1.0001);
+			expect(Math.abs(actual - expected)).toBeLessThanOrEqual(1e-3);
+		});
 
-			const head = output[0] ?? 0;
-			expect(Math.abs(head)).toBeLessThan(0.05);
+		it("keeps extremely long smoothing finite and matches one-pass and two-pass magnitudes", () => {
+			const sampleRate = 48000;
+			const smoothingMs = 1e12;
+			const ratio = 1000 / sampleRate / smoothingMs;
+			const omega = Math.min(ratio, Math.PI);
+			const alphas = getBidirectionalIirAlphas(sampleRate, smoothingMs);
+			const causalMagnitude = getCausalMagnitude(sampleRate, smoothingMs);
+			const bidirectionalPassMagnitude = getOnePoleMagnitude(alphas.bidirectional, omega);
 
-			const cutoffHz = 1 / (2 * Math.PI * (smoothingMs / 1000));
+			expect(Number.isFinite(alphas.causal)).toBe(true);
+			expect(Number.isFinite(alphas.bidirectional)).toBe(true);
+			expect(alphas.causal).toBeGreaterThan(0);
+			expect(alphas.bidirectional).toBeGreaterThan(0);
+			expect(Math.abs(bidirectionalPassMagnitude ** 2 - causalMagnitude)).toBeLessThan(1e-12);
+		});
+	});
 
-			const referenceRms = Math.SQRT1_2;
+	describe("validation", () => {
+		it.each([0, -1, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN])("rejects sample rate %s", (sampleRate) => {
+			expect(() => new BidirectionalIir({ smoothingMs: 10, sampleRate })).toThrow("sampleRate must be positive and finite");
+		});
 
-			const magnitudeAt = (frequencyHz: number): number => {
-				const cyclesNeeded = 8;
-				const periodSamples = sampleRate / frequencyHz;
-				const sineLength = Math.max(8192, Math.ceil(periodSamples * cyclesNeeded * 2));
-				const sine = new Float32Array(sineLength);
-
-				for (let i = 0; i < sineLength; i++) {
-					sine[i] = Math.sin((2 * Math.PI * frequencyHz * i) / sampleRate);
-				}
-
-				const filtered = iir.applyBidirectional(sine);
-
-				const startIdx = Math.floor(sineLength / 4);
-				const endIdx = Math.floor((3 * sineLength) / 4);
-				let sumSq = 0;
-
-				for (let i = startIdx; i < endIdx; i++) {
-					const v = filtered[i] ?? 0;
-					sumSq += v * v;
-				}
-
-				return Math.sqrt(sumSq / (endIdx - startIdx));
-			};
-
-			const cutoffMagnitude = magnitudeAt(cutoffHz) / referenceRms;
-
-			expect(cutoffMagnitude).toBeGreaterThan(0.25);
-			expect(cutoffMagnitude).toBeLessThan(0.45);
-
-			const lowMagnitude = magnitudeAt(cutoffHz / 8) / referenceRms;
-			expect(lowMagnitude).toBeGreaterThan(0.95);
-
-			const highMagnitude = magnitudeAt(cutoffHz * 50) / referenceRms;
-			expect(highMagnitude).toBeLessThan(0.1);
+		it.each([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN])("rejects smoothing %s", (smoothingMs) => {
+			expect(() => new BidirectionalIir({ smoothingMs, sampleRate: 48000 })).toThrow("smoothingMs must be finite");
 		});
 	});
 

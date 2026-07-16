@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
+import { ByteBoundedCache } from "./byte-bounded-cache";
 import type { FftBackend } from "./fft-backend";
 import { getFftAddon } from "./fft-backend";
 
+// Radix-2 transforms follow Cooley and Tukey, "An Algorithm for the Machine Calculation of Complex Fourier Series" (1965).
 export interface StftResult {
 	readonly real: Float32Array;
 	readonly imag: Float32Array;
@@ -14,69 +16,91 @@ export interface StftOutput {
 	readonly imag: Float32Array;
 }
 
-const batchInputCache = new Map<number, Float32Array>();
-
-function getBatchInput(fftSize: number, numFrames: number): Float32Array {
-	const needed = fftSize * numFrames;
-	const cached = batchInputCache.get(fftSize);
-
-	if (cached && cached.length >= needed) return cached;
-
-	const grown = new Float32Array(needed);
-
-	batchInputCache.set(fftSize, grown);
-
-	return grown;
+function assertRadix2Size(size: number): void {
+	if (!Number.isSafeInteger(size) || size <= 0 || !Number.isInteger(Math.log2(size))) {
+		throw new Error(`FFT size must be a positive power-of-two integer, got ${size}`);
+	}
 }
 
-const batchTimeCache = new Map<number, Float32Array>();
-
-function getBatchTime(fftSize: number, numFrames: number): Float32Array {
-	const needed = fftSize * numFrames;
-	const cached = batchTimeCache.get(fftSize);
-
-	if (cached && cached.length >= needed) return cached;
-
-	const grown = new Float32Array(needed);
-
-	batchTimeCache.set(fftSize, grown);
-
-	return grown;
+function assertPositiveInteger(value: number, name: string): void {
+	if (!Number.isSafeInteger(value) || value <= 0) {
+		throw new Error(`${name} must be a positive integer, got ${value}`);
+	}
 }
+
+function assertNonnegativeInteger(value: number, name: string): void {
+	if (!Number.isSafeInteger(value) || value < 0) {
+		throw new Error(`${name} must be a nonnegative integer, got ${value}`);
+	}
+}
+
+export const STFT_BATCH_SCRATCH_BYTES = 8 * 1024 * 1024;
+
+const HANN_WINDOW_CACHE_BYTES = 1024 * 1024;
+const TWIDDLE_CACHE_BYTES = 8 * 1024 * 1024;
 
 export function stft(signal: Float32Array, fftSize: number, hopSize: number, output?: StftOutput, backend?: FftBackend, fftAddonOptions?: { vkfftPath?: string; fftwPath?: string }): StftResult {
-	const window = hanningWindow(fftSize);
-	const numFrames = Math.floor((signal.length - fftSize) / hopSize) + 1;
-	const halfSize = fftSize / 2 + 1;
+	assertRadix2Size(fftSize);
+	assertPositiveInteger(hopSize, "STFT hopSize");
 
-	const addon = backend ? getFftAddon(backend, fftAddonOptions) : null;
+	const numFrames = signal.length < fftSize ? 0 : Math.floor((signal.length - fftSize) / hopSize) + 1;
+	const halfSize = Math.floor(fftSize / 2) + 1;
+	const outputLength = halfSize * numFrames;
 
-	const real = output?.real ?? (numFrames > 0 ? new Float32Array(halfSize * numFrames) : new Float32Array(0));
-	const imag = output?.imag ?? (numFrames > 0 ? new Float32Array(halfSize * numFrames) : new Float32Array(0));
+	if (output !== undefined && (output.real.length < outputLength || output.imag.length < outputLength)) {
+		throw new Error(`STFT output capacity must be at least ${outputLength} values per component`);
+	}
 
 	if (numFrames <= 0) {
+		const real = output?.real ?? new Float32Array(0);
+		const imag = output?.imag ?? new Float32Array(0);
+
 		return { real, imag, frames: 0, fftSize };
 	}
 
+	const addon = backend ? getFftAddon(backend, fftAddonOptions) : null;
+	let slabFrameCapacity = 0;
+
 	if (addon) {
-		const batchInput = getBatchInput(fftSize, numFrames);
+		const bytesPerFrame = Float32Array.BYTES_PER_ELEMENT * (fftSize + 2 * halfSize);
 
-		for (let frame = 0; frame < numFrames; frame++) {
-			const offset = frame * hopSize;
-
-			for (let index = 0; index < fftSize; index++) {
-				batchInput[frame * fftSize + index] = (signal[offset + index] ?? 0) * (window[index] ?? 0);
-			}
+		if (bytesPerFrame > STFT_BATCH_SCRATCH_BYTES) {
+			throw new Error(`STFT fftSize ${fftSize} exceeds the ${STFT_BATCH_SCRATCH_BYTES}-byte native scratch budget`);
 		}
 
-		if (typeof addon.batchFftInto === "function") {
-			addon.batchFftInto(batchInput.subarray(0, fftSize * numFrames), real.subarray(0, halfSize * numFrames), imag.subarray(0, halfSize * numFrames), fftSize, numFrames);
-		} else {
-			// Backwards-compat path for addon v1.1.x: addon allocates, we copy once.
-			const { re: batchRe, im: batchIm } = addon.batchFft(batchInput.subarray(0, fftSize * numFrames), fftSize, numFrames);
+		slabFrameCapacity = Math.max(1, Math.floor(STFT_BATCH_SCRATCH_BYTES / bytesPerFrame));
+	}
 
-			real.set(batchRe.subarray(0, halfSize * numFrames));
-			imag.set(batchIm.subarray(0, halfSize * numFrames));
+	const real = output?.real ?? new Float32Array(outputLength);
+	const imag = output?.imag ?? new Float32Array(outputLength);
+	const window = hanningWindow(fftSize);
+
+	if (addon) {
+		for (let firstFrame = 0; firstFrame < numFrames; firstFrame += slabFrameCapacity) {
+			const slabFrames = Math.min(slabFrameCapacity, numFrames - firstFrame);
+			const batchInput = new Float32Array(fftSize * slabFrames);
+
+			for (let slabFrame = 0; slabFrame < slabFrames; slabFrame++) {
+				const offset = (firstFrame + slabFrame) * hopSize;
+
+				for (let index = 0; index < fftSize; index++) {
+					batchInput[slabFrame * fftSize + index] = (signal[offset + index] ?? 0) * (window[index] ?? 0);
+				}
+			}
+
+			const outputStart = firstFrame * halfSize;
+			const outputEnd = outputStart + slabFrames * halfSize;
+			const realSlab = real.subarray(outputStart, outputEnd);
+			const imagSlab = imag.subarray(outputStart, outputEnd);
+
+			if (typeof addon.batchFftInto === "function") {
+				addon.batchFftInto(batchInput, realSlab, imagSlab, fftSize, slabFrames);
+			} else {
+				const { re: batchReal, im: batchImag } = addon.batchFft(batchInput, fftSize, slabFrames);
+
+				realSlab.set(batchReal.subarray(0, realSlab.length));
+				imagSlab.set(batchImag.subarray(0, imagSlab.length));
+			}
 		}
 
 		return { real, imag, frames: numFrames, fftSize };
@@ -106,37 +130,62 @@ export function stft(signal: Float32Array, fftSize: number, hopSize: number, out
 
 export function istft(result: StftResult, hopSize: number, outputLength: number, backend?: FftBackend, fftAddonOptions?: { vkfftPath?: string; fftwPath?: string }): Float32Array {
 	const { real, imag, frames, fftSize } = result;
+
+	assertRadix2Size(fftSize);
+	assertPositiveInteger(hopSize, "ISTFT hopSize");
+	assertNonnegativeInteger(outputLength, "ISTFT outputLength");
+	assertNonnegativeInteger(frames, "ISTFT frames");
+
+	const halfSize = Math.floor(fftSize / 2) + 1;
+	const spectrumLength = halfSize * frames;
+
+	if (!Number.isSafeInteger(spectrumLength) || real.length < spectrumLength || imag.length < spectrumLength) {
+		throw new Error(`ISTFT spectrum capacity must be at least ${spectrumLength} values per component`);
+	}
+
+	const addon = backend ? getFftAddon(backend, fftAddonOptions) : null;
+	let slabFrameCapacity = 0;
+
+	if (addon && frames > 0) {
+		const bytesPerFrame = Float32Array.BYTES_PER_ELEMENT * fftSize;
+
+		if (bytesPerFrame > STFT_BATCH_SCRATCH_BYTES) {
+			throw new Error(`ISTFT fftSize ${fftSize} exceeds the ${STFT_BATCH_SCRATCH_BYTES}-byte native scratch budget`);
+		}
+
+		slabFrameCapacity = Math.max(1, Math.floor(STFT_BATCH_SCRATCH_BYTES / bytesPerFrame));
+	}
+
 	const window = hanningWindow(fftSize);
 	const output = new Float32Array(outputLength);
 	const windowSum = new Float32Array(outputLength);
-	const halfSize = fftSize / 2 + 1;
-
-	const addon = backend ? getFftAddon(backend, fftAddonOptions) : null;
 
 	if (addon && frames > 0) {
-		const reView = real.subarray(0, halfSize * frames);
-		const imView = imag.subarray(0, halfSize * frames);
-		let timeDomainBatch: Float32Array;
+		for (let firstFrame = 0; firstFrame < frames; firstFrame += slabFrameCapacity) {
+			const slabFrames = Math.min(slabFrameCapacity, frames - firstFrame);
+			const spectrumStart = firstFrame * halfSize;
+			const spectrumEnd = spectrumStart + slabFrames * halfSize;
+			const realSlab = real.subarray(spectrumStart, spectrumEnd);
+			const imagSlab = imag.subarray(spectrumStart, spectrumEnd);
+			let timeDomainSlab: Float32Array;
 
-		if (typeof addon.batchIfftInto === "function") {
-			const batchTime = getBatchTime(fftSize, frames);
+			if (typeof addon.batchIfftInto === "function") {
+				timeDomainSlab = new Float32Array(fftSize * slabFrames);
+				addon.batchIfftInto(realSlab, imagSlab, timeDomainSlab, fftSize, slabFrames);
+			} else {
+				timeDomainSlab = addon.batchIfft(realSlab, imagSlab, fftSize, slabFrames);
+			}
 
-			addon.batchIfftInto(reView, imView, batchTime.subarray(0, fftSize * frames), fftSize, frames);
-			timeDomainBatch = batchTime;
-		} else {
-			// Backwards-compat path for addon v1.1.x.
-			timeDomainBatch = addon.batchIfft(reView, imView, fftSize, frames);
-		}
+			for (let slabFrame = 0; slabFrame < slabFrames; slabFrame++) {
+				const offset = (firstFrame + slabFrame) * hopSize;
 
-		for (let frame = 0; frame < frames; frame++) {
-			const offset = frame * hopSize;
+				for (let index = 0; index < fftSize; index++) {
+					const position = offset + index;
 
-			for (let index = 0; index < fftSize; index++) {
-				const pos = offset + index;
-
-				if (pos < outputLength) {
-					output[pos] = (output[pos] ?? 0) + (timeDomainBatch[frame * fftSize + index] ?? 0) * (window[index] ?? 0);
-					windowSum[pos] = (windowSum[pos] ?? 0) + (window[index] ?? 0) * (window[index] ?? 0);
+					if (position < outputLength) {
+						output[position] = (output[position] ?? 0) + (timeDomainSlab[slabFrame * fftSize + index] ?? 0) * (window[index] ?? 0);
+						windowSum[position] = (windowSum[position] ?? 0) + (window[index] ?? 0) * (window[index] ?? 0);
+					}
 				}
 			}
 		}
@@ -186,22 +235,33 @@ export function istft(result: StftResult, hopSize: number, outputLength: number,
 	return output;
 }
 
-const hanningWindowCache = new Map<string, Float32Array>();
+const hanningWindowCache = new ByteBoundedCache<string, Float32Array>(HANN_WINDOW_CACHE_BYTES);
 
+// Periodic and symmetric Hann windows follow Harris, "On the Use of Windows for Harmonic Analysis with the Discrete Fourier Transform" (1978).
 export function hanningWindow(size: number, periodic = true): Float32Array {
+	assertPositiveInteger(size, "Hann window size");
+
 	const key = `${size}:${periodic ? "p" : "s"}`;
 	const cached = hanningWindowCache.get(key);
 
 	if (cached) return cached;
 
 	const window = new Float32Array(size);
+
+	if (size === 1) {
+		window[0] = 1;
+		hanningWindowCache.set(key, window, window.byteLength);
+
+		return window;
+	}
+
 	const denominator = periodic ? size : size - 1;
 
 	for (let index = 0; index < size; index++) {
 		window[index] = 0.5 * (1 - Math.cos((2 * Math.PI * index) / denominator));
 	}
 
-	hanningWindowCache.set(key, window);
+	hanningWindowCache.set(key, window, window.byteLength);
 
 	return window;
 }
@@ -214,6 +274,8 @@ export interface FftWorkspace {
 }
 
 export function createFftWorkspace(size: number): FftWorkspace {
+	assertRadix2Size(size);
+
 	return {
 		re: new Float32Array(size),
 		im: new Float32Array(size),
@@ -224,6 +286,10 @@ export function createFftWorkspace(size: number): FftWorkspace {
 
 export function fft(input: Float32Array, workspace?: FftWorkspace): { re: Float32Array; im: Float32Array } {
 	const size = input.length;
+
+	assertRadix2Size(size);
+	if (workspace !== undefined) assertWorkspaceCapacity(workspace, size);
+
 	const re = workspace ? workspace.re : new Float32Array(size);
 	const im = workspace ? workspace.im : new Float32Array(size);
 
@@ -241,6 +307,11 @@ export function fft(input: Float32Array, workspace?: FftWorkspace): { re: Float3
 
 export function ifft(re: Float32Array, im: Float32Array, workspace?: FftWorkspace): Float32Array {
 	const size = re.length;
+
+	assertRadix2Size(size);
+	if (im.length !== size) throw new Error(`IFFT real and imaginary lengths must match, got ${size} and ${im.length}`);
+	if (workspace !== undefined) assertWorkspaceCapacity(workspace, size);
+
 	const outRe = workspace ? workspace.outRe : Float32Array.from(re);
 	const outIm = workspace ? workspace.outIm : new Float32Array(size);
 
@@ -261,6 +332,9 @@ export function ifft(re: Float32Array, im: Float32Array, workspace?: FftWorkspac
 }
 
 export function bitReverse(re: Float32Array, im: Float32Array, size: number): void {
+	assertRadix2Size(size);
+	assertComplexCapacity(re, im, size, "bitReverse");
+
 	let rev = 0;
 
 	for (let index = 0; index < size - 1; index++) {
@@ -285,14 +359,14 @@ export function bitReverse(re: Float32Array, im: Float32Array, size: number): vo
 	}
 }
 
-const twiddleCache = new Map<number, { re: Float32Array; im: Float32Array }>();
+const twiddleCache = new ByteBoundedCache<number, { re: Float32Array; im: Float32Array }>(TWIDDLE_CACHE_BYTES);
 
 function getTwiddleFactors(size: number): { re: Float32Array; im: Float32Array } {
 	let cached = twiddleCache.get(size);
 
 	if (cached) return cached;
 
-	const totalFactors = (size / 2) * Math.log2(size);
+	const totalFactors = size - 1;
 	const twRe = new Float32Array(totalFactors);
 	const twIm = new Float32Array(totalFactors);
 	let offset = 0;
@@ -310,12 +384,18 @@ function getTwiddleFactors(size: number): { re: Float32Array; im: Float32Array }
 	}
 
 	cached = { re: twRe, im: twIm };
-	twiddleCache.set(size, cached);
+
+	if (twRe.byteLength > 0) {
+		twiddleCache.set(size, cached, twRe.byteLength + twIm.byteLength);
+	}
 
 	return cached;
 }
 
 export function butterflyStages(re: Float32Array, im: Float32Array, size: number): void {
+	assertRadix2Size(size);
+	assertComplexCapacity(re, im, size, "butterflyStages");
+
 	const twiddle = getTwiddleFactors(size);
 	const twRe = twiddle.re;
 	const twIm = twiddle.im;
@@ -347,5 +427,24 @@ export function butterflyStages(re: Float32Array, im: Float32Array, size: number
 		}
 
 		twOffset += halfStep;
+	}
+}
+
+function assertWorkspaceCapacity(workspace: FftWorkspace, size: number): void {
+	assertWorkspaceArrayCapacity("re", workspace.re, size);
+	assertWorkspaceArrayCapacity("im", workspace.im, size);
+	assertWorkspaceArrayCapacity("outRe", workspace.outRe, size);
+	assertWorkspaceArrayCapacity("outIm", workspace.outIm, size);
+}
+
+function assertWorkspaceArrayCapacity(name: string, values: Float32Array, size: number): void {
+	if (values.length < size) {
+		throw new Error(`FFT workspace ${name} capacity must be at least ${size}, got ${values.length}`);
+	}
+}
+
+function assertComplexCapacity(re: Float32Array, im: Float32Array, size: number, operation: string): void {
+	if (re.length < size || im.length < size) {
+		throw new Error(`${operation} complex-array capacity must be at least ${size}`);
 	}
 }

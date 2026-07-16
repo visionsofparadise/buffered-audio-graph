@@ -1,3 +1,4 @@
+// Monotonic deque per Lemire, "Streaming Maximum-Minimum Filter Using No More than Three Comparisons per Element" (2006).
 export function slidingWindowMin(input: Float32Array, halfWidth: number): Float32Array {
 	const length = input.length;
 	const output = new Float32Array(length);

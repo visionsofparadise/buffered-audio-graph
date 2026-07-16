@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { resampleDirect } from "./resample-direct";
 import { ResampleStream } from "./resample-stream";
 import { fixtures } from "./test-fixtures";
 
@@ -18,116 +17,149 @@ function makeSine(sampleRate: number, durationSeconds: number, frequency: number
 	return out;
 }
 
+async function runResample(
+	input: ReadonlyArray<Float32Array>,
+	sourceSampleRate: number,
+	targetSampleRate: number,
+	writeFrames: number,
+): Promise<Array<Float32Array>> {
+	const stream = new ResampleStream(ffmpegPath, {
+		sourceSampleRate,
+		targetSampleRate,
+		channels: input.length,
+	});
+	const chunks: Array<Array<Float32Array>> = [];
+	const readerDone = (async () => {
+		for (;;) {
+			const chunk = await stream.read(4096);
+
+			if ((chunk[0]?.length ?? 0) === 0) return;
+			chunks.push(chunk);
+		}
+	})();
+
+	try {
+		const frames = input[0]?.length ?? 0;
+
+		for (let offset = 0; offset < frames; offset += writeFrames) {
+			await stream.write(input.map((channel) => channel.subarray(offset, Math.min(offset + writeFrames, frames))));
+		}
+
+		await stream.end();
+		await readerDone;
+	} finally {
+		await stream.close();
+	}
+
+	const totalFrames = chunks.reduce((total, chunk) => total + (chunk[0]?.length ?? 0), 0);
+	const output = Array.from({ length: input.length }, () => new Float32Array(totalFrames));
+	let offset = 0;
+
+	for (const chunk of chunks) {
+		const frames = chunk[0]?.length ?? 0;
+
+		for (let channel = 0; channel < output.length; channel++) {
+			const destination = output[channel];
+			const source = chunk[channel];
+
+			if (destination && source) destination.set(source, offset);
+		}
+
+		offset += frames;
+	}
+
+	return output;
+}
+
+function rootMeanSquare(samples: Float32Array, start: number, end: number): number {
+	let sum = 0;
+
+	for (let index = start; index < end; index++) {
+		const sample = samples[index] ?? 0;
+
+		sum += sample * sample;
+	}
+
+	return Math.sqrt(sum / (end - start));
+}
+
+function positiveCrossingFrequency(samples: Float32Array, start: number, end: number, sampleRate: number): number {
+	let firstCrossing = -1;
+	let lastCrossing = -1;
+	let crossings = 0;
+
+	for (let index = start + 1; index < end; index++) {
+		if ((samples[index - 1] ?? 0) <= 0 && (samples[index] ?? 0) > 0) {
+			firstCrossing = firstCrossing < 0 ? index : firstCrossing;
+			lastCrossing = index;
+			crossings++;
+		}
+	}
+
+	if (crossings < 2) return 0;
+
+	return (crossings - 1) * sampleRate / (lastCrossing - firstCrossing);
+}
+
 describeIfFfmpeg("ResampleStream", () => {
-	it("streaming output matches one-shot resampleDirect within a small tolerance", async () => {
+	it("is chunk-invariant and preserves known stereo sine levels and frequencies", async () => {
 		const sourceRate = 48000;
 		const targetRate = 44100;
-		const seconds = 0.5;
-		const channels = 2;
+		const seconds = 1;
 		const left = makeSine(sourceRate, seconds, 440);
 		const right = makeSine(sourceRate, seconds, 660);
+		const singleWrite = await runResample([left, right], sourceRate, targetRate, left.length);
+		const chunkedWrite = await runResample([left, right], sourceRate, targetRate, 1024);
+		const expectedFrames = Math.round(left.length * targetRate / sourceRate);
 
-		const oneShot = await resampleDirect(ffmpegPath, [left, right], sourceRate, targetRate);
-
-		const stream = new ResampleStream(ffmpegPath, { sourceSampleRate: sourceRate, targetSampleRate: targetRate, channels });
-		const writeChunk = 1024;
-		const readChunk = 4096;
-		const collected: Array<Array<Float32Array>> = [];
-
-		const readerDone = (async () => {
-			for (;;) {
-				const ready = await stream.read(readChunk);
-				const readFrames = ready[0]?.length ?? 0;
-
-				if (readFrames === 0) return;
-				collected.push(ready);
-			}
-		})();
-
-		try {
-			for (let offset = 0; offset < left.length; offset += writeChunk) {
-				const slice = [
-					left.subarray(offset, Math.min(offset + writeChunk, left.length)),
-					right.subarray(offset, Math.min(offset + writeChunk, right.length)),
-				];
-
-				await stream.write(slice);
-			}
-
-			await stream.end();
-			await readerDone;
-		} finally {
-			await stream.close();
+		for (const output of [...singleWrite, ...chunkedWrite]) {
+			expect(Math.abs(output.length - expectedFrames)).toBeLessThanOrEqual(8);
 		}
 
-		const totalFrames = collected.reduce((acc, c) => acc + (c[0]?.length ?? 0), 0);
-		const streamedLeft = new Float32Array(totalFrames);
-		const streamedRight = new Float32Array(totalFrames);
-		let offset = 0;
+		expect(Math.abs((singleWrite[0]?.length ?? 0) - (chunkedWrite[0]?.length ?? 0))).toBeLessThanOrEqual(8);
 
-		for (const c of collected) {
-			const lc = c[0];
-			const rc = c[1];
-			const n = lc?.length ?? 0;
-
-			if (lc) streamedLeft.set(lc, offset);
-			if (rc) streamedRight.set(rc, offset);
-			offset += n;
-		}
-
-		const oneShotLeft = oneShot[0];
-		const oneShotRight = oneShot[1];
-
-		expect(oneShotLeft).toBeDefined();
-		expect(oneShotRight).toBeDefined();
-		if (!oneShotLeft || !oneShotRight) return;
-
-		// Tolerance allows a tiny length mismatch for filter-tail boundary differences.
-		expect(Math.abs(streamedLeft.length - oneShotLeft.length)).toBeLessThanOrEqual(8);
-
-		const cmpLen = Math.min(streamedLeft.length, oneShotLeft.length);
+		const commonFrames = Math.min(singleWrite[0]?.length ?? 0, chunkedWrite[0]?.length ?? 0);
 		let maxDiff = 0;
 
-		for (let i = 0; i < cmpLen; i++) {
-			const dl = Math.abs((streamedLeft[i] ?? 0) - (oneShotLeft[i] ?? 0));
-			const dr = Math.abs((streamedRight[i] ?? 0) - (oneShotRight[i] ?? 0));
+		for (let channel = 0; channel < singleWrite.length; channel++) {
+			for (let index = 0; index < commonFrames; index++) {
+				const difference = Math.abs((singleWrite[channel]?.[index] ?? 0) - (chunkedWrite[channel]?.[index] ?? 0));
 
-			if (dl > maxDiff) maxDiff = dl;
-			if (dr > maxDiff) maxDiff = dr;
+				if (difference > maxDiff) maxDiff = difference;
+			}
 		}
 
-		// SoXR + triangular dither is deterministic, so one-shot vs streaming differ only by ffmpeg framing (1e-3 tolerance).
 		expect(maxDiff).toBeLessThan(1e-3);
+
+		const trim = 512;
+		const expectedRms = 0.5 / Math.SQRT2;
+		const expectedFrequencies = [440, 660];
+
+		for (const resampled of [singleWrite, chunkedWrite]) {
+			for (let channel = 0; channel < resampled.length; channel++) {
+				const output = resampled[channel];
+				const expectedFrequency = expectedFrequencies[channel];
+
+				expect(output).toBeDefined();
+				expect(expectedFrequency).toBeDefined();
+				if (!output || expectedFrequency === undefined) continue;
+
+				const end = output.length - trim;
+
+				expect(Math.abs(rootMeanSquare(output, trim, end) - expectedRms)).toBeLessThan(0.01);
+				expect(Math.abs(positiveCrossingFrequency(output, trim, end, targetRate) - expectedFrequency)).toBeLessThan(2);
+			}
+		}
 	}, 30_000);
 
 	it("handles short input and drains the tail correctly", async () => {
 		const sourceRate = 44100;
 		const targetRate = 22050;
-		const channels = 1;
 		const mono = makeSine(sourceRate, 0.1, 220);
-		const stream = new ResampleStream(ffmpegPath, { sourceSampleRate: sourceRate, targetSampleRate: targetRate, channels });
+		const [output] = await runResample([mono], sourceRate, targetRate, mono.length);
+		const expected = Math.round(mono.length * targetRate / sourceRate);
 
-		try {
-			await stream.write([mono]);
-			await stream.end();
-
-			const collected: Array<Float32Array> = [];
-
-			for (;;) {
-				const got = await stream.read(4096);
-				const ch = got[0];
-				const n = ch?.length ?? 0;
-
-				if (n === 0) break;
-				if (ch) collected.push(ch);
-			}
-
-			const totalFrames = collected.reduce((acc, c) => acc + c.length, 0);
-			const expected = Math.floor(mono.length * targetRate / sourceRate);
-
-			expect(Math.abs(totalFrames - expected)).toBeLessThanOrEqual(8);
-		} finally {
-			await stream.close();
-		}
+		expect(output).toBeDefined();
+		expect(Math.abs((output?.length ?? 0) - expected)).toBeLessThanOrEqual(8);
 	}, 15_000);
 });
