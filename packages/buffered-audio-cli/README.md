@@ -11,6 +11,7 @@ npm i -g @buffered-audio/cli
 ## Usage
 
 ```
+bag --version
 bag render graph.bag
 ```
 
@@ -32,9 +33,9 @@ Run an async audio processing pipeline from a TypeScript file whose default expo
 
 ## Package resolution
 
-Each entry in the bag's `packages` map (`name` → exact `version`) resolves in order:
+Each distinct `(packageName, packageVersion)` pair pinned by the bag's nodes resolves once, in order:
 
-1. **`--resolve name=path` override** — a local directory, for unpublished packages under test. Wins over the pin with a warning; TypeScript source is loaded directly.
+1. **`--resolve name=path` override** — a package-name mapping to a local directory, for unpublished packages under test. It applies to every pinned version of that package with a warning; TypeScript source is loaded directly.
 2. **Ambient `node_modules`** — the copy installed in the working project, used only when its version equals the pin exactly.
 3. **User cache** — `~/.buffered-audio/packages/{encodeURIComponent(name)}/{version}/`, populated by previous fetches (a scoped name is percent-encoded on disk, e.g. `%40buffered-audio%2Fnodes`).
 4. **On-demand fetch** — `pacote` extracts `name@version` into the cache (install scripts disabled). Skipped under `--no-install`.

@@ -61,8 +61,9 @@ function buildLeafParameter(
 	}
 
 	switch (prop.type) {
-		case "number": {
-			const step = prop.multipleOf ?? 0.01;
+		case "number":
+		case "integer": {
+			const step = prop.multipleOf ?? (prop.type === "integer" ? 1 : 0.01);
 			// Exclusive bounds keep the knob one step inside the excluded endpoint so it can never
 			// commit a schema-invalid value (0 for `.lt(0)`, 0 for `.gt(0)`).
 			const min = prop.minimum ?? (prop.exclusiveMinimum !== undefined ? prop.exclusiveMinimum + step : 0);

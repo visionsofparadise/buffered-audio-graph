@@ -92,16 +92,14 @@ const BUILT_IN_PACKAGE_ENTRY: NodePackageState = {
 };
 
 function resetPackageLifecycle(entry: NodePackageState): NodePackageState {
-	return entry.status === "ready"
-		? entry
-		: {
-				...entry,
-				status: "pending",
-				error: null,
-				nodes: [],
-				version: null,
-				apiVersion: null,
-			};
+	return {
+		...entry,
+		status: "pending",
+		error: null,
+		nodes: [],
+		version: null,
+		apiVersion: null,
+	};
 }
 
 function loadSavedPackages(savedPackages: Array<unknown> | undefined): Array<NodePackageState> {

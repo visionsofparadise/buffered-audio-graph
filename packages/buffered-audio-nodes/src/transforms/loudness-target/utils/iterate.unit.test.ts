@@ -1,7 +1,7 @@
 import { BlockBuffer } from "@buffered-audio/core";
 import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { afterEach, describe, expect, it } from "vitest";
-import { iterateForTargets } from "./iterate";
+import { iterateForTargets, type IterationAttempt } from "./iterate";
 
 const SAMPLE_RATE = 48_000;
 const DURATION_SECONDS = 8;
@@ -134,6 +134,9 @@ describe("iterateForTargets", () => {
 
 		const targetLufs = Math.round((metrics.integratedLufs + 3) * 10) / 10;
 		const buffer = await makeBufferFromChannels(source);
+		const progressReports: Array<{ done: number; total: number }> = [];
+		const reportedAttempts: Array<{ attempt: IterationAttempt; attemptIndex: number }> = [];
+		let progressCountAtFirstAttempt: number | undefined;
 
 		const result = await iterateForTargets({
 			buffer,
@@ -148,12 +151,31 @@ describe("iterateForTargets", () => {
 			maxAttempts: 10,
 			tolerance: 0.5,
 			peakTolerance: 0.1,
+			progress: (done, total) => progressReports.push({ done, total }),
+			onAttempt: (attempt, attemptIndex) => {
+				progressCountAtFirstAttempt ??= progressReports.length;
+				reportedAttempts.push({ attempt, attemptIndex });
+			},
 		});
 
 		trackResultBuffers(result);
 
 		expect(result.converged).toBe(true);
 		expect(result.attempts.length).toBeLessThanOrEqual(10);
+		expect(progressCountAtFirstAttempt).toBeGreaterThan(1);
+		expect(reportedAttempts.map(({ attempt }) => attempt)).toEqual(result.attempts);
+		expect(reportedAttempts.map(({ attemptIndex }) => attemptIndex)).toEqual(
+			result.attempts.map((_, attemptIndex) => attemptIndex),
+		);
+		expect(new Set(progressReports.map(({ total }) => total))).toEqual(new Set([10 * FRAME_COUNT * 4]));
+
+		for (let reportIndex = 0; reportIndex < progressReports.length; reportIndex++) {
+			const report = progressReports[reportIndex];
+			const previous = progressReports[reportIndex - 1];
+
+			expect(report?.done).toBeGreaterThanOrEqual(previous?.done ?? 0);
+			expect(report?.done).toBeLessThanOrEqual(report?.total ?? 0);
+		}
 		// BASE-rate smoothed gain envelope, disk-backed (post the
 		// 2026-05-13 base-rate-downstream rewrite — envelope is
 		// bandlimited far below base-rate Nyquist by smoothing, so

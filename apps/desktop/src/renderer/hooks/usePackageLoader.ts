@@ -11,7 +11,9 @@ export function usePackageLoader(
 	main: Main,
 ): { isLoading: boolean } {
 	const [isLoading, setIsLoading] = useState(() =>
-		app.packages.some((entry) => entry.status !== "ready" && entry.status !== "error"),
+		app.packages.some(
+			(entry) => entry.origin === "catalog" && entry.status !== "ready" && entry.status !== "error",
+		),
 	);
 
 	useEffect(() => {
@@ -20,7 +22,7 @@ export function usePackageLoader(
 		async function loadAll(): Promise<void> {
 			const indices = app.packages
 				.map((entry, index) => ({ entry, index }))
-				.filter(({ entry }) => entry.status === "pending")
+				.filter(({ entry }) => entry.origin === "catalog" && entry.status === "pending")
 				.sort((left, right) => (left.entry.isBuiltIn === right.entry.isBuiltIn ? 0 : left.entry.isBuiltIn ? -1 : 1));
 
 			if (indices.length > 0) {

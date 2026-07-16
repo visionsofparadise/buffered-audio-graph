@@ -2,7 +2,7 @@
  * GUI smoke — CDP-driven end-to-end verification of the graph mutation path.
  *
  * Launches the desktop app on an isolated, persistent profile
- * (`.smoke-profile/`), seeds a single empty per-node-pin bag tab, drives the
+ * (`.smoke-profile/`), seeds a restored per-node-pin bag tab, drives the
  * real UI over the Chrome DevTools Protocol, and asserts every graph mutation
  * works and persists. Coverage includes the cmdk add-node catalog (mouse +
  * keyboard pick), the edge insert chip, the reduced node menu, full-graph
@@ -24,17 +24,21 @@ const DESKTOP_DIR = process.cwd();
 const REPO_ROOT = resolve(DESKTOP_DIR, "..", "..");
 const PROFILE_DIR = join(DESKTOP_DIR, ".smoke-profile");
 const BAG_PATH = join(DESKTOP_DIR, ".smoke-seed.bag");
+const RESTORED_BAG_PATH = join(PROFILE_DIR, "smoke-restored.bag");
 const BAG_NAME = "Smoke Bag";
+const RESTORED_BAG_NAME = "Restored Bag";
 const PATH_SENTINEL = "C:/smoke/input.wav";
 const INPUT_WAV_PATH = join(PROFILE_DIR, "smoke-input.wav");
 const OUTPUT_WAV_PATH = join(PROFILE_DIR, "smoke-output.wav");
 
 const BUILTIN_PACKAGE = "@buffered-audio/nodes";
+const STALE_BUILTIN_VERSION = "0.22.0";
 /** Core's leaf-must-be-a-target validation ships in nodes ≥ 0.21.0 (bundles core ≥ 0.10.0). */
 const ZERO_TARGET_MIN_VERSION = "0.21.0";
 
 const SOURCE_NODE = "Read WAV";
 const TRANSFORM_NODE = "Gain";
+const DUPLICATE_CHANNELS_NODE = "Duplicate Channels";
 const WRITE_NODE = "Write";
 const VST3_NODE = "VST3";
 const OTT_MATCH = "OTT";
@@ -55,6 +59,20 @@ interface PersistedNode {
 interface PersistedBag {
 	readonly nodes: ReadonlyArray<PersistedNode>;
 	readonly edges: ReadonlyArray<unknown>;
+}
+
+interface PersistedPackage {
+	readonly requestedSpec?: string;
+	readonly name?: string;
+	readonly version?: string | null;
+	readonly apiVersion?: number | null;
+	readonly status?: string;
+	readonly isBuiltIn?: boolean;
+	readonly origin?: "catalog" | "dependency";
+}
+
+interface PersistedState {
+	readonly packages?: ReadonlyArray<PersistedPackage>;
 }
 
 interface PersistedStage {
@@ -213,6 +231,63 @@ function fileSize(filePath: string): number {
 	}
 }
 
+function readBuiltInPackageState(): PersistedPackage | null {
+	try {
+		const state = JSON.parse(readFileSync(join(PROFILE_DIR, "state.json"), "utf8")) as PersistedState;
+
+		return state.packages?.find((entry) => entry.isBuiltIn) ?? null;
+	} catch {
+		return null;
+	}
+}
+
+function readRestoredDependencyState(): PersistedPackage | null {
+	try {
+		const state = JSON.parse(readFileSync(join(PROFILE_DIR, "state.json"), "utf8")) as PersistedState;
+
+		return state.packages?.find(
+			(entry) =>
+				entry.origin === "dependency" &&
+				entry.name === BUILTIN_PACKAGE &&
+				entry.version === STALE_BUILTIN_VERSION,
+		) ?? null;
+	} catch {
+		return null;
+	}
+}
+
+async function waitForRefreshedBuiltInPackage(timeoutMs: number): Promise<PersistedPackage | null> {
+	const deadline = Date.now() + timeoutMs;
+
+	while (Date.now() < deadline) {
+		const entry = readBuiltInPackageState();
+
+		if (entry?.status === "ready" && entry.version !== null && entry.version !== STALE_BUILTIN_VERSION) {
+			return entry;
+		}
+
+		await sleep(100);
+	}
+
+	return readBuiltInPackageState();
+}
+
+async function waitForRestoredDependency(timeoutMs: number): Promise<PersistedPackage | null> {
+	const deadline = Date.now() + timeoutMs;
+
+	while (Date.now() < deadline) {
+		const entry = readRestoredDependencyState();
+
+		if (entry?.status === "ready") {
+			return entry;
+		}
+
+		await sleep(100);
+	}
+
+	return readRestoredDependencyState();
+}
+
 function seedProfile(): string {
 	mkdirSync(PROFILE_DIR, { recursive: true });
 
@@ -220,24 +295,113 @@ function seedProfile(): string {
 	rmSync(OUTPUT_WAV_PATH, { force: true });
 
 	const bagId = randomUUID();
-	// The per-node-pin bag shape (core 0.11.0 schema): no graph-level packages map;
-	// each node added through the UI carries its own `packageVersion` (the installed
-	// catalog version). The empty seed has no nodes.
+	const restoredBagId = randomUUID();
 	const bag = { id: bagId, apiVersion: 1, name: BAG_NAME, nodes: [], edges: [] };
 
 	writeFileSync(BAG_PATH, JSON.stringify(bag, null, 2));
 
+	// Restoring a tab must register the bag's exact dependency even when the
+	// catalog advances independently to a newer version during startup.
+	const restoredBag = {
+		id: restoredBagId,
+		apiVersion: 1,
+		name: RESTORED_BAG_NAME,
+		nodes: [
+			{
+				id: randomUUID(),
+				packageName: BUILTIN_PACKAGE,
+				packageVersion: STALE_BUILTIN_VERSION,
+				nodeName: SOURCE_NODE,
+				parameters: { path: INPUT_WAV_PATH },
+			},
+		],
+		edges: [],
+	};
+
+	writeFileSync(RESTORED_BAG_PATH, JSON.stringify(restoredBag, null, 2));
+
 	const state = {
-		tabs: [{ id: bagId, bagPath: BAG_PATH }],
-		activeTabId: bagId,
+		tabs: [
+			{ id: bagId, bagPath: BAG_PATH },
+			{ id: restoredBagId, bagPath: RESTORED_BAG_PATH },
+		],
+		activeTabId: restoredBagId,
 		windowBounds: { x: 60, y: 60, width: 1600, height: 1000 },
-		recentFiles: [{ id: bagId, bagPath: BAG_PATH, name: BAG_NAME, lastOpened: Date.now() }],
+		recentFiles: [
+			{ id: restoredBagId, bagPath: RESTORED_BAG_PATH, name: RESTORED_BAG_NAME, lastOpened: Date.now() },
+			{ id: bagId, bagPath: BAG_PATH, name: BAG_NAME, lastOpened: Date.now() - 1 },
+		],
+		packages: [
+			{
+				requestedSpec: `${BUILTIN_PACKAGE}@latest`,
+				name: BUILTIN_PACKAGE,
+				version: STALE_BUILTIN_VERSION,
+				apiVersion: 1,
+				status: "ready",
+				error: null,
+				nodes: [
+					{
+						nodeName: SOURCE_NODE,
+						description: "Read WAV audio from a file",
+						schema: {
+							type: "object",
+							properties: { path: { type: "string", input: "file", mode: "open" } },
+							required: ["path"],
+						},
+						category: "source",
+					},
+					{
+						nodeName: WRITE_NODE,
+						description: "Write audio to a file",
+						schema: {
+							type: "object",
+							properties: { path: { type: "string", input: "file", mode: "save" } },
+							required: ["path"],
+						},
+						category: "target",
+					},
+				],
+				isBuiltIn: true,
+				origin: "catalog",
+			},
+			{
+				requestedSpec: `${BUILTIN_PACKAGE}@${STALE_BUILTIN_VERSION}`,
+				name: BUILTIN_PACKAGE,
+				version: STALE_BUILTIN_VERSION,
+				apiVersion: 1,
+				status: "ready",
+				error: null,
+				nodes: [],
+				isBuiltIn: false,
+				origin: "dependency",
+			},
+		],
 		binaries: {},
 	};
 
 	writeFileSync(join(PROFILE_DIR, "state.json"), JSON.stringify(state, null, 2));
 
-	return bagId;
+	return restoredBagId;
+}
+
+async function selectSmokeTab(page: Page): Promise<void> {
+	const closeButton = await page.$('button[aria-label="Close .smoke-seed"]');
+
+	if (!closeButton) throw new Error("Persisted smoke tab was not found");
+
+	await closeButton.evaluate((element) => {
+		(element.parentElement)?.click();
+	});
+
+	const deadline = Date.now() + 10000;
+
+	while (Date.now() < deadline) {
+		if ((await nodeCount(page)) === 0 && (await page.$(".react-flow__renderer")) !== null) return;
+
+		await sleep(100);
+	}
+
+	throw new Error("Persisted smoke tab did not load its empty graph");
 }
 
 async function waitForCdp(port: number, timeoutMs: number): Promise<void> {
@@ -346,6 +510,18 @@ async function nodeIdByLabel(page: Page, label: string): Promise<string | null> 
 	}, label);
 }
 
+interface RenderedNodeSummary {
+	readonly count: number;
+	readonly texts: ReadonlyArray<string>;
+}
+
+async function renderedNodeSummary(page: Page): Promise<RenderedNodeSummary> {
+	return page.$$eval(".react-flow__node", (elements): RenderedNodeSummary => ({
+		count: elements.length,
+		texts: elements.slice(0, 8).map((element) => (element.textContent).replace(/\s+/g, " ").trim().slice(0, 120)),
+	}));
+}
+
 async function waitForNodeCount(page: Page, expected: number, timeoutMs: number): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
 
@@ -368,6 +544,35 @@ async function waitForEdgeCount(page: Page, expected: number, timeoutMs: number)
 	}
 
 	return false;
+}
+
+async function waitForEdgeAgreement(page: Page, expected: number, timeoutMs: number): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	let persisted: number | null = null;
+	let rendered: number | null = null;
+	let persistedError: string | null = null;
+
+	while (Date.now() < deadline) {
+		try {
+			const bag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
+
+			persisted = bag.edges.length;
+			persistedError = null;
+		} catch (error: unknown) {
+			persisted = null;
+			persistedError = error instanceof Error ? error.message : String(error);
+		}
+
+		rendered = await edgeCount(page);
+
+		if (persisted === expected && rendered === expected) return;
+
+		await sleep(150);
+	}
+
+	throw new Error(
+		`Edge agreement timed out: expected=${expected}, persisted=${String(persisted)}, rendered=${String(rendered)}, persistedError=${persistedError ?? "none"}`,
+	);
 }
 
 async function clickPoint(page: Page, point: Point): Promise<void> {
@@ -571,10 +776,11 @@ interface AddNodeOptions {
 	readonly method?: "click" | "keyboard";
 }
 
-async function addNode(page: Page, nodeLabel: string, expectedCount: number, options: AddNodeOptions = {}): Promise<void> {
+async function addNode(page: Page, nodeLabel: string, expectedCount: number, options: AddNodeOptions = {}): Promise<string> {
 	const search = options.search ?? nodeLabel;
 	const method = options.method ?? "click";
 
+	await sleep(DEBOUNCE_WAIT_MS);
 	await openAddNodeCatalog(page);
 	await page.keyboard.type(search, { delay: 20 });
 	await sleep(250);
@@ -592,9 +798,38 @@ async function addNode(page: Page, nodeLabel: string, expectedCount: number, opt
 		}
 	}
 
-	const reached = await waitForNodeCount(page, expectedCount, 8000);
+	const deadline = Date.now() + 10000;
+	let stableNodeId: string | null = null;
+	let stableSince: number | null = null;
 
-	check(reached, `add "${nodeLabel}" (${method}) — node count reaches ${expectedCount}`);
+	while (Date.now() < deadline) {
+		const [count, nodeId] = await Promise.all([nodeCount(page), nodeIdByLabel(page, nodeLabel)]);
+
+		if (count === expectedCount && nodeId !== null) {
+			if (nodeId !== stableNodeId) {
+				stableNodeId = nodeId;
+				stableSince = Date.now();
+			}
+
+			if (stableSince !== null && Date.now() - stableSince >= DEBOUNCE_WAIT_MS) {
+				check(true, `add "${nodeLabel}" (${method}) — node identity is stable at count ${expectedCount}`);
+
+				return nodeId;
+			}
+		} else {
+			stableNodeId = null;
+			stableSince = null;
+		}
+
+		await sleep(150);
+	}
+
+	const rendered = await renderedNodeSummary(page);
+	const texts = rendered.texts.length > 0 ? rendered.texts.join(" | ") : "(none)";
+
+	throw new Error(
+		`Add "${nodeLabel}" (${method}) did not reach requested identity at count ${expectedCount}; rendered count=${rendered.count}, nodes=${texts}`,
+	);
 }
 
 /**
@@ -917,11 +1152,7 @@ async function waitForPresetCommit(timeoutMs: number): Promise<string | null> {
 async function runVst3Section(page: Page, expectedNodeCount: number): Promise<void> {
 	log("VST3 stage editor:");
 
-	await addNode(page, VST3_NODE, expectedNodeCount);
-
-	const vst3Id = await nodeIdByLabel(page, VST3_NODE);
-
-	if (!vst3Id) throw new Error("Could not resolve the VST3 node id after add");
+	const vst3Id = await addNode(page, VST3_NODE, expectedNodeCount);
 
 	const addedStage = await clickButtonInNodeByText(page, vst3Id, "Add stage");
 
@@ -1040,11 +1271,7 @@ async function dismissRenderToast(page: Page): Promise<void> {
 async function runRenderSection(page: Page): Promise<void> {
 	log("Render — full-graph execution through core:");
 
-	await addNode(page, SOURCE_NODE, 1, { search: "read" });
-
-	const readId = await nodeIdByLabel(page, SOURCE_NODE);
-
-	if (!readId) throw new Error("Could not resolve the Read WAV node id");
+	const readId = await addNode(page, SOURCE_NODE, 1, { search: "read" });
 
 	// Set the input path before moving the node: a drag leaves React Flow's node
 	// in a state where the file input's change does not commit, so set-then-drag
@@ -1083,11 +1310,7 @@ async function runRenderSection(page: Page): Promise<void> {
 		);
 	}
 
-	await addNode(page, WRITE_NODE, 2, { search: "write" });
-
-	const writeId = await nodeIdByLabel(page, WRITE_NODE);
-
-	if (!writeId) throw new Error("Could not resolve the Write node id");
+	const writeId = await addNode(page, WRITE_NODE, 2, { search: "write" });
 
 	await setNodePathParam(page, writeId, OUTPUT_WAV_PATH);
 
@@ -1174,6 +1397,29 @@ async function run(): Promise<void> {
 		// exists only on the error path.
 		await page.waitForSelector(".react-flow__renderer", { timeout: 300000 });
 
+		const refreshedPackage = await waitForRefreshedBuiltInPackage(10000);
+
+		check(
+			refreshedPackage?.status === "ready" && refreshedPackage.version !== null && refreshedPackage.version !== STALE_BUILTIN_VERSION,
+			`stale package lifecycle resets and reloads (${STALE_BUILTIN_VERSION} → ${String(refreshedPackage?.version)})`,
+		);
+
+		const restoredDependency = await waitForRestoredDependency(10000);
+		const restoredNodes = await renderedNodeSummary(page);
+
+		check(
+			restoredDependency?.status === "ready" && restoredDependency.requestedSpec === `${BUILTIN_PACKAGE}@${STALE_BUILTIN_VERSION}`,
+			`restored tab registers exact dependency ${BUILTIN_PACKAGE}@${STALE_BUILTIN_VERSION}`,
+		);
+		check(
+			restoredNodes.count === 1 &&
+				restoredNodes.texts.some((text) => text.includes(SOURCE_NODE)) &&
+			restoredNodes.texts.every((text) => !/node unavailable/i.test(text)),
+			`restored ${SOURCE_NODE} resolves against its pinned package (${restoredNodes.texts.join(" | ")})`,
+		);
+		await selectSmokeTab(page);
+		check(true, "restored-tab regression returns to the untouched smoke graph");
+
 		const sawContinueButton = await page.evaluate(() =>
 			Array.from(document.querySelectorAll("button")).some((button) => (button.textContent).includes("Continue")),
 		);
@@ -1219,18 +1465,13 @@ async function run(): Promise<void> {
 
 		// 1 + 2: add two nodes through the catalog — Read WAV picked by mouse, Gain
 		// picked by keyboard (type-to-filter then Enter selects the first match).
-		await addNode(page, SOURCE_NODE, 1, { search: "read" });
-		await addNode(page, TRANSFORM_NODE, 2, { search: "gain", method: "keyboard" });
-
-		const sourceId = await nodeIdByLabel(page, SOURCE_NODE);
-		const transformId = await nodeIdByLabel(page, TRANSFORM_NODE);
+		const sourceId = await addNode(page, SOURCE_NODE, 1, { search: "read" });
+		const transformId = await addNode(page, TRANSFORM_NODE, 2, { search: "gain", method: "keyboard" });
 
 		check(
-			transformId !== null,
+			transformId.length > 0,
 			"catalog keyboard nav — type-to-filter then Enter adds the first match",
 		);
-
-		if (!sourceId || !transformId) throw new Error("Could not resolve node ids after add");
 
 		// 3: separate the overlapping nodes by dragging the transform node's header.
 		const transformRect = await page.$eval(
@@ -1258,6 +1499,8 @@ async function run(): Promise<void> {
 		await connectHandles(page, sourceHandle, targetHandle);
 
 		check(await waitForEdgeCount(page, 1, 8000), "connect nodes — edge count reaches 1");
+		await waitForEdgeAgreement(page, 1, 5000);
+		check(true, "connect nodes — edge remains in the BAG and renderer after autosave reconciliation");
 
 		// 4b: edge insert chip — hovering the edge reveals the `+` chip; clicking it
 		// opens the insert catalog and must NOT delete the edge (the Phase-3 3.4 fix).
@@ -1306,7 +1549,20 @@ async function run(): Promise<void> {
 		if (paneRect) await clickPoint(page, { x: paneRect.x, y: paneRect.y });
 
 		await undo(page);
-		check(await waitForEdgeCount(page, 0, 5000), "undo 1 — edge removed (edges = 0)");
+		const edgeRemovedByUndo = await waitForEdgeCount(page, 0, 5000);
+
+		if (!edgeRemovedByUndo) {
+			await sleep(DEBOUNCE_WAIT_MS);
+
+			const undoBag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
+			const renderedEdges = await edgeCount(page);
+
+			throw new Error(
+				`Undo edge reconciliation failed: persisted edges=${undoBag.edges.length}, rendered edges=${renderedEdges}`,
+			);
+		}
+
+		check(true, "undo 1 — edge removed (edges = 0)");
 
 		await undo(page);
 		check(await waitForNodeCount(page, 1, 5000), "undo 2 — transform node removed (nodes = 1)");
@@ -1405,6 +1661,40 @@ async function run(): Promise<void> {
 			persistedPath === PATH_SENTINEL,
 			`persisted param path equals typed value ("${String(persistedPath)}")`,
 		);
+
+		const duplicateChannelsId = await addNode(page, DUPLICATE_CHANNELS_NODE, 2, { search: "duplicate channels" });
+
+		const readoutSelector = `.react-flow__node[data-id="${duplicateChannelsId}"] .type-value`;
+		const readout = await rectOf(page, readoutSelector);
+
+		if (!readout) throw new Error("Duplicate Channels numeric readout not found");
+
+		await page.mouse.click(readout.x, readout.y, { count: 2 });
+
+		const editorSelector = `.react-flow__node[data-id="${duplicateChannelsId}"] input[type="number"][step="1"]`;
+
+		await page.waitForSelector(editorSelector, { timeout: 5000 });
+		await page.focus(editorSelector);
+		await page.keyboard.down("Control");
+		await page.keyboard.press("A");
+		await page.keyboard.up("Control");
+		await page.keyboard.type("4");
+		await page.keyboard.press("Enter");
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const integerBag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
+		const duplicateChannels = integerBag.nodes.find((node) => node.nodeName === DUPLICATE_CHANNELS_NODE);
+		const channels = duplicateChannels?.parameters?.channels;
+
+		check(
+			channels === 4 && Number.isInteger(channels),
+			`integer parameter — Duplicate Channels persists numeric channels=4 (${String(channels)})`,
+		);
+
+		const deletedDuplicateChannels = await deleteNodeViaMenu(page, duplicateChannelsId);
+
+		check(deletedDuplicateChannels, "integer parameter — Duplicate Channels removed after persistence assertion");
+		check(await waitForNodeCount(page, 1, 5000), "integer parameter — mutation graph returns to 1 node");
 
 		// 11: VST3 stage editor (Phase 7.3). Runs before the Settings remove-flow
 		// so both seeded scan roots are still present when the picker scans.

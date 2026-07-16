@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BufferedTransformStream, UnbufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
+import { BufferedTransformStream, createProgressGate, UnbufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
 
@@ -72,6 +72,8 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 		const channels = buffered.channels;
 		const sampleRate = this.sampleRate ?? 44100;
 		const bd = buffered.bitDepth;
+		const inputGate = createProgressGate(buffered.frames);
+		const outputGate = createProgressGate(buffered.frames);
 
 		const args: Array<string> = [
 			...(this.properties.extraArgs ?? []),
@@ -85,12 +87,49 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 
 		// Retries the pre-READY init crash (Windows 0xC0000005 / exit 3221225477); see design-vst3.md (2026-06-01).
 		const handle = await spawnVstHostReady(this.properties.vstHostPath, args, {
+			onLiveness: (event) => {
+				this.log(
+					"vst-host liveness",
+					{
+						phase: event.phase,
+						elapsedMs: event.elapsedMs,
+						processCpuDeltaMs: event.processCpuDeltaMs,
+						processCpuMs: event.processCpuMs,
+						state: event.state,
+					},
+					event.state === "idle" ? "warn" : "info",
+				);
+			},
 			onRetry: (failedAttempt, error) => {
 				this.log("vst-host init crash, retrying", { attempt: failedAttempt, error: error.message }, "warn");
 			},
 		});
 
-		await processStreamingThroughVstHost(handle, buffered, channels, sampleRate, bd);
+		await processStreamingThroughVstHost(handle, buffered, {
+			channelCount: channels,
+			sampleRate,
+			bitDepth: bd,
+			onInputProgress: (progress) => {
+				if (inputGate(progress.framesDone, Date.now())) {
+					this.log("vst-host input", {
+						framesDone: progress.framesDone,
+						framesTotal: progress.framesTotal,
+						bytesDone: progress.bytesDone,
+						bytesTotal: progress.bytesTotal,
+					});
+				}
+			},
+			onOutputProgress: (progress) => {
+				if (outputGate(progress.framesDone, Date.now())) {
+					this.log("vst-host output", {
+						framesDone: progress.framesDone,
+						framesTotal: progress.framesTotal,
+						bytesDone: progress.bytesDone,
+						bytesTotal: progress.bytesTotal,
+					});
+				}
+			},
+		});
 
 		await buffered.reset();
 

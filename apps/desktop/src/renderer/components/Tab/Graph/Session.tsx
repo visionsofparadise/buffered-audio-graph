@@ -102,11 +102,8 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 			});
 
 			// Import is a definition-ingress path: satisfy the merged nodes'
-			// dependency pins, gated by the auto-install consent toggle, blocking
-			// the app behind the loading screen exactly as the open path does.
+			// dependency pins behind the auto-install consent gate.
 			if (context.app.installBagPackagesAutomatically) {
-				context.setHasPassedLoading(false);
-
 				try {
 					await ensureGraphPackagesInstalled(merged.definition, context.app, context.appStore, context.main);
 				} catch (error) {
@@ -114,8 +111,6 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 						namespace: "packages",
 					});
 				}
-
-				context.setHasPassedLoading(true);
 			}
 		};
 

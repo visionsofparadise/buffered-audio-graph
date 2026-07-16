@@ -13,9 +13,11 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 	iir: BidirectionalIir;
 	chunkSize: number;
 	minHeldBuffer?: BlockBuffer;
+	progress?: (done: number, total: number) => void;
 }): Promise<void> {
-	const { sourceBuffer, destBuffer, iir, chunkSize, minHeldBuffer } = args;
+	const { sourceBuffer, destBuffer, iir, chunkSize, minHeldBuffer, progress } = args;
 	const totalFrames = sourceBuffer.frames;
+	const totalWork = totalFrames * 2;
 
 	if (totalFrames === 0) return;
 	if (chunkSize <= 0) {
@@ -40,6 +42,7 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 	try {
 		const backwardState = { value: 0 };
 		let seeded = false;
+		let filteredFrames = 0;
 		const sourceReader = await sourceBuffer.openReverseReader();
 
 		try {
@@ -59,6 +62,8 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 				const filtered = iir.applyForwardPass(reversed, backwardState);
 
 				await filteredReversed.write([filtered], sr, bd);
+				filteredFrames += reversed.length;
+				progress?.(filteredFrames, totalWork);
 			}
 		} finally {
 			await sourceReader.close();
@@ -69,6 +74,7 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 		if (minHeldBuffer !== undefined) await minHeldBuffer.reset();
 
 		const filteredReader = await filteredReversed.openReverseReader();
+		let restoredFrames = 0;
 
 		try {
 			for (;;) {
@@ -98,6 +104,8 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 				}
 
 				await destBuffer.write([forwardOrder], sr, bd);
+				restoredFrames += stripeFrames;
+				progress?.(totalFrames + restoredFrames, totalWork);
 			}
 		} finally {
 			await filteredReader.close();

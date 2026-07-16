@@ -36,9 +36,10 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 	useBinaryDefaults(app, appStore, main);
 	useAutosave(app, appStore, main, userDataPath);
 
+	const catalogPackages = app.packages.filter((entry) => entry.origin === "catalog");
 	const { isLoading } = usePackageLoader(app, appStore, main);
-	const hasUnresolvedPackages = app.packages.some((entry) => entry.status !== "ready" && entry.status !== "error");
-	const hasError = app.packages.some((entry) => entry.status === "error");
+	const hasUnresolvedPackages = catalogPackages.some((entry) => entry.status !== "ready" && entry.status !== "error");
+	const hasError = catalogPackages.some((entry) => entry.status === "error");
 
 	const [hasPassedLoading, setHasPassedLoading] = useState(false);
 
@@ -50,7 +51,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 
 	const [settingsOpen, setSettingsOpen] = useState(false);
 
-	const callbacks = useAppCallbacks(app, appStore, main, logger, setHasPassedLoading);
+	const callbacks = useAppCallbacks(app, appStore, main, logger);
 
 	const activeCommands = useCreateState<ActiveCommands>(
 		{ undo: null, redo: null, canUndo: false, canRedo: false, rename: null, importBag: null, save: null },
@@ -79,7 +80,6 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 				await activeCommands.importBag?.();
 			},
 			setSettingsOpen,
-			setHasPassedLoading,
 		}),
 		[app, appStore, logger, mainEvents, queryClient, userDataPath, windowId, activeCommands, callbacks],
 	);
@@ -89,7 +89,7 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 			<div className="flex flex-col h-screen">
 				<AppBar context={context} chromeOnly />
 				<LoadingScreen
-					packages={app.packages}
+					packages={catalogPackages}
 					isLoading={isLoading || hasUnresolvedPackages}
 					onContinue={() => setHasPassedLoading(true)}
 				/>

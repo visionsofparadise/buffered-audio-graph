@@ -5,14 +5,12 @@ import type { Main } from "../models/Main";
 import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
 import type { AppState } from "../models/State/App";
 import { loadBag, newBag, openBag, saveBagDefinition } from "../utils/bagOperations";
-import { ensureGraphPackagesInstalled } from "./packagePipeline";
 
 interface UseAppCallbacksReturn {
 	readonly tabNames: Map<string, string>;
 	readonly openBagTab: () => Promise<void>;
 	readonly openBagByPath: (bagPath: string) => Promise<void>;
 	readonly newBagTab: () => Promise<void>;
-	readonly setHasPassedLoading: (value: boolean) => void;
 }
 
 export function useAppCallbacks(
@@ -20,7 +18,6 @@ export function useAppCallbacks(
 	appStore: ProxyStore,
 	main: Main,
 	logger: Logger,
-	setHasPassedLoading: (value: boolean) => void,
 ): UseAppCallbacksReturn {
 	const tabNamesRef = useRef(new Map<string, string>());
 
@@ -51,28 +48,9 @@ export function useAppCallbacks(
 		async (bagPath: string) => {
 			const definition = await loadBag(main, bagPath);
 
-			setHasPassedLoading(false);
-
-			// Dependency satisfaction is automatic and bag-driven, gated by the
-			// auto-install setting. With it off, an unsatisfiable pin lands the bag
-			// in the existing degraded state (nodeLookup surfaces the missing
-			// package on each node).
-			if (app.installBagPackagesAutomatically) {
-				try {
-					await ensureGraphPackagesInstalled(definition, app, appStore, main);
-				} catch (error) {
-					logger.error("Failed to install exact package versions required by bag", error as Error, {
-						namespace: "packages",
-						bagPath,
-					});
-				}
-			}
-
-			setHasPassedLoading(true);
-
 			addTab(definition.id, bagPath, definition.name);
 		},
-		[addTab, app, appStore, main, logger, setHasPassedLoading],
+		[addTab, main],
 	);
 
 	const openBagTab = useCallback(async () => {
@@ -123,6 +101,5 @@ export function useAppCallbacks(
 		openBagTab,
 		openBagByPath,
 		newBagTab,
-		setHasPassedLoading,
 	};
 }

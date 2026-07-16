@@ -110,6 +110,7 @@ export interface IterateForTargetsArgs {
 	// Pre-built base-rate detection envelope (ownership transfers; closed by this call). Must be bit-identical to buildBaseRateDetectionCache output for the same buffer/halfWidth.
 	detectionEnvelope?: BlockBuffer | undefined;
 	onAttempt?: (attempt: IterationAttempt, attemptIndex: number) => void;
+	progress?: (done: number, total: number) => void;
 }
 
 export async function iterateForTargets(args: IterateForTargetsArgs): Promise<IterateResult> {
@@ -129,6 +130,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		peakTolerance,
 		seedB,
 		onAttempt,
+		progress,
 	} = args;
 
 	const channelCount = buffer.channels;
@@ -207,8 +209,11 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 		// Infinity seed leaves the first secant call (attempt ≥ 2) uncapped by the asymmetric-damping rule.
 		let previousStepMagnitude = Infinity;
+		const attemptWork = frames * 4;
+		const totalWork = maxAttempts * attemptWork;
 
 		for (let attemptIdx = 0; attemptIdx < maxAttempts; attemptIdx++) {
+			const attemptBase = attemptIdx * attemptWork;
 			const tAttempt0 = Date.now();
 			const anchors: Anchors = {
 				floorDb: anchorBase.floorDb,
@@ -225,6 +230,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				halfWidth,
 				forwardEnvelopeBuffer,
 				minHeldEnvelopeBuffer,
+				progress: (done) => progress?.(attemptBase + done, totalWork),
 			});
 
 			await applyBackwardPassOverChunkBuffer({
@@ -233,9 +239,16 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				iir,
 				chunkSize: CHUNK_FRAMES,
 				minHeldBuffer: minHeldEnvelopeBuffer,
+				progress: (done) => progress?.(attemptBase + frames + done, totalWork),
 			});
 
-			const measured = await measureAttemptOutput({ source: buffer, sampleRate, channelCount, gSmoothed: activeRef });
+			const measured = await measureAttemptOutput({
+				source: buffer,
+				sampleRate,
+				channelCount,
+				gSmoothed: activeRef,
+				progress: (done) => progress?.(attemptBase + frames * 3 + done, totalWork),
+			});
 
 			const lufsErr = measured.outputLufs - targetLufs;
 			const peakErr = measured.outputTruePeakDb - effectiveTargetTp;
@@ -355,12 +368,13 @@ export interface StreamCurveAndForwardIirArgs {
 	halfWidth: number;
 	forwardEnvelopeBuffer: BlockBuffer;
 	minHeldEnvelopeBuffer: BlockBuffer;
+	progress?: (done: number, total: number) => void;
 }
 
 export async function streamCurveAndForwardIir(
 	args: StreamCurveAndForwardIirArgs,
 ): Promise<void> {
-	const { detectionEnvelope, anchors, iir, halfWidth, forwardEnvelopeBuffer, minHeldEnvelopeBuffer } = args;
+	const { detectionEnvelope, anchors, iir, halfWidth, forwardEnvelopeBuffer, minHeldEnvelopeBuffer, progress } = args;
 	const totalFrames = detectionEnvelope.frames;
 
 	if (totalFrames === 0) return;
@@ -415,6 +429,8 @@ export async function streamCurveAndForwardIir(
 			await minHeldEnvelopeBuffer.write([minHeldChunk], detectionSampleRate, detectionBitDepth);
 		}
 
+		progress?.(consumedFrames, totalFrames);
+
 		if (chunkLength < CHUNK_FRAMES) break;
 	}
 
@@ -427,6 +443,7 @@ export interface MeasureAttemptArgs {
 	sampleRate: number;
 	channelCount: number;
 	gSmoothed: BlockBuffer;
+	progress?: (done: number, total: number) => void;
 }
 
 export interface MeasureAttemptResult {
@@ -436,7 +453,7 @@ export interface MeasureAttemptResult {
 }
 
 export async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<MeasureAttemptResult> {
-	const { source, sampleRate, channelCount, gSmoothed } = args;
+	const { source, sampleRate, channelCount, gSmoothed, progress } = args;
 	const accumulator = new LoudnessAccumulator(sampleRate, channelCount);
 	const truePeakAccumulator = new TruePeakAccumulator(sampleRate, channelCount);
 
@@ -448,6 +465,8 @@ export async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<Me
 
 	await source.reset();
 	await gSmoothed.reset();
+	const totalFrames = source.frames;
+	let framesDone = 0;
 
 	for (;;) {
 		const sourceChunk = await source.read(CHUNK_FRAMES);
@@ -476,6 +495,8 @@ export async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<Me
 
 		accumulator.push(transformed, chunkFrames);
 		truePeakAccumulator.push(transformed, chunkFrames);
+		framesDone += chunkFrames;
+		progress?.(framesDone, totalFrames);
 
 		if (chunkFrames < CHUNK_FRAMES) break;
 	}

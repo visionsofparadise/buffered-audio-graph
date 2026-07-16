@@ -5,11 +5,23 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+// eslint-disable-next-line import-x/extensions -- TypeScript JSON modules require the explicit specifier here.
+import packageJson from "../package.json";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cliPath = join(here, "..", "dist", "cli.js");
 const nodesDir = join(here, "..", "..", "buffered-audio-nodes");
 const nodesVersion = "0.21.0";
+
+describe("bag --version", () => {
+	it("prints the package version", () => {
+		const result = spawnSync(process.execPath, [cliPath, "--version"], { encoding: "utf-8" });
+
+		expect(result.status, result.stderr).toBe(0);
+		expect(result.stderr).toBe("");
+		expect(result.stdout).toBe(`${packageJson.version}\n`);
+	});
+});
 
 function writeWav(path: string, samples: ReadonlyArray<number>, sampleRate: number): void {
 	const bytesPerSample = 2;

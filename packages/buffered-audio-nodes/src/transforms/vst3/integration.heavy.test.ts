@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { type Block, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
+import { BlockBuffer, type Block, type LogPayload, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
 import { vst3, Vst3Stream } from ".";
-import { spawnVstHostReady, VstHostExitedBeforeReadyError } from "./utils/process";
+import { processStreamingThroughVstHost, spawnVstHostReady, VstHostExitedBeforeReadyError, type VstHostLiveness, type VstHostTransferProgress } from "./utils/process";
 
 // Stub binary mimics the real `vst-host` CLI shape (node as binary + stub via `extraArgs`);
 // spawns a real subprocess exercising the full lifecycle — hence "integration", not "unit".
@@ -86,11 +86,16 @@ const processWholeFile = async (stream: Vst3Stream, channels: Array<Float32Array
 
 describe("Vst3Stream subprocess lifecycle", () => {
 	it("spawns the stub binary, receives READY, processes the whole buffer, and tears down cleanly", async () => {
+		const events = new EventEmitter() as RenderEvents;
+		const logs: Array<LogPayload> = [];
+
+		events.on("log", (_identity, payload) => logs.push(payload));
+
 		const stream = new Vst3Stream(vst3({
 			vstHostPath: process.execPath,
 			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
 			extraArgs: [stubBinary],
-		}), renderContext());
+		}), { events, nextStreamId: () => 0 });
 
 		const channels = 2;
 		const frames = 8192;
@@ -120,6 +125,63 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			}
 		}
 
+		expect(logs.filter((log) => log.message === "vst-host liveness")).toEqual([
+			expect.objectContaining({ level: "info", data: expect.objectContaining({ state: "active", elapsedMs: 30_000 }) }),
+			expect.objectContaining({ level: "warn", data: expect.objectContaining({ state: "idle", elapsedMs: 60_000 }) }),
+		]);
+		expect(logs.find((log) => log.message === "vst-host input")?.data).toEqual({
+			framesDone: frames,
+			framesTotal: frames,
+			bytesDone: frames * channels * 4,
+			bytesTotal: frames * channels * 4,
+		});
+		expect(logs.find((log) => log.message === "vst-host output")?.data).toEqual({
+			framesDone: frames,
+			framesTotal: frames,
+			bytesDone: frames * channels * 4,
+			bytesTotal: frames * channels * 4,
+		});
+
+	}, 30_000);
+
+	it("preserves non-telemetry stderr and reports exact callback totals", async () => {
+		const frames = 4096;
+		const channelCount = 1;
+		const samples = Float32Array.from({ length: frames }, (_, index) => Math.sin(index / 100));
+		const buffer = new BlockBuffer();
+		const stagesPath = await writeStagesFile();
+		const liveness: Array<VstHostLiveness> = [];
+		const inputProgress: Array<VstHostTransferProgress> = [];
+		const outputProgress: Array<VstHostTransferProgress> = [];
+
+		await buffer.write([samples], 48_000, 32);
+		await buffer.flushWrites();
+
+		try {
+			const handle = await spawnVstHostReady(process.execPath, [stubBinary, "--stages-json", stagesPath, "--sample-rate", "48000", "--channels", "1"], {
+				onLiveness: (event) => liveness.push(event),
+			});
+
+			await processStreamingThroughVstHost(handle, buffer, {
+				channelCount,
+				sampleRate: 48_000,
+				bitDepth: 32,
+				onInputProgress: (progress) => inputProgress.push(progress),
+				onOutputProgress: (progress) => outputProgress.push(progress),
+			});
+
+			expect(liveness.map((event) => event.state)).toEqual(["active", "idle"]);
+			expect(inputProgress.at(-1)).toEqual({ framesDone: frames, framesTotal: frames, bytesDone: frames * 4, bytesTotal: frames * 4 });
+			expect(outputProgress.at(-1)).toEqual({ framesDone: frames, framesTotal: frames, bytesDone: frames * 4, bytesTotal: frames * 4 });
+			expect(handle.getStderrTail()).toBe("stub-binary: ordinary diagnostic\nVST_HOST_EVENT {malformed-json}\nstub-binary: incomplete final diagnostic");
+
+			await buffer.reset();
+			const result = await buffer.read(frames);
+
+			expect(result.samples[0]).toEqual(samples);
+		} finally {
+			await buffer.close();
+		}
 	}, 30_000);
 
 	it("handles a non-block-aligned buffer", async () => {

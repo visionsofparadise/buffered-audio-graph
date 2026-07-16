@@ -187,7 +187,8 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		});
 
 		const tIterate0 = Date.now();
-		const attemptGate = createProgressGate(maxAttempts);
+		const totalWork = maxAttempts * buffer.frames * 4;
+		const progressGate = createProgressGate(totalWork);
 		const result = await iterateForTargets({
 			buffer,
 			sampleRate,
@@ -204,6 +205,9 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			peakTolerance,
 			seedB,
 			detectionEnvelope,
+			progress: (done, total) => {
+				if (progressGate(done, Date.now())) this.emitProgress("process", done, total);
+			},
 			onAttempt: (attempt, attemptIndex) => {
 				this.log("attempt", {
 					attempt: attemptIndex + 1,
@@ -214,8 +218,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 					outputLra: attempt.outputLra,
 					elapsedMs: attempt.elapsedMs,
 				});
-
-				if (attemptGate(attemptIndex + 1, Date.now())) this.emitProgress("process", attemptIndex + 1, maxAttempts);
 			},
 		});
 

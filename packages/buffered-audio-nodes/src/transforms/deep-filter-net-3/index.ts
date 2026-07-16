@@ -27,7 +27,7 @@ export const schema = z.object({
 		.number()
 		.int()
 		.positive()
-		.describe("Source audio sample rate in Hz. Required. When ≠ 48000, ffmpeg resampling is chained around the inference stream via _setup composition."),
+		.describe("Source audio sample rate in Hz. Required. At rates other than 48000 Hz, the internal resampling round trip may add or drop up to two source-rate frames."),
 	attenuation: z.number().min(0).max(100).default(30).describe("Attenuation cap in dB. Maps to the ONNX `atten_lim_db` input; 0 = no cap"),
 });
 
@@ -134,7 +134,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 export class DeepFilterNet3Node extends TransformNode<DeepFilterNet3Properties> {
 	static override readonly nodeName = "DeepFilterNet3 (Denoiser)";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly description = "Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)";
+	static override readonly description = "Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN). At other source rates, the internal resampling round trip may add or drop up to two source-rate frames.";
 	static override readonly schema = schema;
 	static override readonly Stream = DeepFilterNet3Stream;
 }

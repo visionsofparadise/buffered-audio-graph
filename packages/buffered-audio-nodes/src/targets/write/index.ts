@@ -23,14 +23,14 @@ export type WavBitDepth = "16" | "24" | "32" | "32f";
 
 export interface EncodingOptions {
 	readonly format: "wav" | "flac" | "mp3" | "aac";
-	readonly bitrate?: string;
+	readonly bitrate?: number;
 	readonly vbr?: number;
 	readonly sampleRate?: number;
 }
 
 export const encodingSchema = z.object({
 	format: z.enum(["wav", "flac", "mp3", "aac"]),
-	bitrate: z.string().optional(),
+	bitrate: z.number().int().min(8).max(1024).optional().describe("Constant bitrate in kbps for MP3 and AAC. Defaults to 192 kbps."),
 	vbr: z.number().min(0).max(9).optional(),
 	sampleRate: z.number().int().positive().optional().describe("Output sample rate (Hz). When set, ffmpeg resamples on encode."),
 });
@@ -215,12 +215,12 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 				if (encoding.vbr !== undefined) {
 					args.push("-q:a", String(encoding.vbr));
 				} else {
-					args.push("-b:a", encoding.bitrate ?? "192k");
+					args.push("-b:a", `${encoding.bitrate ?? 192}k`);
 				}
 
 				break;
 			case "aac":
-				args.push("-codec:a", "aac", "-b:a", encoding.bitrate ?? "192k");
+				args.push("-codec:a", "aac", "-b:a", `${encoding.bitrate ?? 192}k`);
 				break;
 		}
 

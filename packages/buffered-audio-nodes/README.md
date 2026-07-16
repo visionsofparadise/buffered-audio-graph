@@ -92,7 +92,7 @@ Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reducti
 
 ### DeepFilterNet3 (Denoiser)
 
-Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)
+Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN). At other source rates, the internal resampling round trip may add or drop up to two source-rate frames.
 
 [Source](./src/transforms/deep-filter-net-3/index.ts)
 
@@ -101,7 +101,7 @@ Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)
 | `modelPath` | string | `""` | DeepFilterNet3 48 kHz denoiser model (.onnx) Download: [dfn3](https://github.com/yuyun2000/SpeechDenoiser) |
 | `ffmpegPath` | string | `""` | FFmpeg — only used when sampleRate ≠ 48000 to chain up/down resamplers around the inference stream; can be left blank when sampleRate === 48000. Download: [ffmpeg](https://ffmpeg.org/download.html) |
 | `onnxAddonPath` | string | `""` | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
-| `sampleRate` | number (min 0) | — | Source audio sample rate in Hz. Required. When ≠ 48000, ffmpeg resampling is chained around the inference stream via _setup composition. |
+| `sampleRate` | number (min 0) | — | Source audio sample rate in Hz. Required. At rates other than 48000 Hz, the internal resampling round trip may add or drop up to two source-rate frames. |
 | `attenuation` | number (0 to 100) | `30` | Attenuation cap in dB. Maps to the ONNX `atten_lim_db` input; 0 = no cap |
 
 ### Dither
@@ -392,7 +392,7 @@ Write audio to a file
 | `bitDepth` | "16" \| "24" \| "32" \| "32f" | `"16"` |  |
 | `encoding` | Object, optional | — | Encode through ffmpeg to a non-WAV format. Requires `ffmpegPath`. |
 | `encoding.format` | "wav" \| "flac" \| "mp3" \| "aac" | — |  |
-| `encoding.bitrate` | string, optional | — |  |
+| `encoding.bitrate` | number (8 to 1024), optional | — | Constant bitrate in kbps for MP3 and AAC. Defaults to 192 kbps. |
 | `encoding.vbr` | number (0 to 9), optional | — |  |
 | `encoding.sampleRate` | number (min 0), optional | — | Output sample rate (Hz). When set, ffmpeg resamples on encode. |
 

@@ -102,6 +102,7 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 
 			const reductionDb = 20 * Math.log10((inputRms + 1e-12) / (outputRms + 1e-12));
 
+			expect(output[0]?.length).toBe(input[0]?.length);
 			expect(reductionDb).toBeGreaterThanOrEqual(1);
 			expect(notAnomalous(output).pass).toBe(true);
 		} finally {
@@ -142,7 +143,8 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 			const inputChannel = input[0] ?? new Float32Array();
 			const outputChannel = output[0] ?? new Float32Array();
 
-			// ±2 frame tolerance: resample round-trip can drift fractionally.
+			// The model path preserves its received 48 kHz frame count exactly; only the 44.1→48→44.1 kHz
+			// resampling round trip carries this endpoint-rounding tolerance.
 			expect(Math.abs(outputChannel.length - inputChannel.length)).toBeLessThanOrEqual(2);
 
 			let maxAbs = 0;

@@ -111,12 +111,14 @@ describe("applyBackwardPassOverChunkBuffer", () => {
 		const sourceBuffer = await makeFileBufferFromSamples(random);
 		const destBuffer = new BlockBuffer();
 		const iir = new BidirectionalIir({ smoothingMs: SMOOTHING_MS, sampleRate: SAMPLE_RATE });
+		const progressReports: Array<{ done: number; total: number }> = [];
 
 		await applyBackwardPassOverChunkBuffer({
 			sourceBuffer,
 			destBuffer,
 			iir,
 			chunkSize,
+			progress: (done, total) => progressReports.push({ done, total }),
 		});
 
 		const actual = await readAll(destBuffer);
@@ -131,6 +133,16 @@ describe("applyBackwardPassOverChunkBuffer", () => {
 			if (delta > maxDelta) maxDelta = delta;
 		}
 		expect(maxDelta).toBeLessThan(ULP_TOLERANCE);
+		expect(progressReports.length).toBeGreaterThan(2);
+		expect(progressReports.at(-1)).toEqual({ done: length * 2, total: length * 2 });
+
+		for (let reportIndex = 0; reportIndex < progressReports.length; reportIndex++) {
+			const report = progressReports[reportIndex];
+			const previous = progressReports[reportIndex - 1];
+
+			expect(report?.done).toBeGreaterThanOrEqual(previous?.done ?? 0);
+			expect(report?.total).toBe(length * 2);
+		}
 
 		await sourceBuffer.close();
 		await destBuffer.close();
