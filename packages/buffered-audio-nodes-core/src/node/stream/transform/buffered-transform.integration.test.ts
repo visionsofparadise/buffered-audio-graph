@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { Block, BlockBuffer } from "./block-buffer";
+import type { BufferedAudioNode } from "../..";
+import { createBlock } from "../../../testing/blocks";
+import { createTestSetupContext, createTestStreamContext } from "../../../testing/contexts";
+import { drainBlocks, readableFrom } from "../../../testing/streams";
+import type { ProgressPayload, RenderEvents } from "..";
+import type { Block } from "../block";
 import { BufferedTransformStream, WHOLE_FILE } from "./buffered-transform";
-import type { BufferedAudioNode } from "./node";
-import type { ProgressPayload, RenderEvents } from "./stream";
-import { createBlock, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "./testing";
+import type { BlockBuffer } from "./utils/block-buffer";
 
 function nodeWith(properties: Record<string, unknown>): BufferedAudioNode {
 	return { properties, constructor: { nodeName: "probe-transform" } } as unknown as BufferedAudioNode;

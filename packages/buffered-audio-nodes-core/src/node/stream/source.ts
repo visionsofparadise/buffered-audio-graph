@@ -1,8 +1,8 @@
-import type { Block } from "./block-buffer";
-import { BufferedAudioNode, type BufferedAudioNodeProperties, type Composition } from "./node";
-import { createProgressGate } from "./progress-gate";
-import { RenderJob, type RenderOptions } from "./render-job";
-import { BufferedStream, type StreamSetupContext } from "./stream";
+import { BufferedStream, type StreamSetupContext } from ".";
+import { BufferedAudioNode, type BufferedAudioNodeProperties, type Composition } from "..";
+import { RenderJob, type RenderOptions } from "../../render-job";
+import type { Block } from "./block";
+import { createProgressGate } from "./utils/progress-gate";
 
 export interface SourceMetadata {
 	readonly sampleRate: number;

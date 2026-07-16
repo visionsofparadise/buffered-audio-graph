@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { type Composition } from "./node";
-import { SourceNode } from "./source";
-import { TargetNode } from "./target";
-import { TransformNode, type TransformNodeProperties } from "./transform";
+import { type Composition } from ".";
+import { SourceNode } from "./stream/source";
+import { TargetNode } from "./stream/target";
+import { TransformNode, type TransformNodeProperties } from "./stream/transform";
 
 class MockSource extends SourceNode {
 	static override readonly packageName = "test";

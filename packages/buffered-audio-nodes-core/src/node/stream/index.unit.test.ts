@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { BufferedAudioNode } from "./node";
-import { createTestStreamContext } from "./testing";
-import { BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload, type RenderEvents, type StartedPayload, type StreamPhase } from "./stream";
+import { BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload, type RenderEvents, type StartedPayload, type StreamPhase } from ".";
+import type { BufferedAudioNode } from "..";
+import { createTestStreamContext } from "../../testing/contexts";
 
 function fakeNode(nodeName: string, id?: string): BufferedAudioNode {
 	return { id, properties: { id }, constructor: { nodeName } } as unknown as BufferedAudioNode;

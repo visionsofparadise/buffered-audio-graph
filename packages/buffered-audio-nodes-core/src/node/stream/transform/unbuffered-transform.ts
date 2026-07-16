@@ -1,9 +1,9 @@
-import type { Block } from "./block-buffer";
-import type { BufferedAudioNode } from "./node";
-import { createProgressGate, type ProgressGate } from "./progress-gate";
-import { BufferedStream, type StreamSetupContext } from "./stream";
-import type { TransformNodeProperties } from "./transform";
-import { toReadable } from "./utils/to-readable";
+import type { BufferedAudioNode } from "../..";
+import { toReadable } from "../../../utils/to-readable";
+import { BufferedStream, type StreamSetupContext } from "..";
+import type { Block } from "../block";
+import { createProgressGate, type ProgressGate } from "../utils/progress-gate";
+import type { TransformNodeProperties } from ".";
 
 export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>> extends BufferedStream<N> {
 	private framesBuffered = 0;

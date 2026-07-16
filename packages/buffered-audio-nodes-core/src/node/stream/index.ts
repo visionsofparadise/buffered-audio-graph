@@ -1,5 +1,5 @@
 import type { EventEmitter } from "node:events";
-import type { BufferedAudioNode } from "./node";
+import type { BufferedAudioNode } from "..";
 
 export type ExecutionProvider = "gpu" | "cpu-native" | "cpu";
 
@@ -43,7 +43,13 @@ export interface LogPayload {
 	createdAt: number;
 }
 
+export interface RenderLivenessPayload {
+	readonly createdAt: number;
+	readonly elapsedMs: number;
+}
+
 export type RenderEvents = EventEmitter<{
+	liveness: [RenderLivenessPayload];
 	started: [StreamIdentity, StartedPayload];
 	finished: [StreamIdentity, FinishedPayload];
 	progress: [StreamIdentity, ProgressPayload];

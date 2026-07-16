@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { Block } from "./block-buffer";
-import type { BufferedAudioNode } from "./node";
+import type { StreamIdentity } from ".";
+import type { BufferedAudioNode } from "..";
+import type { Block } from "./block";
 import { BufferedSourceStream, SourceNode, type SourceMetadata, type SourceNodeProperties } from "./source";
 import { BufferedTargetStream, TargetNode } from "./target";
-import { createBlock, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "./testing";
-import { UnbufferedTransformStream } from "./unbuffered-transform";
 import { TransformNode } from "./transform";
-import type { StreamIdentity } from "./stream";
+import { UnbufferedTransformStream } from "./transform/unbuffered-transform";
+import { createBlock } from "../../testing/blocks";
+import { createTestSetupContext, createTestStreamContext } from "../../testing/contexts";
+import { drainBlocks, readableFrom } from "../../testing/streams";
 
 function fakeNode(nodeName: string, id?: string): BufferedAudioNode {
 	return { id, properties: { id }, constructor: { nodeName } } as unknown as BufferedAudioNode;

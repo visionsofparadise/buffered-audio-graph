@@ -1,12 +1,14 @@
 import { EventEmitter } from "node:events";
-import type { Block } from "./block-buffer";
-import { BufferedTransformStream } from "./buffered-transform";
 import type { BufferedAudioNode } from "./node";
-import { BufferedSourceStream, type RenderTiming, type SourceNode } from "./source";
-import type { BufferedStream, ExecutionProvider, RenderEvents, StreamContext, StreamSetupContext } from "./stream";
-import { BufferedTargetStream } from "./target";
-import { UnbufferedTransformStream } from "./unbuffered-transform";
+import type { BufferedStream, ExecutionProvider, RenderEvents, StreamContext, StreamSetupContext } from "./node/stream";
+import type { Block } from "./node/stream/block";
+import { BufferedSourceStream, type RenderTiming, type SourceNode } from "./node/stream/source";
+import { BufferedTargetStream } from "./node/stream/target";
+import { BufferedTransformStream } from "./node/stream/transform/buffered-transform";
+import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
 import { teeReadable } from "./utils/tee-readable";
+
+const RENDER_LIVENESS_INTERVAL_MS = 30_000;
 
 export interface RenderOptions {
 	readonly chunkSize?: number;
@@ -22,10 +24,6 @@ interface PlanNode {
 	readonly children: Array<PlanNode>;
 }
 
-function isSourceStream(stream: BufferedStream): stream is BufferedSourceStream {
-	return stream instanceof BufferedSourceStream;
-}
-
 export class RenderJob {
 	readonly events: RenderEvents = new EventEmitter();
 
@@ -34,7 +32,7 @@ export class RenderJob {
 	private readonly renderContext: StreamContext;
 
 	private readonly root: PlanNode;
-	private readonly sourceStream: BufferedSourceStream;
+	private readonly sourceStream;
 
 	private timingData?: RenderTiming;
 	private started = false;
@@ -49,11 +47,13 @@ export class RenderJob {
 
 		this.root = this.build(source, new Set<BufferedAudioNode>());
 
-		if (!isSourceStream(this.root.stream)) {
+		const sourceStream = this.root.stream;
+
+		if (!(sourceStream instanceof BufferedSourceStream)) {
 			throw new Error("Source node did not produce a source stream");
 		}
 
-		this.sourceStream = this.root.stream;
+		this.sourceStream = sourceStream;
 	}
 
 	get streams(): ReadonlyMap<BufferedAudioNode, ReadonlyArray<BufferedStream>> {
@@ -124,46 +124,54 @@ export class RenderJob {
 	async render(): Promise<void> {
 		if (this.started) throw new Error("RenderJob is single-use; render() was already called");
 		this.started = true;
-
-		const meta = await this.sourceStream.getMetadata();
-
-		const defaultProviders: ReadonlyArray<ExecutionProvider> = ["gpu", "cpu-native", "cpu"];
-		const memoryLimit = this.options?.memoryLimit ?? 256 * 1024 * 1024;
-		const stages = Math.max(1, this.countStreams());
-		const chunkSize = this.options?.chunkSize ?? 128 * 1024;
-		const bytesPerChunk = meta.channels * chunkSize * 4;
-		const computedHighWaterMark = Math.max(1, Math.floor(memoryLimit / (stages * bytesPerChunk)));
-
-		const context: StreamSetupContext = {
-			executionProviders: this.options?.executionProviders ?? defaultProviders,
-			memoryLimit,
-			durationFrames: meta.durationFrames,
-			highWaterMark: this.options?.highWaterMark ?? computedHighWaterMark,
-			signal: this.signal(),
-		};
-
-		const start = performance.now();
+		const renderCalledAt = performance.now();
+		const livenessInterval = setInterval(() => {
+			this.events.emit("liveness", { createdAt: Date.now(), elapsedMs: performance.now() - renderCalledAt });
+		}, RENDER_LIVENESS_INTERVAL_MS);
 
 		try {
-			const readable = await this.sourceStream.setup(context);
-			const promises = await this.wireChildren(this.root.children, readable, context);
+			const meta = await this.sourceStream.getMetadata();
 
-			await Promise.all(promises);
-		} finally {
-			for (const streams of this.streamsMap.values()) {
-				for (const stream of streams) {
-					await stream.destroy();
-				}
-			}
+			const defaultProviders: ReadonlyArray<ExecutionProvider> = ["gpu", "cpu-native", "cpu"];
+			const memoryLimit = this.options?.memoryLimit ?? 256 * 1024 * 1024;
+			const stages = Math.max(1, this.countStreams());
+			const chunkSize = this.options?.chunkSize ?? 128 * 1024;
+			const bytesPerChunk = meta.channels * chunkSize * 4;
+			const computedHighWaterMark = Math.max(1, Math.floor(memoryLimit / (stages * bytesPerChunk)));
 
-			const totalMs = performance.now() - start;
-			const audioDurationMs = meta.durationFrames !== undefined ? (meta.durationFrames / meta.sampleRate) * 1000 : 0;
-
-			this.timingData = {
-				totalMs,
-				audioDurationMs,
-				realTimeMultiplier: audioDurationMs > 0 ? audioDurationMs / totalMs : 0,
+			const context: StreamSetupContext = {
+				executionProviders: this.options?.executionProviders ?? defaultProviders,
+				memoryLimit,
+				durationFrames: meta.durationFrames,
+				highWaterMark: this.options?.highWaterMark ?? computedHighWaterMark,
+				signal: this.signal(),
 			};
+
+			const start = performance.now();
+
+			try {
+				const readable = await this.sourceStream.setup(context);
+				const promises = await this.wireChildren(this.root.children, readable, context);
+
+				await Promise.all(promises);
+			} finally {
+				for (const streams of this.streamsMap.values()) {
+					for (const stream of streams) {
+						await stream.destroy();
+					}
+				}
+
+				const totalMs = performance.now() - start;
+				const audioDurationMs = meta.durationFrames !== undefined ? (meta.durationFrames / meta.sampleRate) * 1000 : 0;
+
+				this.timingData = {
+					totalMs,
+					audioDurationMs,
+					realTimeMultiplier: audioDurationMs > 0 ? audioDurationMs / totalMs : 0,
+				};
+			}
+		} finally {
+			clearInterval(livenessInterval);
 		}
 	}
 

@@ -6,15 +6,13 @@ export interface WindowedIterateOptions {
 	readonly hopSize: number;
 }
 
-export async function windowedIterate(
-	buffer: BlockBuffer,
-	options: WindowedIterateOptions,
-	onWindow: (window: Array<Float32Array>, windowIndex: number) => void | Promise<void>,
-): Promise<void> {
+export async function windowedIterate(buffer: BlockBuffer, options: WindowedIterateOptions, onWindow: (window: Array<Float32Array>, windowIndex: number) => void | Promise<void>): Promise<void> {
 	const { windowSize, hopSize } = options;
 
 	if (windowSize <= 0) throw new Error(`windowedIterate: windowSize must be > 0, got ${String(windowSize)}`);
+
 	if (hopSize <= 0) throw new Error(`windowedIterate: hopSize must be > 0, got ${String(hopSize)}`);
+
 	if (hopSize > windowSize) throw new Error(`windowedIterate: hopSize (${String(hopSize)}) must be <= windowSize (${String(windowSize)})`);
 
 	const channels = buffer.channels;
@@ -23,9 +21,10 @@ export async function windowedIterate(
 
 	const scratch: Array<Float32Array> = [];
 
-	for (let ch = 0; ch < channels; ch++) scratch.push(new Float32Array(windowSize));
+	for (let channel = 0; channel < channels; channel++) scratch.push(new Float32Array(windowSize));
 
 	const preload = windowSize - hopSize;
+
 	let scratchFilled = 0;
 
 	if (preload > 0) {
@@ -34,10 +33,10 @@ export async function windowedIterate(
 
 		if (initialFrames === 0) return;
 
-		for (let ch = 0; ch < channels; ch++) {
-			const src = initial.samples[ch];
+		for (let channel = 0; channel < channels; channel++) {
+			const sourceSamples = initial.samples[channel];
 
-			if (src) scratch[ch]!.set(src.subarray(0, initialFrames), 0);
+			if (sourceSamples) scratch[channel]!.set(sourceSamples.subarray(0, initialFrames), 0);
 		}
 
 		scratchFilled = initialFrames;
@@ -57,8 +56,9 @@ export async function windowedIterate(
 
 		if (chunkFrames === 0) {
 			if (scratchFilled === windowSize) return;
+
 			if (scratchFilled > preload) {
-				for (let ch = 0; ch < channels; ch++) scratch[ch]!.fill(0, scratchFilled, windowSize);
+				for (let channel = 0; channel < channels; channel++) scratch[channel]!.fill(0, scratchFilled, windowSize);
 				await onWindow(scratch, windowIndex);
 			}
 
@@ -66,11 +66,12 @@ export async function windowedIterate(
 		}
 
 		if (scratchFilled === windowSize) {
-			for (let ch = 0; ch < channels; ch++) {
-				const view = scratch[ch]!;
+			for (let channel = 0; channel < channels; channel++) {
+				const view = scratch[channel]!;
 
 				view.copyWithin(0, hopSize, windowSize);
-				const incoming = chunk.samples[ch];
+
+				const incoming = chunk.samples[channel];
 
 				if (incoming) {
 					view.set(incoming.subarray(0, chunkFrames), windowSize - hopSize);
@@ -81,16 +82,17 @@ export async function windowedIterate(
 				}
 			}
 		} else {
-			for (let ch = 0; ch < channels; ch++) {
-				const view = scratch[ch]!;
-				const incoming = chunk.samples[ch];
+			for (let channel = 0; channel < channels; channel++) {
+				const view = scratch[channel]!;
+				const incoming = chunk.samples[channel];
 
 				if (incoming) view.set(incoming.subarray(0, chunkFrames), scratchFilled);
 			}
 
 			scratchFilled += chunkFrames;
 			if (scratchFilled < windowSize) {
-				for (let ch = 0; ch < channels; ch++) scratch[ch]!.fill(0, scratchFilled, windowSize);
+				for (let channel = 0; channel < channels; channel++) scratch[channel]!.fill(0, scratchFilled, windowSize);
+
 				await onWindow(scratch, windowIndex);
 
 				return;
@@ -98,6 +100,7 @@ export async function windowedIterate(
 		}
 
 		await onWindow(scratch, windowIndex);
+
 		windowIndex++;
 
 		if (chunkFrames < hopSize) return;

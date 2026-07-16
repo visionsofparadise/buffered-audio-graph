@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { Block } from "../node/stream/block";
 import { sliceBlock } from "./slice-block";
-import type { Block } from "../block-buffer";
 
 function block(values: Array<Array<number>>, offset = 0): Block {
 	return {

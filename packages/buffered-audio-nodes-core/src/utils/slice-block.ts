@@ -1,4 +1,4 @@
-import type { Block } from "../block-buffer";
+import type { Block } from "../node/stream/block";
 
 export function sliceBlock(block: Block, offset: number, frames: number): Block {
 	if (offset === 0 && frames === (block.samples[0]?.length ?? 0)) return block;
