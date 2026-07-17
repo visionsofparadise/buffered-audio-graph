@@ -166,11 +166,11 @@ export async function streamLatticeTrajectory(
 
 			const ringPos = consumed % frameSize;
 
-			for (let ch = 0; ch < channelCount; ch++) {
-				const value = chunk.samples[ch]?.[index] ?? 0;
+			for (let channel = 0; channel < channelCount; channel++) {
+				const value = chunk.samples[channel]?.[index] ?? 0;
 
 				sample = Math.fround(sample + value);
-				const channelRing = channelRings[ch];
+				const channelRing = channelRings[channel];
 
 				if (channelRing) channelRing[ringPos] = value;
 			}
@@ -183,9 +183,9 @@ export async function streamLatticeTrajectory(
 
 				for (let pos = 0; pos < frameSize; pos++) window[pos] = sumRing[(start + pos) % frameSize] ?? 0;
 
-				for (let ch = 0; ch < channelCount; ch++) {
-					const channelRing = channelRings[ch];
-					const channelWindow = channelWindows[ch];
+				for (let channel = 0; channel < channelCount; channel++) {
+					const channelRing = channelRings[channel];
+					const channelWindow = channelWindows[channel];
 
 					if (!channelRing || !channelWindow) continue;
 
@@ -313,10 +313,10 @@ export class LatticeApplyState {
 			const row0 = rows[frame0] ?? this.trajectory.identity;
 			const row1 = rows[frame1] ?? this.trajectory.identity;
 
-			for (let ch = 0; ch < channelCount; ch++) {
-				const inputValue = channels[ch]?.[index] ?? 0;
-				const outChannel = out[ch];
-				const chState = this.state[ch] ?? new Float32Array(order);
+			for (let channel = 0; channel < channelCount; channel++) {
+				const inputValue = channels[channel]?.[index] ?? 0;
+				const outChannel = out[channel];
+				const chState = this.state[channel] ?? new Float32Array(order);
 				let signalValue = inputValue;
 
 				for (let section = 0; section < order; section++) {

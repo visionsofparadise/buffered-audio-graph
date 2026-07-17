@@ -292,11 +292,11 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 		}
 
 		for (let stem = 0; stem < STEM_OUTPUTS; stem++) {
-			const arr = stemAccum[stem];
+			const stemAccumulator = stemAccum[stem];
 
-			if (!arr) continue;
-			arr.copyWithin(0, nStable, SEGMENT_SAMPLES);
-			arr.fill(0, SEGMENT_SAMPLES - nStable, SEGMENT_SAMPLES);
+			if (!stemAccumulator) continue;
+			stemAccumulator.copyWithin(0, nStable, SEGMENT_SAMPLES);
+			stemAccumulator.fill(0, SEGMENT_SAMPLES - nStable, SEGMENT_SAMPLES);
 		}
 
 		sumWeight.copyWithin(0, nStable, SEGMENT_SAMPLES);

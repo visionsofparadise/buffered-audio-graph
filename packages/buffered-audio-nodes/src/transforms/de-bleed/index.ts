@@ -89,9 +89,9 @@ async function readSequentialPadded(
 
 		if (chunkFrames === 0) return;
 
-		const src = chunk.samples[channelIndex];
+		const sourceSamples = chunk.samples[channelIndex];
 
-		if (src) out.set(src.subarray(0, chunkFrames), headPad + written);
+		if (sourceSamples) out.set(sourceSamples.subarray(0, chunkFrames), headPad + written);
 
 		written += chunkFrames;
 		toRead -= chunkFrames;
@@ -214,7 +214,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		const refPaddeds = Array.from({ length: refCount }, () => new Float32Array(warmupFrames * hopSize + (fftSize - hopSize)));
 
 		await buffer.reset();
-		for (let ch = 0; ch < channels; ch++) targetPaddeds[ch]!.fill(0);
+		for (let channelIndex = 0; channelIndex < channels; channelIndex++) targetPaddeds[channelIndex]!.fill(0);
 
 		const targetSamples = warmupFrames * hopSize + (fftSize - hopSize);
 		let written = 0;
@@ -226,10 +226,10 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 			if (chunkFrames === 0) break;
 
-			for (let ch = 0; ch < channels; ch++) {
-				const src = chunk.samples[ch];
+			for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
+				const sourceSamples = chunk.samples[channelIndex];
 
-				if (src) targetPaddeds[ch]!.set(src.subarray(0, chunkFrames), written);
+				if (sourceSamples) targetPaddeds[channelIndex]!.set(sourceSamples.subarray(0, chunkFrames), written);
 			}
 
 			written += chunkFrames;
@@ -244,7 +244,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		const targetStftOutputs = Array.from({ length: channels }, () => allocateStftOutput(warmupFrames, numBins));
 		const refStftOutputs = Array.from({ length: refCount }, () => allocateStftOutput(warmupFrames, numBins));
 
-		const targetStfts = targetPaddeds.map((padded, ch) => stft(padded, fftSize, hopSize, targetStftOutputs[ch], this.fftBackend, this.fftAddonOptions));
+		const targetStfts = targetPaddeds.map((padded, channelIndex) => stft(padded, fftSize, hopSize, targetStftOutputs[channelIndex], this.fftBackend, this.fftAddonOptions));
 		const refStfts = refPaddeds.map((padded, refIndex) => stft(padded, fftSize, hopSize, refStftOutputs[refIndex], this.fftBackend, this.fftAddonOptions));
 
 		const maxRefPows = refStfts.map((refStft) => findMaxRefPower(refStft.real, refStft.imag, refStft.frames, numBins));
@@ -252,8 +252,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 		const seedsByChannel: Array<Array<TransferFunction>> = [];
 
-		for (let ch = 0; ch < channels; ch++) {
-			const targetStft = targetStfts[ch]!;
+		for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
+			const targetStft = targetStfts[channelIndex]!;
 			const accumulators = refStfts.map(() => createTransferAccumulator(numBins));
 
 			for (let refIndex = 0; refIndex < refCount; refIndex++) {
@@ -394,8 +394,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				const targetScratch = targetReader.getScratch();
 				const targetStfts: Array<StftResult> = [];
 
-				for (let ch = 0; ch < channels; ch++) {
-					const stftOut = stft(targetScratch[ch]!.subarray(0, winSamples), fftSize, hopSize, targetStftOutputs[ch], this.fftBackend, this.fftAddonOptions);
+				for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
+					const stftOut = stft(targetScratch[channelIndex]!.subarray(0, winSamples), fftSize, hopSize, targetStftOutputs[channelIndex], this.fftBackend, this.fftAddonOptions);
 
 					targetStfts.push(stftOut);
 				}
@@ -416,12 +416,12 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				const sHatRe = new Float32Array(numBins);
 				const sHatIm = new Float32Array(numBins);
 
-				for (let ch = 0; ch < channels; ch++) {
-					const kalmanStates = kalmanStatesByCh[ch]!;
-					const interfererPsd = interfererPsdByCh[ch]!;
-					const msadChannelStates = msadChannelStatesByCh[ch]!;
-					const ispStates = ispStatesByCh[ch]!;
-					const targetStft = targetStfts[ch]!;
+				for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
+					const kalmanStates = kalmanStatesByCh[channelIndex]!;
+					const interfererPsd = interfererPsdByCh[channelIndex]!;
+					const msadChannelStates = msadChannelStatesByCh[channelIndex]!;
+					const ispStates = ispStatesByCh[channelIndex]!;
+					const targetStft = targetStfts[channelIndex]!;
 
 					for (let frame = 0; frame < winFrames; frame++) {
 						const frameOffset = frame * numBins;
@@ -551,15 +551,15 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				const { clipStart, sliceFromOffset, sliceLength } = clip;
 				const writeSamplesByChannel: Array<Float32Array> = [];
 
-				for (let ch = 0; ch < channels; ch++) {
-					writeSamplesByChannel.push(cleanedByChannel[ch]!.subarray(sliceFromOffset, sliceFromOffset + sliceLength));
+				for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
+					writeSamplesByChannel.push(cleanedByChannel[channelIndex]!.subarray(sliceFromOffset, sliceFromOffset + sliceLength));
 				}
 
 				if (clipStart > outputBuffer.frames) {
 					const padFrames = clipStart - outputBuffer.frames;
 					const zeroSamples: Array<Float32Array> = [];
 
-					for (let ch = 0; ch < channels; ch++) zeroSamples.push(new Float32Array(padFrames));
+					for (let channelIndex = 0; channelIndex < channels; channelIndex++) zeroSamples.push(new Float32Array(padFrames));
 
 					const _twritePad = _profStart();
 
@@ -582,7 +582,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				const padFrames = totalFrames - outputBuffer.frames;
 				const zeroSamples: Array<Float32Array> = [];
 
-				for (let ch = 0; ch < channels; ch++) zeroSamples.push(new Float32Array(padFrames));
+				for (let channelIndex = 0; channelIndex < channels; channelIndex++) zeroSamples.push(new Float32Array(padFrames));
 
 				await outputBuffer.write(zeroSamples, sampleRate, bitDepth);
 			}

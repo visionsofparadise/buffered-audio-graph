@@ -135,18 +135,18 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 		// scratch and sliding input window are per-channel.
 		const streams: Array<DtlnBlockStream> = [];
 
-		for (let ch = 0; ch < channels; ch++) {
+		for (let channel = 0; channel < channels; channel++) {
 			streams.push(new DtlnBlockStream({ session1: this.session1, session2: this.session2, fftBackend: this.fftBackend, fftAddonOptions: this.fftAddonOptions }));
 		}
 
 		const stepAccum: Array<Float32Array> = [];
 
-		for (let ch = 0; ch < channels; ch++) stepAccum.push(new Float32Array(BLOCK_SHIFT));
+		for (let channel = 0; channel < channels; channel++) stepAccum.push(new Float32Array(BLOCK_SHIFT));
 		let stepAccumLen = 0;
 
 		const stepBatch: Array<Float32Array> = [];
 
-		for (let ch = 0; ch < channels; ch++) stepBatch.push(new Float32Array(STEP_BATCH_SIZE));
+		for (let channel = 0; channel < channels; channel++) stepBatch.push(new Float32Array(STEP_BATCH_SIZE));
 		let stepBatchLen = 0;
 
 		let samplesFed = 0;
@@ -173,12 +173,12 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 				const need = BLOCK_SHIFT - stepAccumLen;
 				const take = Math.min(need, chunkFrames - consumed);
 
-				for (let ch = 0; ch < channels; ch++) {
-					const src = got16k[ch] ?? firstChannel;
-					const dest = stepAccum[ch];
+				for (let channel = 0; channel < channels; channel++) {
+					const sourceChannel = got16k[channel] ?? firstChannel;
+					const dest = stepAccum[channel];
 
-					if (!src || !dest) continue;
-					dest.set(src.subarray(consumed, consumed + take), stepAccumLen);
+					if (!sourceChannel || !dest) continue;
+					dest.set(sourceChannel.subarray(consumed, consumed + take), stepAccumLen);
 				}
 
 				stepAccumLen += take;
@@ -207,7 +207,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 		if (samplesFed > 0 && samplesFed < BLOCK_LEN) {
 			const zeroInputs: Array<Float32Array> = [];
 
-			for (let ch = 0; ch < channels; ch++) zeroInputs.push(new Float32Array(BLOCK_SHIFT));
+			for (let channel = 0; channel < channels; channel++) zeroInputs.push(new Float32Array(BLOCK_SHIFT));
 
 			while (samplesFed < BLOCK_LEN) {
 				const result = stepAllChannels({ channels, streams, inputs: zeroInputs, stepBatch, stepBatchLen, batchSize: STEP_BATCH_SIZE, warmupRemaining });
@@ -226,7 +226,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 		// flush() returns the trailing BLOCK_LEN - BLOCK_SHIFT = 384 samples per channel.
 		const flushOutputs: Array<Float32Array> = [];
 
-		for (let ch = 0; ch < channels; ch++) flushOutputs.push(streams[ch]?.flush() ?? new Float32Array(0));
+		for (let channel = 0; channel < channels; channel++) flushOutputs.push(streams[channel]?.flush() ?? new Float32Array(0));
 
 		const flushLen = flushOutputs[0]?.length ?? 0;
 

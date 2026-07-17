@@ -5,13 +5,13 @@ export function updateMinMax(
 	min: Float32Array,
 	max: Float32Array,
 ): void {
-	for (let ch = 0; ch < channels; ch++) {
-		const sample = samples[ch]?.[frame] ?? 0;
-		const currentMin = min[ch];
-		const currentMax = max[ch];
+	for (let channel = 0; channel < channels; channel++) {
+		const sample = samples[channel]?.[frame] ?? 0;
+		const currentMin = min[channel];
+		const currentMax = max[channel];
 
-		if (currentMin !== undefined && sample < currentMin) min[ch] = sample;
-		if (currentMax !== undefined && sample > currentMax) max[ch] = sample;
+		if (currentMin !== undefined && sample < currentMin) min[channel] = sample;
+		if (currentMax !== undefined && sample > currentMax) max[channel] = sample;
 	}
 }
 
@@ -22,8 +22,8 @@ export function writeMinMaxPoint(
 	target: Buffer,
 	offset: number,
 ): void {
-	for (let ch = 0; ch < channels; ch++) {
-		target.writeFloatLE(min[ch] ?? 0, offset + ch * 8);
-		target.writeFloatLE(max[ch] ?? 0, offset + ch * 8 + 4);
+	for (let channel = 0; channel < channels; channel++) {
+		target.writeFloatLE(min[channel] ?? 0, offset + channel * 8);
+		target.writeFloatLE(max[channel] ?? 0, offset + channel * 8 + 4);
 	}
 }

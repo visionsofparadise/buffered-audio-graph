@@ -2,8 +2,8 @@ export function interleave(samples: Array<Float32Array>, frames: number, channel
 	const interleaved = new Float32Array(frames * channels);
 
 	for (let frame = 0; frame < frames; frame++) {
-		for (let ch = 0; ch < channels; ch++) {
-			interleaved[frame * channels + ch] = samples[ch]?.[frame] ?? 0;
+		for (let channel = 0; channel < channels; channel++) {
+			interleaved[frame * channels + channel] = samples[channel]?.[frame] ?? 0;
 		}
 	}
 
@@ -15,16 +15,16 @@ export function deinterleaveBuffer(buffer: Buffer, channels: number): Array<Floa
 	const frames = Math.floor(totalSamples / channels);
 	const result: Array<Float32Array> = [];
 
-	for (let ch = 0; ch < channels; ch++) {
+	for (let channel = 0; channel < channels; channel++) {
 		result.push(new Float32Array(frames));
 	}
 
 	const view = new Float32Array(buffer.buffer, buffer.byteOffset, totalSamples);
 
 	for (let frame = 0; frame < frames; frame++) {
-		for (let ch = 0; ch < channels; ch++) {
-			const channelArray = result[ch];
-			const value = view[frame * channels + ch];
+		for (let channel = 0; channel < channels; channel++) {
+			const channelArray = result[channel];
+			const value = view[frame * channels + channel];
 
 			if (channelArray && value !== undefined) {
 				channelArray[frame] = value;

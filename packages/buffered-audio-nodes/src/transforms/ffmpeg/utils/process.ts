@@ -81,16 +81,16 @@ export function parseStdoutFrames(stash: Buffer, bytes: Buffer, channels: number
 
 	const samples: Array<Float32Array> = [];
 
-	for (let ch = 0; ch < channels; ch++) {
+	for (let channel = 0; channel < channels; channel++) {
 		samples.push(new Float32Array(frameCount));
 	}
 
 	for (let frame = 0; frame < frameCount; frame++) {
-		for (let ch = 0; ch < channels; ch++) {
-			const channelArray = samples[ch];
+		for (let channel = 0; channel < channels; channel++) {
+			const channelArray = samples[channel];
 
 			if (channelArray) {
-				channelArray[frame] = floatView[frame * channels + ch] ?? 0;
+				channelArray[frame] = floatView[frame * channels + channel] ?? 0;
 			}
 		}
 	}

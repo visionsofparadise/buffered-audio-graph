@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-// eslint-disable-next-line import-x/extensions -- TypeScript JSON modules require the explicit specifier here.
 import packageJson from "../package.json";
 
 const here = dirname(fileURLToPath(import.meta.url));

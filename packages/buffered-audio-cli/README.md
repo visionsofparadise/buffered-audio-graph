@@ -27,10 +27,6 @@ Rendering a bag executes the code the packages it names contain. Resolved packag
 | `--no-install` | Disable on-demand fetch; fail if a pin cannot be satisfied locally. |
 | `--resolve <name=path>` | Override a package pin with a local directory. Repeatable. |
 
-### `process --pipeline <file>`
-
-Run an async audio processing pipeline from a TypeScript file whose default export is a source node.
-
 ## Package resolution
 
 Each distinct `(packageName, packageVersion)` pair pinned by the bag's nodes resolves once, in order:

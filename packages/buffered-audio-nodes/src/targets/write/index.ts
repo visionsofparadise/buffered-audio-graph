@@ -192,8 +192,8 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		let offset = 0;
 
 		for (let frame = 0; frame < frames; frame++) {
-			for (let ch = 0; ch < channels; ch++) {
-				const sample = chunk.samples[ch]?.[frame] ?? 0;
+			for (let channel = 0; channel < channels; channel++) {
+				const sample = chunk.samples[channel]?.[frame] ?? 0;
 
 				offset = writeSample(buffer, offset, sample, this.properties.bitDepth);
 			}

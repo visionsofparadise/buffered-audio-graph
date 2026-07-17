@@ -1,72 +1,15 @@
+import { createRenderJobs, validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
 import { Command } from "commander";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createRenderJobs, validateGraphDefinition, SourceNode, type GraphDefinition } from "@buffered-audio/core";
-// eslint-disable-next-line import-x/extensions -- TypeScript JSON modules require the explicit specifier here.
 import packageJson from "../package.json";
 import { createEventSink } from "./event-sink";
-import { resolvePackages } from "./resolve-packages";
 import { parseParams, parseResolveOverrides } from "./parse-options";
-
-const collect = (value: string, previous: Array<string>): Array<string> => [...previous, value];
+import { resolvePackages } from "./resolve-packages";
 
 const program = new Command();
 
 program.name("bag").description("Process audio through buffered audio node pipelines").version(packageJson.version);
-
-program
-	.command("process")
-	.description("Run an async audio processing pipeline")
-	.requiredOption("--pipeline <file>", "TypeScript file with default SourceAsyncModule export")
-	.option("--chunk-size <samples>", "Chunk size in samples")
-	.option("--high-water-mark <count>", "Stream backpressure high water mark")
-	.action(async (options: { pipeline: string; chunkSize?: string; highWaterMark?: string }) => {
-		const pipelinePath = resolve(options.pipeline);
-
-		if (!existsSync(pipelinePath)) {
-			process.stderr.write(`Error: pipeline file not found: ${pipelinePath}\n`);
-			process.exit(1);
-		}
-
-		const { register } = await import("tsx/esm/api");
-		const unregister = register();
-
-		try {
-			const mod = (await import(pipelinePath)) as Record<string, unknown>;
-			const source = mod.default;
-
-			if (!(source instanceof SourceNode)) {
-				process.stderr.write("Error: default export must be a SourceAsyncModule\n");
-				process.exit(1);
-			}
-
-			const chunkSize = options.chunkSize ? parseInt(options.chunkSize, 10) : undefined;
-			const highWaterMark = options.highWaterMark ? parseInt(options.highWaterMark, 10) : undefined;
-
-			if (chunkSize !== undefined && (!Number.isFinite(chunkSize) || chunkSize <= 0)) {
-				process.stderr.write(`Error: --chunk-size must be a positive integer, got "${options.chunkSize}"\n`);
-				process.exit(1);
-			}
-
-			if (highWaterMark !== undefined && (!Number.isFinite(highWaterMark) || highWaterMark <= 0)) {
-				process.stderr.write(`Error: --high-water-mark must be a positive integer, got "${options.highWaterMark}"\n`);
-				process.exit(1);
-			}
-
-			const sink = createEventSink();
-
-			const job = source.createRenderJob({ chunkSize, highWaterMark });
-
-		sink.subscribe(job);
-
-			process.stdout.write(`Processing pipeline: ${pipelinePath}\n`);
-			await job.render();
-			sink.printSummary([job]);
-			process.stdout.write("Done.\n");
-		} finally {
-			await unregister();
-		}
-	});
 
 program
 	.command("render")
@@ -74,9 +17,9 @@ program
 	.argument("<file>", "Path to .bag file (JSON)")
 	.option("--chunk-size <samples>", "Chunk size in samples")
 	.option("--high-water-mark <count>", "Stream backpressure high water mark")
-	.option("--param <name=value>", "Bind a {{name}} template placeholder in the bag (repeatable)", collect, [])
+	.option("--param <name=value>", "Bind a {{name}} template placeholder in the bag (repeatable)", (value: string, previous: Array<string>) => [...previous, value], [])
 	.option("--no-install", "Disable on-demand fetch of pinned packages; fail if a pin cannot be satisfied locally")
-	.option("--resolve <name=path>", "Override a package pin with a local directory (repeatable)", collect, [])
+	.option("--resolve <name=path>", "Override a package pin with a local directory (repeatable)", (value: string, previous: Array<string>) => [...previous, value], [])
 	.action(async (file: string, options: { chunkSize?: string; highWaterMark?: string; param: Array<string>; install: boolean; resolve: Array<string> }) => {
 		const bagPath = resolve(file);
 

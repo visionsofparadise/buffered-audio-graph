@@ -81,9 +81,9 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 
 		const outputChannels: Array<Float32Array> = [];
 
-		for (let ch = 0; ch < channels; ch++) {
-			const channel = chunk.samples[ch];
-			const dfnState = this.dfnStates[ch];
+		for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
+			const channel = chunk.samples[channelIndex];
+			const dfnState = this.dfnStates[channelIndex];
 
 			if (!channel || !dfnState) {
 				outputChannels.push(new Float32Array(frames));

@@ -49,8 +49,8 @@ export class CutStream extends UnbufferedTransformStream<CutNode> {
 		const channels = chunk.samples.length;
 		const output: Array<Float32Array> = [];
 
-		for (let ch = 0; ch < channels; ch++) {
-			const channel = chunk.samples[ch];
+		for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
+			const channel = chunk.samples[channelIndex];
 
 			if (!channel) {
 				output.push(new Float32Array(totalKept));

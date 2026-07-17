@@ -173,9 +173,9 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		if (!child) throw new Error("FfmpegStream.child not initialized");
 
 		const interleaved = interleave(block.samples, frames, channels);
-		const buf = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
+		const interleavedBuffer = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
 
-		const ok = child.stdin.write(buf);
+		const ok = child.stdin.write(interleavedBuffer);
 
 		if (!ok) {
 			this.pendingDrain = new Promise<void>((resolve) => {

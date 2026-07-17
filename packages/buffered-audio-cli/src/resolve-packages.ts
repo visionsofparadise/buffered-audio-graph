@@ -1,10 +1,10 @@
+import type { BufferedAudioNode, NodeRegistry } from "@buffered-audio/core";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { BufferedAudioNode, NodeRegistry } from "@buffered-audio/core";
 
 type NodeConstructor = new (options?: Record<string, unknown>) => BufferedAudioNode;
 
@@ -32,20 +32,14 @@ function collectExportEntries(exportsValue: PackageExports): Array<string> {
 	if (Array.isArray(exportsValue)) return exportsValue.flatMap((value) => collectExportEntries(value));
 
 	const preferredKeys = ["import", "default", "require", "node"];
-	const orderedKeys = [
-		...preferredKeys.filter((key) => key in exportsValue),
-		...Object.keys(exportsValue).filter((key) => key !== "types" && !preferredKeys.includes(key)),
-	];
+	const orderedKeys = [...preferredKeys.filter((key) => key in exportsValue), ...Object.keys(exportsValue).filter((key) => key !== "types" && !preferredKeys.includes(key))];
 
 	return orderedKeys.flatMap((key) => collectExportEntries(exportsValue[key]));
 }
 
 function resolveEntryPath(packageDir: string): string {
 	const manifest = readManifest(packageDir);
-	const rootExports =
-		manifest.exports && typeof manifest.exports === "object" && !Array.isArray(manifest.exports) && "." in manifest.exports
-			? manifest.exports["."]
-			: manifest.exports;
+	const rootExports = manifest.exports && typeof manifest.exports === "object" && !Array.isArray(manifest.exports) && "." in manifest.exports ? manifest.exports["."] : manifest.exports;
 	const candidates = [...collectExportEntries(rootExports), ...(manifest.module ? [manifest.module] : []), ...(manifest.main ? [manifest.main] : [])];
 
 	for (const candidate of candidates) {
@@ -66,10 +60,7 @@ async function importPackageDir(packageDir: string): Promise<Record<string, unkn
 }
 
 function locateAmbientPackageDir(name: string): string | undefined {
-	// A CLI is invoked from a project, so ambient resolution anchors at the working
-	// directory rather than the CLI's own install location. `require.resolve(name)`
-	// throws ERR_PACKAGE_PATH_NOT_EXPORTED for exports-restricted packages (no `require`
-	// condition), so walk the resolver's candidate node_modules bases directly.
+	// require.resolve(name) throws ERR_PACKAGE_PATH_NOT_EXPORTED for exports-restricted packages, so walk the resolver's candidate node_modules bases directly.
 	const require = createRequire(join(process.cwd(), "noop.js"));
 	const searchPaths = require.resolve.paths(name) ?? [];
 
@@ -112,11 +103,11 @@ function indexExports(mod: Record<string, unknown>): Map<string, NodeConstructor
 	for (const value of Object.values(mod)) {
 		if (typeof value !== "function") continue;
 
-		const ctor = value as { nodeName?: unknown } & NodeConstructor;
+		const constructor = value as { nodeName?: unknown } & NodeConstructor;
 
-		if (typeof ctor.nodeName !== "string") continue;
+		if (typeof constructor.nodeName !== "string") continue;
 
-		packageMap.set(ctor.nodeName, ctor);
+		packageMap.set(constructor.nodeName, constructor);
 	}
 
 	return packageMap;
@@ -154,10 +145,7 @@ async function resolvePackage(name: string, version: string, options: { install:
 	return importPackageDir(cacheDir);
 }
 
-export async function resolvePackages(
-	pairs: ReadonlyArray<{ packageName: string; packageVersion: string }>,
-	options: { install: boolean; overrides: Map<string, string> },
-): Promise<NodeRegistry> {
+export async function resolvePackages(pairs: ReadonlyArray<{ packageName: string; packageVersion: string }>, options: { install: boolean; overrides: Map<string, string> }): Promise<NodeRegistry> {
 	const registry: NodeRegistry = new Map();
 
 	for (const { packageName, packageVersion } of pairs) {

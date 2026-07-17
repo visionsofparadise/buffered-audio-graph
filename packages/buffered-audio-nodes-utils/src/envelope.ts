@@ -1,6 +1,6 @@
 export function smoothEnvelope(envelope: Float32Array, windowSize: number, scratch?: Float32Array): void {
 	const halfWin = Math.floor(windowSize / 2);
-	const len = envelope.length;
+	const envelopeLength = envelope.length;
 
 	const source = scratch ?? Float32Array.from(envelope);
 
@@ -11,15 +11,15 @@ export function smoothEnvelope(envelope: Float32Array, windowSize: number, scrat
 	let sum = 0;
 	let count = 0;
 
-	for (let index = 0; index < Math.min(halfWin, len); index++) {
+	for (let index = 0; index < Math.min(halfWin, envelopeLength); index++) {
 		sum += source[index] ?? 0;
 		count++;
 	}
 
-	for (let index = 0; index < len; index++) {
+	for (let index = 0; index < envelopeLength; index++) {
 		const addIdx = index + halfWin;
 
-		if (addIdx < len) {
+		if (addIdx < envelopeLength) {
 			sum += source[addIdx] ?? 0;
 			count++;
 		}

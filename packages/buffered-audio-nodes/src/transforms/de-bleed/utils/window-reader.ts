@@ -12,7 +12,7 @@ export class WindowReader {
 		this.channels = channels;
 		this.windowSamples = windowSamples;
 		this.scratch = [];
-		for (let ch = 0; ch < channels; ch++) this.scratch.push(new Float32Array(windowSamples));
+		for (let channelIndex = 0; channelIndex < channels; channelIndex++) this.scratch.push(new Float32Array(windowSamples));
 	}
 
 	getScratch(): Array<Float32Array> {
@@ -20,7 +20,7 @@ export class WindowReader {
 	}
 
 	async preload(buffer: BlockBuffer, edgePadSamples: number): Promise<void> {
-		for (let ch = 0; ch < this.channels; ch++) this.scratch[ch]!.fill(0);
+		for (let channelIndex = 0; channelIndex < this.channels; channelIndex++) this.scratch[channelIndex]!.fill(0);
 
 		this.virtualCursor = 0;
 		this.bufferDrained = false;
@@ -38,8 +38,8 @@ export class WindowReader {
 
 		const keep = this.windowSamples - step;
 
-		for (let ch = 0; ch < this.channels; ch++) {
-			const view = this.scratch[ch]!;
+		for (let channelIndex = 0; channelIndex < this.channels; channelIndex++) {
+			const view = this.scratch[channelIndex]!;
 
 			if (keep > 0) view.copyWithin(0, step, this.windowSamples);
 			view.fill(0, keep, this.windowSamples);
@@ -65,11 +65,11 @@ export class WindowReader {
 				return;
 			}
 
-			for (let ch = 0; ch < this.channels; ch++) {
-				const src = chunk.samples[ch];
-				const dest = this.scratch[ch]!;
+			for (let channelIndex = 0; channelIndex < this.channels; channelIndex++) {
+				const sourceSamples = chunk.samples[channelIndex];
+				const dest = this.scratch[channelIndex]!;
 
-				if (src) dest.set(src.subarray(0, chunkFrames), outOffset);
+				if (sourceSamples) dest.set(sourceSamples.subarray(0, chunkFrames), outOffset);
 			}
 
 			outOffset += chunkFrames;

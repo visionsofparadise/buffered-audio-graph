@@ -18,9 +18,9 @@ export function stepAllChannels(args: {
 	const { channels, streams, inputs, stepBatch, stepBatchLen, batchSize, warmupRemaining } = args;
 	const stepOutputs: Array<Float32Array> = [];
 
-	for (let ch = 0; ch < channels; ch++) {
-		const stream = streams[ch];
-		const input = inputs[ch];
+	for (let channel = 0; channel < channels; channel++) {
+		const stream = streams[channel];
+		const input = inputs[channel];
 
 		if (!stream || !input) {
 			stepOutputs.push(new Float32Array(BLOCK_SHIFT));
@@ -69,12 +69,12 @@ export function appendToStepBatch(args: {
 		const copy = Math.min(space, length - offset);
 		const firstSample = samples[0];
 
-		for (let ch = 0; ch < channels; ch++) {
-			const src = samples[ch] ?? firstSample;
-			const dest = stepBatch[ch];
+		for (let channel = 0; channel < channels; channel++) {
+			const sourceChannel = samples[channel] ?? firstSample;
+			const dest = stepBatch[channel];
 
-			if (!src || !dest) continue;
-			dest.set(src.subarray(offset, offset + copy), batchLen);
+			if (!sourceChannel || !dest) continue;
+			dest.set(sourceChannel.subarray(offset, offset + copy), batchLen);
 		}
 
 		batchLen += copy;
@@ -100,10 +100,10 @@ export async function commitStepBatch(args: {
 
 	const slices: Array<Float32Array> = [];
 
-	for (let ch = 0; ch < channels; ch++) {
-		const src = stepBatch[ch] ?? new Float32Array(length);
+	for (let channel = 0; channel < channels; channel++) {
+		const sourceChannel = stepBatch[channel] ?? new Float32Array(length);
 
-		slices.push(src.subarray(0, length));
+		slices.push(sourceChannel.subarray(0, length));
 	}
 
 	const remaining = Math.max(0, originalFrames - writerState.written);
@@ -130,8 +130,8 @@ export async function pullNextChunkAt16k(args: {
 
 	const out: Array<Float32Array> = [];
 
-	for (let ch = 0; ch < channels; ch++) {
-		out.push(chunk.samples[ch] ?? chunk.samples[0] ?? new Float32Array(got));
+	for (let channel = 0; channel < channels; channel++) {
+		out.push(chunk.samples[channel] ?? chunk.samples[0] ?? new Float32Array(got));
 	}
 
 	return out;

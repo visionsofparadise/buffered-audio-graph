@@ -42,10 +42,10 @@ export class PhaseStream extends UnbufferedTransformStream<PhaseNode> {
 			this.allpassState.push(0);
 		}
 
-		const samples = chunk.samples.map((channel, ch) => {
-			const { output, state } = applyAllpass(channel, coefficient, this.allpassState[ch] ?? 0);
+		const samples = chunk.samples.map((channel, channelIndex) => {
+			const { output, state } = applyAllpass(channel, coefficient, this.allpassState[channelIndex] ?? 0);
 
-			this.allpassState[ch] = state;
+			this.allpassState[channelIndex] = state;
 
 			return output;
 		});

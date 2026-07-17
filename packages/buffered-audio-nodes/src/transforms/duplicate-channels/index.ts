@@ -20,7 +20,7 @@ export class DuplicateChannelsStream extends UnbufferedTransformStream<Duplicate
 		const outputCount = this.properties.channels;
 		const samples: Array<Float32Array> = [];
 
-		for (let ch = 0; ch < outputCount; ch++) {
+		for (let channel = 0; channel < outputCount; channel++) {
 			samples.push(Float32Array.from(source));
 		}
 

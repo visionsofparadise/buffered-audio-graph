@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
+import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
+import { createFftWorkspace, detectFftBackend, getFftAddon, hanningWindow, type FftWorkspace } from "@buffered-audio/utils";
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
-import { detectFftBackend, getFftAddon, createFftWorkspace, hanningWindow, type FftWorkspace } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { computeSpectrogramFrames } from "./utils/frames";
-import { FREQUENCY_SCALE_BYTE, computeMelBandMappings, computeErbBandMappings, computeLogBandMappings } from "./utils/frequency";
+import { FREQUENCY_SCALE_BYTE, computeErbBandMappings, computeLogBandMappings, computeMelBandMappings } from "./utils/frequency";
 
 export const schema = z.object({
 	outputPath: z.string().default("").meta({ input: "file", mode: "save", accept: ".bin" }).describe("Output Path"),
@@ -99,7 +99,7 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 		}
 
 		this.sampleBuffers = [];
-		for (let ch = 0; ch < this.channels; ch++) {
+		for (let channel = 0; channel < this.channels; channel++) {
 			this.sampleBuffers.push(new Float32Array(this.sampleBufferCapacity));
 		}
 
@@ -128,21 +128,23 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 		if (this.sampleBufferOffset + frames > this.sampleBufferCapacity) {
 			const newCapacity = Math.max(this.sampleBufferCapacity * 2, this.sampleBufferOffset + frames);
 
-			for (let ch = 0; ch < this.channels; ch++) {
+			for (let channel = 0; channel < this.channels; channel++) {
 				const newBuf = new Float32Array(newCapacity);
 
-				newBuf.set(this.sampleBuffers[ch]!.subarray(0, this.sampleBufferOffset));
-				this.sampleBuffers[ch] = newBuf;
+				newBuf.set(this.sampleBuffers[channel]!.subarray(0, this.sampleBufferOffset));
+
+				this.sampleBuffers[channel] = newBuf;
 			}
 
 			this.sampleBufferCapacity = newCapacity;
 		}
 
-		for (let ch = 0; ch < this.channels; ch++) {
-			const src = chunk.samples[ch];
+		for (let channel = 0; channel < this.channels; channel++) {
+			const channelSamples = chunk.samples[channel];
 
-			if (!src) continue;
-			this.sampleBuffers[ch]!.set(src, this.sampleBufferOffset);
+			if (!channelSamples) continue;
+
+			this.sampleBuffers[channel]!.set(channelSamples, this.sampleBufferOffset);
 		}
 
 		this.sampleBufferOffset += frames;
@@ -155,6 +157,7 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 
 		if (this.writeBuffer && this.writeBufferOffset > 0) {
 			await this.fileHandle!.write(this.writeBuffer, 0, this.writeBufferOffset, this.writeBufferFileOffset);
+
 			this.writeBufferOffset = 0;
 		}
 
@@ -176,10 +179,10 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 		const magScale = 2 / fftSize;
 
 		if (flush && this.sampleBufferOffset > 0 && this.sampleBufferOffset < fftSize) {
-			for (let ch = 0; ch < this.channels; ch++) {
-				const buf = this.sampleBuffers[ch]!;
+			for (let channel = 0; channel < this.channels; channel++) {
+				const buffer = this.sampleBuffers[channel]!;
 
-				buf.fill(0, this.sampleBufferOffset, fftSize);
+				buffer.fill(0, this.sampleBufferOffset, fftSize);
 			}
 
 			this.sampleBufferOffset = fftSize;
@@ -200,9 +203,9 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 			this.writeBufferFileOffset = this.fileOffset;
 		}
 
-		for (let ch = 0; ch < this.channels; ch++) {
+		for (let channel = 0; channel < this.channels; channel++) {
 			const frames = computeSpectrogramFrames(
-				this.sampleBuffers[ch]!,
+				this.sampleBuffers[channel]!,
 				batchFrames,
 				fftSize,
 				hopSize,
@@ -217,7 +220,7 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 			);
 
 			for (const frame of frames) {
-				await this.writeFrame(ch, frame);
+				await this.writeFrame(channel, frame);
 			}
 		}
 
@@ -227,30 +230,31 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 		const keepCount = this.sampleBufferOffset - keepFrom;
 
 		if (keepCount > 0) {
-			for (let ch = 0; ch < this.channels; ch++) {
-				const buf = this.sampleBuffers[ch]!;
+			for (let channel = 0; channel < this.channels; channel++) {
+				const buffer = this.sampleBuffers[channel]!;
 
-				buf.copyWithin(0, keepFrom, keepFrom + keepCount);
+				buffer.copyWithin(0, keepFrom, keepFrom + keepCount);
 			}
 		}
 
 		this.sampleBufferOffset = keepCount > 0 ? keepCount : 0;
 	}
 
-	private async writeFrame(ch: number, frame: Float32Array): Promise<void> {
+	private async writeFrame(channel: number, frame: Float32Array): Promise<void> {
 		const frameByteSize = this.outputBins * this.channels * 4;
 
 		if (this.writeBuffer && this.writeBufferOffset + frameByteSize > this.writeBuffer.length) {
 			await this.flushWriteBuffer();
 		}
 
-		const buf = this.writeBuffer;
+		const writeBuffer = this.writeBuffer;
 
-		if (!buf) return;
+		if (!writeBuffer) return;
+
 		const offset = this.writeBufferOffset;
 
 		for (let bin = 0; bin < this.outputBins; bin++) {
-			buf.writeFloatLE(frame[bin]!, offset + (ch * this.outputBins + bin) * 4);
+			writeBuffer.writeFloatLE(frame[bin]!, offset + (channel * this.outputBins + bin) * 4);
 		}
 
 		this.writeBufferOffset += frameByteSize;

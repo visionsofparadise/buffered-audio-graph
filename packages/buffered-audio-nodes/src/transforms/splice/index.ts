@@ -25,9 +25,9 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 		const targetChannels = this.properties.channels;
 
 		if (targetChannels) {
-			for (const ch of targetChannels) {
-				if (ch < 0) {
-					throw new Error(`Splice: target channel ${ch} is out of range`);
+			for (const targetChannel of targetChannels) {
+				if (targetChannel < 0) {
+					throw new Error(`Splice: target channel ${targetChannel} is out of range`);
 				}
 			}
 		}
@@ -72,9 +72,9 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 				applyInsert(channelSamples, insertChannel, overlap);
 			}
 		} else {
-			for (let ch = 0; ch < samples.length; ch++) {
-				const channelSamples = samples[ch];
-				const insertChannel = this.insertSamples[ch];
+			for (let channel = 0; channel < samples.length; channel++) {
+				const channelSamples = samples[channel];
+				const insertChannel = this.insertSamples[channel];
 
 				if (!channelSamples || !insertChannel) continue;
 

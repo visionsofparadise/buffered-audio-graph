@@ -11,13 +11,13 @@ export function buildModelInput(
 ): { readonly inputData: Float32Array; readonly xData: Float32Array } {
 	const xData = new Float32Array(4 * xBins * xFrames);
 
-	for (let ch = 0; ch < 2; ch++) {
-		const stftCh = ch === 0 ? stftLeft : stftRight;
+	for (let channel = 0; channel < 2; channel++) {
+		const stftCh = channel === 0 ? stftLeft : stftRight;
 
 		for (let freq = 0; freq < xBins; freq++) {
 			for (let frame = 0; frame < xFrames; frame++) {
-				const realIdx = 2 * ch * xBins * xFrames + freq * xFrames + frame;
-				const imagIdx = (2 * ch + 1) * xBins * xFrames + freq * xFrames + frame;
+				const realIdx = 2 * channel * xBins * xFrames + freq * xFrames + frame;
+				const imagIdx = (2 * channel + 1) * xBins * xFrames + freq * xFrames + frame;
 				const srcFrame = frame + 2;
 
 				xData[realIdx] = stftCh.real[srcFrame]?.[freq] ?? 0;
@@ -97,8 +97,8 @@ export function extractStems(
 	const { freqRealBuffers, freqImagBuffers, nbFrames, stftLen, stftPad, pad, xBins, xFrames } = workspace;
 
 	for (let source = 0; source < 4; source++) {
-		for (let ch = 0; ch < 2; ch++) {
-			const xtIndex = source * 2 * segmentLength + ch * segmentLength;
+		for (let channel = 0; channel < 2; channel++) {
+			const xtIndex = source * 2 * segmentLength + channel * segmentLength;
 
 			for (let frame = 0; frame < nbFrames; frame++) {
 				freqRealBuffers[frame]?.fill(0);
@@ -110,8 +110,8 @@ export function extractStems(
 
 				for (let freq = 0; freq < xBins; freq++) {
 					for (let frame = 0; frame < xFrames; frame++) {
-						const realIdx = baseOffset + 2 * ch * xBins * xFrames + freq * xFrames + frame;
-						const imagIdx = baseOffset + (2 * ch + 1) * xBins * xFrames + freq * xFrames + frame;
+						const realIdx = baseOffset + 2 * channel * xBins * xFrames + freq * xFrames + frame;
+						const imagIdx = baseOffset + (2 * channel + 1) * xBins * xFrames + freq * xFrames + frame;
 						const destFrame = frame + 2;
 						const realArr = freqRealBuffers[destFrame];
 						const imagArr = freqImagBuffers[destFrame];
@@ -133,11 +133,11 @@ export function extractStems(
 				const combined = timeVal + freqVal;
 				const wt = weight[index] ?? 1;
 
-				const outIdx = source * 2 + ch;
-				const arr = stemOutputs[outIdx];
+				const outIdx = source * 2 + channel;
+				const stemOutput = stemOutputs[outIdx];
 
-				if (arr) {
-					arr[segmentOffset + index] = (arr[segmentOffset + index] ?? 0) + combined * wt;
+				if (stemOutput) {
+					stemOutput[segmentOffset + index] = (stemOutput[segmentOffset + index] ?? 0) + combined * wt;
 				}
 			}
 		}

@@ -192,12 +192,13 @@ export default tseslint.config(
 
       "id-denylist": [
         "error",
-        "btn", "cb", "ctx", "el", "elem", "err", "evt", "fn", "idx",
-        "msg", "num", "obj", "opts", "params", "pkg", "ptr", "req",
-        "res", "ret", "str", "temp", "tmp", "val", "var",
+        "arr", "btn", "buf", "cb", "cfg", "ch", "ctor", "ctx", "curr",
+        "dst", "el", "elem", "err", "evt", "fn", "idx", "len", "lhs",
+        "msg", "num", "obj", "opts", "params", "pkg", "prev", "ptr", "req",
+        "res", "ret", "rhs", "src", "str", "temp", "tmp", "val", "var",
       ],
 
-      "import-x/extensions": ["error", "never", { ignorePackages: true }],
+      "import-x/extensions": ["error", "never", { ignorePackages: true, pattern: { json: "always" } }],
       "import-x/no-useless-path-segments": ["error", { noUselessIndex: true }],
 
       "barrel-files/avoid-barrel-files": "error",

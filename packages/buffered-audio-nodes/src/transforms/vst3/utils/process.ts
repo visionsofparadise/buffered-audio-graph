@@ -331,13 +331,13 @@ export async function processStreamingThroughVstHost(
 
 		const channelArrays: Array<Float32Array> = [];
 
-		for (let ch = 0; ch < channelCount; ch++) {
-			channelArrays.push(chunk.samples[ch] ?? new Float32Array(chunkFrames));
+		for (let channel = 0; channel < channelCount; channel++) {
+			channelArrays.push(chunk.samples[channel] ?? new Float32Array(chunkFrames));
 		}
 
 		const interleaved = interleave(channelArrays, chunkFrames, channelCount);
-		const buf = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
-		const canWrite = handle.stdin.write(buf);
+		const interleavedBuffer = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
+		const canWrite = handle.stdin.write(interleavedBuffer);
 
 		if (!canWrite) {
 			await waitForDrain(handle.proc, handle.stdin);

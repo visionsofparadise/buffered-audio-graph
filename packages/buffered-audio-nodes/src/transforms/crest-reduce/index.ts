@@ -118,7 +118,7 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceNode> 
 			applyState ??= new LatticeApplyState(smoothedTrajectory, order, hopSize, blockChannelCount);
 
 			const transformed = applyState.apply(block.samples, frames);
-			const samples = block.samples.map((inputChannel, ch) => transformed[ch] ?? inputChannel);
+			const samples = block.samples.map((inputChannel, channelIndex) => transformed[channelIndex] ?? inputChannel);
 
 			yield { samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
 

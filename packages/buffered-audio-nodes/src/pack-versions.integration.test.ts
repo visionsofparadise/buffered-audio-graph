@@ -1,12 +1,11 @@
-import { describe, expect, it } from "vitest";
 import { pack } from "@buffered-audio/core";
-// eslint-disable-next-line import-x/extensions -- TypeScript JSON modules require the explicit specifier here.
+import { describe, expect, it } from "vitest";
 import packageJson from "../package.json";
 import { read } from "./sources/read";
 import { write } from "./targets/write";
 
-describe("pack resolves the nodes package version", () => {
-	it("stamps @buffered-audio/nodes at its package.json version", () => {
+describe("pack anchored in this package resolves this package's manifest", () => {
+	it("stamps every node with the version from this package's package.json, not the workspace root's", () => {
 		const source = read("input.wav");
 		const target = write("output.wav");
 

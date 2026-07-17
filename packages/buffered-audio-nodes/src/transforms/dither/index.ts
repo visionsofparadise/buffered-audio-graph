@@ -25,7 +25,7 @@ export class DitherStream extends UnbufferedTransformStream<DitherNode> {
 			this.lastError.push(0);
 		}
 
-		const samples = chunk.samples.map((channel, ch) => {
+		const samples = chunk.samples.map((channel, channelIndex) => {
 			const output = new Float32Array(channel.length);
 
 			for (let index = 0; index < channel.length; index++) {
@@ -35,13 +35,13 @@ export class DitherStream extends UnbufferedTransformStream<DitherNode> {
 				let dithered = sample + tpdfNoise;
 
 				if (noiseShaping) {
-					dithered += this.lastError[ch] ?? 0;
+					dithered += this.lastError[channelIndex] ?? 0;
 				}
 
 				const quantized = quantizeSample(dithered, levels);
 
 				if (noiseShaping) {
-					this.lastError[ch] = dithered - quantized;
+					this.lastError[channelIndex] = dithered - quantized;
 				}
 
 				output[index] = quantized;

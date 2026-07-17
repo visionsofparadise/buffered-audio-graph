@@ -1,6 +1,6 @@
 {
   "name": "@buffered-audio/cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "bin": {
     "bag": "./dist/cli.js"
@@ -30,7 +30,7 @@
     "integration": "vitest run --project integration"
   },
   "devDependencies": {
-    "@buffered-audio/nodes": "0.24.0",
+    "@buffered-audio/nodes": "0.24.1",
     "@types/node": "^25.3.5",
     "concurrently": "*",
     "tsup": "^8.0.0",

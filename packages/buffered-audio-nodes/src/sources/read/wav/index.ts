@@ -1,6 +1,6 @@
+import { BufferedSourceStream, SourceNode, type Block, type SourceMetadata, type SourceNodeProperties } from "@buffered-audio/core";
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedSourceStream, SourceNode, type Block, type SourceMetadata, type SourceNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../../package-metadata";
 import { DEFAULT_CHUNK_SIZE, parseWavFormat, readSample, type WavFormat } from "./utils/wav-format";
 
@@ -49,7 +49,6 @@ export class ReadWavStream extends BufferedSourceStream<ReadWavNode> {
 		this.bytesRead = 0;
 		this.sourceSampleRate = format.sampleRate;
 		this.sourceBitDepth = format.bitsPerSample;
-
 	}
 
 	override async _read(): Promise<Block | undefined> {
@@ -86,14 +85,14 @@ export class ReadWavStream extends BufferedSourceStream<ReadWavNode> {
 
 		const allChannels: Array<Float32Array> = [];
 
-		for (let ch = 0; ch < fileChannels; ch++) {
+		for (let fileChannel = 0; fileChannel < fileChannels; fileChannel++) {
 			allChannels.push(new Float32Array(frames));
 		}
 
 		for (let frame = 0; frame < frames; frame++) {
-			for (let ch = 0; ch < fileChannels; ch++) {
-				const byteOffset = frame * format.blockAlign + ch * (format.bitsPerSample / 8);
-				const channel = allChannels[ch];
+			for (let fileChannel = 0; fileChannel < fileChannels; fileChannel++) {
+				const byteOffset = frame * format.blockAlign + fileChannel * (format.bitsPerSample / 8);
+				const channel = allChannels[fileChannel];
 
 				if (channel) {
 					channel[frame] = readSample(chunk, byteOffset, format.bitsPerSample, format.audioFormat);

@@ -247,7 +247,7 @@ function factorize(size: number): Array<number> {
 		throw new Error(`MixedRadixFft: size ${size} has unsupported prime factor ${remaining} (only 2, 3, 5 supported)`);
 	}
 
-	factors.sort((lhs, rhs) => lhs - rhs);
+	factors.sort((firstFactor, secondFactor) => firstFactor - secondFactor);
 
 	return factors;
 }
