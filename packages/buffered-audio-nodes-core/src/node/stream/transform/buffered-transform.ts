@@ -1,10 +1,10 @@
+import { BufferedStream, type StreamContext, type StreamSetupContext } from "..";
 import type { BufferedAudioNode } from "../..";
 import { sliceBlock } from "../../../utils/slice-block";
 import { toReadable } from "../../../utils/to-readable";
-import { BufferedStream, type StreamContext, type StreamSetupContext } from "..";
+import type { TransformNodeProperties } from "../../transform";
 import type { Block } from "../block";
 import { createProgressGate, type ProgressGate } from "../utils/progress-gate";
-import type { TransformNodeProperties } from ".";
 import { BlockBuffer } from "./utils/block-buffer";
 
 export const WHOLE_FILE = Infinity;
@@ -52,7 +52,8 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 	}
 
 	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
-		this.sourceTotalFrames = context.durationFrames;
+		this.sourceTotalFrames = context.sourceTotalFrames;
+
 		await this._setup(context);
 
 		return this._pipe(input);

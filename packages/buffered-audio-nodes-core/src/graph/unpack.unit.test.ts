@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { BufferedAudioNode } from "../node";
 import { SourceNode } from "../node/stream/source";
 import { TargetNode } from "../node/stream/target";
-import { TransformNode, type TransformNodeProperties } from "../node/stream/transform";
+import { TransformNode, type TransformNodeProperties } from "../node/transform";
 import { validateGraphDefinition, type GraphDefinition, type NodeRegistry } from "./definition";
 import { unpack } from "./unpack";
 

@@ -6,14 +6,12 @@ export const STDERR_CAP_BYTES = 64 * 1024;
 export interface FfmpegChildHandle {
 	readonly child: ChildProcessWithoutNullStreams;
 	readonly exitPromise: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
-	readonly stdoutEndPromise: Promise<void>;
 }
 
 export interface SpawnFfmpegOptions {
 	readonly ffmpegPath: string;
 	readonly args: ReadonlyArray<string>;
 	readonly onStderr: (chunk: Buffer) => void;
-	readonly onStdout: (bytes: Buffer) => void;
 	readonly onStdinError: (error: Error & { code?: string }) => void;
 }
 
@@ -21,18 +19,13 @@ export function spawnFfmpegChild(options: SpawnFfmpegOptions): FfmpegChildHandle
 	const child = spawn(options.ffmpegPath, [...options.args], { stdio: ["pipe", "pipe", "pipe"] });
 
 	child.stderr.on("data", options.onStderr);
-	child.stdout.on("data", options.onStdout);
 	child.stdin.on("error", options.onStdinError);
 
 	const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
 		child.once("exit", (code, signal) => resolve({ code, signal }));
 	});
 
-	const stdoutEndPromise = new Promise<void>((resolve) => {
-		child.stdout.once("end", () => resolve());
-	});
-
-	return { child, exitPromise, stdoutEndPromise };
+	return { child, exitPromise };
 }
 
 export function buildInputArgs(sampleRate: number, channels: number): Array<string> {

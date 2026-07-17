@@ -19,7 +19,6 @@ describeIfFixtureSet("htdemucs", () => {
 		expect(notAnomalous(output).pass).toBe(true);
 	}, 480_000);
 
-	// Exercises the resample path (input rate is not 44.1 kHz); passes only if the background pump/drainer pattern is correct, else ffmpeg's ~225 K stdin buffer deadlocks the segment loop.
 	(hasBinaryFixtures("ffmpeg") && hasAudioFixtures("testVoice48k") ? it : it.skip)("processes voice audio at 48 kHz (resample path)", async () => {
 		const transform = htdemucs(binaries.htdemucs, { vocals: 1, drums: 0, bass: 0, other: 0 }, { onnxAddonPath: binaries.onnxAddon, ffmpegPath: binaries.ffmpeg });
 		const { input, output, context } = await runTransform(testVoice48k, transform);

@@ -50,6 +50,8 @@ async function runStats(channels: ReadonlyArray<Float32Array>, sampleRate: numbe
 		executionProviders: ["cpu"],
 		memoryLimit: Number.POSITIVE_INFINITY,
 		highWaterMark: 1,
+		sourceSampleRate: sampleRate,
+		sampleRate,
 	};
 
 	await stream.setup(input, context);
@@ -224,6 +226,8 @@ describe("loudness-stats", () => {
 			executionProviders: ["cpu"],
 			memoryLimit: Number.POSITIVE_INFINITY,
 			highWaterMark: 1,
+			sourceSampleRate: TEST_SAMPLE_RATE,
+			sampleRate: TEST_SAMPLE_RATE,
 		};
 
 		await stream.setup(input, context);

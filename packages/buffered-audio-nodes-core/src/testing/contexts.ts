@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import type { RenderEvents, StreamContext, StreamSetupContext } from "../node/stream";
 
 export function createTestSetupContext(overrides?: Partial<StreamSetupContext>): StreamSetupContext {
-	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, ...overrides };
+	return { executionProviders: ["cpu"], memoryLimit: 256 * 1024 * 1024, highWaterMark: 16, sourceSampleRate: 44100, sampleRate: 44100, ...overrides };
 }
 
 export function createTestStreamContext(): { context: StreamContext; events: RenderEvents } {

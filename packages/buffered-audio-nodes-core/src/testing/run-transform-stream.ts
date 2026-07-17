@@ -33,7 +33,22 @@ export async function runTransformStream(
 		throw new Error(`runTransformStream: node "${constructor.nodeName}" did not produce a transform stream`);
 	}
 
-	const output = await stream.setup(readableFrom(blocks), createTestSetupContext(options?.setup));
+	const setupContext = createTestSetupContext({
+		sourceSampleRate: blocks[0]?.sampleRate ?? 44100,
+		sampleRate: blocks[0]?.sampleRate ?? 44100,
+		...options?.setup,
+	});
 
-	return { blocks: await drainBlocks(output), events: captured };
+	const output = await stream.setup(readableFrom(blocks), setupContext);
+	const drained = await drainBlocks(output);
+
+	for (const block of drained) {
+		if (block.sampleRate !== setupContext.sampleRate) {
+			throw new Error(
+				`runTransformStream: node "${constructor.nodeName}" emitted ${block.sampleRate} Hz where ${setupContext.sampleRate} Hz was declared — a rate-changing stream must assign context.sampleRate in _setup`,
+			);
+		}
+	}
+
+	return { blocks: drained, events: captured };
 }

@@ -37,7 +37,7 @@ export abstract class BufferedSourceStream<N extends BufferedAudioNode<SourceNod
 		this.processingMs = 0;
 		this.hasStarted = false;
 
-		const { signal, durationFrames: sourceTotalFrames, highWaterMark } = context;
+		const { signal, sourceTotalFrames, highWaterMark } = context;
 		const readGate = createProgressGate(sourceTotalFrames);
 
 		return new ReadableStream<Block>(

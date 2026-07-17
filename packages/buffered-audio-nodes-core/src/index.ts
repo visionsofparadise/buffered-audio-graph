@@ -20,12 +20,12 @@ export {
 export type { Block } from "./node/stream/block";
 export { BufferedSourceStream, SourceNode, type RenderTiming, type SourceMetadata, type SourceNodeProperties } from "./node/stream/source";
 export { BufferedTargetStream, TargetNode, type TargetNodeProperties } from "./node/stream/target";
-export { TransformNode, type TransformNodeProperties } from "./node/stream/transform";
 export { BufferedTransformStream, WHOLE_FILE } from "./node/stream/transform/buffered-transform";
 export { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
 export { BlockBuffer } from "./node/stream/transform/utils/block-buffer";
 export { ReverseBlockReader } from "./node/stream/transform/utils/reverse-block-reader";
 export { createProgressGate, PROGRESS_MIN_INTERVAL_MS, PROGRESS_PERCENT_QUANTUM } from "./node/stream/utils/progress-gate";
+export { TransformNode, type TransformNodeProperties } from "./node/transform";
 export { RenderJob, type RenderOptions } from "./render-job";
 
 export { createRenderJobs, type RenderGraphOptions } from "./graph/create-render-jobs";

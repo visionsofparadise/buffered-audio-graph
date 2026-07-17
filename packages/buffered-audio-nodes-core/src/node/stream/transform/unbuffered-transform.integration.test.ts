@@ -192,7 +192,7 @@ describe("UnbufferedTransformStream progress shape", () => {
 		const stream = new GainStream(nodeWith({}), context);
 		const progress = collectProgress(events);
 
-		await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 100), createBlock(2, 100, 100)]), createTestSetupContext({ durationFrames: 200 })));
+		await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 100), createBlock(2, 100, 100)]), createTestSetupContext({ sourceTotalFrames: 200 })));
 
 		const buffers = progress.filter((p) => p.phase === "buffer");
 		const emits = progress.filter((p) => p.phase === "emit");

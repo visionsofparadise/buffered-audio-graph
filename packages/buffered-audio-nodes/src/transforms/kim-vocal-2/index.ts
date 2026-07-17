@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
-import { bandpass, MixedRadixFft, ResampleStream } from "@buffered-audio/utils";
+import { bandpass, MixedRadixFft } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
+import { createResampleComposition } from "../../utils/resample-composition";
+import type { FfmpegStream } from "../ffmpeg";
 import { buildTransitionWindow, createSegmentWorkspace, processSegment } from "./utils/segment";
 
 export const schema = z.object({
@@ -34,26 +36,38 @@ const OVERLAP = 0.25;
 const TRANSITION_POWER = 1.0;
 
 const CHUNK_FRAMES = 44100; // 44.1 kHz input-side chunk
-const RESAMPLE_DRAIN_CHUNK = 16384;
-
-interface StreamPair {
-	readonly resampleIn: ResampleStream;
-	readonly resampleOut: ResampleStream;
-}
 
 export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 	override blockSize = WHOLE_FILE;
 
 	private session!: OnnxSession;
 	private fftInstance: MixedRadixFft;
+	private readonly renderContext: StreamContext;
+	private upResample?: FfmpegStream;
+	private downResample?: FfmpegStream;
 
 	constructor(node: KimVocal2Node, context: StreamContext) {
 		super(node, context);
 		this.fftInstance = new MixedRadixFft(N_FFT);
+
+		this.renderContext = context;
 	}
 
 	override _setup(context: StreamSetupContext): void {
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: filterOnnxProviders(context.executionProviders) }, (message, data) => this.log(message, data));
+
+		const composition = createResampleComposition({ context, streamContext: this.renderContext, ffmpegPath: this.properties.ffmpegPath, modelRate: SAMPLE_RATE });
+
+		if (composition) {
+			this.upResample = composition.upResample;
+			this.downResample = composition.downResample;
+		}
+	}
+
+	override _pipe(input: ReadableStream<Block>): ReadableStream<Block> {
+		if (!this.upResample || !this.downResample) return super._pipe(input);
+
+		return this.downResample._pipe(super._pipe(this.upResample._pipe(input)));
 	}
 
 	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
@@ -62,28 +76,9 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 
 		if (originalFrames === 0 || channels === 0) return;
 
-		const sourceRate = this.sampleRate ?? SAMPLE_RATE;
 		const bitDepth = this.bitDepth;
-		const needsResample = sourceRate !== SAMPLE_RATE;
 
 		await buffered.reset();
-
-		let pair: StreamPair | undefined;
-
-		if (needsResample) {
-			pair = {
-				resampleIn: new ResampleStream(this.properties.ffmpegPath, {
-					sourceSampleRate: sourceRate,
-					targetSampleRate: SAMPLE_RATE,
-					channels: 2,
-				}),
-				resampleOut: new ResampleStream(this.properties.ffmpegPath, {
-					sourceSampleRate: SAMPLE_RATE,
-					targetSampleRate: sourceRate,
-					channels: 2,
-				}),
-			};
-		}
 
 		const output = new BlockBuffer();
 
@@ -93,19 +88,13 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 				output,
 				channels,
 				originalFrames,
-				sourceRate,
 				bitDepth,
-				pair,
 			});
 
 			await output.reset();
 
 			yield* output.iterate(CHUNK_FRAMES);
 		} finally {
-			if (pair) {
-				await Promise.all([pair.resampleIn.close(), pair.resampleOut.close()]);
-			}
-
 			await output.close();
 		}
 	}
@@ -115,17 +104,13 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 		readonly output: BlockBuffer;
 		readonly channels: number;
 		readonly originalFrames: number;
-		readonly sourceRate: number;
 		readonly bitDepth: number | undefined;
-		readonly pair: StreamPair | undefined;
 	}): Promise<void> {
-		const { buffer, output, channels, originalFrames, sourceRate, bitDepth, pair } = args;
+		const { buffer, output, channels, originalFrames, bitDepth } = args;
 		const stride = Math.round((1 - OVERLAP) * SEGMENT_SAMPLES);
 		const isMono = channels < 2;
 
 		const writerState = { written: 0 };
-		const pumpDone = pair !== undefined ? pumpSourceToResampleIn({ buffer, resampleIn: pair.resampleIn, channels, chunkFrames: CHUNK_FRAMES }) : Promise.resolve();
-		const drainerDone = pair !== undefined ? drainResampleOutToBuffer({ resampleOut: pair.resampleOut, output, channels, sourceRate, bitDepth, originalFrames, writerState }) : Promise.resolve();
 
 		// OLA weight window: triangular raised to TRANSITION_POWER.
 		const weight = buildTransitionWindow(SEGMENT_SAMPLES, TRANSITION_POWER);
@@ -142,15 +127,14 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 		const outAccumRight = new Float32Array(SEGMENT_SAMPLES);
 		const sumWeight = new Float32Array(SEGMENT_SAMPLES);
 
-		const modelRateFrames = Math.round(originalFrames * SAMPLE_RATE / sourceRate);
-		const progressGate = createProgressGate(modelRateFrames);
+		const progressGate = createProgressGate(originalFrames);
 		let stableEmitted = 0;
 
 		for (;;) {
 			if (!inputExhausted) {
 				while (segFilled < SEGMENT_SAMPLES) {
 					const need = SEGMENT_SAMPLES - segFilled;
-					const got = await pullNextChunkAt441({ buffer, pair, channels, frames: Math.min(need, CHUNK_FRAMES) });
+					const got = await pullNextChunkAt441({ buffer, channels, frames: Math.min(need, CHUNK_FRAMES) });
 
 					if (got === undefined || got[0].length === 0) {
 						inputExhausted = true;
@@ -195,10 +179,8 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 				outAccumLeft,
 				outAccumRight,
 				sumWeight,
-				pair,
 				output,
 				channels,
-				sourceRate,
 				bitDepth,
 				originalFrames,
 				writerState,
@@ -206,9 +188,9 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 
 			stableEmitted += nStable;
 
-			const doneFrames = Math.min(stableEmitted, modelRateFrames);
+			const doneFrames = Math.min(stableEmitted, originalFrames);
 
-			if (progressGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, modelRateFrames);
+			if (progressGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, originalFrames);
 
 			if (!isFinalIter) {
 				segLeft.copyWithin(0, nStable, SEGMENT_SAMPLES);
@@ -221,17 +203,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 			}
 		}
 
-		// Await defensively to surface pump-side errors.
-		await pumpDone;
-
-		if (pair) {
-			await pair.resampleOut.end();
-		}
-
-		await drainerDone;
-
-		// Zero-pad when rate conversion produced fewer frames than the original.
-		await padTail(output, channels, originalFrames, writerState.written, sourceRate, bitDepth);
+		await padTail(output, channels, originalFrames, writerState.written, SAMPLE_RATE, bitDepth);
 	}
 
 	private async emitStable(args: {
@@ -239,15 +211,13 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 		readonly outAccumLeft: Float32Array;
 		readonly outAccumRight: Float32Array;
 		readonly sumWeight: Float32Array;
-		readonly pair: StreamPair | undefined;
 		readonly output: BlockBuffer;
 		readonly channels: number;
-		readonly sourceRate: number;
 		readonly bitDepth: number | undefined;
 		readonly originalFrames: number;
 		readonly writerState: { written: number };
 	}): Promise<void> {
-		const { nStable, outAccumLeft, outAccumRight, sumWeight, pair, output, channels, sourceRate, bitDepth, originalFrames, writerState } = args;
+		const { nStable, outAccumLeft, outAccumRight, sumWeight, output, channels, bitDepth, originalFrames, writerState } = args;
 
 		if (nStable <= 0) return;
 
@@ -263,19 +233,15 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 
 		bandpass([outLeft, outRight], SAMPLE_RATE, this.properties.highPass, this.properties.lowPass);
 
-		if (pair) {
-			await pair.resampleOut.write([outLeft, outRight]);
-		} else {
-			const writeChannels = buildWriteChannels(outLeft, outRight, channels);
-			const remaining = Math.max(0, originalFrames - writerState.written);
+		const writeChannels = buildWriteChannels(outLeft, outRight, channels);
+		const remaining = Math.max(0, originalFrames - writerState.written);
 
-			if (remaining > 0) {
-				const take = Math.min(nStable, remaining);
-				const sliced = take === nStable ? writeChannels : writeChannels.map((channel) => channel.subarray(0, take));
+		if (remaining > 0) {
+			const take = Math.min(nStable, remaining);
+			const sliced = take === nStable ? writeChannels : writeChannels.map((channel) => channel.subarray(0, take));
 
-				await output.write(sliced, sourceRate, bitDepth);
-				writerState.written += take;
-			}
+			await output.write(sliced, SAMPLE_RATE, bitDepth);
+			writerState.written += take;
 		}
 
 		outAccumLeft.copyWithin(0, nStable, SEGMENT_SAMPLES);
@@ -291,110 +257,20 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 
 async function pullNextChunkAt441(args: {
 	readonly buffer: BlockBuffer;
-	readonly pair: StreamPair | undefined;
 	readonly channels: number;
 	readonly frames: number;
 }): Promise<readonly [Float32Array, Float32Array] | undefined> {
-	const { buffer, pair, channels, frames } = args;
+	const { buffer, channels, frames } = args;
 
-	if (!pair) {
-		const chunk = await buffer.read(frames);
-		const got = chunk.samples[0]?.length ?? 0;
-
-		if (got === 0) return undefined;
-
-		const left = chunk.samples[0] ?? new Float32Array(got);
-		const right = channels >= 2 ? (chunk.samples[1] ?? left) : left;
-
-		return [left, right];
-	}
-
-	const out = await pair.resampleIn.read(frames);
-	const got = out[0]?.length ?? 0;
+	const chunk = await buffer.read(frames);
+	const got = chunk.samples[0]?.length ?? 0;
 
 	if (got === 0) return undefined;
 
-	const left = out[0] ?? new Float32Array(got);
-	const right = out[1] ?? left;
+	const left = chunk.samples[0] ?? new Float32Array(got);
+	const right = channels >= 2 ? (chunk.samples[1] ?? left) : left;
 
 	return [left, right];
-}
-
-// Resampler always spawned channels:2; mono duplicated to right so the segment loop sees stable stereo.
-async function pumpSourceToResampleIn(args: {
-	readonly buffer: BlockBuffer;
-	readonly resampleIn: ResampleStream;
-	readonly channels: number;
-	readonly chunkFrames: number;
-}): Promise<void> {
-	const { buffer, resampleIn, channels, chunkFrames } = args;
-
-	for (;;) {
-		const sourceChunk = await buffer.read(chunkFrames);
-		const sourceFrames = sourceChunk.samples[0]?.length ?? 0;
-
-		if (sourceFrames === 0) break;
-
-		const sourceLeft = sourceChunk.samples[0] ?? new Float32Array(sourceFrames);
-		const sourceRight = channels >= 2 ? (sourceChunk.samples[1] ?? sourceLeft) : sourceLeft;
-
-		await resampleIn.write([sourceLeft, sourceRight]);
-
-		if (sourceFrames < chunkFrames) break;
-	}
-
-	await resampleIn.end();
-}
-
-async function drainResampleOutToBuffer(args: {
-	readonly resampleOut: ResampleStream;
-	readonly output: BlockBuffer;
-	readonly channels: number;
-	readonly sourceRate: number;
-	readonly bitDepth: number | undefined;
-	readonly originalFrames: number;
-	readonly writerState: { written: number };
-}): Promise<void> {
-	const { resampleOut, output, channels, sourceRate, bitDepth, originalFrames, writerState } = args;
-
-	for (;;) {
-		const chunk = await resampleOut.read(RESAMPLE_DRAIN_CHUNK);
-		const got = chunk[0]?.length ?? 0;
-
-		if (got === 0) return; // EOF
-
-		await commitResampledFrames({ chunk, channels, output, sourceRate, bitDepth, originalFrames, writerState });
-	}
-}
-
-async function commitResampledFrames(args: {
-	readonly chunk: ReadonlyArray<Float32Array>;
-	readonly channels: number;
-	readonly output: BlockBuffer;
-	readonly sourceRate: number;
-	readonly bitDepth: number | undefined;
-	readonly originalFrames: number;
-	readonly writerState: { written: number };
-}): Promise<void> {
-	const { chunk, channels, output, sourceRate, bitDepth, originalFrames, writerState } = args;
-	const firstChannel = chunk[0];
-	const got = firstChannel?.length ?? 0;
-
-	if (got === 0 || !firstChannel) return;
-
-	const remaining = originalFrames - writerState.written;
-
-	if (remaining <= 0) return;
-
-	const take = Math.min(got, remaining);
-	const right = chunk[1] ?? firstChannel;
-	const writeLeft = take === got ? firstChannel : firstChannel.subarray(0, take);
-	const writeRight = take === got ? right : right.subarray(0, take);
-
-	const writeChannels = buildWriteChannels(writeLeft, writeRight, channels);
-
-	await output.write(writeChannels, sourceRate, bitDepth);
-	writerState.written += take;
 }
 
 function buildWriteChannels(left: Float32Array, right: Float32Array, channels: number): Array<Float32Array> {
@@ -409,7 +285,7 @@ function buildWriteChannels(left: Float32Array, right: Float32Array, channels: n
 	return out;
 }
 
-async function padTail(output: BlockBuffer, channels: number, originalFrames: number, written: number, sourceRate: number, bitDepth: number | undefined): Promise<void> {
+async function padTail(output: BlockBuffer, channels: number, originalFrames: number, written: number, sampleRate: number, bitDepth: number | undefined): Promise<void> {
 	if (written >= originalFrames) return;
 
 	const missing = originalFrames - written;
@@ -419,7 +295,7 @@ async function padTail(output: BlockBuffer, channels: number, originalFrames: nu
 		padChannels.push(new Float32Array(missing));
 	}
 
-	await output.write(padChannels, sourceRate, bitDepth);
+	await output.write(padChannels, sampleRate, bitDepth);
 }
 
 export class KimVocal2Node extends TransformNode<KimVocal2Properties> {

@@ -1,9 +1,9 @@
+import { BufferedStream, type StreamSetupContext } from "..";
 import type { BufferedAudioNode } from "../..";
 import { toReadable } from "../../../utils/to-readable";
-import { BufferedStream, type StreamSetupContext } from "..";
+import type { TransformNodeProperties } from "../../transform";
 import type { Block } from "../block";
 import { createProgressGate, type ProgressGate } from "../utils/progress-gate";
-import type { TransformNodeProperties } from ".";
 
 export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>> extends BufferedStream<N> {
 	private framesBuffered = 0;
@@ -12,7 +12,7 @@ export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<Tran
 	private sourceTotalFrames?: number;
 
 	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
-		this.sourceTotalFrames = context.durationFrames;
+		this.sourceTotalFrames = context.sourceTotalFrames;
 
 		await this._setup(context);
 

@@ -6,6 +6,7 @@ import { BufferedSourceStream, type RenderTiming, type SourceNode } from "./node
 import { BufferedTargetStream } from "./node/stream/target";
 import { BufferedTransformStream } from "./node/stream/transform/buffered-transform";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
+import { assertFirstBlockSampleRate } from "./utils/assert-first-block-sample-rate";
 import { teeReadable } from "./utils/tee-readable";
 
 const RENDER_LIVENESS_INTERVAL_MS = 30_000;
@@ -142,7 +143,9 @@ export class RenderJob {
 			const context: StreamSetupContext = {
 				executionProviders: this.options?.executionProviders ?? defaultProviders,
 				memoryLimit,
-				durationFrames: meta.durationFrames,
+				sourceSampleRate: meta.sampleRate,
+				sampleRate: meta.sampleRate,
+				sourceTotalFrames: meta.durationFrames,
 				highWaterMark: this.options?.highWaterMark ?? computedHighWaterMark,
 				signal: this.signal(),
 			};
@@ -151,7 +154,8 @@ export class RenderJob {
 
 			try {
 				const readable = await this.sourceStream.setup(context);
-				const promises = await this.wireChildren(this.root.children, readable, context);
+				const sourceName = (this.root.node.constructor as typeof BufferedAudioNode).nodeName;
+				const promises = await this.setupChildren(this.root.children, assertFirstBlockSampleRate(readable, context.sampleRate, sourceName), context);
 
 				await Promise.all(promises);
 			} finally {
@@ -175,15 +179,15 @@ export class RenderJob {
 		}
 	}
 
-	private async wireChildren(children: Array<PlanNode>, readable: ReadableStream<Block>, context: StreamSetupContext): Promise<Array<Promise<void>>> {
+	private async setupChildren(children: Array<PlanNode>, readable: ReadableStream<Block>, context: StreamSetupContext): Promise<Array<Promise<void>>> {
 		const pairs = teeReadable(readable, children);
 
-		const nested = await Promise.all(pairs.map(([branch, child]) => this.wire(child, branch, context)));
+		const nested = await Promise.all(pairs.map(([branch, child]) => this.setup(child, branch, { ...context })));
 
 		return nested.flat();
 	}
 
-	private async wire(plan: PlanNode, input: ReadableStream<Block>, context: StreamSetupContext): Promise<Array<Promise<void>>> {
+	private async setup(plan: PlanNode, input: ReadableStream<Block>, context: StreamSetupContext): Promise<Array<Promise<void>>> {
 		const { stream } = plan;
 
 		if (stream instanceof BufferedTargetStream) {
@@ -191,9 +195,10 @@ export class RenderJob {
 		}
 
 		if (stream instanceof BufferedTransformStream || stream instanceof UnbufferedTransformStream) {
+			const nodeName = (plan.node.constructor as typeof BufferedAudioNode).nodeName;
 			const output = await stream.setup(input, context);
 
-			return this.wireChildren(plan.children, output, context);
+			return this.setupChildren(plan.children, assertFirstBlockSampleRate(output, context.sampleRate, nodeName), context);
 		}
 
 		throw new Error(`Unexpected stream type for node "${(plan.node.constructor as typeof BufferedAudioNode).nodeName}"`);

@@ -19,8 +19,6 @@ export { getLraConsideredMinLufs, getLraConsideredStats } from "./loudness-range
 export type { LraConsideredStats } from "./loudness-range";
 export { MixedRadixFft } from "./mixed-radix-fft";
 export { replaceChannel } from "./replace-channel";
-export { ResampleStream } from "./resample-stream";
-export type { ResampleStreamOptions } from "./resample-stream";
 export { SlidingWindowMaxStream, slidingWindowMax } from "./sliding-window-max";
 export { SlidingWindowMinStream, slidingWindowMin } from "./sliding-window-min";
 export { createFftWorkspace, fft, hanningWindow, ifft, istft, stft } from "./stft";

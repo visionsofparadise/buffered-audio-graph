@@ -1,4 +1,4 @@
-import { BufferedAudioNode, type BufferedAudioNodeProperties, type Composition } from "../..";
+import { BufferedAudioNode, type BufferedAudioNodeProperties, type Composition } from ".";
 
 export interface TransformNodeProperties extends BufferedAudioNodeProperties {}
 

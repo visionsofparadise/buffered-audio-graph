@@ -111,20 +111,6 @@ import { interleave, deinterleaveBuffer, replaceChannel } from "@buffered-audio/
 | `deinterleaveBuffer(buffer, channelCount)` | Deinterleave a buffer into per-channel arrays |
 | `replaceChannel(samples, channelIndex, replacement)` | Replace a single channel in an interleaved buffer |
 
-### Resampling
-
-```ts
-import { ResampleStream } from "@buffered-audio/utils";
-```
-
-| API | Description |
-| --- | --- |
-| `new ResampleStream(ffmpegPath, options)` | Start an FFmpeg/SoXR resampler for `sourceSampleRate`, `targetSampleRate`, and `channels` |
-| `write(channels)` | Write equal-length planar `Float32Array` channel samples with stdin backpressure |
-| `read(frames)` | Read up to the requested number of output frames per channel |
-| `end()` | Finish the input and let FFmpeg drain its filter tail |
-| `close()` | Terminate the child process and release queued output |
-
 ## License
 
 ISC

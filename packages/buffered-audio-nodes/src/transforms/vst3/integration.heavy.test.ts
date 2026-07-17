@@ -31,10 +31,12 @@ const writeStagesFile = async (): Promise<string> => {
 	return path;
 };
 
-const buildContext = (): StreamSetupContext => ({
+const buildContext = (sampleRate: number): StreamSetupContext => ({
 	executionProviders: ["cpu"],
 	memoryLimit: 64 * 1024 * 1024,
 	highWaterMark: 1,
+	sourceSampleRate: sampleRate,
+	sampleRate,
 });
 
 const renderContext = (): StreamContext => ({ events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 });
@@ -51,7 +53,7 @@ const processWholeFile = async (stream: Vst3Stream, channels: Array<Float32Array
 		},
 	});
 
-	const output = await stream.setup(input, buildContext());
+	const output = await stream.setup(input, buildContext(sampleRate));
 	const reader = output.getReader();
 	const blocks: Array<Block> = [];
 

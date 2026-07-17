@@ -1,24 +1,23 @@
+import {
+	BlockBuffer,
+	BufferedTransformStream,
+	createProgressGate,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type StreamContext,
+	type StreamSetupContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
+import { initFftBackend, type FftBackend } from "@buffered-audio/utils";
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
-import { initFftBackend, ResampleStream, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
+import { createResampleComposition } from "../../utils/resample-composition";
+import type { FfmpegStream } from "../ffmpeg";
 import { BLOCK_LEN, BLOCK_SHIFT, DtlnBlockStream } from "./utils/dtln";
-import {
-	appendToStepBatch,
-	commitStepBatch,
-	CHUNK_FRAMES,
-	DTLN_SAMPLE_RATE,
-	drainResampleOutToBuffer,
-	padTail,
-	pullNextChunkAt16k,
-	pumpSourceToResampleIn,
-	stepAllChannels,
-	STEP_BATCH_SIZE,
-	WARMUP_SAMPLES,
-	type StreamPair,
-} from "./utils/pump";
+import { appendToStepBatch, CHUNK_FRAMES, commitStepBatch, DTLN_SAMPLE_RATE, padTail, pullNextChunkAt16k, STEP_BATCH_SIZE, stepAllChannels, WARMUP_SAMPLES } from "./utils/pump";
 
 export const schema = z.object({
 	modelPath1: z
@@ -58,6 +57,15 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 	private session2!: OnnxSession;
 	private fftBackend?: FftBackend;
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
+	private readonly renderContext: StreamContext;
+	private upResample?: FfmpegStream;
+	private downResample?: FfmpegStream;
+
+	constructor(node: DtlnNode, context: StreamContext) {
+		super(node, context);
+
+		this.renderContext = context;
+	}
 
 	override _setup(context: StreamSetupContext): void {
 		const onnxProviders = filterOnnxProviders(context.executionProviders);
@@ -70,6 +78,19 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 
 		this.fftBackend = fft.backend;
 		this.fftAddonOptions = fft.addonOptions;
+
+		const composition = createResampleComposition({ context, streamContext: this.renderContext, ffmpegPath: this.properties.ffmpegPath, modelRate: DTLN_SAMPLE_RATE });
+
+		if (composition) {
+			this.upResample = composition.upResample;
+			this.downResample = composition.downResample;
+		}
+	}
+
+	override _pipe(input: ReadableStream<Block>): ReadableStream<Block> {
+		if (!this.upResample || !this.downResample) return super._pipe(input);
+
+		return this.downResample._pipe(super._pipe(this.upResample._pipe(input)));
 	}
 
 	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
@@ -78,28 +99,9 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 
 		if (originalFrames === 0 || channels === 0) return;
 
-		const sourceRate = this.sampleRate ?? DTLN_SAMPLE_RATE;
 		const bitDepth = this.bitDepth;
-		const needsResample = sourceRate !== DTLN_SAMPLE_RATE;
 
 		await buffered.reset();
-
-		let pair: StreamPair | undefined;
-
-		if (needsResample) {
-			pair = {
-				resampleIn: new ResampleStream(this.properties.ffmpegPath, {
-					sourceSampleRate: sourceRate,
-					targetSampleRate: DTLN_SAMPLE_RATE,
-					channels,
-				}),
-				resampleOut: new ResampleStream(this.properties.ffmpegPath, {
-					sourceSampleRate: DTLN_SAMPLE_RATE,
-					targetSampleRate: sourceRate,
-					channels,
-				}),
-			};
-		}
 
 		const output = new BlockBuffer();
 
@@ -109,19 +111,13 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 				output,
 				channels,
 				originalFrames,
-				sourceRate,
 				bitDepth,
-				pair,
 			});
 
 			await output.reset();
 
 			yield* output.iterate(CHUNK_FRAMES);
 		} finally {
-			if (pair) {
-				await Promise.all([pair.resampleIn.close(), pair.resampleOut.close()]);
-			}
-
 			await output.close();
 		}
 	}
@@ -131,11 +127,9 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 		readonly output: BlockBuffer;
 		readonly channels: number;
 		readonly originalFrames: number;
-		readonly sourceRate: number;
 		readonly bitDepth: number | undefined;
-		readonly pair: StreamPair | undefined;
 	}): Promise<void> {
-		const { buffer, output, channels, originalFrames, sourceRate, bitDepth, pair } = args;
+		const { buffer, output, channels, originalFrames, bitDepth } = args;
 
 		// Per-channel DTLN streaming state. LSTM states are per-channel; the OLA
 		// scratch and sliding input window are per-channel.
@@ -161,14 +155,10 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 
 		const writerState = { written: 0 };
 
-		const pumpDone = pair !== undefined ? pumpSourceToResampleIn({ buffer, resampleIn: pair.resampleIn, channels, chunkFrames: CHUNK_FRAMES }) : Promise.resolve();
-		const drainerDone = pair !== undefined ? drainResampleOutToBuffer({ resampleOut: pair.resampleOut, output, channels, sourceRate, bitDepth, originalFrames, writerState }) : Promise.resolve();
-
-		const total16k = Math.round(originalFrames * DTLN_SAMPLE_RATE / sourceRate);
-		const progressGate = createProgressGate(total16k);
+		const progressGate = createProgressGate(originalFrames);
 
 		for (;;) {
-			const got16k = await pullNextChunkAt16k({ buffer, pair, channels, frames: CHUNK_FRAMES });
+			const got16k = await pullNextChunkAt16k({ buffer, channels, frames: CHUNK_FRAMES });
 
 			if (got16k === undefined) break;
 
@@ -203,19 +193,16 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 					stepAccumLen = 0;
 
 					if (stepBatchLen >= STEP_BATCH_SIZE) {
-						await commitStepBatch({ stepBatch, length: stepBatchLen, channels, pair, output, sourceRate, bitDepth, originalFrames, writerState });
+						await commitStepBatch({ stepBatch, length: stepBatchLen, channels, output, sampleRate: DTLN_SAMPLE_RATE, bitDepth, originalFrames, writerState });
 						stepBatchLen = 0;
 					}
 				}
 			}
 
-			const doneFrames = Math.min(samplesFed, total16k);
+			const doneFrames = Math.min(samplesFed, originalFrames);
 
-			if (progressGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, total16k);
+			if (progressGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, originalFrames);
 		}
-
-		// Await defensively to surface pump-side errors.
-		await pumpDone;
 
 		if (samplesFed > 0 && samplesFed < BLOCK_LEN) {
 			const zeroInputs: Array<Float32Array> = [];
@@ -230,7 +217,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 				samplesFed += BLOCK_SHIFT;
 
 				if (stepBatchLen >= STEP_BATCH_SIZE) {
-					await commitStepBatch({ stepBatch, length: stepBatchLen, channels, pair, output, sourceRate, bitDepth, originalFrames, writerState });
+					await commitStepBatch({ stepBatch, length: stepBatchLen, channels, output, sampleRate: DTLN_SAMPLE_RATE, bitDepth, originalFrames, writerState });
 					stepBatchLen = 0;
 				}
 			}
@@ -250,24 +237,18 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 			warmupRemaining = result.warmupRemaining;
 
 			if (stepBatchLen >= STEP_BATCH_SIZE) {
-				await commitStepBatch({ stepBatch, length: stepBatchLen, channels, pair, output, sourceRate, bitDepth, originalFrames, writerState });
+				await commitStepBatch({ stepBatch, length: stepBatchLen, channels, output, sampleRate: DTLN_SAMPLE_RATE, bitDepth, originalFrames, writerState });
 				stepBatchLen = 0;
 			}
 		}
 
 		if (stepBatchLen > 0) {
-			await commitStepBatch({ stepBatch, length: stepBatchLen, channels, pair, output, sourceRate, bitDepth, originalFrames, writerState });
+			await commitStepBatch({ stepBatch, length: stepBatchLen, channels, output, sampleRate: DTLN_SAMPLE_RATE, bitDepth, originalFrames, writerState });
 			stepBatchLen = 0;
 		}
 
-		if (pair) {
-			await pair.resampleOut.end();
-		}
-
-		await drainerDone;
-
-		// Zero-pad: rate-conversion rounding can leave written < originalFrames.
-		await padTail(output, channels, originalFrames, writerState.written, sourceRate, bitDepth);
+		// Zero-pad: warm-up trimming can leave written < originalFrames.
+		await padTail(output, channels, originalFrames, writerState.written, DTLN_SAMPLE_RATE, bitDepth);
 	}
 }
 
@@ -279,14 +260,6 @@ export class DtlnNode extends TransformNode<DtlnProperties> {
 	static override readonly Stream = DtlnStream;
 }
 
-export function dtln(options: {
-	modelPath1: string;
-	modelPath2: string;
-	ffmpegPath: string;
-	onnxAddonPath?: string;
-	vkfftAddonPath?: string;
-	fftwAddonPath?: string;
-	id?: string;
-}): DtlnNode {
+export function dtln(options: { modelPath1: string; modelPath2: string; ffmpegPath: string; onnxAddonPath?: string; vkfftAddonPath?: string; fftwAddonPath?: string; id?: string }): DtlnNode {
 	return new DtlnNode(options);
 }

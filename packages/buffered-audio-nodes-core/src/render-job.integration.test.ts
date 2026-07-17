@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import type { StreamSetupContext } from "./node/stream";
 import type { Block } from "./node/stream/block";
 import { BufferedSourceStream, SourceNode, type SourceMetadata, type SourceNodeProperties } from "./node/stream/source";
 import { BufferedTargetStream, TargetNode } from "./node/stream/target";
-import { TransformNode } from "./node/stream/transform";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
+import { TransformNode, type TransformNodeProperties } from "./node/transform";
 import { RenderJob } from "./render-job";
 
-function createBlock(value: number, offset: number, frames: number): Block {
-	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate: 44100, bitDepth: 32 };
+function createBlock(value: number, offset: number, frames: number, sampleRate = 44100): Block {
+	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate, bitDepth: 32 };
 }
 
 interface MockSourceProperties extends SourceNodeProperties {
@@ -46,6 +47,12 @@ class MockSource extends SourceNode<MockSourceProperties> {
 }
 
 class MockTransformStream extends UnbufferedTransformStream {
+	observedSampleRate?: number;
+
+	override _setup(context: StreamSetupContext): void {
+		this.observedSampleRate = context.sampleRate;
+	}
+
 	override *_transform(block: Block): Iterable<Block> {
 		yield block;
 	}
@@ -58,9 +65,42 @@ class MockTransform extends TransformNode {
 	static override readonly Stream = MockTransformStream;
 }
 
+interface RateTransformProperties extends TransformNodeProperties {
+	readonly rate: number;
+	readonly declare: boolean;
+}
+
+class RateTransformStream extends UnbufferedTransformStream<RateTransform> {
+	override _setup(context: StreamSetupContext): void {
+		if (this.properties.declare) context.sampleRate = this.properties.rate;
+	}
+
+	override *_transform(block: Block): Iterable<Block> {
+		yield { ...block, sampleRate: this.properties.rate };
+	}
+}
+
+class RateTransform extends TransformNode<RateTransformProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "rate-transform";
+	static override readonly schema = z.object({});
+	static override readonly Stream = RateTransformStream;
+
+	constructor(rate: number, declare: boolean) {
+		super({ rate, declare });
+	}
+}
+
 class MockTargetStream extends BufferedTargetStream {
 	readonly receivedBlocks: Array<Block> = [];
+	observedSampleRate?: number;
 	closed = false;
+
+	override _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> | void {
+		this.observedSampleRate = context.sampleRate;
+
+		return super._setup(input, context);
+	}
 
 	override async _write(block: Block): Promise<void> {
 		this.receivedBlocks.push(block);
@@ -280,6 +320,39 @@ describe("RenderJob execution", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it("a rate-changing transform's cursor reaches its own subtree and not its siblings", async () => {
+		const source = new MockSource([createBlock(1, 0, 100)]);
+		const resample = new RateTransform(48000, true);
+		const resampled = new MockTarget();
+		const sibling = new MockTransform();
+		const untouched = new MockTarget();
+
+		source.to(resample);
+		resample.to(resampled);
+		source.to(sibling);
+		sibling.to(untouched);
+
+		const job = source.createRenderJob();
+		await job.render();
+
+		expect(targetStream(job, resampled).observedSampleRate).toBe(48000);
+		expect((job.streams.get(sibling)?.[0] as MockTransformStream).observedSampleRate).toBe(44100);
+		expect(targetStream(job, untouched).observedSampleRate).toBe(44100);
+	});
+
+	it("a transform that re-tags blocks without declaring the rate fails the render, naming itself", async () => {
+		const source = new MockSource([createBlock(1, 0, 100)]);
+		const dishonest = new RateTransform(48000, false);
+		const target = new MockTarget();
+
+		source.to(dishonest);
+		dishonest.to(target);
+
+		const job = source.createRenderJob();
+
+		await expect(job.render()).rejects.toThrow(/^rate-transform: emitted 48000 Hz where 44100 Hz was declared/);
 	});
 
 	it("destroy backstop runs on a stream that errors mid-render", async () => {

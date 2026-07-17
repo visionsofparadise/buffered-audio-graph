@@ -12,7 +12,10 @@ export interface StreamIdentity {
 export interface StreamSetupContext {
 	readonly executionProviders: ReadonlyArray<ExecutionProvider>;
 	readonly memoryLimit: number;
-	readonly durationFrames?: number;
+	readonly sourceSampleRate: number;
+	// The rate flowing at this point in the chain; a rate-changing stream assigns its outgoing rate in _setup.
+	sampleRate: number;
+	readonly sourceTotalFrames?: number;
 	readonly highWaterMark: number;
 	readonly signal?: AbortSignal;
 }

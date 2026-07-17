@@ -3,7 +3,7 @@ import { z } from "zod";
 import { type Composition } from ".";
 import { SourceNode } from "./stream/source";
 import { TargetNode } from "./stream/target";
-import { TransformNode, type TransformNodeProperties } from "./stream/transform";
+import { TransformNode, type TransformNodeProperties } from "./transform";
 
 class MockSource extends SourceNode {
 	static override readonly packageName = "test";

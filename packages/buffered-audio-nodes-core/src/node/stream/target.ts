@@ -14,7 +14,7 @@ export abstract class BufferedTargetStream<N extends BufferedAudioNode<TargetNod
 	abstract _close(): Promise<void> | void;
 
 	setup(readable: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
-		this.sourceTotalFrames = context.durationFrames;
+		this.sourceTotalFrames = context.sourceTotalFrames;
 
 		return Promise.resolve(this._setup(readable, context));
 	}

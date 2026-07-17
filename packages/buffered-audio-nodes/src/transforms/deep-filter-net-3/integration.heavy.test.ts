@@ -59,7 +59,6 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 			modelPath: binaries.dfn3,
 			ffmpegPath: binaries.ffmpeg,
 			onnxAddonPath: binaries.onnxAddon,
-			sampleRate: 44100,
 		});
 		const { input, output, context } = await runTransform(audio.testVoice, transform);
 
@@ -94,7 +93,6 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 				modelPath: binaries.dfn3,
 				ffmpegPath: binaries.ffmpeg,
 				onnxAddonPath: binaries.onnxAddon,
-				sampleRate,
 			});
 			const { input, output } = await runTransform(tempPath, transform);
 			const inputRms = computeRms(input[0] ?? new Float32Array());
@@ -113,7 +111,6 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 	}, 240_000);
 
 	it("processes a 44.1 kHz fixture via internal up/down resample composition", async () => {
-		// Verifies the sampleRate ≠ 48000 composition round-trips the source rate.
 		const sampleRate = 44100;
 		const durationSeconds = 2;
 		const numSamples = sampleRate * durationSeconds;
@@ -137,7 +134,6 @@ describeIfFixtureSet("deep-filter-net-3", () => {
 				modelPath: binaries.dfn3,
 				ffmpegPath: binaries.ffmpeg,
 				onnxAddonPath: binaries.onnxAddon,
-				sampleRate,
 			});
 			const { input, output } = await runTransform(tempPath, transform);
 			const inputChannel = input[0] ?? new Float32Array();

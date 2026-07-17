@@ -23,19 +23,22 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	private streamContext?: StreamSetupContext;
 
 	private child?: ChildProcessWithoutNullStreams;
-	private readonly pending: Array<Block> = [];
 	private stdoutStash: Buffer = Buffer.alloc(0);
 	private outputOffset = 0;
 	private stderr = "";
 	private stdinError?: Error;
 	private exitPromise?: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
-	private stdoutEndPromise?: Promise<void>;
+	private stdoutEnded = false;
+	private stdoutWait?: Promise<void>;
+	private stdoutNotify?: () => void;
 	private pendingDrain?: Promise<void>;
 	private inputSampleRate = 0;
 	private inputChannels = 0;
 
 	override _setup(context: StreamSetupContext): void {
 		this.streamContext = context;
+
+		if (this.properties.outputSampleRate !== undefined) context.sampleRate = this.properties.outputSampleRate;
 	}
 
 	protected _buildArgs(context: StreamSetupContext): Array<string> {
@@ -55,13 +58,12 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		const outRate = this.properties.outputSampleRate ?? sampleRate;
 		const args = [...buildInputArgs(sampleRate, channels), ...this._buildArgs(this.streamContext), ...buildOutputArgs(outRate, channels)];
 
-		const { child, exitPromise, stdoutEndPromise } = spawnFfmpegChild({
+		const { child, exitPromise } = spawnFfmpegChild({
 			ffmpegPath: this.properties.ffmpegPath,
 			args,
 			onStderr: (chunk) => {
 				this.stderr = appendStderr(this.stderr, chunk);
 			},
-			onStdout: (bytes) => this.handleStdoutBytes(bytes),
 			onStdinError: (error) => {
 				if (error.code === "EPIPE") return;
 
@@ -69,21 +71,89 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 			},
 		});
 
+		child.stdout.on("readable", () => this.wakeStdout());
+		child.stdout.on("end", () => {
+			this.stdoutEnded = true;
+			this.wakeStdout();
+		});
+
 		this.child = child;
 		this.exitPromise = exitPromise;
-		this.stdoutEndPromise = stdoutEndPromise;
 	}
 
-	private handleStdoutBytes(bytes: Buffer): void {
+	private wakeStdout(): void {
+		const notify = this.stdoutNotify;
+
+		this.stdoutNotify = undefined;
+		this.stdoutWait = undefined;
+		notify?.();
+	}
+
+	private *readAvailableStdout(): Generator<Block> {
+		const stdout = this.child?.stdout;
+
+		if (!stdout) return;
+
 		const outRate = this.properties.outputSampleRate ?? this.inputSampleRate;
-		const { block, stash, frameCount } = parseStdoutFrames(this.stdoutStash, bytes, this.inputChannels, this.outputOffset, outRate);
 
-		this.stdoutStash = stash;
+		for (;;) {
+			const bytes = stdout.read() as Buffer | null;
 
-		if (!block) return;
+			if (!bytes) return;
 
-		this.pending.push(block);
-		this.outputOffset += frameCount;
+			const { block, stash, frameCount } = parseStdoutFrames(this.stdoutStash, bytes, this.inputChannels, this.outputOffset, outRate);
+
+			this.stdoutStash = stash;
+
+			if (block) {
+				this.outputOffset += frameCount;
+
+				yield block;
+			}
+		}
+	}
+
+	private waitForStdoutReadableOrEnd(): Promise<void> {
+		const stdout = this.child?.stdout;
+
+		if (!stdout || this.stdoutEnded) return Promise.resolve();
+
+		// Node re-arms 'readable' only while readableLength <= highWaterMark, so parking on buffered bytes never wakes.
+		if (stdout.readableLength > 0) return Promise.resolve();
+
+		if (stdout.readableEnded) {
+			this.stdoutEnded = true;
+
+			return Promise.resolve();
+		}
+
+		if (this.stdoutWait) return this.stdoutWait;
+
+		const wait = new Promise<void>((resolve) => {
+			this.stdoutNotify = resolve;
+		});
+
+		this.stdoutWait = wait;
+
+		return wait;
+	}
+
+	private async *serveWhileParked(): AsyncGenerator<Block> {
+		for (;;) {
+			yield* this.readAvailableStdout();
+
+			const drain = this.pendingDrain;
+
+			if (drain === undefined) return;
+
+			if (this.stdoutEnded) {
+				await drain;
+
+				return;
+			}
+
+			await Promise.race([drain, this.waitForStdoutReadableOrEnd()]);
+		}
 	}
 
 	override async *_transform(block: Block): AsyncGenerator<Block> {
@@ -105,10 +175,6 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		const interleaved = interleave(block.samples, frames, channels);
 		const buf = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
 
-		if (this.pendingDrain) {
-			await this.pendingDrain;
-		}
-
 		const ok = child.stdin.write(buf);
 
 		if (!ok) {
@@ -120,7 +186,8 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 			});
 		}
 
-		yield* this.pending.splice(0);
+		yield* this.serveWhileParked();
+		yield* this.readAvailableStdout();
 	}
 
 	override async *_flush(): AsyncGenerator<Block> {
@@ -128,29 +195,36 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		if (!child) return;
 
-		if (this.pendingDrain) {
-			await this.pendingDrain;
-		}
+		yield* this.serveWhileParked();
 
 		child.stdin.end();
 
 		if (this.stdinError) throw this.stdinError;
 
-		const stdoutEnd = this.stdoutEndPromise ?? Promise.resolve();
-		const exit = this.exitPromise ?? Promise.resolve({ code: 0, signal: null });
-		const [, exitResult] = await Promise.all([stdoutEnd, exit]);
+		for (;;) {
+			yield* this.readAvailableStdout();
+
+			if (this.stdoutEnded) break;
+
+			await this.waitForStdoutReadableOrEnd();
+		}
+
+		if (this.stdoutStash.length >= this.inputChannels * 4) {
+			const outRate = this.properties.outputSampleRate ?? this.inputSampleRate;
+			const { block } = parseStdoutFrames(this.stdoutStash, Buffer.alloc(0), this.inputChannels, this.outputOffset, outRate);
+
+			this.stdoutStash = Buffer.alloc(0);
+
+			if (block) yield block;
+		}
+
+		const exitResult = await (this.exitPromise ?? Promise.resolve({ code: 0, signal: null }));
 
 		if (exitResult.code !== null && exitResult.code !== 0) {
 			const detail = this.stderr ? `: ${this.stderr.slice(0, 1024)}` : "";
 
 			throw new Error(`ffmpeg exited ${exitResult.code}${detail}`);
 		}
-
-		if (this.stdoutStash.length >= this.inputChannels * 4) {
-			this.handleStdoutBytes(Buffer.alloc(0));
-		}
-
-		yield* this.pending.splice(0);
 	}
 
 	override async _destroy(): Promise<void> {

@@ -99,9 +99,8 @@ Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN).
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `modelPath` | string | `""` | DeepFilterNet3 48 kHz denoiser model (.onnx) Download: [dfn3](https://github.com/yuyun2000/SpeechDenoiser) |
-| `ffmpegPath` | string | `""` | FFmpeg — only used when sampleRate ≠ 48000 to chain up/down resamplers around the inference stream; can be left blank when sampleRate === 48000. Download: [ffmpeg](https://ffmpeg.org/download.html) |
+| `ffmpegPath` | string | `""` | FFmpeg — used when the input audio is not 48 kHz to chain up/down resamplers around the inference stream; can be left blank for 48 kHz input. Download: [ffmpeg](https://ffmpeg.org/download.html) |
 | `onnxAddonPath` | string | `""` | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
-| `sampleRate` | number (min 0) | — | Source audio sample rate in Hz. Required. At rates other than 48000 Hz, the internal resampling round trip may add or drop up to two source-rate frames. |
 | `attenuation` | number (0 to 100) | `30` | Attenuation cap in dB. Maps to the ONNX `atten_lim_db` input; 0 = no cap |
 
 ### Dither

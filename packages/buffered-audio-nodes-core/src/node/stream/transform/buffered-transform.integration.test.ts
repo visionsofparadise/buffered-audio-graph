@@ -232,7 +232,7 @@ describe("BufferedTransformStream progress shape", () => {
 		const stream = new IdentityTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 10 }), context);
 		const progress = collectProgress(events);
 
-		await drainBlocks(await stream.setup(readableFrom([createBlock(0.5, 0, 100)]), createTestSetupContext({ durationFrames: 100 })));
+		await drainBlocks(await stream.setup(readableFrom([createBlock(0.5, 0, 100)]), createTestSetupContext({ sourceTotalFrames: 100 })));
 
 		const buffers = progress.filter((p) => p.phase === "buffer");
 		const emits = progress.filter((p) => p.phase === "emit");
