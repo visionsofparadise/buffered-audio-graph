@@ -7,8 +7,10 @@
  * works and persists. Coverage includes the cmdk add-node catalog (mouse +
  * keyboard pick), the edge insert chip, the reduced node menu, full-graph
  * render-to-completion through core, the version-guarded zero-target leaf
- * error, and the Settings modal. See design-testing.md (2026-07-12 GUI smoke
- * harness entry).
+ * error, value-level undo/redo of rename/parameter/bypass edits, insert-on-edge
+ * as a mutation, a mixed-sequence exact restore of the persisted bag, the
+ * external file:changed reconcile, and the Settings modal. See design-testing.md
+ * (2026-07-12 GUI smoke harness and 2026-07-18 regression net entries).
  *
  * Exit 0 on all assertions passing; 1 with a printed failure summary.
  */
@@ -28,6 +30,7 @@ const RESTORED_BAG_PATH = join(PROFILE_DIR, "smoke-restored.bag");
 const BAG_NAME = "Smoke Bag";
 const RESTORED_BAG_NAME = "Restored Bag";
 const PATH_SENTINEL = "C:/smoke/input.wav";
+const PATH_SENTINEL_2 = "C:/smoke/param-undo.wav";
 const INPUT_WAV_PATH = join(PROFILE_DIR, "smoke-input.wav");
 const OUTPUT_WAV_PATH = join(PROFILE_DIR, "smoke-output.wav");
 
@@ -51,14 +54,23 @@ interface Point {
 }
 
 interface PersistedNode {
+	readonly id?: string;
 	readonly nodeName?: string;
 	readonly packageVersion?: string;
 	readonly parameters?: Record<string, unknown>;
 }
 
 interface PersistedBag {
+	readonly id: string;
+	readonly apiVersion: number;
+	readonly name: string;
 	readonly nodes: ReadonlyArray<PersistedNode>;
 	readonly edges: ReadonlyArray<unknown>;
+}
+
+/** Parse the persisted smoke bag from disk. Read after a settle wait (`DEBOUNCE_WAIT_MS`) so the debounced writer has flushed. */
+function readPersistedBag(): PersistedBag {
+	return JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
 }
 
 interface PersistedPackage {
@@ -83,7 +95,7 @@ interface PersistedStage {
 
 /** Read the first stage of the persisted VST3 node, or null if absent. */
 function readVst3FirstStage(): PersistedStage | null {
-	const bag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
+	const bag = readPersistedBag();
 	const vst3 = bag.nodes.find((node) => node.nodeName === VST3_NODE);
 	const stages = vst3?.parameters?.stages;
 
@@ -201,9 +213,7 @@ function writeSineWav(filePath: string): void {
 /** The built-in nodes package version carried by the first added node in the saved bag (per-node `packageVersion`), or null. */
 function readBuiltinVersion(): string | null {
 	try {
-		const bag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
-
-		return bag.nodes.find((node) => typeof node.packageVersion === "string" && node.packageVersion.length > 0)?.packageVersion ?? null;
+		return readPersistedBag().nodes.find((node) => typeof node.packageVersion === "string" && node.packageVersion.length > 0)?.packageVersion ?? null;
 	} catch {
 		return null;
 	}
@@ -554,9 +564,7 @@ async function waitForEdgeAgreement(page: Page, expected: number, timeoutMs: num
 
 	while (Date.now() < deadline) {
 		try {
-			const bag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
-
-			persisted = bag.edges.length;
+			persisted = readPersistedBag().edges.length;
 			persistedError = null;
 		} catch (error: unknown) {
 			persisted = null;
@@ -863,6 +871,67 @@ async function setNodePathParam(page: Page, nodeId: string, value: string): Prom
 
 		if (committed === value) return;
 	}
+}
+
+/** The current value of a node's first text input (its file-path param), or null when absent. */
+async function paramInputValue(page: Page, nodeId: string): Promise<string | null> {
+	return page
+		.$eval(`.react-flow__node[data-id="${nodeId}"] input[type="text"]`, (element) => (element).value)
+		.catch(() => null);
+}
+
+/** Whether a node renders bypassed (its body carries `.opacity-60`). */
+async function isNodeBypassed(page: Page, nodeId: string): Promise<boolean> {
+	return page.evaluate((id: string): boolean => {
+		const node = document.querySelector(`.react-flow__node[data-id="${id}"]`);
+
+		return node ? node.querySelector(".opacity-60") !== null : false;
+	}, nodeId);
+}
+
+/**
+ * Click a neutral point on the React Flow pane (offset into its top-left
+ * quarter, clear of the centred nodes and the corner overlays) to move focus
+ * out of any field before undo/redo — the Canvas keydown handler ignores
+ * Ctrl+Z while an INPUT/TEXTAREA has focus.
+ */
+async function defocus(page: Page): Promise<void> {
+	const pane = await rectOf(page, ".react-flow__pane");
+
+	if (!pane) return;
+
+	await clickPoint(page, { x: pane.x / 2, y: pane.y / 2 });
+	await sleep(100);
+}
+
+/**
+ * Rename the graph by driving the active tab's `TabNameInput`: click the tab
+ * bar's text input (scoped to the AppBar via the App-menu trigger so node
+ * parameter inputs never match), select-all, type the name, commit with Enter,
+ * and wait out the save debounce.
+ */
+async function renameGraph(page: Page, name: string): Promise<void> {
+	const inputPoint = await page.evaluate((): Point | null => {
+		const bar = document.querySelector('button[aria-label="App menu"]')?.closest("div.h-12");
+		const input = bar?.querySelector('input[type="text"]');
+
+		if (!input) return null;
+
+		const rect = input.getBoundingClientRect();
+
+		return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+	});
+
+	if (!inputPoint) throw new Error("Active tab name input was not found in the AppBar");
+
+	await clickPoint(page, inputPoint);
+	await sleep(100);
+	await page.keyboard.down("Control");
+	await page.keyboard.press("A");
+	await page.keyboard.up("Control");
+	await page.keyboard.type(name, { delay: 20 });
+	await page.keyboard.press("Enter");
+	await sleep(DEBOUNCE_WAIT_MS);
 }
 
 /** Click a plain `<button>` (not a menuitem) whose text contains `text` — used for the Settings left-nav rows. */
@@ -1544,9 +1613,7 @@ async function run(): Promise<void> {
 		// 5 + 6: structural undo x2 / redo x2 — node/edge counts follow.
 		// (Placed on structural ops so the counts observably track undo/redo,
 		// which they could not if undo reversed the param/bypass edits below.)
-		const paneRect = await rectOf(page, ".react-flow__pane");
-
-		if (paneRect) await clickPoint(page, { x: paneRect.x, y: paneRect.y });
+		await defocus(page);
 
 		await undo(page);
 		const edgeRemovedByUndo = await waitForEdgeCount(page, 0, 5000);
@@ -1554,7 +1621,7 @@ async function run(): Promise<void> {
 		if (!edgeRemovedByUndo) {
 			await sleep(DEBOUNCE_WAIT_MS);
 
-			const undoBag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
+			const undoBag = readPersistedBag();
 			const renderedEdges = await edgeCount(page);
 
 			throw new Error(
@@ -1606,13 +1673,7 @@ async function run(): Promise<void> {
 		await clickPoint(page, bypassButton);
 		await sleep(300);
 
-		const isBypassed = await page.evaluate((id: string): boolean => {
-			const node = document.querySelector(`.react-flow__node[data-id="${id}"]`);
-
-			return node ? node.querySelector(".opacity-60") !== null : false;
-		}, sourceId);
-
-		check(isBypassed, "toggle bypass — node shows opacity-60");
+		check(await isNodeBypassed(page, sourceId), "toggle bypass — node shows opacity-60");
 
 		// 9: the node menu is exactly Bypass/Enable, Reset, Delete Node (Phase 3.2 —
 		// Render/Abort dropped) plus a read-only package@version label (Phase 5.1 —
@@ -1650,7 +1711,7 @@ async function run(): Promise<void> {
 		// 10: after the debounce window, the persisted bag matches the UI.
 		await sleep(DEBOUNCE_WAIT_MS);
 
-		const persisted = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
+		const persisted = readPersistedBag();
 
 		check(persisted.nodes.length === 1, `persisted bag has 1 node (has ${persisted.nodes.length})`);
 		check(persisted.edges.length === 0, `persisted bag has 0 edges (has ${persisted.edges.length})`);
@@ -1682,7 +1743,7 @@ async function run(): Promise<void> {
 		await page.keyboard.press("Enter");
 		await sleep(DEBOUNCE_WAIT_MS);
 
-		const integerBag = JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
+		const integerBag = readPersistedBag();
 		const duplicateChannels = integerBag.nodes.find((node) => node.nodeName === DUPLICATE_CHANNELS_NODE);
 		const channels = duplicateChannels?.parameters?.channels;
 
@@ -1695,6 +1756,306 @@ async function run(): Promise<void> {
 
 		check(deletedDuplicateChannels, "integer parameter — Duplicate Channels removed after persistence assertion");
 		check(await waitForNodeCount(page, 1, 5000), "integer parameter — mutation graph returns to 1 node");
+
+		// Value-level undo/redo (the opshot-migration regression net): rename,
+		// parameter, and bypass edits asserted against the rendered DOM and the
+		// persisted bag through undo/redo; insert-on-edge as a real mutation; a
+		// mixed-sequence exact restore; and — strictly last — the external
+		// file:changed reconcile, after which nothing may assert undo behavior.
+		log("--- value-level undo/redo ---");
+
+		// Setup: Read WAV (path PATH_SENTINEL, bypass on) is in scope as sourceId.
+		// Both addNode placements land at screen centre, and coincident handles
+		// defeat connectHandles and the edge-chip hover, so the new Gain is dragged
+		// clear — an unhistoried position write that cannot pollute undo counts.
+		const readNodeId = sourceId;
+		const gainNodeId = await addNode(page, TRANSFORM_NODE, 2, { search: "gain" });
+
+		await zoomOut(page, 4);
+		await dragNodeBy(page, gainNodeId, 320, 140);
+
+		const valueSourceHandle = await rectOf(page, `.react-flow__node[data-id="${readNodeId}"] .react-flow__handle-right`);
+		const valueTargetHandle = await rectOf(page, `.react-flow__node[data-id="${gainNodeId}"] .react-flow__handle-left`);
+
+		if (!valueSourceHandle || !valueTargetHandle) throw new Error("Could not locate value-level connection handles");
+
+		await connectHandles(page, valueSourceHandle, valueTargetHandle);
+		await waitForEdgeAgreement(page, 1, 8000);
+		check(true, "value setup — Read WAV → Gain connected (edges = 1, persisted and rendered)");
+
+		// Rename: the tab-name commit routes through the historied rename command.
+		await renameGraph(page, "Renamed Smoke");
+		check(readPersistedBag().name === "Renamed Smoke", 'rename — persisted bag name becomes "Renamed Smoke"');
+
+		await defocus(page);
+		await undo(page);
+		await sleep(DEBOUNCE_WAIT_MS);
+		check(readPersistedBag().name === BAG_NAME, `rename undo — persisted bag name reverts to "${BAG_NAME}"`);
+
+		await redo(page);
+		await sleep(DEBOUNCE_WAIT_MS);
+		check(readPersistedBag().name === "Renamed Smoke", 'rename redo — persisted bag name returns to "Renamed Smoke"');
+
+		// Parameter: the file-path edit undoes to the previous sentinel and redoes
+		// back, in the input and the persisted node parameter alike.
+		await setNodePathParam(page, readNodeId, PATH_SENTINEL_2);
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const paramSetNode = readPersistedBag().nodes.find((node) => node.id === readNodeId);
+
+		check(
+			(await paramInputValue(page, readNodeId)) === PATH_SENTINEL_2 && paramSetNode?.parameters?.path === PATH_SENTINEL_2,
+			`param set — input and persisted path equal "${PATH_SENTINEL_2}"`,
+		);
+
+		await defocus(page);
+		await undo(page);
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const paramUndoNode = readPersistedBag().nodes.find((node) => node.id === readNodeId);
+
+		check(
+			(await paramInputValue(page, readNodeId)) === PATH_SENTINEL && paramUndoNode?.parameters?.path === PATH_SENTINEL,
+			`param undo — input and persisted path revert to "${PATH_SENTINEL}"`,
+		);
+
+		await redo(page);
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const paramRedoNode = readPersistedBag().nodes.find((node) => node.id === readNodeId);
+
+		check(
+			(await paramInputValue(page, readNodeId)) === PATH_SENTINEL_2 && paramRedoNode?.parameters?.path === PATH_SENTINEL_2,
+			`param redo — input and persisted path return to "${PATH_SENTINEL_2}"`,
+		);
+
+		// Bypass: toggled on the Gain node only — the Read WAV is already bypassed
+		// from the earlier scenario and must stay untouched. The bypass control is a
+		// plain body button; a coordinate click reaches it for the centred source node
+		// but not for this zoomed-out, dragged one, so it fires via a synthetic click
+		// (the harness's node-body-button convention — see synthClickInNode).
+		const gainHasBypass = await synthClickInNode(page, gainNodeId, 'button[aria-label="Bypass"]');
+
+		if (!gainHasBypass) throw new Error("Gain bypass button not found");
+
+		await sleep(300);
+		check(await isNodeBypassed(page, gainNodeId), "bypass — Gain node shows opacity-60");
+
+		await defocus(page);
+		await undo(page);
+		await sleep(300);
+		check(!(await isNodeBypassed(page, gainNodeId)), "bypass undo — opacity-60 absent on Gain");
+
+		await redo(page);
+		await sleep(300);
+		check(await isNodeBypassed(page, gainNodeId), "bypass redo — opacity-60 present on Gain");
+
+		await undo(page);
+		await sleep(300);
+		check(!(await isNodeBypassed(page, gainNodeId)), "bypass — final undo leaves Gain unbypassed");
+
+		// Insert-on-edge as a real mutation: complete the chip flow with a
+		// Duplicate Channels pick, then undo/redo the split (one history entry).
+		const insertSourceHandle = await rectOf(page, `.react-flow__node[data-id="${readNodeId}"] .react-flow__handle-right`);
+		const insertTargetHandle = await rectOf(page, `.react-flow__node[data-id="${gainNodeId}"] .react-flow__handle-left`);
+
+		if (!insertSourceHandle || !insertTargetHandle) throw new Error("Could not locate insert-on-edge handles");
+
+		const insertChipMid = {
+			x: (insertSourceHandle.x + insertTargetHandle.x) / 2,
+			y: (insertSourceHandle.y + insertTargetHandle.y) / 2,
+		};
+		let insertChipShown = false;
+
+		for (const dy of [0, -8, 8, -16, 16]) {
+			await page.mouse.move(insertChipMid.x, insertChipMid.y + dy);
+			await sleep(200);
+
+			if ((await page.$("[data-edge-insert]")) !== null) {
+				insertChipShown = true;
+				break;
+			}
+		}
+
+		check(insertChipShown, "insert-on-edge — hovering the edge reveals the insert chip");
+
+		const insertChipButton = await page.$('[data-edge-insert] button[aria-label="Insert node"]');
+		const insertChipBox = insertChipButton ? await insertChipButton.boundingBox() : null;
+
+		if (!insertChipBox) throw new Error("Insert chip button not found for the insert-on-edge mutation");
+
+		await page.mouse.click(insertChipBox.x + insertChipBox.width / 2, insertChipBox.y + insertChipBox.height / 2);
+		await page.waitForSelector("[data-catalog-input]", { timeout: 5000 });
+		await sleep(150);
+		await page.keyboard.type("duplicate", { delay: 20 });
+		await sleep(250);
+
+		const insertPicked = await clickCmdkItemByText(page, DUPLICATE_CHANNELS_NODE);
+
+		if (!insertPicked) throw new Error("Duplicate Channels not found in the insert catalog");
+
+		check(await waitForNodeCount(page, 3, 10000), "insert-on-edge — node count reaches 3");
+		await waitForEdgeAgreement(page, 2, 8000);
+		check(true, "insert-on-edge — edge splits into 2 (persisted and rendered)");
+
+		await defocus(page);
+		await undo(page);
+		check(await waitForNodeCount(page, 2, 5000), "insert-on-edge undo — back to 2 nodes");
+		await waitForEdgeAgreement(page, 1, 8000);
+		check(true, "insert-on-edge undo — edge restored to 1 (persisted and rendered)");
+
+		await defocus(page);
+		await redo(page);
+		check(await waitForNodeCount(page, 3, 5000), "insert-on-edge redo — 3 nodes again");
+		await waitForEdgeAgreement(page, 2, 8000);
+		check(true, "insert-on-edge redo — 2 edges again (persisted and rendered)");
+
+		// The redo re-inserts the node and leaves focus in its parameter field, where
+		// the Canvas keydown handler ignores Ctrl+Z; defocus before the undo so it lands.
+		await defocus(page);
+		await undo(page);
+		check(await waitForNodeCount(page, 2, 5000), "insert-on-edge — final undo returns to 2 nodes");
+		await waitForEdgeAgreement(page, 1, 8000);
+		check(true, "insert-on-edge — final undo returns to 1 edge (persisted and rendered)");
+
+		// Mixed-sequence exact restore: three discrete mutations, undone and redone
+		// wholesale, must deep-equal the persisted captures on both sides — the BAG
+		// exact-restore property the migration's History rewrite must preserve.
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const bagA = readPersistedBag();
+
+		await setNodePathParam(page, readNodeId, "C:/smoke/mixed-restore.wav");
+
+		const mixedBypassed = await synthClickInNode(page, gainNodeId, 'button[aria-label="Bypass"]');
+
+		if (!mixedBypassed) throw new Error("Gain bypass button not found for the mixed sequence");
+
+		await sleep(300);
+
+		const mixedDeleted = await deleteNodeViaMenu(page, gainNodeId);
+
+		check(mixedDeleted, "mixed sequence — Gain deleted via the node menu");
+		check(await waitForNodeCount(page, 1, 5000), "mixed sequence — 1 node after the three mutations");
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const bagB = readPersistedBag();
+
+		check(
+			bagB.nodes.length === 1 && bagB.edges.length === 0,
+			`mixed sequence — bagB holds 1 node, 0 edges (${bagB.nodes.length}/${bagB.edges.length})`,
+		);
+
+		await defocus(page);
+		await undo(page);
+		await undo(page);
+		await undo(page);
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const restoredBagA = readPersistedBag();
+		const bagARestored = JSON.stringify(restoredBagA) === JSON.stringify(bagA);
+
+		if (!bagARestored) {
+			log(`  INFO  bagA expected: ${JSON.stringify(bagA)}`);
+			log(`  INFO  bagA actual:   ${JSON.stringify(restoredBagA)}`);
+		}
+
+		check(bagARestored, "mixed undo ×3 — persisted bag deep-equals the pre-sequence capture");
+
+		await defocus(page);
+		await redo(page);
+		await redo(page);
+		await redo(page);
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const restoredBagB = readPersistedBag();
+		const bagBRestored = JSON.stringify(restoredBagB) === JSON.stringify(bagB);
+
+		if (!bagBRestored) {
+			log(`  INFO  bagB expected: ${JSON.stringify(bagB)}`);
+			log(`  INFO  bagB actual:   ${JSON.stringify(restoredBagB)}`);
+		}
+
+		check(bagBRestored, "mixed redo ×3 — persisted bag deep-equals the post-sequence capture");
+
+		// Return to baseline: back to the bagA state, drop Gain for good, and reset
+		// the Read WAV path so downstream sections see the historical baseline.
+		await defocus(page);
+		await undo(page);
+		await undo(page);
+		await undo(page);
+		check(await waitForNodeCount(page, 2, 5000), "baseline — undo ×3 restores the 2-node bagA state");
+
+		// The undo-restored Gain lost its unhistoried position (it renders at flow
+		// 0,0), which can sit under the top-left overlay or off-viewport and defeat
+		// the real right-click; fall back to a synthetic contextmenu anchored at a
+		// visible pane point (the menu opens at the event's client coordinates).
+		let baselineDeleted = await deleteNodeViaMenu(page, gainNodeId);
+
+		if (!baselineDeleted) {
+			const fallbackPane = await rectOf(page, ".react-flow__pane");
+			const fallbackAnchor = fallbackPane ? { x: fallbackPane.x, y: fallbackPane.y / 2 } : { x: 600, y: 300 };
+			const dispatched = await page.evaluate(
+				(id: string, point: Point): boolean => {
+					const node = document.querySelector(`.react-flow__node[data-id="${id}"]`);
+
+					if (!node) return false;
+
+					node.dispatchEvent(
+						new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: point.x, clientY: point.y }),
+					);
+
+					return true;
+				},
+				gainNodeId,
+				fallbackAnchor,
+			);
+
+			if (dispatched) {
+				await page.waitForSelector('[role="menuitem"]', { timeout: 3000 }).catch(() => undefined);
+				await sleep(120);
+				baselineDeleted = await clickMenuItemByText(page, "Delete Node");
+			}
+		}
+
+		check(baselineDeleted, "baseline — Gain deleted via the node menu");
+		check(await waitForNodeCount(page, 1, 5000), "baseline — 1 node remains");
+		check(await waitForEdgeCount(page, 0, 5000), "baseline — 0 edges remain");
+
+		await setNodePathParam(page, readNodeId, PATH_SENTINEL);
+		check(
+			(await paramInputValue(page, readNodeId)) === PATH_SENTINEL,
+			`baseline — Read WAV path reset to "${PATH_SENTINEL}"`,
+		);
+
+		// External file:changed reconcile — LAST in this block: today's reconcile
+		// leaves the undo stack in an undefined relationship to the document, so
+		// nothing below asserts undo behavior.
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const externalBag = { ...readPersistedBag(), name: "External Edit" };
+
+		writeFileSync(BAG_PATH, JSON.stringify(externalBag));
+
+		const reconcileDeadline = Date.now() + 10000;
+		let reconciled = false;
+
+		while (Date.now() < reconcileDeadline) {
+			const tabBarText = await page.evaluate((): string => {
+				const bar = document.querySelector('button[aria-label="App menu"]')?.closest("div.h-12");
+
+				return bar?.textContent ?? "";
+			});
+
+			if (tabBarText.includes("External Edit")) {
+				reconciled = true;
+				break;
+			}
+
+			await sleep(200);
+		}
+
+		check(reconciled, 'file:changed reconcile — active tab shows the external name "External Edit"');
 
 		// 11: VST3 stage editor (Phase 7.3). Runs before the Settings remove-flow
 		// so both seeded scan roots are still present when the picker scans.
