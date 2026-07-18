@@ -2,7 +2,7 @@ import type { BrowserWindow } from "electron";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
-import type { FileChangedPayload } from "../shared/utilities/emitToRenderer";
+import { emitToRenderer, type FileChangedPayload } from "../shared/utilities/emitToRenderer";
 
 export class FileWatcherManager {
 	private readonly watchers = new Map<string, fs.FSWatcher>();
@@ -32,7 +32,7 @@ export class FileWatcherManager {
 							const contentHash = crypto.createHash("sha256").update(content).digest("hex");
 							const payload: FileChangedPayload = { path: filePath, contentHash };
 
-							this.browserWindow.webContents.send("file:changed", payload);
+							emitToRenderer(this.browserWindow, "file:changed", payload);
 						} catch (error) {
 							if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 						}

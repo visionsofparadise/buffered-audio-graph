@@ -5,6 +5,7 @@ import readline from "node:readline";
 import { getVst3CliPath } from "../../../../main/bundledBinaries";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
 import type { Logger } from "../../../models/Logger";
+import { emitToRenderer } from "../../../utilities/emitToRenderer";
 import { parseVst3EditorLine, type Vst3EditorEvent } from "../Vst3EditorEvent";
 import { VST3_LAUNCH_EDITOR_ACTION, type Vst3LaunchEditorInput, type Vst3LaunchEditorIpcParameters, type Vst3LaunchEditorIpcReturn } from "./Renderer";
 
@@ -91,7 +92,7 @@ export class Vst3LaunchEditorMainIpc extends AsyncMainIpc<Vst3LaunchEditorIpcPar
 		const emit = (event: Vst3EditorEvent): void => {
 			if (browserWindow.isDestroyed()) return;
 
-			browserWindow.webContents.send("vst3:editorEvent", { launchId, event });
+			emitToRenderer(browserWindow, "vst3:editorEvent", { launchId, event });
 		};
 
 		const readStderrTail = consumeChildStreams(child, launchId, logger, emit);

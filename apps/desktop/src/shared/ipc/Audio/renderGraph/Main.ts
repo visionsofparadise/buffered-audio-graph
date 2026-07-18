@@ -1,7 +1,7 @@
 import type { NodeRegistry, ProgressPayload, StreamIdentity } from "@buffered-audio/core";
 import { createRenderJobs } from "@buffered-audio/core";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
-import type { AudioProgressPayload } from "../../../utilities/emitToRenderer";
+import { emitToRenderer, type AudioProgressPayload } from "../../../utilities/emitToRenderer";
 import { RENDER_GRAPH_ACTION, type RenderGraphInput, type RenderGraphIpcParameters, type RenderGraphIpcReturn } from "./Renderer";
 
 export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, RenderGraphIpcReturn> {
@@ -27,7 +27,7 @@ export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, R
 						framesTotal: payload.framesTotal,
 					};
 
-					browserWindow.webContents.send("audio:progress", progressPayload);
+					emitToRenderer(browserWindow, "audio:progress", progressPayload);
 				});
 			}
 

@@ -1,4 +1,5 @@
 import type { StreamPhase } from "@buffered-audio/core";
+import type { BrowserWindow } from "electron";
 import type { Vst3EditorEventPayload } from "../ipc/Vst3/Vst3EditorEvent";
 import type { Vst3ScanEntry } from "../ipc/Vst3/Vst3ScanEntry";
 
@@ -31,3 +32,9 @@ export interface MainEventMap {
 }
 
 export interface RendererEventMap {}
+
+export const emitToRenderer = <K extends keyof MainEventMap>(
+	browserWindow: BrowserWindow,
+	channel: K,
+	...args: MainEventMap[K]
+): void => browserWindow.webContents.send(channel, ...args);

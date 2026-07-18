@@ -1,11 +1,11 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { app, BrowserWindow } from "electron";
+import squirrelStartup from "electron-squirrel-startup";
 import { logger } from "./logger";
 import { createWindow } from "./window";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- Electron Forge requires this pattern
-if (require("electron-squirrel-startup")) {
+if (squirrelStartup) {
 	app.quit();
 }
 
