@@ -27,7 +27,8 @@ function createMockChild(): {
 } {
 	const child = new EventEmitter();
 	const stdin = new PassThrough();
-	const stdout = new Readable({ read: () => undefined });
+	// A real child stdout pipe is a 16 KiB socket; pin it so backpressure tests do not depend on the platform's default highWaterMark (16 KiB on Windows, 64 KiB on Linux).
+	const stdout = new Readable({ read: () => undefined, highWaterMark: 16384 });
 	const stderr = new PassThrough();
 	let exitCode: number | null = null;
 	let killed = false;
