@@ -30,8 +30,7 @@
     "lint:fix": "eslint . --fix",
     "build": "tsup",
     "unit": "vitest run --project unit",
-    "integration": "vitest run --project integration",
-    "integration:heavy": "vitest run -c vitest.heavy.config.ts"
+    "integration": "vitest run --project integration"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",
