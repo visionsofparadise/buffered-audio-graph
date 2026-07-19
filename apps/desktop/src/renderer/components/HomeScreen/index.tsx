@@ -1,8 +1,8 @@
 import { HomeGraphDecoration, type HomeGraphAnchor } from "../HomeGraphDecoration";
 import { FolderOpen, Plus } from "lucide-react";
+import { retrack } from "opshot/react";
 import { cn } from "../../utils/cn";
 import type { AppContext } from "../../models/Context";
-import { resnapshot } from "../../models/ProxyStore/resnapshot";
 import type { RecentFile } from "../../models/State/App";
 import { ProjectIcon } from "../ProjectIcon";
 
@@ -61,7 +61,7 @@ const HOME_BARCODE_BARS: ReadonlyArray<number> = [
 ];
 const HOME_BARCODE_ACCENT = new Set<number>([6, 25, 44, 55]);
 
-export const HomeScreen = resnapshot<Props>(({ context }: Props) => {
+export const HomeScreen = retrack<Props>(({ context }: Props) => {
 	const recentFiles: ReadonlyArray<RecentFile> = context.app.recentFiles.slice(0, 6);
 
 	const anchors: ReadonlyArray<HomeGraphAnchor> = recentFiles.map((recent) => ({

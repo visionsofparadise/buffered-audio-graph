@@ -2,11 +2,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import type { Logger } from "../../shared/models/Logger";
 import { main } from "../models/Main";
-import { ProxyStore } from "../models/ProxyStore/ProxyStore";
 import { loadAppState } from "../models/State/App";
 import { AppLayout } from "./Layout";
-
-const appStore = new ProxyStore();
 
 interface Props {
 	readonly queryClient: QueryClient;
@@ -42,7 +39,6 @@ export function AppLoader({ queryClient, logger }: Props) {
 			initialState={initialState}
 			windowId={windowId}
 			userDataPath={userDataPath}
-			appStore={appStore}
 			queryClient={queryClient}
 			logger={logger}
 		/>

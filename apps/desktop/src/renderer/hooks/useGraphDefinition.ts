@@ -1,10 +1,9 @@
+import type { State } from "opshot";
 import { useCallback, useEffect, useRef } from "react";
-import { snapshot, subscribe, type Snapshot } from "valtio/vanilla";
 import { SUPPORTED_API_VERSIONS } from "../../shared/models/ApiVersion";
 import type { FileChangedPayload } from "../../shared/utilities/emitToRenderer";
 import type { AppContext } from "../models/Context";
-import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
-import { useCreateState } from "../models/ProxyStore/hooks/useCreateState";
+import type { GraphMeta } from "../models/History";
 import {
 	loadGraphDefinition,
 	serializeGraphDefinition,
@@ -16,7 +15,6 @@ import { ensureGraphPackagesInstalled } from "./packagePipeline";
 const SAVE_DEBOUNCE_MS = 800;
 
 interface UseGraphDefinitionResult {
-	readonly graphDefinition: Snapshot<GraphDefinitionState>;
 	/** Force an immediate save of the pending debounced edit to disk. */
 	readonly flushDefinition: () => void;
 }
@@ -32,14 +30,12 @@ async function sha256Hex(content: string): Promise<string> {
 export { loadGraphDefinition };
 
 export function useGraphDefinition(
-	initialDefinition: Omit<GraphDefinitionState, "_key">,
+	graphDefinition: State<GraphDefinitionState, GraphMeta, GraphMeta>,
 	initialContent: string,
-	store: ProxyStore,
 	bagPath: string,
 	context: AppContext,
 ): UseGraphDefinitionResult {
 	const { main, mainEvents } = context;
-	const graphDefinition = useCreateState<GraphDefinitionState>(initialDefinition, store);
 
 	const contextRef = useRef(context);
 
@@ -78,12 +74,8 @@ export function useGraphDefinition(
 	}, [main]);
 
 	useEffect(() => {
-		const proxy = store.dangerouslyGetProxy<GraphDefinitionState>(graphDefinition._key);
-
-		if (!proxy) return;
-
-		const unsubscribe = subscribe(proxy, () => {
-			const json = serializeGraphDefinition(snapshot(proxy));
+		const unsubscribe = graphDefinition.op.subscribe(() => {
+			const json = serializeGraphDefinition(graphDefinition.op.unwrap());
 
 			pendingJsonRef.current = json;
 
@@ -118,7 +110,7 @@ export function useGraphDefinition(
 			unsubscribe();
 			flushDefinition();
 		};
-	}, [graphDefinition._key, store, main, flushDefinition]);
+	}, [graphDefinition.op, main, flushDefinition]);
 
 	useEffect(() => {
 		void main.watchFile(bagPath);
@@ -148,22 +140,25 @@ export function useGraphDefinition(
 
 					hashRef.current = newHash;
 
-					store.mutate(graphDefinition, (proxy) => {
-						proxy.id = validated.id;
-						proxy.apiVersion = validated.apiVersion;
-						proxy.name = validated.name;
-						proxy.nodes = validated.nodes;
-						proxy.edges = validated.edges;
-					});
+					graphDefinition.mutate(
+						(mutable) => {
+							mutable.id = validated.id;
+							mutable.apiVersion = validated.apiVersion;
+							mutable.name = validated.name;
+							mutable.nodes = validated.nodes;
+							mutable.edges = validated.edges;
+						},
+						{ external: true },
+					);
 
 					// External-reconcile is a definition-ingress path: satisfy the
 					// reconciled nodes' dependency pins, gated by the auto-install
 					// toggle. Non-blocking (the render gate covers the interim);
 					// errors are logged.
-					const { app, appStore, logger } = contextRef.current;
+					const { app, logger } = contextRef.current;
 
 					if (app.installBagPackagesAutomatically) {
-						void ensureGraphPackagesInstalled(validated, app, appStore, main).catch((error: unknown) => {
+						void ensureGraphPackagesInstalled(validated, app, main).catch((error: unknown) => {
 							logger.error("Failed to install packages for externally-edited bag", error as Error, {
 								namespace: "packages",
 							});
@@ -181,7 +176,7 @@ export function useGraphDefinition(
 		return () => {
 			mainEvents.off("file:changed", handler);
 		};
-	}, [bagPath, mainEvents, main, store, graphDefinition]);
+	}, [bagPath, mainEvents, main, graphDefinition.op]);
 
-	return { graphDefinition, flushDefinition };
+	return { flushDefinition };
 }

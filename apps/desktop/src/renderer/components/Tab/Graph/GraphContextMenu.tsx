@@ -8,7 +8,7 @@ import {
 	DropdownMenuTrigger,
 } from "../../DropdownMenu";
 import { Download, Plus, Redo2, Undo2 } from "lucide-react";
-import type { Snapshot } from "valtio/vanilla";
+import type { Snapshot } from "opshot";
 import type { AppState } from "../../../models/State/App";
 import { NodeMenuItems } from "./Node/Menu";
 import { PackageNodeList } from "./PackageNodeList";

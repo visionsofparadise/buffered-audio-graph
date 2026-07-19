@@ -1,7 +1,7 @@
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyflow/react";
 import { useRef, useState } from "react";
 import { Plus } from "lucide-react";
-import type { Snapshot } from "valtio/vanilla";
+import type { Snapshot } from "opshot";
 import type { AppState } from "../../../models/State/App";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "../../DropdownMenu";
 import { PackageNodeList } from "./PackageNodeList";

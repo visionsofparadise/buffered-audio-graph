@@ -2,7 +2,6 @@ import type { GraphEdge, GraphNode } from "@buffered-audio/core";
 import { useMemo, useRef } from "react";
 import { comparePackageVersions } from "../../../../hooks/packagePipeline";
 import type { GraphContext } from "../../../../models/Context";
-import type { Mutable } from "../../../../models/State";
 import type { GraphDefinitionState } from "../../../../models/State/GraphDefinition";
 import { buildDefaultParameters } from "../Node/utils/buildParameters";
 import { lookupNode } from "../Node/utils/nodeLookup";
@@ -102,10 +101,10 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 	contextRef.current = context;
 
 	return useMemo<GraphMutations>(() => {
-		function mutate(callback: (proxy: Mutable<GraphDefinitionState>) => void, transactionKey?: string): void {
-			const { history, graphDefinition } = contextRef.current;
+		function mutate(callback: (mutable: GraphDefinitionState) => void, transactionKey?: string): void {
+			const { graphDefinition } = contextRef.current;
 
-			history.mutate(graphDefinition, callback, transactionKey ? { transactionKey } : undefined);
+			graphDefinition.mutate(callback, transactionKey ? { transactionKey } : undefined);
 		}
 
 		/**
@@ -130,7 +129,7 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function addNode(packageName: string, nodeName: string, position: Position): void {
-			const { graphStore, graph, graphDefinition, app, logger } = contextRef.current;
+			const { positions, graphDefinition, app, logger } = contextRef.current;
 
 			const version = resolveAddVersion(packageName);
 
@@ -164,44 +163,54 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 				parameters: {},
 			};
 
-			mutate((proxy) => {
-				proxy.nodes = [...proxy.nodes, node];
-			});
+			const transactionKey = crypto.randomUUID();
 
-			graphStore.mutate(graph, (proxy) => {
-				proxy.positions[id] = { x: position.x, y: position.y };
-			});
+			mutate((mutable) => {
+				mutable.nodes = [...mutable.nodes, node];
+			}, transactionKey);
+
+			positions.mutate(
+				(mutable) => {
+					mutable.positions[id] = { x: position.x, y: position.y };
+				},
+				{ transactionKey },
+			);
 		}
 
 		function removeNode(nodeId: string): void {
-			mutate((proxy) => {
-				proxy.nodes = proxy.nodes.filter((node) => node.id !== nodeId);
-				proxy.edges = proxy.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId);
-			});
+			const transactionKey = crypto.randomUUID();
 
-			const { graphStore, graph } = contextRef.current;
+			mutate((mutable) => {
+				mutable.nodes = mutable.nodes.filter((node) => node.id !== nodeId);
+				mutable.edges = mutable.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId);
+			}, transactionKey);
 
-			graphStore.mutate(graph, (proxy) => {
-				const { [nodeId]: _removedPosition, ...remainingPositions } = proxy.positions;
+			const { positions } = contextRef.current;
 
-				proxy.positions = remainingPositions;
-			});
+			positions.mutate(
+				(mutable) => {
+					const { [nodeId]: _removedPosition, ...remainingPositions } = mutable.positions;
+
+					mutable.positions = remainingPositions;
+				},
+				{ transactionKey },
+			);
 		}
 
 		function addEdge(from: string, to: string): void {
-			mutate((proxy) => {
-				proxy.edges = [...proxy.edges, { from, to }];
+			mutate((mutable) => {
+				mutable.edges = [...mutable.edges, { from, to }];
 			});
 		}
 
 		function removeEdge(from: string, to: string): void {
-			mutate((proxy) => {
-				proxy.edges = proxy.edges.filter((edge) => !(edge.from === from && edge.to === to));
+			mutate((mutable) => {
+				mutable.edges = mutable.edges.filter((edge) => !(edge.from === from && edge.to === to));
 			});
 		}
 
 		function insertNodeOnEdge(edge: GraphEdge, packageName: string, nodeName: string): void {
-			const { graph, graphStore, logger } = contextRef.current;
+			const { positions, logger } = contextRef.current;
 
 			const version = resolveAddVersion(packageName);
 
@@ -221,29 +230,34 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 				parameters: {},
 			};
 
-			const fromPosition = graph.positions[edge.from];
-			const toPosition = graph.positions[edge.to];
+			const fromPosition = positions.positions[edge.from];
+			const toPosition = positions.positions[edge.to];
 			const position: Position = fromPosition && toPosition
 				? { x: (fromPosition.x + toPosition.x) / 2, y: (fromPosition.y + toPosition.y) / 2 }
 				: { x: 0, y: 0 };
 
-			mutate((proxy) => {
-				proxy.nodes = [...proxy.nodes, node];
-				proxy.edges = [
-					...proxy.edges.filter((graphEdge) => !(graphEdge.from === edge.from && graphEdge.to === edge.to)),
+			const transactionKey = crypto.randomUUID();
+
+			mutate((mutable) => {
+				mutable.nodes = [...mutable.nodes, node];
+				mutable.edges = [
+					...mutable.edges.filter((graphEdge) => !(graphEdge.from === edge.from && graphEdge.to === edge.to)),
 					{ from: edge.from, to: id },
 					{ from: id, to: edge.to },
 				];
-			});
+			}, transactionKey);
 
-			graphStore.mutate(graph, (proxy) => {
-				proxy.positions[id] = { x: position.x, y: position.y };
-			});
+			positions.mutate(
+				(mutable) => {
+					mutable.positions[id] = { x: position.x, y: position.y };
+				},
+				{ transactionKey },
+			);
 		}
 
 		function toggleBypass(nodeId: string): void {
-			mutate((proxy) => {
-				const node = proxy.nodes.find((graphNode) => graphNode.id === nodeId);
+			mutate((mutable) => {
+				const node = mutable.nodes.find((graphNode) => graphNode.id === nodeId);
 
 				if (!node) return;
 
@@ -262,8 +276,8 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			const { schema } = lookupNode(graphNode.packageName, graphNode.packageVersion, graphNode.nodeName, contextRef.current);
 			const defaults = buildDefaultParameters(schema);
 
-			mutate((proxy) => {
-				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
 
 				if (!node) return;
 
@@ -272,8 +286,8 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function setGraphName(name: string): void {
-			mutate((proxy) => {
-				proxy.name = name;
+			mutate((mutable) => {
+				mutable.name = name;
 			});
 		}
 
@@ -282,8 +296,8 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 
 			if (typeof path[0] !== "string") return;
 
-			mutate((proxy) => {
-				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
 
 				if (!node) return;
 
@@ -298,8 +312,8 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 
 			if (typeof path[0] !== "string") return;
 
-			mutate((proxy) => {
-				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
 
 				if (!node?.parameters) return;
 
@@ -308,8 +322,8 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function addArrayRow(nodeId: string, paramName: string, defaultItem: Record<string, unknown>): void {
-			mutate((proxy) => {
-				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
 
 				if (!node) return;
 
@@ -323,8 +337,8 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function deleteArrayRow(nodeId: string, paramName: string, rowIndex: number): void {
-			mutate((proxy) => {
-				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
 
 				if (!node?.parameters) return;
 
@@ -341,8 +355,8 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function reorderArrayRows(nodeId: string, paramName: string, fromIndex: number, toIndex: number): void {
-			mutate((proxy) => {
-				const node = proxy.nodes.find((candidate) => candidate.id === nodeId);
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
 
 				if (!node?.parameters) return;
 

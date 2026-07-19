@@ -1,4 +1,4 @@
-import type { Snapshot } from "valtio/vanilla";
+import type { Snapshot } from "opshot";
 import { Button } from "./Button";
 import type { NodePackageState } from "../models/State/App";
 

@@ -1,8 +1,6 @@
-import type { Snapshot } from "valtio/vanilla";
+import type { State } from "opshot";
+import { useTrackedState } from "opshot/react";
 import { z } from "zod";
-import type { State } from ".";
-import { useCreateState } from "../ProxyStore/hooks/useCreateState";
-import type { ProxyStore } from "../ProxyStore/ProxyStore";
 
 const TabEntrySchema = z.object({
 	id: z.string(),
@@ -57,7 +55,7 @@ export type TabEntry = z.infer<typeof TabEntrySchema>;
 export type RecentFile = z.infer<typeof RecentFileSchema>;
 export type WindowBounds = z.infer<typeof WindowBoundsSchema>;
 export type NodePackageState = z.infer<typeof NodePackageStateSchema>;
-export type AppState = z.infer<typeof AppStateSchema> & State;
+export type AppState = z.infer<typeof AppStateSchema>;
 
 const SavedStateSchema = AppStateSchema.pick({
 	tabs: true,
@@ -142,7 +140,7 @@ export async function loadAppState(main: {
 	readFile: (path: string) => Promise<string>;
 	vst3GetDefaultScanRoots: () => Promise<Array<string>>;
 	stat: (filePath: string) => Promise<{ isFile: boolean }>;
-}): Promise<Omit<AppState, "_key">> {
+}): Promise<AppState> {
 	const userDataPath = await main.getUserDataPath();
 	const path = `${userDataPath}/state.json`;
 
@@ -188,6 +186,6 @@ export async function loadAppState(main: {
 	};
 }
 
-export function useAppState(initial: Omit<AppState, "_key">, store: ProxyStore): Snapshot<AppState> {
-	return useCreateState<AppState>(initial, store);
+export function useAppState(initial: AppState): State<AppState> {
+	return useTrackedState(initial);
 }

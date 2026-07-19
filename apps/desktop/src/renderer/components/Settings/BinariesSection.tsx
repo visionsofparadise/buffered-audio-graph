@@ -1,8 +1,8 @@
+import { retrack } from "opshot/react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "../Button";
 import type { NodeJsonSchema } from "../../../shared/ipc/Package/ensure/Renderer";
 import type { AppContext } from "../../models/Context";
-import { resnapshot } from "../../models/ProxyStore/resnapshot";
 
 interface Props {
 	readonly context: AppContext;
@@ -38,8 +38,8 @@ function extractBinaries(context: AppContext): Array<BinaryInfo> {
 		}));
 }
 
-export const BinariesSection = resnapshot<Props>(({ context }: Props) => {
-	const { app, appStore, main } = context;
+export const BinariesSection = retrack<Props>(({ context }: Props) => {
+	const { app, main } = context;
 
 	const binaries = extractBinaries(context);
 
@@ -69,12 +69,12 @@ export const BinariesSection = resnapshot<Props>(({ context }: Props) => {
 			const selectedPath = result?.[0];
 
 			if (selectedPath) {
-				appStore.mutate(app, (proxy) => {
-					proxy.binaries[binaryName] = selectedPath;
+				app.mutate((mutable) => {
+					mutable.binaries[binaryName] = selectedPath;
 				});
 			}
 		},
-		[main, appStore, app],
+		[main, app],
 	);
 
 	return (

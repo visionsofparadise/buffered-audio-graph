@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ensureGraphPackagesInstalled } from "../../../hooks/packagePipeline";
 import { loadGraphDefinition } from "../../../hooks/useGraphDefinition";
 import type { AppContext } from "../../../models/Context";
-import { ProxyStore } from "../../../models/ProxyStore/ProxyStore";
 import type { TabEntry } from "../../../models/State/App";
 import type { GraphState } from "../../../models/State/Graph";
 import { loadGraphState } from "../../../models/State/Graph";
@@ -15,13 +14,12 @@ interface Props {
 }
 
 interface InitialLoad {
-	readonly initialGraphState: Omit<GraphState, "_key">;
-	readonly initialDefinition: Omit<GraphDefinitionState, "_key">;
+	readonly initialGraphState: GraphState;
+	readonly initialDefinition: GraphDefinitionState;
 	readonly initialContent: string;
 }
 
 export function GraphView({ tab, context }: Props) {
-	const graphStore = useMemo(() => new ProxyStore(), []);
 	const [initial, setInitial] = useState<InitialLoad | null>(null);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const contextRef = useRef(context);
@@ -44,7 +42,6 @@ export function GraphView({ tab, context }: Props) {
 						await ensureGraphPackagesInstalled(
 							definition,
 							currentContext.app,
-							currentContext.appStore,
 							currentContext.main,
 						);
 					} catch (error) {
@@ -84,7 +81,6 @@ export function GraphView({ tab, context }: Props) {
 			initialDefinition={initial.initialDefinition}
 			initialContent={initial.initialContent}
 			tab={tab}
-			graphStore={graphStore}
 			context={context}
 		/>
 	);

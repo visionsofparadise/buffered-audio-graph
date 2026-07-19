@@ -1,13 +1,11 @@
+import type { State } from "opshot";
 import { useEffect, useState } from "react";
-import type { Snapshot } from "valtio/vanilla";
 import type { Main } from "../models/Main";
-import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
 import type { AppState } from "../models/State/App";
 import { mutatePackageAt, runPackagePipeline } from "./packagePipeline";
 
 export function usePackageLoader(
-	app: Snapshot<AppState>,
-	appStore: ProxyStore,
+	app: State<AppState>,
 	main: Main,
 ): { isLoading: boolean } {
 	const [isLoading, setIsLoading] = useState(() =>
@@ -20,8 +18,9 @@ export function usePackageLoader(
 		let cancelled = false;
 
 		async function loadAll(): Promise<void> {
-			const indices = app.packages
-				.map((entry, index) => ({ entry, index }))
+			const indices = app.op
+				.unwrap()
+				.packages.map((entry, index) => ({ entry, index }))
 				.filter(({ entry }) => entry.origin === "catalog" && entry.status === "pending")
 				.sort((left, right) => (left.entry.isBuiltIn === right.entry.isBuiltIn ? 0 : left.entry.isBuiltIn ? -1 : 1));
 
@@ -33,9 +32,9 @@ export function usePackageLoader(
 				if (cancelled) return;
 
 				try {
-					await runPackagePipeline(entry, index, app, appStore, main);
+					await runPackagePipeline(entry, index, app, main);
 				} catch (error) {
-					mutatePackageAt(appStore, app, index, (target) => {
+					mutatePackageAt(app, index, (target) => {
 						target.status = "error";
 						target.error = error instanceof Error ? error.message : String(error);
 					});
@@ -52,7 +51,7 @@ export function usePackageLoader(
 		return () => {
 			cancelled = true;
 		};
-	}, [app._key, appStore, main]);
+	}, [app.op, main]);
 
 	return { isLoading };
 }

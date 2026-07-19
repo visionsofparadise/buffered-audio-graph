@@ -1,25 +1,19 @@
+import type { State } from "opshot";
 import { useEffect, useRef } from "react";
-import { snapshot, subscribe, type Snapshot } from "valtio/vanilla";
 import type { AppContext } from "../models/Context";
-import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
-import { useCreateState } from "../models/ProxyStore/hooks/useCreateState";
-import { serializeGraphState, type GraphState } from "../models/State/Graph";
+import type { GraphMeta } from "../models/History";
+import { serializeGraphState, type GraphViewState, type PositionsState } from "../models/State/Graph";
 
 /** Disk-write debounce window for graph-state autosave (ms). */
 const STATE_DEBOUNCE_MS = 800;
 
-interface UseGraphStateResult {
-	readonly graph: Snapshot<GraphState>;
-}
-
 export function useGraphState(
-	initialState: Omit<GraphState, "_key">,
-	store: ProxyStore,
+	positions: State<PositionsState, GraphMeta, GraphMeta>,
+	graphView: State<GraphViewState>,
 	bagId: string,
 	context: AppContext,
-): UseGraphStateResult {
+): void {
 	const { main, userDataPath } = context;
-	const graph = useCreateState<GraphState>(initialState, store);
 
 	const pendingDataRef = useRef<string | null>(null);
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -29,10 +23,6 @@ export function useGraphState(
 	filePathRef.current = filePath;
 
 	useEffect(() => {
-		const proxy = store.dangerouslyGetProxy<GraphState>(graph._key);
-
-		if (!proxy) return;
-
 		const flush = (): void => {
 			if (timerRef.current !== null) {
 				clearTimeout(timerRef.current);
@@ -47,8 +37,8 @@ export function useGraphState(
 			void main.writeFile(filePathRef.current, data);
 		};
 
-		const unsubscribe = subscribe(proxy, () => {
-			pendingDataRef.current = serializeGraphState(snapshot(proxy));
+		const schedule = (): void => {
+			pendingDataRef.current = serializeGraphState(positions.op.unwrap(), graphView.op.unwrap());
 
 			if (timerRef.current !== null) {
 				clearTimeout(timerRef.current);
@@ -64,7 +54,10 @@ export function useGraphState(
 				pendingDataRef.current = null;
 				void main.writeFile(filePathRef.current, data);
 			}, STATE_DEBOUNCE_MS);
-		});
+		};
+
+		const unsubscribePositions = positions.op.subscribe(schedule);
+		const unsubscribeGraphView = graphView.op.subscribe(schedule);
 
 		const handleBeforeUnload = (): void => {
 			flush();
@@ -74,10 +67,9 @@ export function useGraphState(
 
 		return () => {
 			window.removeEventListener("beforeunload", handleBeforeUnload);
-			unsubscribe();
+			unsubscribePositions();
+			unsubscribeGraphView();
 			flush();
 		};
-	}, [graph._key, store, main]);
-
-	return { graph };
+	}, [positions.op, graphView.op, main]);
 }

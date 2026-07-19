@@ -1,15 +1,15 @@
 import { Plus, X } from "lucide-react";
+import { retrack } from "opshot/react";
 import { useCallback } from "react";
 import type { AppContext } from "../../models/Context";
-import { resnapshot } from "../../models/ProxyStore/resnapshot";
 import { Button } from "../Button";
 
 interface Props {
 	readonly context: AppContext;
 }
 
-export const Vst3ScanRootsSection = resnapshot<Props>(({ context }: Props) => {
-	const { app, appStore, main } = context;
+export const Vst3ScanRootsSection = retrack<Props>(({ context }: Props) => {
+	const { app, main } = context;
 
 	const scanRoots = app.vst3ScanRoots;
 
@@ -25,27 +25,27 @@ export const Vst3ScanRootsSection = resnapshot<Props>(({ context }: Props) => {
 
 		if (scanRoots.includes(selectedPath)) return;
 
-		appStore.mutate(app, (proxy) => {
-			if (proxy.vst3ScanRoots.includes(selectedPath)) return;
+		app.mutate((mutable) => {
+			if (mutable.vst3ScanRoots.includes(selectedPath)) return;
 
-			proxy.vst3ScanRoots.push(selectedPath);
+			mutable.vst3ScanRoots.push(selectedPath);
 		});
 
 		// Rescan against the next roots; open pickers refresh via vst3:scanUpdate.
 		void main.vst3ScanPlugins([...scanRoots, selectedPath]);
-	}, [main, appStore, app, scanRoots]);
+	}, [main, app, scanRoots]);
 
 	const handleRemoveRoot = useCallback(
 		(root: string) => {
 			const nextRoots = scanRoots.filter((entry) => entry !== root);
 
-			appStore.mutate(app, (proxy) => {
-				proxy.vst3ScanRoots = proxy.vst3ScanRoots.filter((entry) => entry !== root);
+			app.mutate((mutable) => {
+				mutable.vst3ScanRoots = mutable.vst3ScanRoots.filter((entry) => entry !== root);
 			});
 
 			void main.vst3ScanPlugins([...nextRoots]);
 		},
-		[main, appStore, app, scanRoots],
+		[main, app, scanRoots],
 	);
 
 	return (

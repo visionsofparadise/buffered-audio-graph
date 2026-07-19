@@ -1,14 +1,15 @@
+import type { State } from "opshot";
 import { useEffect } from "react";
-import type { Snapshot } from "valtio/vanilla";
 import type { Main } from "../models/Main";
 import type { MainEvents } from "../models/MainEvents";
-import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
 import type { AppState, WindowBounds } from "../models/State/App";
 
-export function useWindowState(app: Snapshot<AppState>, appStore: ProxyStore, main: Main, mainEvents: MainEvents): void {
+export function useWindowState(app: State<AppState>, main: Main, mainEvents: MainEvents): void {
 	useEffect(() => {
-		if (app.windowBounds) {
-			const { x, y, width, height } = app.windowBounds;
+		const { windowBounds } = app.op.unwrap();
+
+		if (windowBounds) {
+			const { x, y, width, height } = windowBounds;
 
 			void main.getAllDisplays().then((displays) => {
 				const isVisible = displays.some(
@@ -25,9 +26,9 @@ export function useWindowState(app: Snapshot<AppState>, appStore: ProxyStore, ma
 			});
 		}
 
-		const listener = (windowBounds: WindowBounds): void => {
-			appStore.mutate(app, (proxy) => {
-				proxy.windowBounds = windowBounds;
+		const listener = (nextWindowBounds: WindowBounds): void => {
+			app.mutate((mutable) => {
+				mutable.windowBounds = nextWindowBounds;
 			});
 		};
 
@@ -36,5 +37,5 @@ export function useWindowState(app: Snapshot<AppState>, appStore: ProxyStore, ma
 		return () => {
 			mainEvents.off("windowBoundsChanged", listener);
 		};
-	}, [app._key, appStore, main, mainEvents]);
+	}, [app.op, main, mainEvents]);
 }

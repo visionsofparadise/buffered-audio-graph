@@ -1,7 +1,6 @@
+import type { State } from "opshot";
 import { useEffect } from "react";
-import type { Snapshot } from "valtio/vanilla";
 import type { Main } from "../models/Main";
-import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
 import type { AppState } from "../models/State/App";
 
 /**
@@ -13,9 +12,9 @@ import type { AppState } from "../models/State/App";
  * unset. Never overwrites a user-set path.
  *
  * Runs once per app boot (deps are stable for the hook's lifetime —
- * `app._key` survives the whole window).
+ * `app.op` survives the whole window).
  */
-export function useBinaryDefaults(app: Snapshot<AppState>, appStore: ProxyStore, main: Main): void {
+export function useBinaryDefaults(app: State<AppState>, main: Main): void {
 	useEffect(() => {
 		let cancelled = false;
 
@@ -23,9 +22,10 @@ export function useBinaryDefaults(app: Snapshot<AppState>, appStore: ProxyStore,
 			if (cancelled) return;
 
 			const updates: Array<[string, string]> = [];
+			const { binaries } = app.op.unwrap();
 
 			for (const [key, bundledPath] of Object.entries(bundled)) {
-				const existing = (app.binaries as Readonly<Record<string, string>>)[key];
+				const existing = (binaries as Readonly<Record<string, string>>)[key];
 
 				if (existing !== undefined && existing !== "") continue;
 
@@ -34,11 +34,11 @@ export function useBinaryDefaults(app: Snapshot<AppState>, appStore: ProxyStore,
 
 			if (updates.length === 0) return;
 
-			appStore.mutate(app, (proxy) => {
+			app.mutate((mutable) => {
 				for (const [key, bundledPath] of updates) {
-					if (proxy.binaries[key] !== undefined && proxy.binaries[key] !== "") continue;
+					if (mutable.binaries[key] !== undefined && mutable.binaries[key] !== "") continue;
 
-					proxy.binaries[key] = bundledPath;
+					mutable.binaries[key] = bundledPath;
 				}
 			});
 		});
@@ -46,5 +46,5 @@ export function useBinaryDefaults(app: Snapshot<AppState>, appStore: ProxyStore,
 		return () => {
 			cancelled = true;
 		};
-	}, [app, appStore, main]);
+	}, [app.op, main]);
 }

@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { useTrackedState } from "opshot/react";
 import { useEffect, useMemo, useState } from "react";
 import type { Logger } from "../../shared/models/Logger";
 import { useAppCallbacks } from "../hooks/useAppCallbacks";
@@ -9,8 +10,6 @@ import { useWindowState } from "../hooks/useWindowState";
 import type { AppContext } from "../models/Context";
 import { main } from "../models/Main";
 import { MainEvents } from "../models/MainEvents";
-import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
-import { useCreateState } from "../models/ProxyStore/hooks/useCreateState";
 import type { ActiveCommands } from "../models/State/ActiveCommands";
 import { useAppState, type AppState } from "../models/State/App";
 import { LoadingScreen } from "./LoadingScreen";
@@ -19,25 +18,24 @@ import { AppBar } from "./AppBar";
 import { TabContent } from "./Tab";
 
 interface Props {
-	readonly initialState: Omit<AppState, "_key">;
+	readonly initialState: AppState;
 	readonly windowId: string;
 	readonly userDataPath: string;
-	readonly appStore: ProxyStore;
 	readonly queryClient: QueryClient;
 	readonly logger: Logger;
 }
 
-export function AppLayout({ initialState, windowId, userDataPath, appStore, queryClient, logger }: Props) {
-	const app = useAppState(initialState, appStore);
+export function AppLayout({ initialState, windowId, userDataPath, queryClient, logger }: Props) {
+	const app = useAppState(initialState);
 
 	const mainEvents = useMemo(() => new MainEvents(main), []);
 
-	useWindowState(app, appStore, main, mainEvents);
-	useBinaryDefaults(app, appStore, main);
-	useAutosave(app, appStore, main, userDataPath);
+	useWindowState(app, main, mainEvents);
+	useBinaryDefaults(app, main);
+	useAutosave(app, main, userDataPath);
 
 	const catalogPackages = app.packages.filter((entry) => entry.origin === "catalog");
-	const { isLoading } = usePackageLoader(app, appStore, main);
+	const { isLoading } = usePackageLoader(app, main);
 	const hasUnresolvedPackages = catalogPackages.some((entry) => entry.status !== "ready" && entry.status !== "error");
 	const hasError = catalogPackages.some((entry) => entry.status === "error");
 
@@ -51,37 +49,41 @@ export function AppLayout({ initialState, windowId, userDataPath, appStore, quer
 
 	const [settingsOpen, setSettingsOpen] = useState(false);
 
-	const callbacks = useAppCallbacks(app, appStore, main, logger);
+	const callbacks = useAppCallbacks(app, main, logger);
 
-	const activeCommands = useCreateState<ActiveCommands>(
-		{ undo: null, redo: null, canUndo: false, canRedo: false, rename: null, importBag: null, save: null },
-		appStore,
-	);
+	const activeCommands = useTrackedState<ActiveCommands>({
+		undo: null,
+		redo: null,
+		canUndo: false,
+		canRedo: false,
+		rename: null,
+		importBag: null,
+		save: null,
+	});
 
 	const context: AppContext = useMemo(
 		() => ({
 			app,
-			appStore,
+			activeCommands,
 			logger,
 			main,
 			mainEvents,
 			queryClient,
 			userDataPath,
 			windowId,
-			activeCommands,
 			tabNames: callbacks.tabNames,
 			openBagTab: callbacks.openBagTab,
 			openBagByPath: callbacks.openBagByPath,
 			newBagTab: callbacks.newBagTab,
 			renameTab: (_tabId, newName) => {
-				activeCommands.rename?.(newName);
+				activeCommands.op.unwrap().rename?.(newName);
 			},
 			importBagIntoActiveTab: async () => {
-				await activeCommands.importBag?.();
+				await activeCommands.op.unwrap().importBag?.();
 			},
 			setSettingsOpen,
 		}),
-		[app, appStore, logger, mainEvents, queryClient, userDataPath, windowId, activeCommands, callbacks],
+		[app, logger, mainEvents, queryClient, userDataPath, windowId, activeCommands, callbacks],
 	);
 
 	if (!hasPassedLoading) {

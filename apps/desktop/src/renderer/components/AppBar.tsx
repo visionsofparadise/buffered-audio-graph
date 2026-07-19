@@ -5,7 +5,7 @@ import { IconButton } from "./IconButton";
 import { ProjectIcon } from "./ProjectIcon";
 import { TabNameInput } from "./TabNameInput";
 import type { AppContext } from "../models/Context";
-import { resnapshot } from "../models/ProxyStore/resnapshot";
+import { retrack } from "opshot/react";
 
 interface Props {
 	readonly context: AppContext;
@@ -26,8 +26,8 @@ const NO_DRAG = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
  * package loading screen where only the menu trigger + reservation show (no
  * tabs), so the window is always draggable. See design-app-shell.md (2026-07-11).
  */
-export const AppBar = resnapshot<Props>(({ context, chromeOnly = false }: Props) => {
-	const { app, appStore, activeCommands } = context;
+export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) => {
+	const { app, activeCommands } = context;
 	const save = activeCommands.save;
 	const hasActiveGraphTab = app.activeTabId !== null;
 
@@ -44,7 +44,7 @@ export const AppBar = resnapshot<Props>(({ context, chromeOnly = false }: Props)
 	const tabs = app.tabs.map((tab) => ({
 		id: tab.id,
 		label:
-			context.tabNames.get(tab.id) ??
+			context.tabNames.names[tab.id] ??
 			tab.bagPath
 				.split(/[\\/]/)
 				.pop()
@@ -55,29 +55,31 @@ export const AppBar = resnapshot<Props>(({ context, chromeOnly = false }: Props)
 	const visibleTabs = chromeOnly ? [] : tabs;
 
 	const selectTab = (id: string): void => {
-		appStore.mutate(app, (proxy) => {
-			proxy.activeTabId = id;
+		app.mutate((mutable) => {
+			mutable.activeTabId = id;
 		});
 	};
 
 	const closeTab = (id: string): void => {
-		appStore.mutate(app, (proxy) => {
-			const index = proxy.tabs.findIndex((tab) => tab.id === id);
+		app.mutate((mutable) => {
+			const index = mutable.tabs.findIndex((tab) => tab.id === id);
 
 			if (index === -1) return;
-			proxy.tabs.splice(index, 1);
+			mutable.tabs.splice(index, 1);
 
-			if (proxy.activeTabId === id) {
-				proxy.activeTabId = proxy.tabs[index]?.id ?? proxy.tabs[index - 1]?.id ?? null;
+			if (mutable.activeTabId === id) {
+				mutable.activeTabId = mutable.tabs[index]?.id ?? mutable.tabs[index - 1]?.id ?? null;
 			}
 		});
 
-		context.tabNames.delete(id);
+		context.tabNames.mutate((mutable) => {
+			mutable.names = Object.fromEntries(Object.entries(mutable.names).filter(([tabId]) => tabId !== id));
+		});
 	};
 
 	const goHome = (): void => {
-		appStore.mutate(app, (proxy) => {
-			proxy.activeTabId = null;
+		app.mutate((mutable) => {
+			mutable.activeTabId = null;
 		});
 	};
 

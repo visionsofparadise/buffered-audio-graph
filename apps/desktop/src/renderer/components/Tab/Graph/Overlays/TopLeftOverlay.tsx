@@ -5,7 +5,7 @@ import {
 	DropdownMenuContent,
 	DropdownMenuTrigger,
 } from "../../../DropdownMenu";
-import type { Snapshot } from "valtio/vanilla";
+import type { Snapshot } from "opshot";
 import type { AppState } from "../../../../models/State/App";
 import { PackageNodeList } from "../PackageNodeList";
 

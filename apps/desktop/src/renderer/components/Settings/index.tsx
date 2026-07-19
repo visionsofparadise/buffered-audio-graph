@@ -1,7 +1,7 @@
+import { retrack } from "opshot/react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "../../utils/cn";
 import type { AppContext } from "../../models/Context";
-import { resnapshot } from "../../models/ProxyStore/resnapshot";
 import { Button } from "../Button";
 import { BinariesSection } from "./BinariesSection";
 import { PackagesSection } from "./PackagesSection";
@@ -21,7 +21,7 @@ const SECTIONS: ReadonlyArray<{ readonly id: SectionId; readonly label: string }
 	{ id: "vst3ScanRoots", label: "VST3 scan roots" },
 ];
 
-export const Settings = resnapshot<Props>(({ isOpen, onClose, context }: Props) => {
+export const Settings = retrack<Props>(({ isOpen, onClose, context }: Props) => {
 	const [activeSection, setActiveSection] = useState<SectionId>("packages");
 
 	const handleEscape = useCallback(

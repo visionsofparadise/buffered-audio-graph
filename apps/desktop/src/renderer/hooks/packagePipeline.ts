@@ -1,8 +1,7 @@
 import type { GraphDefinition } from "@buffered-audio/core";
-import type { Snapshot } from "valtio/vanilla";
+import type { Snapshot, State } from "opshot";
 import { packageNameFromSpec, packageSpecFromNameAndVersion } from "../../shared/utilities/packageSpec";
 import type { Main } from "../models/Main";
-import type { ProxyStore } from "../models/ProxyStore/ProxyStore";
 import type { AppState, NodePackageState } from "../models/State/App";
 
 export function comparePackageVersions(left: string, right: string): number {
@@ -17,13 +16,12 @@ export function packageInstallDirectory(userDataPath: string, packageName: strin
 }
 
 export function mutatePackageAt(
-	appStore: ProxyStore,
-	app: Snapshot<AppState>,
+	app: State<AppState>,
 	index: number,
 	callback: (entry: NodePackageState) => void,
 ): void {
-	appStore.mutate(app, (proxy) => {
-		const entry = proxy.packages[index];
+	app.mutate((mutable) => {
+		const entry = mutable.packages[index];
 
 		if (entry) {
 			callback(entry);
@@ -32,17 +30,17 @@ export function mutatePackageAt(
 }
 
 export function ensurePackageState(
-	app: Snapshot<AppState>,
-	appStore: ProxyStore,
+	app: State<AppState>,
 	requestedSpec: string,
 	options?: { readonly isBuiltIn?: boolean; readonly origin?: NodePackageState["origin"] },
 ): { index: number; entry: NodePackageState } {
-	const existingIndex = app.packages.findIndex((entry) => entry.requestedSpec === requestedSpec);
+	const packages = app.op.unwrap().packages;
+	const existingIndex = packages.findIndex((entry) => entry.requestedSpec === requestedSpec);
 
 	if (existingIndex !== -1) {
 		return {
 			index: existingIndex,
-			entry: app.packages[existingIndex] as NodePackageState,
+			entry: packages[existingIndex] as NodePackageState,
 		};
 	}
 
@@ -60,8 +58,8 @@ export function ensurePackageState(
 
 	let newIndex = -1;
 
-	appStore.mutate(app, (proxy) => {
-		newIndex = proxy.packages.push(newEntry) - 1;
+	app.mutate((mutable) => {
+		newIndex = mutable.packages.push(newEntry) - 1;
 	});
 
 	return { index: newIndex, entry: newEntry };
@@ -70,11 +68,10 @@ export function ensurePackageState(
 export async function runPackagePipeline(
 	entry: Snapshot<NodePackageState>,
 	index: number,
-	app: Snapshot<AppState>,
-	appStore: ProxyStore,
+	app: State<AppState>,
 	main: Main,
 ): Promise<void> {
-	mutatePackageAt(appStore, app, index, (target) => {
+	mutatePackageAt(app, index, (target) => {
 		target.status = "installing";
 		target.error = null;
 		target.nodes = [];
@@ -84,7 +81,7 @@ export async function runPackagePipeline(
 
 	const result = await main.ensurePackage({ packageSpec: entry.requestedSpec });
 
-	mutatePackageAt(appStore, app, index, (target) => {
+	mutatePackageAt(app, index, (target) => {
 		target.name = result.packageName;
 		target.version = result.packageVersion;
 		target.apiVersion = result.apiVersion;
@@ -96,8 +93,7 @@ export async function runPackagePipeline(
 
 export async function ensureGraphPackagesInstalled(
 	graphDefinition: GraphDefinition,
-	app: Snapshot<AppState>,
-	appStore: ProxyStore,
+	app: State<AppState>,
 	main: Main,
 ): Promise<void> {
 	const seen = new Set<string>();
@@ -115,25 +111,25 @@ export async function ensureGraphPackagesInstalled(
 	}
 
 	for (const { packageName, packageVersion } of pairs) {
-		const satisfied = app.packages.some(
-			(entry) => entry.status === "ready" && entry.name === packageName && entry.version === packageVersion,
-		);
+		const satisfied = app.op
+			.unwrap()
+			.packages.some((entry) => entry.status === "ready" && entry.name === packageName && entry.version === packageVersion);
 
 		if (satisfied) {
 			continue;
 		}
 
 		const requestedSpec = packageSpecFromNameAndVersion(packageName, packageVersion);
-		const { index, entry } = ensurePackageState(app, appStore, requestedSpec, { origin: "dependency" });
+		const { index, entry } = ensurePackageState(app, requestedSpec, { origin: "dependency" });
 
 		if (entry.status === "ready") {
 			continue;
 		}
 
 		try {
-			await runPackagePipeline(entry, index, app, appStore, main);
+			await runPackagePipeline(entry, index, app, main);
 		} catch (error) {
-			mutatePackageAt(appStore, app, index, (target) => {
+			mutatePackageAt(app, index, (target) => {
 				target.status = "error";
 				target.error = error instanceof Error ? error.message : String(error);
 			});

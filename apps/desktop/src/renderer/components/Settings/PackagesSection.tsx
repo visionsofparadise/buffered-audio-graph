@@ -1,17 +1,17 @@
+import { retrack } from "opshot/react";
 import { useCallback, useState } from "react";
 import { Button } from "../Button";
 import { Input } from "../Input";
 import { Toggle } from "../Toggle";
 import type { AppContext } from "../../models/Context";
-import { resnapshot } from "../../models/ProxyStore/resnapshot";
 import { usePackageManager } from "../../hooks/usePackageManager";
 
 interface Props {
 	readonly context: AppContext;
 }
 
-export const PackagesSection = resnapshot<Props>(({ context }: Props) => {
-	const { app, appStore } = context;
+export const PackagesSection = retrack<Props>(({ context }: Props) => {
+	const { app } = context;
 	const { addPackage, removePackage, updatePackage, clearDependencies } = usePackageManager(context);
 
 	const [packageSpec, setPackageSpec] = useState("");
@@ -45,11 +45,11 @@ export const PackagesSection = resnapshot<Props>(({ context }: Props) => {
 
 	const setInstallAutomatically = useCallback(
 		(value: boolean) => {
-			appStore.mutate(app, (proxy) => {
-				proxy.installBagPackagesAutomatically = value;
+			app.mutate((mutable) => {
+				mutable.installBagPackagesAutomatically = value;
 			});
 		},
-		[appStore, app],
+		[app],
 	);
 
 	return (

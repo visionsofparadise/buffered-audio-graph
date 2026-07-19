@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
+import type { Snapshot } from "opshot";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Snapshot } from "valtio/vanilla";
 import {
 	DropdownMenuItem,
 	DropdownMenuLabel,

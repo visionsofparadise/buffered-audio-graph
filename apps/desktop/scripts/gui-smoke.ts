@@ -73,6 +73,34 @@ function readPersistedBag(): PersistedBag {
 	return JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
 }
 
+interface PersistedGraphState {
+	readonly positions?: Record<string, { x: number; y: number }>;
+}
+
+/** The persisted per-node positions for a bag (`graphs/{bagId}.json`), or `{}` before the debounced writer has created the file. */
+function readGraphPositions(bagId: string): Record<string, { x: number; y: number }> {
+	try {
+		const graphState = JSON.parse(readFileSync(join(PROFILE_DIR, "graphs", `${bagId}.json`), "utf8")) as PersistedGraphState;
+
+		return graphState.positions ?? {};
+	} catch {
+		return {};
+	}
+}
+
+/** Poll `graphs/{bagId}.json` until `nodeId` has (or lacks) a positions entry, absorbing the ~800ms positions-write debounce. */
+async function waitForPositionEntry(bagId: string, nodeId: string, present: boolean, timeoutMs: number): Promise<boolean> {
+	const deadline = Date.now() + timeoutMs;
+
+	while (Date.now() < deadline) {
+		if (Object.prototype.hasOwnProperty.call(readGraphPositions(bagId), nodeId) === present) return true;
+
+		await sleep(150);
+	}
+
+	return false;
+}
+
 interface PersistedPackage {
 	readonly requestedSpec?: string;
 	readonly name?: string;
@@ -1610,9 +1638,10 @@ async function run(): Promise<void> {
 			}
 		}
 
-		// 5 + 6: structural undo x2 / redo x2 — node/edge counts follow.
-		// (Placed on structural ops so the counts observably track undo/redo,
-		// which they could not if undo reversed the param/bypass edits below.)
+		// 5 + 6: structural undo/redo — node/edge counts follow. Post-migration,
+		// positions are historied uniformly, so the setup drag that separated the
+		// Gain node is its own history entry sitting between the edge and the
+		// node-add: the undo order is edge, drag (no count change), node-add.
 		await defocus(page);
 
 		await undo(page);
@@ -1631,14 +1660,22 @@ async function run(): Promise<void> {
 
 		check(true, "undo 1 — edge removed (edges = 0)");
 
+		// The Gain separation drag is one historied entry; undoing it moves the node
+		// back, leaving the node/edge counts unchanged.
 		await undo(page);
-		check(await waitForNodeCount(page, 1, 5000), "undo 2 — transform node removed (nodes = 1)");
+		check(await waitForNodeCount(page, 2, 2000), "undo 2 — drag reversed, node count unchanged (nodes = 2)");
+
+		await undo(page);
+		check(await waitForNodeCount(page, 1, 5000), "undo 3 — transform node removed (nodes = 1)");
 
 		await redo(page);
 		check(await waitForNodeCount(page, 2, 5000), "redo 1 — transform node restored (nodes = 2)");
 
 		await redo(page);
-		check(await waitForEdgeCount(page, 1, 5000), "redo 2 — edge restored (edges = 1)");
+		check(await waitForNodeCount(page, 2, 2000), "redo 2 — drag replayed, node count unchanged (nodes = 2)");
+
+		await redo(page);
+		check(await waitForEdgeCount(page, 1, 5000), "redo 3 — edge restored (edges = 1)");
 
 		// 7: type into the source node's file path param and blur.
 		const inputSelector = `.react-flow__node[data-id="${sourceId}"] input[type="text"]`;
@@ -1898,6 +1935,12 @@ async function run(): Promise<void> {
 		await waitForEdgeAgreement(page, 2, 8000);
 		check(true, "insert-on-edge — edge splits into 2 (persisted and rendered)");
 
+		// The inserted node is the persisted node that is neither pre-existing endpoint.
+		const insertBagId = readPersistedBag().id;
+		const insertedNodeId = readPersistedBag().nodes.map((node) => node.id).find((id) => id !== undefined && id !== readNodeId && id !== gainNodeId) ?? null;
+
+		check(insertedNodeId !== null, "insert-on-edge — inserted node id identified in the persisted bag");
+
 		await defocus(page);
 		await undo(page);
 		check(await waitForNodeCount(page, 2, 5000), "insert-on-edge undo — back to 2 nodes");
@@ -1910,6 +1953,13 @@ async function run(): Promise<void> {
 		await waitForEdgeAgreement(page, 2, 8000);
 		check(true, "insert-on-edge redo — 2 edges again (persisted and rendered)");
 
+		// Position-undo net (opshot migration): the inserted node's definition and
+		// position halves ride one history entry, so redo restores its position entry.
+		check(
+			insertedNodeId !== null && (await waitForPositionEntry(insertBagId, insertedNodeId, true, 5000)),
+			"insert-on-edge redo — inserted node's position entry present in graphs/{bagId}.json",
+		);
+
 		// The redo re-inserts the node and leaves focus in its parameter field, where
 		// the Canvas keydown handler ignores Ctrl+Z; defocus before the undo so it lands.
 		await defocus(page);
@@ -1917,6 +1967,13 @@ async function run(): Promise<void> {
 		check(await waitForNodeCount(page, 2, 5000), "insert-on-edge — final undo returns to 2 nodes");
 		await waitForEdgeAgreement(page, 1, 8000);
 		check(true, "insert-on-edge — final undo returns to 1 edge (persisted and rendered)");
+
+		// The single undo dropped the definition and the position together — proof the
+		// two-state mutation coalesced into one history entry.
+		check(
+			insertedNodeId !== null && (await waitForPositionEntry(insertBagId, insertedNodeId, false, 5000)),
+			"insert-on-edge — final undo drops the inserted node's position entry (definition + position as one entry)",
+		);
 
 		// Mixed-sequence exact restore: three discrete mutations, undone and redone
 		// wholesale, must deep-equal the persisted captures on both sides — the BAG

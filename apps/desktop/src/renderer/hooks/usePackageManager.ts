@@ -15,7 +15,7 @@ export interface PackageManager {
 }
 
 export function usePackageManager(context: AppContext): PackageManager {
-	const { app, appStore, main, userDataPath } = context;
+	const { app, main, userDataPath } = context;
 
 	const addPackage = useCallback(
 		async (packageSpec: string): Promise<void> => {
@@ -25,22 +25,22 @@ export function usePackageManager(context: AppContext): PackageManager {
 				throw new Error("Package spec is required");
 			}
 
-			const { index, entry } = ensurePackageState(app, appStore, requestedSpec);
+			const { index, entry } = ensurePackageState(app, requestedSpec);
 
 			if (entry.status === "ready") {
 				return;
 			}
 
 			try {
-				await runPackagePipeline(entry, index, app, appStore, main);
+				await runPackagePipeline(entry, index, app, main);
 			} catch (error) {
-				mutatePackageAt(appStore, app, index, (target) => {
+				mutatePackageAt(app, index, (target) => {
 					target.status = "error";
 					target.error = error instanceof Error ? error.message : String(error);
 				});
 			}
 		},
-		[app, appStore, main],
+		[app, main],
 	);
 
 	const removePackage = useCallback(
@@ -64,11 +64,11 @@ export function usePackageManager(context: AppContext): PackageManager {
 
 			await main.deleteFile(packageInstallDirectory(userDataPath, entry.name, entry.version));
 
-			appStore.mutate(app, (proxy) => {
-				proxy.packages.splice(index, 1);
+			app.mutate((mutable) => {
+				mutable.packages.splice(index, 1);
 			});
 		},
-		[app, appStore, main, userDataPath],
+		[app, main, userDataPath],
 	);
 
 	const updatePackage = useCallback(
@@ -94,7 +94,7 @@ export function usePackageManager(context: AppContext): PackageManager {
 				await main.deleteFile(packageInstallDirectory(userDataPath, entry.name, entry.version));
 			}
 
-			mutatePackageAt(appStore, app, index, (target) => {
+			mutatePackageAt(app, index, (target) => {
 				target.status = "pending";
 				target.error = null;
 				target.nodes = [];
@@ -112,17 +112,16 @@ export function usePackageManager(context: AppContext): PackageManager {
 					},
 					index,
 					app,
-					appStore,
 					main,
 				);
 			} catch (error) {
-				mutatePackageAt(appStore, app, index, (target) => {
+				mutatePackageAt(app, index, (target) => {
 					target.status = "error";
 					target.error = error instanceof Error ? error.message : String(error);
 				});
 			}
 		},
-		[app, appStore, main, userDataPath],
+		[app, main, userDataPath],
 	);
 
 	const clearDependencies = useCallback(async (): Promise<void> => {
@@ -147,14 +146,14 @@ export function usePackageManager(context: AppContext): PackageManager {
 			}),
 		);
 
-		appStore.mutate(app, (proxy) => {
-			for (let index = proxy.packages.length - 1; index >= 0; index -= 1) {
-				if (proxy.packages[index]?.origin === "dependency") {
-					proxy.packages.splice(index, 1);
+		app.mutate((mutable) => {
+			for (let index = mutable.packages.length - 1; index >= 0; index -= 1) {
+				if (mutable.packages[index]?.origin === "dependency") {
+					mutable.packages.splice(index, 1);
 				}
 			}
 		});
-	}, [app, appStore, main, userDataPath]);
+	}, [app, main, userDataPath]);
 
 	return { addPackage, removePackage, updatePackage, clearDependencies };
 }

@@ -1,6 +1,5 @@
-import type { Snapshot } from "valtio/vanilla";
+import type { Snapshot } from "opshot";
 import { z } from "zod";
-import type { State } from ".";
 import type { Main } from "../Main";
 
 const ViewportSchema = z.object({
@@ -15,9 +14,18 @@ export const GraphStateSchema = z.object({
 	viewport: ViewportSchema.default({ x: 0, y: 0, zoom: 1 }),
 });
 
-export type GraphState = z.infer<typeof GraphStateSchema> & State;
+export type GraphState = z.infer<typeof GraphStateSchema>;
 
-export async function loadGraphState(main: Main, userDataPath: string, bagId: string): Promise<Omit<GraphState, "_key">> {
+export interface PositionsState {
+	positions: Record<string, { x: number; y: number }>;
+}
+
+export interface GraphViewState {
+	inspectedNodeId: string | null;
+	viewport: { x: number; y: number; zoom: number };
+}
+
+export async function loadGraphState(main: Main, userDataPath: string, bagId: string): Promise<GraphState> {
 	const path = `${userDataPath}/graphs/${bagId}.json`;
 
 	try {
@@ -35,8 +43,6 @@ export async function loadGraphState(main: Main, userDataPath: string, bagId: st
 
 }
 
-export function serializeGraphState(state: Snapshot<GraphState>): string {
-	const { _key, ...rest } = state;
-
-	return JSON.stringify(rest);
+export function serializeGraphState(positions: Snapshot<PositionsState>, view: Snapshot<GraphViewState>): string {
+	return JSON.stringify({ positions: positions.positions, inspectedNodeId: view.inspectedNodeId, viewport: view.viewport });
 }

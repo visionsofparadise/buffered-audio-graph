@@ -14,9 +14,9 @@ import {
 	type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { retrack } from "opshot/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphContext } from "../../../models/Context";
-import { resnapshot } from "../../../models/ProxyStore/resnapshot";
 import { computeAutoLayout } from "../../../utils/autoLayout";
 import { buildDefaultArrayItem, buildParameters, type Parameter } from "./Node/utils/buildParameters";
 import { lookupNode, schemaPropertyAtPath } from "./Node/utils/nodeLookup";
@@ -65,7 +65,7 @@ function buildReactFlowNodes(context: GraphContext): Array<Node<NodeContainerDat
 		return {
 			id: graphNode.id,
 			type: "bufferedAudioNode",
-			position: context.graph.positions[graphNode.id] ?? { x: 0, y: 0 },
+			position: context.positions.positions[graphNode.id] ?? { x: 0, y: 0 },
 			data: {
 				label: graphNode.nodeName,
 				packageName: graphNode.packageName,
@@ -99,7 +99,7 @@ interface Props {
 	readonly context: GraphContext;
 }
 
-export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
+export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 	const { startRender, abortRender, clearRenderError, activeJobId, processingNodes, renderError } = useRenderJob(context);
 
 	const initialNodes = useMemo(
@@ -290,14 +290,19 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 		(changes: Array<NodeChange<Node<NodeContainerData>>>) => {
 			onNodesChange(changes);
 
+			const transactionKey = crypto.randomUUID();
+
 			for (const change of changes) {
 				if (change.type === "position" && change.position && !change.dragging) {
 					const nodeId = change.id;
 					const position = change.position;
 
-					context.graphStore.mutate(context.graph, (proxy) => {
-						proxy.positions[nodeId] = { x: position.x, y: position.y };
-					});
+					context.positions.mutate(
+						(mutable) => {
+							mutable.positions[nodeId] = { x: position.x, y: position.y };
+						},
+						{ transactionKey },
+					);
 				}
 			}
 		},
@@ -336,8 +341,8 @@ export const GraphCanvas = resnapshot<Props>(({ context }: Props) => {
 	const handleAutoOrganize = useCallback(() => {
 		const nextPositions = computeAutoLayout(context.graphDefinition.nodes, context.graphDefinition.edges);
 
-		context.history.mutate(context.graph, (proxy) => {
-			proxy.positions = nextPositions;
+		context.positions.mutate((mutable) => {
+			mutable.positions = nextPositions;
 		});
 	}, [context]);
 
