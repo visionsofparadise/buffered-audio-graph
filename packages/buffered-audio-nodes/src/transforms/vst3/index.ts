@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { BufferedTransformStream, createProgressGate, UnbufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
+import { startProcessLivenessMonitor, type ProcessLivenessOptions } from "../../utils/process-liveness";
 import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
 
 export const stageSchema = z.object({
@@ -38,6 +39,10 @@ export interface Vst3Properties extends TransformNodeProperties {
 	readonly bypass?: boolean;
 	// test-only: spawn `node <stub>` by passing `node` as vstHostPath + [stub] here.
 	readonly extraArgs?: ReadonlyArray<string>;
+	// test-only: override the 30000 ms monitor interval so heavy tests can force ticks.
+	readonly monitorIntervalMs?: number;
+	// test-only: replace process-tree sampling so heavy tests can drive monitor outcomes.
+	readonly monitorSampler?: ProcessLivenessOptions["sampler"];
 }
 
 export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends UnbufferedTransformStream<Vst3Node<P>> {
@@ -87,49 +92,51 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 
 		// Retries the pre-READY init crash (Windows 0xC0000005 / exit 3221225477); see design-vst3.md (2026-06-01).
 		const handle = await spawnVstHostReady(this.properties.vstHostPath, args, {
-			onLiveness: (event) => {
-				this.log(
-					"vst-host liveness",
-					{
-						phase: event.phase,
-						elapsedMs: event.elapsedMs,
-						processCpuDeltaMs: event.processCpuDeltaMs,
-						processCpuMs: event.processCpuMs,
-						state: event.state,
-					},
-					event.state === "idle" ? "warn" : "info",
-				);
-			},
 			onRetry: (failedAttempt, error) => {
 				this.log("vst-host init crash, retrying", { attempt: failedAttempt, error: error.message }, "warn");
 			},
 		});
+		const stopMonitor = handle.proc.pid === undefined
+			? undefined
+			: startProcessLivenessMonitor(handle.proc.pid, (sample) => {
+				this.log("vst-host liveness", { ...sample }, sample.state === "idle" ? "warn" : "info");
+			}, {
+				intervalMs: this.properties.monitorIntervalMs,
+				sampler: this.properties.monitorSampler,
+				onError: (error) => {
+					this.log("vst-host liveness sample failed", { error: String(error) }, "warn");
+				},
+			});
 
-		await processStreamingThroughVstHost(handle, buffered, {
-			channelCount: channels,
-			sampleRate,
-			bitDepth: bd,
-			onInputProgress: (progress) => {
-				if (inputGate(progress.framesDone, Date.now())) {
-					this.log("vst-host input", {
-						framesDone: progress.framesDone,
-						framesTotal: progress.framesTotal,
-						bytesDone: progress.bytesDone,
-						bytesTotal: progress.bytesTotal,
-					});
-				}
-			},
-			onOutputProgress: (progress) => {
-				if (outputGate(progress.framesDone, Date.now())) {
-					this.log("vst-host output", {
-						framesDone: progress.framesDone,
-						framesTotal: progress.framesTotal,
-						bytesDone: progress.bytesDone,
-						bytesTotal: progress.bytesTotal,
-					});
-				}
-			},
-		});
+		try {
+			await processStreamingThroughVstHost(handle, buffered, {
+				channelCount: channels,
+				sampleRate,
+				bitDepth: bd,
+				onInputProgress: (progress) => {
+					if (inputGate(progress.framesDone, Date.now())) {
+						this.log("vst-host input", {
+							framesDone: progress.framesDone,
+							framesTotal: progress.framesTotal,
+							bytesDone: progress.bytesDone,
+							bytesTotal: progress.bytesTotal,
+						});
+					}
+				},
+				onOutputProgress: (progress) => {
+					if (outputGate(progress.framesDone, Date.now())) {
+						this.log("vst-host output", {
+							framesDone: progress.framesDone,
+							framesTotal: progress.framesTotal,
+							bytesDone: progress.bytesDone,
+							bytesTotal: progress.bytesTotal,
+						});
+					}
+				},
+			});
+		} finally {
+			await stopMonitor?.();
+		}
 
 		await buffered.reset();
 
@@ -166,6 +173,8 @@ export function vst3(options: {
 	bypass?: boolean;
 	id?: string;
 	extraArgs?: ReadonlyArray<string>;
+	monitorIntervalMs?: number;
+	monitorSampler?: ProcessLivenessOptions["sampler"];
 }): Vst3Node {
 	return new Vst3Node({
 		vstHostPath: options.vstHostPath,
@@ -173,6 +182,8 @@ export function vst3(options: {
 		bypass: options.bypass,
 		id: options.id,
 		extraArgs: options.extraArgs,
+		monitorIntervalMs: options.monitorIntervalMs,
+		monitorSampler: options.monitorSampler,
 	});
 }
 

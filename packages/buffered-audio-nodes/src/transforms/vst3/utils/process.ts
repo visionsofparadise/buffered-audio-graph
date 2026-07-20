@@ -2,34 +2,19 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { StringDecoder } from "node:string_decoder";
 import type { BlockBuffer } from "@buffered-audio/core";
 import { deinterleaveBuffer, interleave } from "@buffered-audio/utils";
 import { waitForDrain } from "../../../utils/ffmpeg";
 
 const CHUNK_FRAMES = 48000;
-const TELEMETRY_PREFIX = "VST_HOST_EVENT ";
 
 export const DIAGNOSTIC_TAIL_BYTES = 64 * 1024;
-
-export interface VstHostLiveness {
-	readonly type: "liveness";
-	readonly phase: "process";
-	readonly elapsedMs: number;
-	readonly processCpuDeltaMs: number;
-	readonly processCpuMs: number;
-	readonly state: "active" | "idle";
-}
 
 export interface VstHostTransferProgress {
 	readonly framesDone: number;
 	readonly framesTotal: number;
 	readonly bytesDone: number;
 	readonly bytesTotal: number;
-}
-
-export interface SpawnVstHostOptions {
-	readonly onLiveness?: (event: VstHostLiveness) => void;
 }
 
 export interface VstHostHandle {
@@ -51,91 +36,15 @@ const READY_LINE = "READY\n";
 // 5-min floor: heavy plugin chains cold-start in ~60s; see design-vst3.md Known limitation 4.
 const READY_TIMEOUT_MS = 300_000;
 
-const isFiniteNonnegativeNumber = (value: unknown): value is number =>
-	typeof value === "number" && Number.isFinite(value) && value >= 0;
+export function observeVstHostStderr(stderr: NodeJS.ReadableStream): () => string {
+	let diagnosticTail: Buffer = Buffer.alloc(0);
 
-const isUnknownRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
-
-export function parseVstHostEvent(line: string): VstHostLiveness | undefined {
-	if (!line.startsWith(TELEMETRY_PREFIX)) return undefined;
-
-	let parsed: unknown;
-
-	try {
-		parsed = JSON.parse(line.slice(TELEMETRY_PREFIX.length));
-	} catch {
-		return undefined;
-	}
-
-	if (!isUnknownRecord(parsed)) return undefined;
-
-	const record = parsed;
-
-	if (record.type !== "liveness" || record.phase !== "process") return undefined;
-	if (record.state !== "active" && record.state !== "idle") return undefined;
-	if (!isFiniteNonnegativeNumber(record.elapsedMs)) return undefined;
-	if (!isFiniteNonnegativeNumber(record.processCpuDeltaMs)) return undefined;
-	if (!isFiniteNonnegativeNumber(record.processCpuMs)) return undefined;
-
-	return {
-		type: record.type,
-		phase: record.phase,
-		elapsedMs: record.elapsedMs,
-		processCpuDeltaMs: record.processCpuDeltaMs,
-		processCpuMs: record.processCpuMs,
-		state: record.state,
-	};
-}
-
-export function observeVstHostStderr(
-	stderr: NodeJS.ReadableStream,
-	onLiveness?: (event: VstHostLiveness) => void,
-): () => string {
-	const decoder = new StringDecoder("utf8");
-	let pendingLine = "";
-	let diagnosticTail = Buffer.alloc(0);
-
-	const appendDiagnostic = (text: string): void => {
-		if (text.length === 0) return;
-
-		const bytes = Buffer.from(text);
-		const combined = diagnosticTail.length === 0 ? bytes : Buffer.concat([diagnosticTail, bytes]);
+	stderr.on("data", (chunk: Buffer) => {
+		const combined = diagnosticTail.length === 0 ? chunk : Buffer.concat([diagnosticTail, chunk]);
 
 		diagnosticTail = combined.length <= DIAGNOSTIC_TAIL_BYTES
 			? combined
 			: combined.subarray(combined.length - DIAGNOSTIC_TAIL_BYTES);
-	};
-
-	const consumeCompleteLines = (): void => {
-		for (;;) {
-			const newlineIndex = pendingLine.indexOf("\n");
-
-			if (newlineIndex === -1) return;
-
-			const line = pendingLine.slice(0, newlineIndex);
-
-			pendingLine = pendingLine.slice(newlineIndex + 1);
-
-			const event = parseVstHostEvent(line);
-
-			if (event !== undefined) {
-				onLiveness?.(event);
-			} else {
-				appendDiagnostic(`${line}\n`);
-			}
-		}
-	};
-
-	stderr.on("data", (chunk: Buffer) => {
-		pendingLine += decoder.write(chunk);
-		consumeCompleteLines();
-	});
-
-	stderr.once("end", () => {
-		pendingLine += decoder.end();
-		appendDiagnostic(pendingLine);
-		pendingLine = "";
 	});
 
 	return () => diagnosticTail.toString("utf8");
@@ -159,7 +68,7 @@ export class VstHostExitedBeforeReadyError extends Error {
 }
 
 // Caller must await `ready` before writing audio to stdin, or the first write races the plugin-chain load.
-export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>, options: SpawnVstHostOptions = {}): VstHostHandle {
+export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostHandle {
 	const proc: ChildProcess = spawn(binaryPath, [...args], {
 		stdio: ["pipe", "pipe", "pipe"],
 	});
@@ -171,7 +80,7 @@ export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>, op
 	const stdin = proc.stdin;
 	const stdout = proc.stdout;
 	const stderr = proc.stderr;
-	const getStderrTail = observeVstHostStderr(stderr, options.onLiveness);
+	const getStderrTail = observeVstHostStderr(stderr);
 
 	const ready = new Promise<void>((resolve, reject) => {
 		// Buffer stdout bytes until we see `READY\n`. Anything after the newline
@@ -248,7 +157,7 @@ function isRetryableInitCrash(error: unknown): error is VstHostExitedBeforeReady
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-export interface SpawnVstHostReadyOptions extends SpawnVstHostOptions {
+export interface SpawnVstHostReadyOptions {
 	readonly maxAttempts?: number;
 	readonly backoffMs?: number;
 	readonly onRetry?: (failedAttempt: number, error: VstHostExitedBeforeReadyError) => void;
@@ -260,7 +169,7 @@ export async function spawnVstHostReady(binaryPath: string, args: ReadonlyArray<
 	const backoffMs = options.backoffMs ?? 750;
 
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-		const handle = spawnVstHost(binaryPath, args, { onLiveness: options.onLiveness });
+		const handle = spawnVstHost(binaryPath, args);
 
 		try {
 			await handle.ready;

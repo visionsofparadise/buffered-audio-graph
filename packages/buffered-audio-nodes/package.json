@@ -37,6 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.3.5",
+    "@types/pidusage": "^2.0.5",
     "concurrently": "*",
     "tsup": "^8.0.0",
     "tsx": "^4.21.0",
@@ -47,6 +48,8 @@
     "@buffered-audio/core": "0.12.0",
     "@buffered-audio/utils": "0.8.1",
     "bufferfy": "^4.0.3",
+    "pidtree": "^1.0.0",
+    "pidusage": "^4.0.1",
     "wavefile": "^11.0.0",
     "zod": "^4.3.6"
   }

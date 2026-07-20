@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { BlockBuffer, type Block, type LogPayload, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
 import { vst3, Vst3Stream } from ".";
-import { processStreamingThroughVstHost, spawnVstHostReady, VstHostExitedBeforeReadyError, type VstHostLiveness, type VstHostTransferProgress } from "./utils/process";
+import { processStreamingThroughVstHost, spawnVstHostReady, VstHostExitedBeforeReadyError } from "./utils/process";
 
 // Stub binary mimics the real `vst-host` CLI shape (node as binary + stub via `extraArgs`);
 // spawns a real subprocess exercising the full lifecycle — hence "integration", not "unit".
@@ -90,6 +90,7 @@ describe("Vst3Stream subprocess lifecycle", () => {
 	it("spawns the stub binary, receives READY, processes the whole buffer, and tears down cleanly", async () => {
 		const events = new EventEmitter() as RenderEvents;
 		const logs: Array<LogPayload> = [];
+		let monitorSampleCount = 0;
 
 		events.on("log", (_identity, payload) => logs.push(payload));
 
@@ -97,6 +98,14 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			vstHostPath: process.execPath,
 			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
 			extraArgs: [stubBinary],
+			monitorIntervalMs: 20,
+			monitorSampler: async () => {
+				monitorSampleCount += 1;
+
+				if (monitorSampleCount === 3) throw new Error("test sample failure");
+
+				return { cpuMs: monitorSampleCount * 100, pidCount: 1 };
+			},
 		}), { events, nextStreamId: () => 0 });
 
 		const channels = 2;
@@ -127,10 +136,13 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			}
 		}
 
-		expect(logs.filter((log) => log.message === "vst-host liveness")).toEqual([
-			expect.objectContaining({ level: "info", data: expect.objectContaining({ state: "active", elapsedMs: 30_000 }) }),
-			expect.objectContaining({ level: "warn", data: expect.objectContaining({ state: "idle", elapsedMs: 60_000 }) }),
-		]);
+		expect(logs.find((log) => log.message === "vst-host liveness")).toEqual(expect.objectContaining({
+			data: expect.objectContaining({ state: expect.stringMatching(/^(active|idle)$/) }),
+		}));
+		expect(logs.find((log) => log.message === "vst-host liveness sample failed")).toEqual(expect.objectContaining({
+			level: "warn",
+			data: { error: "Error: test sample failure" },
+		}));
 		expect(logs.find((log) => log.message === "vst-host input")?.data).toEqual({
 			framesDone: frames,
 			framesTotal: frames,
@@ -152,17 +164,14 @@ describe("Vst3Stream subprocess lifecycle", () => {
 		const samples = Float32Array.from({ length: frames }, (_, index) => Math.sin(index / 100));
 		const buffer = new BlockBuffer();
 		const stagesPath = await writeStagesFile();
-		const liveness: Array<VstHostLiveness> = [];
-		const inputProgress: Array<VstHostTransferProgress> = [];
-		const outputProgress: Array<VstHostTransferProgress> = [];
+		const inputProgress: Array<unknown> = [];
+		const outputProgress: Array<unknown> = [];
 
 		await buffer.write([samples], 48_000, 32);
 		await buffer.flushWrites();
 
 		try {
-			const handle = await spawnVstHostReady(process.execPath, [stubBinary, "--stages-json", stagesPath, "--sample-rate", "48000", "--channels", "1"], {
-				onLiveness: (event) => liveness.push(event),
-			});
+			const handle = await spawnVstHostReady(process.execPath, [stubBinary, "--stages-json", stagesPath, "--sample-rate", "48000", "--channels", "1"]);
 
 			await processStreamingThroughVstHost(handle, buffer, {
 				channelCount,
@@ -172,10 +181,10 @@ describe("Vst3Stream subprocess lifecycle", () => {
 				onOutputProgress: (progress) => outputProgress.push(progress),
 			});
 
-			expect(liveness.map((event) => event.state)).toEqual(["active", "idle"]);
 			expect(inputProgress.at(-1)).toEqual({ framesDone: frames, framesTotal: frames, bytesDone: frames * 4, bytesTotal: frames * 4 });
 			expect(outputProgress.at(-1)).toEqual({ framesDone: frames, framesTotal: frames, bytesDone: frames * 4, bytesTotal: frames * 4 });
-			expect(handle.getStderrTail()).toBe("stub-binary: ordinary diagnostic\nVST_HOST_EVENT {malformed-json}\nstub-binary: incomplete final diagnostic");
+			expect(handle.getStderrTail()).toBe("stub-binary: ordinary diagnostic\nstub-binary: incomplete final diagnostic");
+			expect(handle.getStderrTail()).not.toContain("VST_HOST_EVENT");
 
 			await buffer.reset();
 			const result = await buffer.read(frames);

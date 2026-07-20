@@ -2,7 +2,7 @@
 // Stub `vst-host` binary for tests. Contract:
 //   1. Parse the canonical args (--stages-json, --sample-rate, --channels).
 //   2. Print `READY\n`.
-//   3. Emit structured and diagnostic stderr fixtures.
+//   3. Emit diagnostic stderr fixtures.
 //   4. Echo all stdin back to stdout verbatim.
 //   5. Close stdout and exit cleanly when stdin closes.
 
@@ -51,14 +51,9 @@ try {
 }
 
 process.stdout.write("READY\n");
-
-const splitTelemetry = 'VST_HOST_EVENT {"type":"liveness","phase":"process","elapsedMs":30000,';
-
-process.stderr.write(splitTelemetry);
-process.stderr.write('"processCpuDeltaMs":25000,"processCpuMs":26000,"state":"active"}\n');
-process.stderr.write('VST_HOST_EVENT {"type":"liveness","phase":"process","elapsedMs":60000,"processCpuDeltaMs":0,"processCpuMs":26000,"state":"idle"}\n');
 process.stderr.write("stub-binary: ordinary diagnostic\n");
-process.stderr.write("VST_HOST_EVENT {malformed-json}\n");
+
+await new Promise((resolve) => setTimeout(resolve, 100));
 
 process.stdin.on("data", (chunk) => {
 	process.stdout.write(chunk);
