@@ -12,10 +12,10 @@
     "lint:verbose": "eslint .",
     "lint:fix": "eslint . --fix",
     "unit": "vitest run --project unit",
+    "integration:heavy": "vitest run --config vitest.heavy.config.ts",
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make",
-    "smoke:gui": "tsx scripts/gui-smoke.ts"
+    "make": "electron-forge make"
   },
   "author": {
     "name": "Matt Cavender",

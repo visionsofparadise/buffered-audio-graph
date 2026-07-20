@@ -6,6 +6,6 @@
     "jsx": "react-jsx",
     "noEmit": true
   },
-  "include": ["src", "scripts", "forge.env.d.ts"],
+  "include": ["src", "forge.env.d.ts"],
   "exclude": [".vite", "node_modules", "out"]
 }
