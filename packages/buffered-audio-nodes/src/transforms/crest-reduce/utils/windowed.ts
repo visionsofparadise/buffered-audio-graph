@@ -64,6 +64,20 @@ export class TruePeakArgmaxAccumulator {
 	}
 
 	finalize(): { db: number; peakInputSample: number } {
+		for (const upsampler of this.upsamplers) {
+			const tail = upsampler.flush();
+
+			for (let index = 0; index < tail.length; index++) {
+				const value = tail[index] ?? 0;
+				const magnitude = value < 0 ? -value : value;
+
+				if (magnitude > this.runningMax) {
+					this.runningMax = magnitude;
+					this.peakInputSample = Math.max(0, this.inputBase - 1);
+				}
+			}
+		}
+
 		return { db: linearToDb(this.runningMax), peakInputSample: this.peakInputSample };
 	}
 }
@@ -140,6 +154,10 @@ export async function streamLatticeTrajectory(
 	const bindingMask = new Array<boolean>(frameCount).fill(true);
 
 	if (frameCount === 0 || channelCount === 0) return { trajectory, frameCount, signalLength, windowPeaks, bindingMask };
+
+	const globalTruePeakFrame = search === undefined
+		? undefined
+		: Math.min(frameCount - 1, Math.max(0, Math.round(search.peakInputSample / hopSize)));
 
 	await buffer.reset();
 
@@ -236,7 +254,7 @@ export async function streamLatticeTrajectory(
 
 				if (search) {
 					const frameTruePeakDb = measureFrameTruePeakDb(channelWindows, search.sampleRate);
-					const isGlobalTpFrame = Math.round(search.peakInputSample / hopSize) === nextFrame;
+					const isGlobalTpFrame = globalTruePeakFrame === nextFrame;
 					const bound = isBindingPeak(frameTruePeakDb, amount, search.globalTruePeakDb, isGlobalTpFrame);
 
 					bindingMask[nextFrame] = bound;

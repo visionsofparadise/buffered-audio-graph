@@ -95,9 +95,11 @@ function truePeak4xAbs(channelWindows: ReadonlyArray<Float32Array>, row: Float32
 
 	for (const channelWindow of channelWindows) {
 		const transformed = applyWindowAtScale(channelWindow, row, scale, ORDER);
-		const upsampled = new TruePeakUpsampler(4).upsample(transformed);
+		const upsampler = new TruePeakUpsampler(4);
 
-		for (const value of upsampled) maxAbs = Math.max(maxAbs, Math.abs(value));
+		for (const output of [upsampler.upsample(transformed), upsampler.flush()]) {
+			for (const value of output) maxAbs = Math.max(maxAbs, Math.abs(value));
+		}
 	}
 
 	return maxAbs;
@@ -335,5 +337,20 @@ describe("crest-reduce search — applyWindowAtScale is the verbatim normalized-
 
 		expect(power).toBeCloseTo(amp * amp, 9);
 		expect(power).toBeGreaterThan(0);
+	});
+
+	it("includes a maximum that occurs only in the flushed FIR tail", () => {
+		const input = new Float32Array([
+			-0.08388812094926834,
+			0.6030386090278625,
+			-0.7042242288589478,
+		]);
+		const upsampler = new TruePeakUpsampler(4);
+		const sourceAligned = upsampler.upsample(input);
+		const sourceAlignedPeak = peakAbs(sourceAligned);
+		const power = truePeakPower4x([input], new Float32Array(0), 0, 0);
+
+		expect(power).toBeGreaterThan(sourceAlignedPeak * sourceAlignedPeak);
+		expect(Math.sqrt(power)).toBeCloseTo(0.7503057227, 6);
 	});
 });

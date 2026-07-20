@@ -81,6 +81,15 @@ export function truePeakPower4x(channelWindows: ReadonlyArray<Float32Array>, ref
 
 			if (magnitude > maxAbs) maxAbs = magnitude;
 		}
+
+		const tail = upsampler.flush();
+
+		for (let index = 0; index < tail.length; index++) {
+			const value = tail[index] ?? 0;
+			const magnitude = value < 0 ? -value : value;
+
+			if (magnitude > maxAbs) maxAbs = magnitude;
+		}
 	}
 
 	// |truePeak|² — a POWER, matching Hong's Eq. 5 |p̃(n_i)|² cost shape.
