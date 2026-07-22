@@ -3,30 +3,59 @@ import type { GraphDefinition } from "./definition";
 
 const placeholderPattern = /\{\{([A-Za-z][A-Za-z0-9_-]*)\}\}/g;
 
-export function substituteParameters(definition: GraphDefinition, parameters: Record<string, string>): GraphDefinition {
-	const usedNames = new Set<string>();
-	const unboundNames = new Set<string>();
+function forEachPlaceholderName(parameters: Record<string, unknown>, onName: (name: string) => void): void {
+	traverse(parameters, (value) => {
+		if (typeof value !== "string") return;
 
-	const substitute = (value: string): string =>
 		value.replace(placeholderPattern, (match, name: string) => {
-			usedNames.add(name);
-
-			const provided = Object.prototype.hasOwnProperty.call(parameters, name) ? parameters[name] : undefined;
-
-			if (provided !== undefined) return provided;
-
-			unboundNames.add(name);
+			onName(name);
 
 			return match;
 		});
+	});
+}
+
+export function collectParameters(definition: GraphDefinition): Array<string> {
+	const names = new Set<string>();
+
+	for (const node of definition.nodes) {
+		if (node.parameters === undefined) continue;
+
+		forEachPlaceholderName(node.parameters, (name) => names.add(name));
+	}
+
+	return [...names].sort();
+}
+
+export function substituteParameters(definition: GraphDefinition, parameters: Record<string, string>): GraphDefinition {
+	const usedNames = new Set<string>();
+	const unboundNames = new Set<string>();
 
 	const nodes = definition.nodes.map((node) => {
 		if (node.parameters === undefined) return node;
 
 		const clonedParameters = structuredClone(node.parameters);
 
+		forEachPlaceholderName(clonedParameters, (name) => {
+			usedNames.add(name);
+
+			const provided = Object.prototype.hasOwnProperty.call(parameters, name) ? parameters[name] : undefined;
+
+			if (provided === undefined) unboundNames.add(name);
+		});
+
 		traverse(clonedParameters, (value, key, parent) => {
-			if (typeof value === "string") Reflect.set(parent, key, substitute(value));
+			if (typeof value !== "string") return;
+
+			Reflect.set(
+				parent,
+				key,
+				value.replace(placeholderPattern, (match, name: string) => {
+					const provided = Object.prototype.hasOwnProperty.call(parameters, name) ? parameters[name] : undefined;
+
+					return provided ?? match;
+				}),
+			);
 		});
 
 		return { ...node, parameters: clonedParameters };

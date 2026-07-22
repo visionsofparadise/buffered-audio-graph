@@ -9,13 +9,13 @@ export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, R
 
 	async handler(input: RenderGraphInput, dependencies: IpcHandlerDependencies): Promise<RenderGraphIpcReturn> {
 		const { browserWindow, jobManager, nodeRegistry } = dependencies;
-		const { jobId, definition } = input;
+		const { jobId, definition, parameters } = input;
 
 		const signal = jobManager.getOrCreateSignal(jobId);
 
 		try {
 			// Bridges the desktop's `NodeClass` values to core's bare-ctor `NodeRegistry`: same object, structural superset, blocked only by `Map` generic invariance.
-			const jobs = createRenderJobs(definition, nodeRegistry as unknown as NodeRegistry, { signal });
+			const jobs = createRenderJobs(definition, nodeRegistry as unknown as NodeRegistry, { signal, parameters });
 
 			for (const job of jobs) {
 				job.events.on("progress", (identity: StreamIdentity, payload: ProgressPayload): void => {

@@ -2,7 +2,7 @@ import { FileInput } from "../../../../FileInput";
 import { IconButton } from "../../../../IconButton";
 import { cn } from "../../../../../utils/cn";
 import { ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FieldLabel } from "./FieldLabel";
 
 export interface FileParameter {
@@ -37,6 +37,15 @@ export function FileRow({
 	/** Bumped when a render completes, re-triggering the existence check. */
 	readonly renderEpoch?: number;
 }) {
+	const [local, setLocal] = useState(param.value);
+	// Same-tick input+blur (e.g. smoke helper) commits before setState re-renders.
+	const localRef = useRef(param.value);
+
+	useEffect(() => {
+		localRef.current = param.value;
+		setLocal(param.value);
+	}, [param.value]);
+
 	const complete = param.value !== "";
 	const controlDisabled = param.optional && !param.defined;
 	const isSaveMode = param.mode === "save";
@@ -68,6 +77,19 @@ export function FileRow({
 		};
 	}, [isSaveMode, statFile, param.value, renderEpoch]);
 
+	const updateLocal = (next: string): void => {
+		localRef.current = next;
+		setLocal(next);
+	};
+
+	const commit = (): void => {
+		const next = localRef.current;
+
+		if (next === param.value) return;
+
+		onParameterChange?.(param.name, next);
+	};
+
 	return (
 		<div className={cn("flex flex-col", dimmed && "opacity-40")}>
 			<FieldLabel
@@ -80,10 +102,19 @@ export function FileRow({
 			<div className={cn("mt-1 flex items-center gap-1", controlDisabled && "pointer-events-none opacity-40")}>
 				<FileInput
 					className="flex-1"
-					key={param.value}
-					defaultValue={param.value}
+					value={local}
 					placeholder="No file selected"
-					onChange={onParameterChange ? (next) => onParameterChange(param.name, next) : undefined}
+					onChange={onParameterChange ? updateLocal : undefined}
+					onBlur={onParameterChange ? commit : undefined}
+					onKeyDown={
+						onParameterChange
+							? (event) => {
+									if (event.key === "Enter") {
+										event.currentTarget.blur();
+									}
+								}
+							: undefined
+					}
 					onBrowse={onParameterBrowse ? () => onParameterBrowse(param.name) : undefined}
 				/>
 				{isSaveMode && openEnabled && onOpen && (

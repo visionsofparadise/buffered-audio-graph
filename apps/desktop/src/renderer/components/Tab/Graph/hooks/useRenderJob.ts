@@ -4,9 +4,10 @@ import type { AudioProgressPayload } from "../../../../../shared/utilities/emitT
 import type { GraphContext } from "../../../../models/Context";
 
 export interface UseRenderJobReturn {
-	readonly startRender: () => Promise<void>;
+	readonly startRender: (parameters: Record<string, string>) => Promise<void>;
 	readonly abortRender: () => Promise<void>;
 	readonly clearRenderError: () => void;
+	readonly surfaceRenderError: (message: string) => void;
 	readonly activeJobId: string | null;
 	readonly processingNodes: Map<string, number>;
 	readonly renderError: string | null;
@@ -63,35 +64,38 @@ export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 		activeJobIdRef.current = activeJobId;
 	}, [activeJobId]);
 
-	const startRender = useCallback(async () => {
-		// Defense in depth behind the UI render gates: never render while a
-		// pinned pair is missing from the registry (a post-gate miss would be a
-		// real error, but the gate should have prevented reaching here).
-		if (unreadyRenderPairs(context.graphDefinition.nodes, context.app.packages).length > 0) return;
+	const startRender = useCallback(
+		async (parameters: Record<string, string>) => {
+			// Defense in depth behind the UI render gates: never render while a
+			// pinned pair is missing from the registry (a post-gate miss would be a
+			// real error, but the gate should have prevented reaching here).
+			if (unreadyRenderPairs(context.graphDefinition.nodes, context.app.packages).length > 0) return;
 
-		const jobId = mintJobId();
+			const jobId = mintJobId();
 
-		setActiveJobId(jobId);
-		setProcessingNodes(new Map());
-		setRenderError(null);
-
-		const definition = structuredClone(context.graphDefinition.op.unwrap()) as GraphDefinition;
-
-		try {
-			await context.main.audioRenderGraph({ jobId, definition });
-
-			if (activeJobIdRef.current !== jobId) return;
-
-			setActiveJobId(null);
+			setActiveJobId(jobId);
 			setProcessingNodes(new Map());
-		} catch (error) {
-			if (activeJobIdRef.current !== jobId) return;
+			setRenderError(null);
 
-			setActiveJobId(null);
-			setProcessingNodes(new Map());
-			setRenderError(error instanceof Error ? error.message : String(error));
-		}
-	}, [context]);
+			const definition = structuredClone(context.graphDefinition.op.unwrap()) as GraphDefinition;
+
+			try {
+				await context.main.audioRenderGraph({ jobId, definition, parameters });
+
+				if (activeJobIdRef.current !== jobId) return;
+
+				setActiveJobId(null);
+				setProcessingNodes(new Map());
+			} catch (error) {
+				if (activeJobIdRef.current !== jobId) return;
+
+				setActiveJobId(null);
+				setProcessingNodes(new Map());
+				setRenderError(error instanceof Error ? error.message : String(error));
+			}
+		},
+		[context],
+	);
 
 	const abortRender = useCallback(async () => {
 		if (activeJobIdRef.current === null) return;
@@ -103,6 +107,12 @@ export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 
 	const clearRenderError = useCallback(() => {
 		setRenderError(null);
+	}, []);
+
+	const surfaceRenderError = useCallback((message: string) => {
+		setActiveJobId(null);
+		setProcessingNodes(new Map());
+		setRenderError(message);
 	}, []);
 
 	useEffect(() => {
@@ -129,5 +139,5 @@ export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 		};
 	}, [context.mainEvents]);
 
-	return { startRender, abortRender, clearRenderError, activeJobId, processingNodes, renderError };
+	return { startRender, abortRender, clearRenderError, surfaceRenderError, activeJobId, processingNodes, renderError };
 }

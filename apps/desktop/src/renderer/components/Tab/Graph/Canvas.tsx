@@ -1,3 +1,4 @@
+import type { GraphDefinition } from "@buffered-audio/core";
 import {
 	MiniMap,
 	ReactFlow,
@@ -29,9 +30,12 @@ import { unreadyRenderPairs, useRenderJob } from "./hooks/useRenderJob";
 import { BottomRightOverlay } from "./Overlays/BottomRightOverlay";
 import { TopLeftOverlay } from "./Overlays/TopLeftOverlay";
 import { TopRightOverlay } from "./Overlays/TopRightOverlay";
+import { RenderParametersModal } from "./RenderParametersModal";
 
 const NODE_TYPES: NodeTypes = { bufferedAudioNode: NodeContainer };
 const EDGE_TYPES: EdgeTypes = { bufferedAudioEdge: EdgeContainer };
+// Stable identity — `?? {}` would reseed the modal on every parent render.
+const EMPTY_REMEMBERED_PARAMETERS: Record<string, string> = {};
 
 /** Minimap node color per category — matches the demo `BottomLeftOverlay`. */
 const CATEGORY_COLOR: Record<NodeContainerData["category"], string> = {
@@ -100,7 +104,7 @@ interface Props {
 }
 
 export const GraphCanvas = retrack<Props>(({ context }: Props) => {
-	const { startRender, abortRender, clearRenderError, activeJobId, processingNodes, renderError } = useRenderJob(context);
+	const { startRender, abortRender, clearRenderError, surfaceRenderError, activeJobId, processingNodes, renderError } = useRenderJob(context);
 
 	const initialNodes = useMemo(
 		() => buildReactFlowNodes(context),
@@ -116,6 +120,44 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 	const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
 	const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 	const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
+	const [renderParamsOpen, setRenderParamsOpen] = useState(false);
+	const [renderParamNames, setRenderParamNames] = useState<Array<string>>([]);
+
+	const requestRender = useCallback(() => {
+		const definition = structuredClone(context.graphDefinition.op.unwrap()) as GraphDefinition;
+
+		void context.main
+			.collectParameters(definition)
+			.then((names) => {
+				if (names.length === 0) {
+					void startRender({});
+
+					return;
+				}
+
+				setRenderParamNames(names);
+				setRenderParamsOpen(true);
+			})
+			.catch((error: unknown) => {
+				setRenderParamsOpen(false);
+				surfaceRenderError(error instanceof Error ? error.message : String(error));
+			});
+	}, [context.graphDefinition, context.main, startRender, surfaceRenderError]);
+
+	const closeRenderParams = useCallback(() => {
+		setRenderParamsOpen(false);
+	}, []);
+
+	const confirmRenderParams = useCallback(
+		(values: Record<string, string>) => {
+			context.app.mutate((draft) => {
+				draft.rememberedParameters[context.bagId] = values;
+			});
+			setRenderParamsOpen(false);
+			void startRender(values);
+		},
+		[context.app, context.bagId, startRender],
+	);
 
 	const { screenToFlowPosition, getNodes } = useReactFlow();
 	const mutations = useGraphMutations(context);
@@ -365,7 +407,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 				}
 
 				case "render": {
-					void startRender();
+					requestRender();
 					setContextMenu(null);
 					break;
 				}
@@ -401,7 +443,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 				}
 			}
 		},
-		[contextMenu, mutations, startRender, context],
+		[contextMenu, mutations, requestRender, context],
 	);
 
 	const handleAddNodeFromContextMenu = useCallback(
@@ -581,7 +623,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 				onAutoOrganize={handleAutoOrganize}
 				onUndo={() => context.history.undo()}
 				onRedo={() => context.history.redo()}
-				onRender={() => void startRender()}
+				onRender={requestRender}
 				onAbort={() => void abortRender()}
 				canUndo={canUndo}
 				canRedo={canRedo}
@@ -615,6 +657,14 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 					renderDisabled={!renderReadiness.ready}
 				/>
 			)}
+
+			<RenderParametersModal
+				isOpen={renderParamsOpen}
+				names={renderParamNames}
+				initialValues={context.app.rememberedParameters[context.bagId] ?? EMPTY_REMEMBERED_PARAMETERS}
+				onCancel={closeRenderParams}
+				onConfirm={confirmRenderParams}
+			/>
 		</div>
 	);
 });

@@ -31,7 +31,7 @@ export { RenderJob, type RenderOptions } from "./render-job";
 export { createRenderJobs, type RenderGraphOptions } from "./graph/create-render-jobs";
 export { validateGraphDefinition, type GraphDefinition, type GraphEdge, type GraphNode, type NodeRegistry } from "./graph/definition";
 export { pack } from "./graph/pack";
-export { substituteParameters } from "./graph/substitute-parameters";
+export { collectParameters, substituteParameters } from "./graph/substitute-parameters";
 export { unpack } from "./graph/unpack";
 
 export { windowedIterate, type WindowedIterateOptions } from "./node/stream/transform/utils/windowed-iterate";

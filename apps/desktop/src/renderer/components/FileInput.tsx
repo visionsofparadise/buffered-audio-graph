@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import { FolderOpen } from "lucide-react";
 import { cn } from "../utils/cn";
 import { IconButton } from "./IconButton";
@@ -8,6 +9,8 @@ export interface FileInputProps {
 	readonly placeholder?: string;
 	readonly label?: string;
 	readonly onChange?: (value: string) => void;
+	readonly onBlur?: () => void;
+	readonly onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
 	/** Invoked by the browse button — opens the OS file picker in the desktop app. */
 	readonly onBrowse?: () => void;
 	readonly className?: string;
@@ -27,6 +30,8 @@ export function FileInput({
 	placeholder,
 	label,
 	onChange,
+	onBlur,
+	onKeyDown,
 	onBrowse,
 	className,
 }: FileInputProps) {
@@ -40,6 +45,8 @@ export function FileInput({
 					defaultValue={defaultValue}
 					placeholder={placeholder}
 					onChange={onChange ? (event) => onChange(event.target.value) : undefined}
+					onBlur={onBlur}
+					onKeyDown={onKeyDown}
 					className="min-w-0 flex-1 rounded-xs bg-surface px-2 py-1 text-body text-text-primary outline-none placeholder:text-dimmed"
 				/>
 				<IconButton

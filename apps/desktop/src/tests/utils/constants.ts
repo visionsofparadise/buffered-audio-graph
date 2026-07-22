@@ -11,6 +11,8 @@ export const PATH_SENTINEL = "C:/smoke/input.wav";
 export const PATH_SENTINEL_2 = "C:/smoke/param-undo.wav";
 export const INPUT_WAV_PATH = join(PROFILE_DIR, "smoke-input.wav");
 export const OUTPUT_WAV_PATH = join(PROFILE_DIR, "smoke-output.wav");
+export const TEMPLATED_WRITE_PATH = "{{outDir}}/templated-out.wav";
+export const TEMPLATED_OUTPUT_WAV_PATH = join(PROFILE_DIR, "templated-out.wav");
 
 export const BUILTIN_PACKAGE = "@buffered-audio/nodes";
 export const STALE_BUILTIN_VERSION = "0.22.0";

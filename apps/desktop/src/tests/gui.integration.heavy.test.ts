@@ -17,6 +17,14 @@ import { clearGraph } from "./actions/clearGraph";
 import { deleteNodeViaMenu, openNodeMenuAndDump } from "./actions/deleteNodeViaMenu";
 import { dragNodeBy } from "./actions/dragNodeBy";
 import { clickRender, dismissRenderToast, isRenderEnabled, waitForRenderError, waitForRenderOutput } from "./actions/render";
+import {
+	cancelRenderParameters,
+	confirmRenderParameters,
+	fillRenderParameter,
+	isRenderParametersOpen,
+	readRenderParameter,
+	waitForRenderParametersOpen,
+} from "./actions/renderParameters";
 import { selectSmokeTab } from "./actions/selectSmokeTab";
 import { setNodePathParam } from "./actions/setNodePathParam";
 import { redo, undo } from "./actions/undoRedo";
@@ -43,6 +51,8 @@ import {
 	PROFILE_DIR,
 	SOURCE_NODE,
 	STALE_BUILTIN_VERSION,
+	TEMPLATED_OUTPUT_WAV_PATH,
+	TEMPLATED_WRITE_PATH,
 	TRANSFORM_NODE,
 	VST3_NODE,
 	WRITE_NODE,
@@ -192,6 +202,7 @@ describe("boot and package lifecycle", () => {
 
 describe("full-graph render", () => {
 	let readId: string;
+	let writeId: string;
 	let builtinVersion: string | null;
 
 	beforeAll(async () => {
@@ -230,6 +241,8 @@ describe("full-graph render", () => {
 
 		await clickRender(page);
 
+		expect(await isRenderParametersOpen(page), "zero-target — no parameters modal (untemplated bag)").toBe(false);
+
 		const errorText = await waitForRenderError(page, 20000);
 
 		expect(
@@ -241,7 +254,7 @@ describe("full-graph render", () => {
 	});
 
 	it("connects Read WAV → Write and enables the render gate", async () => {
-		const writeId = await addNode(page, WRITE_NODE, 2, { search: "write" });
+		writeId = await addNode(page, WRITE_NODE, 2, { search: "write" });
 
 		await setNodePathParam(page, writeId, OUTPUT_WAV_PATH);
 
@@ -261,10 +274,12 @@ describe("full-graph render", () => {
 		expect(await isRenderEnabled(page), "render gate — Render button enabled once both pinned packages are ready").toBe(true);
 	});
 
-	it("renders the graph to a non-empty output file", async () => {
+	it("renders the graph to a non-empty output file without a parameters modal", async () => {
 		rmSync(OUTPUT_WAV_PATH, { force: true });
 
 		await clickRender(page);
+
+		expect(await isRenderParametersOpen(page), "untemplated render — no parameters modal").toBe(false);
 
 		const outcome = await waitForRenderOutput(page, OUTPUT_WAV_PATH, 60000);
 
@@ -272,6 +287,50 @@ describe("full-graph render", () => {
 		expect(statSync(OUTPUT_WAV_PATH).size > 0, "render to completion — output file exists and is non-empty").toBe(true);
 
 		await dismissRenderToast(page);
+	});
+
+	it("types a multi-segment template into a file param and persists it", async () => {
+		await setNodePathParam(page, writeId, TEMPLATED_WRITE_PATH);
+
+		const committed = await page.$eval(
+			`.react-flow__node[data-id="${writeId}"] input[type="text"]`,
+			(element) => (element as HTMLInputElement).value,
+		);
+
+		expect(committed, "file-param template types and stays in the input").toBe(TEMPLATED_WRITE_PATH);
+
+		await sleep(DEBOUNCE_WAIT_MS);
+
+		const bag = readPersistedBag();
+		const writeNode = bag.nodes.find((node) => node.id === writeId);
+		const path = writeNode?.parameters?.path;
+
+		expect(path, "file-param template persists in the bag").toBe(TEMPLATED_WRITE_PATH);
+	});
+
+	it("prompts for template parameters, renders with them, and pre-fills on the next render", async () => {
+		rmSync(TEMPLATED_OUTPUT_WAV_PATH, { force: true });
+
+		await clickRender(page);
+
+		expect(await waitForRenderParametersOpen(page), "templated bag — parameters modal opens").toBe(true);
+
+		await fillRenderParameter(page, "outDir", PROFILE_DIR);
+		await confirmRenderParameters(page);
+
+		const outcome = await waitForRenderOutput(page, TEMPLATED_OUTPUT_WAV_PATH, 60000);
+
+		expect(outcome.ok, `templated render — output written and toast settled (${outcome.error ?? "ok"})`).toBe(true);
+		expect(statSync(TEMPLATED_OUTPUT_WAV_PATH).size > 0, "templated render — output file non-empty").toBe(true);
+
+		await dismissRenderToast(page);
+
+		await clickRender(page);
+
+		expect(await waitForRenderParametersOpen(page), "second render — modal reopens with remembered values").toBe(true);
+		expect(await readRenderParameter(page, "outDir"), "second render — outDir pre-filled").toBe(PROFILE_DIR);
+
+		await cancelRenderParameters(page);
 	});
 });
 
@@ -362,24 +421,12 @@ describe("graph editing and persistence", () => {
 	});
 
 	it("commits a typed path parameter", async () => {
-		const inputSelector = `.react-flow__node[data-id="${sourceId}"] input[type="text"]`;
+		await setNodePathParam(page, sourceId, PATH_SENTINEL);
 
-		await page.waitForSelector(inputSelector, { timeout: 5000 });
-		await page.$eval(
-			inputSelector,
-			(element, value: string) => {
-				const input = element as HTMLInputElement;
-				const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
-
-				descriptor?.set?.call(input, value);
-				input.dispatchEvent(new Event("input", { bubbles: true }));
-				input.dispatchEvent(new Event("blur", { bubbles: true }));
-			},
-			PATH_SENTINEL,
+		const committedValue = await page.$eval(
+			`.react-flow__node[data-id="${sourceId}"] input[type="text"]`,
+			(element) => (element as HTMLInputElement).value,
 		);
-		await sleep(300);
-
-		const committedValue = await page.$eval(inputSelector, (element) => (element as HTMLInputElement).value);
 
 		expect(committedValue === PATH_SENTINEL, `type param — input value persists ("${committedValue}")`).toBe(true);
 	});
