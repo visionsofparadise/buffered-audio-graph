@@ -1,4 +1,4 @@
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { GET_WINDOW_ID_ACTION, type GetWindowIdIpcParameters, type GetWindowIdIpcReturn } from "./Renderer";
 
 export class GetWindowIdMainIpc extends AsyncMainIpc<GetWindowIdIpcParameters, GetWindowIdIpcReturn> {

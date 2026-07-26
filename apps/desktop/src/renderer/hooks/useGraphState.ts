@@ -1,10 +1,9 @@
 import type { State } from "opshot";
 import { useEffect, useRef } from "react";
-import type { AppContext } from "../models/Context";
-import type { GraphMeta } from "../models/History";
-import { serializeGraphState, type GraphViewState, type PositionsState } from "../models/State/Graph";
+import type { AppContext } from "../Models/Context";
+import type { GraphMeta } from "../Models/History";
+import { serializeGraphState, type GraphViewState, type PositionsState } from "../Models/State/Graph";
 
-/** Disk-write debounce window for graph-state autosave (ms). */
 const STATE_DEBOUNCE_MS = 800;
 
 export function useGraphState(

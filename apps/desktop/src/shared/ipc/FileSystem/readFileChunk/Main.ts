@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { READ_FILE_CHUNK_ACTION, type ReadFileChunkIpcParameters, type ReadFileChunkIpcReturn } from "./Renderer";
 
 export class ReadFileChunkMainIpc extends AsyncMainIpc<ReadFileChunkIpcParameters, ReadFileChunkIpcReturn> {

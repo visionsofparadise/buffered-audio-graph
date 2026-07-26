@@ -1,0 +1,375 @@
+import type { GraphEdge, GraphNode } from "@buffered-audio/core";
+import { useMemo, useRef } from "react";
+import { comparePackageVersions } from "../../../../hooks/packagePipeline";
+import type { GraphContext } from "../../../../Models/Context";
+import type { GraphDefinitionState } from "../../../../Models/State/GraphDefinition";
+import { buildDefaultParameters } from "../Node/utils/buildParameters";
+import { lookupNode } from "../Node/utils/nodeLookup";
+
+interface Position {
+	x: number;
+	y: number;
+}
+
+interface GraphMutations {
+	addNode: (packageName: string, nodeName: string, position: Position) => void;
+	removeNode: (nodeId: string) => void;
+	addEdge: (from: string, to: string) => void;
+	removeEdge: (from: string, to: string) => void;
+	insertNodeOnEdge: (edge: GraphEdge, packageName: string, nodeName: string) => void;
+	toggleBypass: (nodeId: string) => void;
+	resetNodeParameters: (nodeId: string) => void;
+	setGraphName: (name: string) => void;
+	setParameterAtPath: (nodeId: string, path: ReadonlyArray<string | number>, value: unknown) => void;
+	deleteParameterAtPath: (nodeId: string, path: ReadonlyArray<string | number>) => void;
+	addArrayRow: (nodeId: string, paramName: string, defaultItem: Record<string, unknown>) => void;
+	deleteArrayRow: (nodeId: string, paramName: string, rowIndex: number) => void;
+	reorderArrayRows: (nodeId: string, paramName: string, fromIndex: number, toIndex: number) => void;
+}
+
+function setNestedValue(
+	root: Record<string | number, unknown>,
+	path: ReadonlyArray<string | number>,
+	value: unknown,
+): void {
+	let container: Record<string | number, unknown> = root;
+
+	for (let depth = 0; depth < path.length - 1; depth++) {
+		const key = path[depth];
+		const nextKey = path[depth + 1];
+
+		if (key === undefined) return;
+
+		const existing = container[key];
+
+		if (existing === null || typeof existing !== "object") {
+			container[key] = typeof nextKey === "number" ? [] : {};
+		}
+
+		container = container[key] as Record<string | number, unknown>;
+	}
+
+	const leaf = path[path.length - 1];
+
+	if (leaf === undefined) return;
+
+	container[leaf] = value;
+}
+
+function deleteNestedValue(
+	root: Record<string | number, unknown>,
+	path: ReadonlyArray<string | number>,
+): void {
+	let container: Record<string | number, unknown> = root;
+
+	for (let depth = 0; depth < path.length - 1; depth++) {
+		const key = path[depth];
+
+		if (key === undefined) return;
+
+		const existing = container[key];
+
+		if (existing === null || typeof existing !== "object") return;
+
+		container = existing as Record<string | number, unknown>;
+	}
+
+	const leaf = path[path.length - 1];
+
+	if (leaf === undefined) return;
+
+	Reflect.deleteProperty(container, leaf);
+}
+
+export function useGraphMutations(context: GraphContext): GraphMutations {
+	const contextRef = useRef(context);
+
+	contextRef.current = context;
+
+	return useMemo<GraphMutations>(() => {
+		function mutate(callback: (mutable: GraphDefinitionState) => void, transactionKey?: string): void {
+			const { graphDefinition } = contextRef.current;
+
+			graphDefinition.mutate(callback, transactionKey ? { transactionKey } : undefined);
+		}
+
+		function resolveAddVersion(packageName: string): string | null {
+			const { app } = contextRef.current;
+
+			const ready = app.packages.filter(
+				(entry) => entry.name === packageName && entry.origin === "catalog" && entry.status === "ready" && entry.version !== null,
+			);
+
+			if (ready.length === 0) return null;
+
+			const latest = ready.reduce((winner, candidate) =>
+				comparePackageVersions(candidate.version ?? "", winner.version ?? "") > 0 ? candidate : winner,
+			);
+
+			return latest.version;
+		}
+
+		function addNode(packageName: string, nodeName: string, position: Position): void {
+			const { positions, graphDefinition, app, logger } = contextRef.current;
+
+			const version = resolveAddVersion(packageName);
+
+			if (version === null) {
+				logger.error(`Cannot add node "${nodeName}": no installed version of ${packageName}`, undefined, { namespace: "graph" });
+
+				return;
+			}
+
+			const bagApiVersion = graphDefinition.apiVersion;
+			const packageEntry = app.packages.find((entry) => entry.name === packageName && entry.version === version);
+			const packageApiVersion = packageEntry?.apiVersion ?? null;
+
+			if (packageApiVersion !== null && packageApiVersion !== bagApiVersion) {
+				logger.error(
+					`Cannot add node "${nodeName}": package ${packageName}@${version} is on API version ${String(packageApiVersion)} but the bag is on API version ${String(bagApiVersion)}`,
+					undefined,
+					{ namespace: "graph" },
+				);
+
+				return;
+			}
+
+			const id = crypto.randomUUID();
+
+			const node: GraphNode = {
+				id,
+				packageName,
+				packageVersion: version,
+				nodeName,
+				parameters: {},
+			};
+
+			const transactionKey = crypto.randomUUID();
+
+			mutate((mutable) => {
+				mutable.nodes = [...mutable.nodes, node];
+			}, transactionKey);
+
+			positions.mutate(
+				(mutable) => {
+					mutable.positions[id] = { x: position.x, y: position.y };
+				},
+				{ transactionKey },
+			);
+		}
+
+		function removeNode(nodeId: string): void {
+			const transactionKey = crypto.randomUUID();
+
+			mutate((mutable) => {
+				mutable.nodes = mutable.nodes.filter((node) => node.id !== nodeId);
+				mutable.edges = mutable.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId);
+			}, transactionKey);
+
+			const { positions } = contextRef.current;
+
+			positions.mutate(
+				(mutable) => {
+					const { [nodeId]: _removedPosition, ...remainingPositions } = mutable.positions;
+
+					mutable.positions = remainingPositions;
+				},
+				{ transactionKey },
+			);
+		}
+
+		function addEdge(from: string, to: string): void {
+			mutate((mutable) => {
+				mutable.edges = [...mutable.edges, { from, to }];
+			});
+		}
+
+		function removeEdge(from: string, to: string): void {
+			mutate((mutable) => {
+				mutable.edges = mutable.edges.filter((edge) => !(edge.from === from && edge.to === to));
+			});
+		}
+
+		function insertNodeOnEdge(edge: GraphEdge, packageName: string, nodeName: string): void {
+			const { positions, logger } = contextRef.current;
+
+			const version = resolveAddVersion(packageName);
+
+			if (version === null) {
+				logger.error(`Cannot insert node "${nodeName}": no installed version of ${packageName}`, undefined, { namespace: "graph" });
+
+				return;
+			}
+
+			const id = crypto.randomUUID();
+
+			const node: GraphNode = {
+				id,
+				packageName,
+				packageVersion: version,
+				nodeName,
+				parameters: {},
+			};
+
+			const fromPosition = positions.positions[edge.from];
+			const toPosition = positions.positions[edge.to];
+			const position: Position = fromPosition && toPosition
+				? { x: (fromPosition.x + toPosition.x) / 2, y: (fromPosition.y + toPosition.y) / 2 }
+				: { x: 0, y: 0 };
+
+			const transactionKey = crypto.randomUUID();
+
+			mutate((mutable) => {
+				mutable.nodes = [...mutable.nodes, node];
+				mutable.edges = [
+					...mutable.edges.filter((graphEdge) => !(graphEdge.from === edge.from && graphEdge.to === edge.to)),
+					{ from: edge.from, to: id },
+					{ from: id, to: edge.to },
+				];
+			}, transactionKey);
+
+			positions.mutate(
+				(mutable) => {
+					mutable.positions[id] = { x: position.x, y: position.y };
+				},
+				{ transactionKey },
+			);
+		}
+
+		function toggleBypass(nodeId: string): void {
+			mutate((mutable) => {
+				const node = mutable.nodes.find((graphNode) => graphNode.id === nodeId);
+
+				if (!node) return;
+
+				const current = node.options?.bypass ?? false;
+
+				node.options = { ...node.options, bypass: !current };
+			});
+		}
+
+		function resetNodeParameters(nodeId: string): void {
+			const { graphDefinition } = contextRef.current;
+			const graphNode = graphDefinition.nodes.find((node) => node.id === nodeId);
+
+			if (!graphNode) return;
+
+			const { schema } = lookupNode(graphNode.packageName, graphNode.packageVersion, graphNode.nodeName, contextRef.current);
+			const defaults = buildDefaultParameters(schema);
+
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
+
+				if (!node) return;
+
+				node.parameters = defaults;
+			});
+		}
+
+		function setGraphName(name: string): void {
+			mutate((mutable) => {
+				mutable.name = name;
+			});
+		}
+
+		function setParameterAtPath(nodeId: string, path: ReadonlyArray<string | number>, value: unknown): void {
+			if (path.length === 0) return;
+
+			if (typeof path[0] !== "string") return;
+
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
+
+				if (!node) return;
+
+				node.parameters ??= {};
+
+				setNestedValue(node.parameters, path, value);
+			});
+		}
+
+		function deleteParameterAtPath(nodeId: string, path: ReadonlyArray<string | number>): void {
+			if (path.length === 0) return;
+
+			if (typeof path[0] !== "string") return;
+
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
+
+				if (!node?.parameters) return;
+
+				deleteNestedValue(node.parameters, path);
+			});
+		}
+
+		function addArrayRow(nodeId: string, paramName: string, defaultItem: Record<string, unknown>): void {
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
+
+				if (!node) return;
+
+				node.parameters ??= {};
+
+				const existing = node.parameters[paramName];
+				const rows = Array.isArray(existing) ? (existing as Array<unknown>) : [];
+
+				node.parameters[paramName] = [...rows, defaultItem];
+			});
+		}
+
+		function deleteArrayRow(nodeId: string, paramName: string, rowIndex: number): void {
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
+
+				if (!node?.parameters) return;
+
+				const existing = node.parameters[paramName];
+
+				if (!Array.isArray(existing)) return;
+
+				const rows = existing as Array<unknown>;
+
+				if (rowIndex < 0 || rowIndex >= rows.length) return;
+
+				node.parameters[paramName] = rows.filter((_, index) => index !== rowIndex);
+			});
+		}
+
+		function reorderArrayRows(nodeId: string, paramName: string, fromIndex: number, toIndex: number): void {
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
+
+				if (!node?.parameters) return;
+
+				const existing = node.parameters[paramName];
+
+				if (!Array.isArray(existing)) return;
+
+				const rows = [...(existing as Array<unknown>)];
+
+				if (fromIndex < 0 || fromIndex >= rows.length || toIndex < 0 || toIndex >= rows.length) return;
+
+				const [moved] = rows.splice(fromIndex, 1);
+
+				rows.splice(toIndex, 0, moved);
+				node.parameters[paramName] = rows;
+			});
+		}
+
+		return {
+			addNode,
+			removeNode,
+			addEdge,
+			removeEdge,
+			insertNodeOnEdge,
+			toggleBypass,
+			resetNodeParameters,
+			setGraphName,
+			setParameterAtPath,
+			deleteParameterAtPath,
+			addArrayRow,
+			deleteArrayRow,
+			reorderArrayRows,
+		};
+	}, []);
+}

@@ -1,5 +1,5 @@
-import { unregisterPackage } from "../../../models/NodeRegistry";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { unregisterPackage } from "../../../Models/NodeRegistry";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import {
 	UNLOAD_PACKAGE_NODES_ACTION,
 	type UnloadPackageNodesInput,

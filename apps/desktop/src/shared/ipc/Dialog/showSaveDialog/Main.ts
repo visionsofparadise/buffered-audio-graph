@@ -1,5 +1,5 @@
 import { dialog } from "electron";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import {
 	SHOW_SAVE_DIALOG_ACTION,
 	type ShowSaveDialogIpcParameters,

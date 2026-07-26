@@ -1,4 +1,4 @@
-import type { IpcHandlerAction, IpcHandlerParameters, IpcHandlerReturn } from "../models/AsyncRendererIpc";
+import type { IpcHandlerAction, IpcHandlerParameters, IpcHandlerReturn } from "../Models/AsyncRendererIpc";
 import { AbortJobRendererIpc } from "./Audio/abortJob/Renderer";
 import { RenderGraphRendererIpc } from "./Audio/renderGraph/Renderer";
 import { ShowOpenDialogRendererIpc } from "./Dialog/showOpenDialog/Renderer";

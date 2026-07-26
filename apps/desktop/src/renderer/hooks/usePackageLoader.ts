@@ -1,7 +1,7 @@
 import type { State } from "opshot";
 import { useEffect, useState } from "react";
-import type { Main } from "../models/Main";
-import type { AppState } from "../models/State/App";
+import type { Main } from "../Models/Main";
+import type { AppState } from "../Models/State/App";
 import { mutatePackageAt, runPackagePipeline } from "./packagePipeline";
 
 export function usePackageLoader(

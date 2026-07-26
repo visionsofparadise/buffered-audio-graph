@@ -1,5 +1,5 @@
 import { shell } from "electron";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { OPEN_PATH_ACTION, type OpenPathIpcParameters, type OpenPathIpcReturn } from "./Renderer";
 
 export class OpenPathMainIpc extends AsyncMainIpc<OpenPathIpcParameters, OpenPathIpcReturn> {

@@ -1,6 +1,7 @@
 import type { GraphDefinition } from "@buffered-audio/core";
-import { CURRENT_API_VERSION, SUPPORTED_API_VERSIONS } from "../../shared/models/ApiVersion";
-import type { Main } from "../models/Main";
+import { CURRENT_API_VERSION, SUPPORTED_API_VERSIONS } from "../../shared/Models/ApiVersion";
+import type { Main } from "../Models/Main";
+import { basename } from "./path";
 
 async function selectBag(main: Main, title: string): Promise<string | undefined> {
 	const result = await main.showOpenDialog({
@@ -61,7 +62,7 @@ export async function newBag(main: Main): Promise<{ bagPath: string; definition:
 
 	if (!bagPath) return undefined;
 
-	const fileName = bagPath.split(/[\\/]/).pop() ?? "Untitled";
+	const fileName = basename(bagPath) || "Untitled";
 	const name = fileName.replace(/\.bag$/i, "");
 
 	const definition: GraphDefinition = {

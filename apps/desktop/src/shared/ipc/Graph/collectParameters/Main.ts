@@ -1,5 +1,5 @@
 import { collectParameters } from "@buffered-audio/core";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { COLLECT_PARAMETERS_ACTION, type CollectParametersIpcParameters, type CollectParametersIpcReturn } from "./Renderer";
 
 export class CollectParametersMainIpc extends AsyncMainIpc<CollectParametersIpcParameters, CollectParametersIpcReturn> {

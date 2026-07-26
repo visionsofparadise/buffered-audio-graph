@@ -1,4 +1,4 @@
-import { AsyncRendererIpc } from "../../../models/AsyncRendererIpc";
+import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
 
 export type ReadDirectoryIpcParameters = [dirPath: string];
 export type ReadDirectoryIpcReturn = Array<string>;

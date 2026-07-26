@@ -1,4 +1,4 @@
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { WATCH_FILE_ACTION, type WatchFileIpcParameters, type WatchFileIpcReturn } from "./Renderer";
 
 export class WatchFileMainIpc extends AsyncMainIpc<WatchFileIpcParameters, WatchFileIpcReturn> {

@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { READ_DIRECTORY_ACTION, type ReadDirectoryIpcParameters, type ReadDirectoryIpcReturn } from "./Renderer";
 
 export class ReadDirectoryMainIpc extends AsyncMainIpc<ReadDirectoryIpcParameters, ReadDirectoryIpcReturn> {

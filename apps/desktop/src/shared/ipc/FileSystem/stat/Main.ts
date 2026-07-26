@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { STAT_ACTION, type StatIpcParameters, type StatIpcReturn } from "./Renderer";
 
 export class StatMainIpc extends AsyncMainIpc<StatIpcParameters, StatIpcReturn> {

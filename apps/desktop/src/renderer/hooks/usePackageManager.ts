@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { AppContext } from "../models/Context";
+import type { AppContext } from "../Models/Context";
 import {
 	ensurePackageState,
 	mutatePackageAt,

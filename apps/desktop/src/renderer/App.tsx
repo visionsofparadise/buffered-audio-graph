@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Logger } from "../shared/models/Logger";
-import { AppLoader } from "./components/Loader";
+import { Logger } from "../shared/Models/Logger";
+import { AppLoader } from "./Components/AppLoader";
 
 const logger = new Logger("renderer");
 

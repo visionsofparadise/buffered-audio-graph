@@ -1,4 +1,4 @@
-import { AsyncRendererIpc } from "../../../models/AsyncRendererIpc";
+import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
 import type { FileFilter } from "../showOpenDialog/Renderer";
 
 export interface ShowSaveDialogOptions {

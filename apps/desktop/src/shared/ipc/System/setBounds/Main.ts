@@ -1,4 +1,4 @@
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import type { BoundsRect } from "./Renderer";
 import { SET_BOUNDS_ACTION, type SetBoundsIpcParameters, type SetBoundsIpcReturn } from "./Renderer";
 

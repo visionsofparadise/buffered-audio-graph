@@ -1,4 +1,4 @@
-import { AsyncRendererIpc } from "../../../models/AsyncRendererIpc";
+import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
 
 export type Vst3GetDefaultScanRootsIpcParameters = [];
 export type Vst3GetDefaultScanRootsIpcReturn = Array<string>;

@@ -1,4 +1,4 @@
-import { AsyncRendererIpc } from "../../../models/AsyncRendererIpc";
+import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
 
 export type EnsureDirectoryIpcParameters = [path: string];
 export type EnsureDirectoryIpcReturn = undefined;

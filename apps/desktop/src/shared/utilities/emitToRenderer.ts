@@ -31,8 +31,6 @@ export interface MainEventMap {
 	"vst3:editorEvent": [payload: Vst3EditorEventPayload];
 }
 
-export interface RendererEventMap {}
-
 export const emitToRenderer = <K extends keyof MainEventMap>(
 	browserWindow: BrowserWindow,
 	channel: K,

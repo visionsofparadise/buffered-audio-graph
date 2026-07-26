@@ -1,21 +1,19 @@
 import type { State } from "opshot";
 import { useCallback, useEffect, useRef } from "react";
-import { SUPPORTED_API_VERSIONS } from "../../shared/models/ApiVersion";
+import { SUPPORTED_API_VERSIONS } from "../../shared/Models/ApiVersion";
 import type { FileChangedPayload } from "../../shared/utilities/emitToRenderer";
-import type { AppContext } from "../models/Context";
-import type { GraphMeta } from "../models/History";
+import type { AppContext } from "../Models/Context";
+import type { GraphMeta } from "../Models/History";
 import {
 	loadGraphDefinition,
 	serializeGraphDefinition,
 	type GraphDefinitionState,
-} from "../models/State/GraphDefinition";
+} from "../Models/State/GraphDefinition";
 import { ensureGraphPackagesInstalled } from "./packagePipeline";
 
-/** Disk-write debounce window for autosave (ms). */
 const SAVE_DEBOUNCE_MS = 800;
 
 interface UseGraphDefinitionResult {
-	/** Force an immediate save of the pending debounced edit to disk. */
 	readonly flushDefinition: () => void;
 }
 
@@ -151,10 +149,6 @@ export function useGraphDefinition(
 						{ external: true },
 					);
 
-					// External-reconcile is a definition-ingress path: satisfy the
-					// reconciled nodes' dependency pins, gated by the auto-install
-					// toggle. Non-blocking (the render gate covers the interim);
-					// errors are logged.
 					const { app, logger } = contextRef.current;
 
 					if (app.installBagPackagesAutomatically) {
@@ -165,8 +159,7 @@ export function useGraphDefinition(
 						});
 					}
 				} catch {
-					// External edit produced invalid JSON or schema; let the
-					// next valid write reconcile.
+					// empty: invalid external edit; next valid write reconciles
 				}
 			})();
 		};

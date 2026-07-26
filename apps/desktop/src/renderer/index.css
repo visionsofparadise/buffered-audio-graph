@@ -67,6 +67,65 @@
   * { scrollbar-width: thin; scrollbar-color: var(--color-dimmed) var(--color-border); }
 }
 
+@layer components {
+  .react-flow {
+    --xy-background-color: var(--color-surface);
+    --xy-node-border-radius: 2px;
+    --xy-node-boxshadow-default: none;
+    --xy-node-boxshadow-hover: none;
+    --xy-node-boxshadow-selected: none;
+    --xy-minimap-background: var(--color-elevated);
+    --xy-minimap-mask-background: var(--color-surface);
+    --xy-controls-button-background: var(--color-elevated);
+    --xy-controls-button-color: var(--color-text-secondary);
+    --xy-controls-button-border-color: transparent;
+    --xy-edge-stroke-default: var(--color-border);
+    --xy-handle-background: var(--color-text-secondary);
+    --xy-handle-border-color: transparent;
+    --xy-selection-background: var(--color-elevated);
+    --xy-selection-border: none;
+  }
+
+  .react-flow .react-flow__controls {
+    border: none;
+    border-radius: 2px;
+    box-shadow: none;
+    background: var(--color-elevated);
+  }
+
+  .react-flow .react-flow__controls button {
+    background: var(--color-elevated);
+    border: none;
+    border-radius: 0;
+    width: 28px;
+    height: 28px;
+    padding: 4px;
+  }
+
+  .react-flow .react-flow__controls button:hover {
+    background: var(--color-text-primary);
+  }
+
+  .react-flow .react-flow__controls svg {
+    fill: var(--color-text-secondary);
+  }
+
+  .react-flow .react-flow__node {
+    border-radius: 2px;
+    box-shadow: none;
+    padding: 0;
+    cursor: default;
+  }
+
+  .react-flow .react-flow__node.dragging {
+    cursor: grabbing;
+  }
+
+  .react-flow .react-flow__attribution {
+    display: none;
+  }
+}
+
 @utility type-display {
   font-family: var(--font-mono);
   font-size: var(--text-display);
@@ -89,4 +148,25 @@
   font-family: var(--font-mono);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+}
+
+@utility app-drag {
+  -webkit-app-region: drag;
+}
+
+@utility app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+@utility writing-vertical-rl {
+  writing-mode: vertical-rl;
+}
+
+@utility clip-arrow {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+@utility knob-arc {
+  stroke-width: 3;
+  stroke-linecap: round;
 }

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Logger } from "../../shared/models/Logger";
+import type { Logger } from "../../shared/Models/Logger";
 
 export interface WalkModule {
 	readonly modulePath: string;

@@ -1,4 +1,4 @@
-import { AsyncRendererIpc } from "../../../models/AsyncRendererIpc";
+import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
 
 /** A single property from Zod v4's toJSONSchema() output. Meta fields from .meta() are flattened to the top level. */
 export interface NodeJsonSchemaProperty {

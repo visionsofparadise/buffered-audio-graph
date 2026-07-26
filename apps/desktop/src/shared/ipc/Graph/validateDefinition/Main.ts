@@ -1,5 +1,5 @@
 import { validateGraphDefinition } from "@buffered-audio/core";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { VALIDATE_GRAPH_DEFINITION_ACTION, type ValidateGraphDefinitionIpcParameters, type ValidateGraphDefinitionIpcReturn } from "./Renderer";
 
 export class ValidateGraphDefinitionMainIpc extends AsyncMainIpc<ValidateGraphDefinitionIpcParameters, ValidateGraphDefinitionIpcReturn> {

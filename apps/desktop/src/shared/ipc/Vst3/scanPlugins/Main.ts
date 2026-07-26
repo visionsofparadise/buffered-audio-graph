@@ -1,4 +1,4 @@
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { VST3_SCAN_PLUGINS_ACTION, type Vst3ScanPluginsIpcParameters, type Vst3ScanPluginsIpcReturn } from "./Renderer";
 
 export class Vst3ScanPluginsMainIpc extends AsyncMainIpc<Vst3ScanPluginsIpcParameters, Vst3ScanPluginsIpcReturn> {

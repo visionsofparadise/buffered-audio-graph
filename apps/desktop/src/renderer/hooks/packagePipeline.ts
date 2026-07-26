@@ -1,8 +1,8 @@
 import type { GraphDefinition } from "@buffered-audio/core";
 import type { Snapshot, State } from "opshot";
 import { packageNameFromSpec, packageSpecFromNameAndVersion } from "../../shared/utilities/packageSpec";
-import type { Main } from "../models/Main";
-import type { AppState, NodePackageState } from "../models/State/App";
+import type { Main } from "../Models/Main";
+import type { AppState, NodePackageState } from "../Models/State/App";
 
 export function comparePackageVersions(left: string, right: string): number {
 	return left.localeCompare(right, undefined, {

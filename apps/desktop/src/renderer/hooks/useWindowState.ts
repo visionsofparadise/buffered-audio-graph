@@ -1,8 +1,8 @@
 import type { State } from "opshot";
 import { useEffect } from "react";
-import type { Main } from "../models/Main";
-import type { MainEvents } from "../models/MainEvents";
-import type { AppState, WindowBounds } from "../models/State/App";
+import type { Main } from "../Models/Main";
+import type { MainEvents } from "../Models/MainEvents";
+import type { AppState, WindowBounds } from "../Models/State/App";
 
 export function useWindowState(app: State<AppState>, main: Main, mainEvents: MainEvents): void {
 	useEffect(() => {

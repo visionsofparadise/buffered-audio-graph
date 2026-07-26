@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { VST3_GET_DEFAULT_SCAN_ROOTS_ACTION, type Vst3GetDefaultScanRootsIpcParameters, type Vst3GetDefaultScanRootsIpcReturn } from "./Renderer";
 
 export class Vst3GetDefaultScanRootsMainIpc extends AsyncMainIpc<Vst3GetDefaultScanRootsIpcParameters, Vst3GetDefaultScanRootsIpcReturn> {

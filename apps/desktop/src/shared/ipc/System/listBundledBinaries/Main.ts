@@ -1,4 +1,4 @@
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { listBundledBinaryFiles } from "../../../../main/bundledBinaries";
 import { LIST_BUNDLED_BINARIES_ACTION, type ListBundledBinariesIpcParameters, type ListBundledBinariesIpcReturn } from "./Renderer";
 

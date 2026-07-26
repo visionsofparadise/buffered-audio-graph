@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { z } from "zod";
-import type { Logger } from "../../shared/models/Logger";
+import type { Logger } from "../../shared/Models/Logger";
 
 const cacheRecordSchema = z.union([
 	z.object({

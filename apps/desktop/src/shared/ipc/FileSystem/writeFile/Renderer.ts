@@ -1,4 +1,4 @@
-import { AsyncRendererIpc } from "../../../models/AsyncRendererIpc";
+import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
 
 export type WriteFileIpcParameters = [filePath: string, content: string];
 export type WriteFileIpcReturn = undefined;

@@ -3,9 +3,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app } from "electron";
 import { toJSONSchema } from "zod";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
-import { SUPPORTED_API_VERSIONS } from "../../../models/ApiVersion";
-import { registerPackage, type NodeClass } from "../../../models/NodeRegistry";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
+import { SUPPORTED_API_VERSIONS } from "../../../Models/ApiVersion";
+import { registerPackage, type NodeClass } from "../../../Models/NodeRegistry";
 import {
 	ENSURE_PACKAGE_ACTION,
 	type EnsurePackageInput,

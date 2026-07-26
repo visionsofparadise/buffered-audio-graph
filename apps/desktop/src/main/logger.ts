@@ -1,4 +1,4 @@
-import { Logger } from "../shared/models/Logger";
+import { Logger } from "../shared/Models/Logger";
 
 export const logger = new Logger("main");
 

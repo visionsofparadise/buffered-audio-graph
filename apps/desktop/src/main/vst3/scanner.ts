@@ -1,4 +1,4 @@
-import type { Logger } from "../../shared/models/Logger";
+import type { Logger } from "../../shared/Models/Logger";
 import type { Vst3ScanEntry } from "../../shared/ipc/Vst3/Vst3ScanEntry";
 import { isCacheHit, readCache, statModule, writeCache, type CacheRecord, type ModuleStat, type ScanCache } from "./cache";
 import { deriveErrorEntry, derivePendingEntry, deriveReadyEntries } from "./entries";

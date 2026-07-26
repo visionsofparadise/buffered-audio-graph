@@ -1,5 +1,5 @@
 import { screen } from "electron";
-import { AsyncMainIpc } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc } from "../../../Models/AsyncMainIpc";
 import { GET_ALL_DISPLAYS_ACTION, type GetAllDisplaysIpcParameters, type GetAllDisplaysIpcReturn } from "./Renderer";
 
 export class GetAllDisplaysMainIpc extends AsyncMainIpc<GetAllDisplaysIpcParameters, GetAllDisplaysIpcReturn> {

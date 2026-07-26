@@ -1,4 +1,4 @@
-import { AsyncRendererIpc } from "../../../models/AsyncRendererIpc";
+import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
 
 export type ReadFileChunkIpcParameters = [path: string, offset: number, length: number];
 export type ReadFileChunkIpcReturn = Uint8Array;

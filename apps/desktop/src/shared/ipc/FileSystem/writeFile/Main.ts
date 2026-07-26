@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { WRITE_FILE_ACTION, type WriteFileIpcParameters, type WriteFileIpcReturn } from "./Renderer";
 
 export class WriteFileMainIpc extends AsyncMainIpc<WriteFileIpcParameters, WriteFileIpcReturn> {

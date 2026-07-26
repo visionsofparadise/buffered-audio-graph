@@ -1,4 +1,4 @@
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../models/AsyncMainIpc";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { ABORT_JOB_ACTION, type AbortJobIpcParameters, type AbortJobIpcReturn } from "./Renderer";
 
 export class AbortJobMainIpc extends AsyncMainIpc<AbortJobIpcParameters, AbortJobIpcReturn> {

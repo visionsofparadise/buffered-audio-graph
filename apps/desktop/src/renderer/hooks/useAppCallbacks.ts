@@ -1,11 +1,12 @@
 import type { State } from "opshot";
 import { useTrackedState } from "opshot/react";
 import { useCallback } from "react";
-import type { Logger } from "../../shared/models/Logger";
-import type { TabNamesState } from "../models/Context";
-import type { Main } from "../models/Main";
-import type { AppState } from "../models/State/App";
+import type { Logger } from "../../shared/Models/Logger";
+import type { TabNamesState } from "../Models/Context";
+import type { Main } from "../Models/Main";
+import type { AppState } from "../Models/State/App";
 import { loadBag, newBag, openBag, saveBagDefinition } from "../utils/bagOperations";
+import { comparePackageVersions } from "./packagePipeline";
 
 interface UseAppCallbacksReturn {
 	readonly tabNames: State<TabNamesState>;
@@ -74,7 +75,7 @@ export function useAppCallbacks(
 
 		if (readyBufferedAudioNodes.length > 0) {
 			const latest = readyBufferedAudioNodes.reduce((winner, candidate) =>
-				(candidate.version ?? "").localeCompare(winner.version ?? "", undefined, { numeric: true, sensitivity: "base" }) > 0 ? candidate : winner,
+				comparePackageVersions(candidate.version ?? "", winner.version ?? "") > 0 ? candidate : winner,
 			);
 
 			if (latest.apiVersion !== null && latest.apiVersion !== result.definition.apiVersion) {
