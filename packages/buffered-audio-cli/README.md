@@ -4,13 +4,13 @@ Render `.bag` graph definition files from the command line. The `bag` binary res
 
 ## Install
 
-```
+```bash
 npm i -g @buffered-audio/cli
 ```
 
 ## Usage
 
-```
+```bash
 bag --version
 bag render graph.bag
 ```

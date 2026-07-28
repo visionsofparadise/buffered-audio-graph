@@ -1,10 +1,10 @@
-import type { BufferedAudioNode, NodeRegistry } from "@buffered-audio/core";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { BufferedAudioNode, NodeRegistry } from "@buffered-audio/core";
 
 type NodeConstructor = new (options?: Record<string, unknown>) => BufferedAudioNode;
 
@@ -32,7 +32,9 @@ function readManifest(packageDir: string): PackageManifest {
 
 function collectExportEntries(exportsValue: PackageExports): Array<string> {
 	if (!exportsValue) return [];
+
 	if (typeof exportsValue === "string") return [exportsValue];
+
 	if (Array.isArray(exportsValue)) return exportsValue.flatMap((value) => collectExportEntries(value));
 
 	const preferredKeys = ["import", "default", "require", "node"];
@@ -97,6 +99,7 @@ async function loadPacote(): Promise<PacoteApi> {
 	const pacoteModule = (await import("pacote")) as PacoteApi | { default?: PacoteApi };
 
 	if ("extract" in pacoteModule) return pacoteModule;
+
 	if (!pacoteModule.default) throw new Error("Failed to load pacote");
 
 	return pacoteModule.default;

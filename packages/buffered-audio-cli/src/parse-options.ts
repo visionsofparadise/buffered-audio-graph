@@ -10,6 +10,7 @@ export function parseParams(entries: ReadonlyArray<string>): Record<string, stri
 		const value = entry.slice(separatorIndex + 1);
 
 		if (name === "") throw new Error(`--param name must not be empty, got "${entry}"`);
+
 		if (parameters.has(name)) throw new Error(`--param ${name} given more than once`);
 
 		parameters.set(name, value);
@@ -30,7 +31,9 @@ export function parseResolveOverrides(entries: ReadonlyArray<string>): Map<strin
 		const path = entry.slice(separatorIndex + 1);
 
 		if (name === "") throw new Error(`--resolve name must not be empty, got "${entry}"`);
+
 		if (path === "") throw new Error(`--resolve path must not be empty, got "${entry}"`);
+
 		if (overrides.has(name)) throw new Error(`--resolve ${name} given more than once`);
 
 		overrides.set(name, path);

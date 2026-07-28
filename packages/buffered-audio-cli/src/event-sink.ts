@@ -72,6 +72,7 @@ export function subscribeRenderEvents(events: RenderEvents, getSourceLabel: () =
 
 export function createEventSink(write: EventWriter = (text) => process.stdout.write(text)): {
 	subscribe(job: RenderJob): void;
+
 	printSummary(jobs: ReadonlyArray<RenderJob>): void;
 } {
 	const totals = new Map<number, { label: string; framesDone: number; processingMs?: number }>();

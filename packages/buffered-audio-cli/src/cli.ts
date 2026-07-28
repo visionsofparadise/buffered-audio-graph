@@ -1,7 +1,7 @@
-import { createRenderJobs, validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
-import { Command } from "commander";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createRenderJobs, validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
+import { Command } from "commander";
 import packageJson from "../package.json";
 import { createEventSink } from "./event-sink";
 import { parseParams, parseResolveOverrides } from "./parse-options";
