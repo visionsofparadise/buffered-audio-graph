@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { glob } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { format, resolveConfig } from "prettier";
 import { zodToRows, type Row } from "./zod-rows";
 import type { z } from "zod";
 
@@ -144,8 +145,10 @@ async function main(): Promise<void> {
 	const generatedBlock = renderNodesBlock(nodes);
 	const readme = await readFile(README_PATH, "utf8");
 	const next = replaceNodesSection(readme, generatedBlock);
+	const options = await resolveConfig(README_PATH);
+	const formatted = await format(next, { ...options, filepath: README_PATH });
 
-	await writeFile(README_PATH, next, "utf8");
+	await writeFile(README_PATH, formatted, "utf8");
 
 	process.stdout.write(`Generated docs for ${String(nodes.length)} nodes\n`);
 }
