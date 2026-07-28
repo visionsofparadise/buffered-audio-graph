@@ -1,7 +1,50 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- typed-array access in test assertions */
-import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { applyNlmSmoothing, type NlmParams } from "@buffered-audio/utils";
 import { createNlmWorkerPool } from "./nlm-worker-pool";
+
+const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+
+let buildParent = "";
+let buildDir: string;
+let workerUrl: URL;
+
+beforeAll(() => {
+	buildParent = join(packageRoot, "node_modules", ".nlm-worker-test");
+
+	mkdirSync(buildParent, { recursive: true });
+
+	buildDir = mkdtempSync(join(buildParent, "build-"));
+
+	const tsupCli = createRequire(import.meta.url).resolve("tsup/dist/cli-default.js");
+	const build = spawnSync(process.execPath, [tsupCli, "--out-dir", buildDir], {
+		cwd: packageRoot,
+		encoding: "utf-8",
+	});
+
+	if (build.status !== 0) {
+		throw new Error(
+			`Building the NLM worker under test failed (exit ${String(build.status)}): ${build.error?.message ?? ""}\n${build.stderr}`,
+		);
+	}
+
+	const workerPath = join(buildDir, "nlm-worker.js");
+
+	if (!existsSync(workerPath)) {
+		throw new Error(`Building the NLM worker under test produced no ${workerPath}`);
+	}
+
+	workerUrl = pathToFileURL(workerPath);
+}, 180_000);
+
+afterAll(() => {
+	if (buildParent) rmSync(buildParent, { recursive: true, force: true });
+});
 
 function mulberry32(seed: number): () => number {
 	let state = seed >>> 0;
@@ -46,7 +89,6 @@ describe("nlm worker pool parity", () => {
 
 		const output = new Float32Array(new SharedArrayBuffer(length * 4));
 
-		const workerUrl = new URL("../../../dist/nlm-worker.js", import.meta.url);
 		const pool = createNlmWorkerPool(4, workerUrl);
 
 		expect(pool.mode).toBe("worker");

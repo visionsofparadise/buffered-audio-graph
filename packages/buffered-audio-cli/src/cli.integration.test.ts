@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -8,9 +9,43 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import packageJson from "../package.json";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const cliPath = join(here, "..", "dist", "cli.js");
+const packageRoot = join(here, "..");
 const nodesDir = join(here, "..", "..", "buffered-audio-nodes");
 const nodesVersion = "0.21.0";
+
+let buildParent = "";
+let buildDir: string;
+let cliPath: string;
+
+beforeAll(() => {
+	buildParent = join(packageRoot, "node_modules", ".bag-cli-test");
+
+	mkdirSync(buildParent, { recursive: true });
+
+	buildDir = mkdtempSync(join(buildParent, "build-"));
+
+	const tsupCli = createRequire(import.meta.url).resolve("tsup/dist/cli-default.js");
+	const build = spawnSync(process.execPath, [tsupCli, "--out-dir", buildDir], {
+		cwd: packageRoot,
+		encoding: "utf-8",
+	});
+
+	if (build.status !== 0) {
+		throw new Error(
+			`Building the CLI under test failed (exit ${String(build.status)}): ${build.error?.message ?? ""}\n${build.stderr}`,
+		);
+	}
+
+	cliPath = join(buildDir, "cli.js");
+
+	if (!existsSync(cliPath)) {
+		throw new Error(`Building the CLI under test produced no ${cliPath}`);
+	}
+}, 120_000);
+
+afterAll(() => {
+	if (buildParent) rmSync(buildParent, { recursive: true, force: true });
+});
 
 describe("bag --version", () => {
 	it("prints the package version", () => {
