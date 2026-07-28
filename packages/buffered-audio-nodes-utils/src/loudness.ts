@@ -15,6 +15,19 @@ const FILE_LRA_TAIL_SECONDS = 1.5;
 const FILE_LRA_TAIL_CHUNK_FRAMES = 8192;
 const POWER_FLOOR = 1e-10;
 
+function pushKWeighted(
+	kw: KWeightedSquaredSum,
+	outputBuffer: Float64Array,
+	channels: ReadonlyArray<Float32Array>,
+	frames: number,
+): Float64Array {
+	const output = outputBuffer.length < frames ? new Float64Array(frames) : outputBuffer;
+
+	kw.push(channels, frames, output);
+
+	return output;
+}
+
 function applyBs1770Gating(closedBlockSums: ReadonlyArray<number>, blockSize: number): number {
 	const blockCount = closedBlockSums.length;
 
@@ -99,11 +112,7 @@ export class IntegratedLufsAccumulator {
 
 		if (frames <= 0) return;
 
-		if (this.outputBuffer.length < frames) {
-			this.outputBuffer = new Float64Array(frames);
-		}
-
-		this.kw.push(channels, frames, this.outputBuffer);
+		this.outputBuffer = pushKWeighted(this.kw, this.outputBuffer, channels, frames);
 		this.blocks.push(this.outputBuffer, frames);
 	}
 
@@ -167,11 +176,7 @@ export class LoudnessAccumulator {
 
 		if (frames <= 0) return;
 
-		if (this.outputBuffer.length < frames) {
-			this.outputBuffer = new Float64Array(frames);
-		}
-
-		this.kw.push(channels, frames, this.outputBuffer);
+		this.outputBuffer = pushKWeighted(this.kw, this.outputBuffer, channels, frames);
 		this.blocks400.push(this.outputBuffer, frames);
 		this.blocks3s.push(this.outputBuffer, frames);
 		this.sourceFrames += frames;
@@ -194,9 +199,7 @@ export class LoudnessAccumulator {
 		while (remainingTailFrames > 0) {
 			const frames = Math.min(remainingTailFrames, tailChunkFrames);
 
-			if (this.outputBuffer.length < frames) this.outputBuffer = new Float64Array(frames);
-
-			this.kw.push(zeroChannels, frames, this.outputBuffer);
+			this.outputBuffer = pushKWeighted(this.kw, this.outputBuffer, zeroChannels, frames);
 			this.blocks3s.push(this.outputBuffer, frames);
 			remainingTailFrames -= frames;
 		}

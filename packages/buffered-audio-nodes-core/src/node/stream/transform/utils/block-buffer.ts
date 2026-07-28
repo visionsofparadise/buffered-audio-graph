@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { awaitStreamClose } from "./await-stream-close";
 import { buildBlock, deinterleave, pullBytes } from "./block-io";
+import { iterateBlocks } from "./iterate-blocks";
 import { ReverseBlockReader } from "./reverse-block-reader";
 import type { Block } from "../../block";
 
@@ -140,14 +141,8 @@ export class BlockBuffer {
 		return buildBlock(out, startFrame, this._sampleRate, this._bitDepth);
 	}
 
-	async *iterate(frames: number): AsyncIterableIterator<Block> {
-		for (;;) {
-			const block = await this.read(frames);
-
-			if ((block.samples[0]?.length ?? 0) === 0) return;
-
-			yield block;
-		}
+	iterate(frames: number): AsyncIterableIterator<Block> {
+		return iterateBlocks(this, frames);
 	}
 
 	async reset(): Promise<void> {
@@ -174,19 +169,8 @@ export class BlockBuffer {
 	}
 
 	async close(): Promise<void> {
-		await this.endWriteStream();
-		await this.endReadStream();
-		await this.closeReverseReaders();
+		await this.clear();
 
-		if (this.tempPath) {
-			await unlink(this.tempPath).catch(() => undefined);
-
-			this.tempPath = undefined;
-		}
-
-		this.tempFileExists = false;
-		this.writePositionByte = 0;
-		this._frames = 0;
 		this._channels = 0;
 	}
 

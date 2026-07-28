@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { mutatePackageAt, runPackagePipeline } from "./packagePipeline";
+import { recordPackageError, runPackagePipeline } from "./packagePipeline";
 import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
 import type { State } from "opshot";
@@ -31,10 +31,7 @@ export function usePackageLoader(app: State<AppState>, main: Main): { isLoading:
 				try {
 					await runPackagePipeline(entry, index, app, main);
 				} catch (error) {
-					mutatePackageAt(app, index, (target) => {
-						target.status = "error";
-						target.error = error instanceof Error ? error.message : String(error);
-					});
+					recordPackageError(app, index, error);
 				}
 			}
 

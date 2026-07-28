@@ -3,6 +3,7 @@
 
 import { TruePeakUpsampler } from "@buffered-audio/utils";
 import { LATTICE_ORDER } from "./lattice";
+import { argmaxMagnitude } from "./magnitude";
 
 export const GROUP_DELAY_CEILING_MS = 4.0;
 
@@ -75,23 +76,13 @@ export function truePeakPower4x(
 
 		const transformed = applyWindowAtScale(channelWindow, reflectionRow, scale, order);
 		const upsampler = new TruePeakUpsampler(4);
-		const upsampled = upsampler.upsample(transformed);
+		const upsampledPeak = argmaxMagnitude(upsampler.upsample(transformed));
 
-		for (let index = 0; index < upsampled.length; index++) {
-			const value = upsampled[index] ?? 0;
-			const magnitude = value < 0 ? -value : value;
+		if (upsampledPeak.magnitude > maxAbs) maxAbs = upsampledPeak.magnitude;
 
-			if (magnitude > maxAbs) maxAbs = magnitude;
-		}
+		const tailPeak = argmaxMagnitude(upsampler.flush());
 
-		const tail = upsampler.flush();
-
-		for (let index = 0; index < tail.length; index++) {
-			const value = tail[index] ?? 0;
-			const magnitude = value < 0 ? -value : value;
-
-			if (magnitude > maxAbs) maxAbs = magnitude;
-		}
+		if (tailPeak.magnitude > maxAbs) maxAbs = tailPeak.magnitude;
 	}
 
 	// eslint-disable-next-line comment-rules/no-restricted-comments

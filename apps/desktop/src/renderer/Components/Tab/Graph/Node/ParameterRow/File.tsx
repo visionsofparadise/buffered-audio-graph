@@ -1,9 +1,9 @@
 import { ExternalLink } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { cn } from "../../../../../utils/cn";
+import { useEffect, useState } from "react";
 import { FileInput } from "../../../../UI/FileInput";
 import { IconButton } from "../../../../UI/IconButton";
-import { FieldLabel } from "./FieldLabel";
+import { FieldRow } from "./FieldRow";
+import { useCommittedText } from "./hooks/useCommittedText";
 
 export interface FileParameter {
 	readonly kind: "file";
@@ -33,21 +33,12 @@ export function FileRow({
 	readonly statFile?: (value: string) => Promise<boolean>;
 	readonly renderEpoch?: number;
 }) {
-	const [local, setLocal] = useState(param.value);
-	const localRef = useRef(param.value);
+	const text = useCommittedText(
+		param.value,
+		onParameterChange ? (next) => onParameterChange(param.name, next) : undefined,
+	);
 
-	useEffect(() => {
-		localRef.current = param.value;
-		setLocal(param.value);
-	}, [param.value]);
-
-	const complete = param.value !== "";
-	const controlDisabled = param.optional && !param.defined;
 	const isSaveMode = param.mode === "save";
-	const setDefinedHandler =
-		onParameterChange || onParameterUnset
-			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-			: undefined;
 
 	const [openEnabled, setOpenEnabled] = useState(false);
 
@@ -73,56 +64,31 @@ export function FileRow({
 		};
 	}, [isSaveMode, statFile, param.value, renderEpoch]);
 
-	const updateLocal = (next: string): void => {
-		localRef.current = next;
-		setLocal(next);
-	};
-
-	const commit = (): void => {
-		const next = localRef.current;
-
-		if (next === param.value) return;
-
-		onParameterChange?.(param.name, next);
-	};
-
 	return (
-		<div className={cn("flex flex-col", dimmed && "opacity-40")}>
-			<FieldLabel
-				name={param.name}
-				optional={param.optional}
-				defined={param.defined}
-				complete={complete}
-				onSetDefined={setDefinedHandler}
+		<FieldRow
+			param={param}
+			dimmed={dimmed}
+			complete={param.value !== ""}
+			className="flex flex-col"
+			controlClassName="mt-1 flex items-center gap-1"
+			onParameterChange={onParameterChange}
+			onParameterUnset={onParameterUnset}
+		>
+			<FileInput
+				className="flex-1"
+				{...text}
+				placeholder="No file selected"
+				onBrowse={onParameterBrowse ? () => onParameterBrowse(param.name) : undefined}
 			/>
-			<div className={cn("mt-1 flex items-center gap-1", controlDisabled && "pointer-events-none opacity-40")}>
-				<FileInput
-					className="flex-1"
-					value={local}
-					placeholder="No file selected"
-					onChange={onParameterChange ? updateLocal : undefined}
-					onBlur={onParameterChange ? commit : undefined}
-					onKeyDown={
-						onParameterChange
-							? (event) => {
-									if (event.key === "Enter") {
-										event.currentTarget.blur();
-									}
-								}
-							: undefined
-					}
-					onBrowse={onParameterBrowse ? () => onParameterBrowse(param.name) : undefined}
+			{isSaveMode && openEnabled && onOpen && (
+				<IconButton
+					icon={ExternalLink}
+					label="Open output"
+					variant="ghost"
+					size="md"
+					onClick={() => onOpen(param.value)}
 				/>
-				{isSaveMode && openEnabled && onOpen && (
-					<IconButton
-						icon={ExternalLink}
-						label="Open output"
-						variant="ghost"
-						size="md"
-						onClick={() => onOpen(param.value)}
-					/>
-				)}
-			</div>
-		</div>
+			)}
+		</FieldRow>
 	);
 }

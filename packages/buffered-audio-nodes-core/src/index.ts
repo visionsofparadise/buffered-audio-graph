@@ -50,4 +50,5 @@ export { collectParameters, substituteParameters } from "./graph/substitute-para
 export { unpack } from "./graph/unpack";
 
 export { windowedIterate, type WindowedIterateOptions } from "./node/stream/transform/utils/windowed-iterate";
+export { collectPackageEntryCandidates, type PackageEntryManifest, type PackageExports } from "./utils/package-entry";
 export { teeReadable } from "./utils/tee-readable";

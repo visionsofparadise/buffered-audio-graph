@@ -1,44 +1,19 @@
-import { BufferedStream, type StreamSetupContext } from "..";
-import { toReadable } from "../../../utils/to-readable";
 import { createProgressGate, type ProgressGate } from "../utils/progress-gate";
+import { InstrumentedTransformStream } from "./instrumented-transform";
 import type { BufferedAudioNode } from "../..";
 import type { TransformNodeProperties } from "../../transform";
 import type { Block } from "../block";
 
 export abstract class UnbufferedTransformStream<
 	N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>,
-> extends BufferedStream<N> {
-	private framesBuffered = 0;
-	private framesEmitted = 0;
-	private hasStarted = false;
-	private sourceTotalFrames?: number;
-
-	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
-		this.sourceTotalFrames = context.sourceTotalFrames;
-
-		await this._setup(context);
-
-		return this._pipe(input);
-	}
-
-	_setup(_context: StreamSetupContext): Promise<void> | void {
-		return;
-	}
-
-	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		return toReadable(this.blocks(input));
-	}
-
-	private async *blocks(input: ReadableStream<Block>): AsyncGenerator<Block> {
+> extends InstrumentedTransformStream<N> {
+	protected async *blocks(input: ReadableStream<Block>): AsyncGenerator<Block> {
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
 
 		try {
 			for await (const block of input) {
-				if (!this.hasStarted) {
-					this.hasStarted = true;
-					this.emitStarted();
-				}
+				this.markStarted();
 
 				this.framesBuffered += block.samples[0]?.length ?? 0;
 
@@ -56,9 +31,7 @@ export abstract class UnbufferedTransformStream<
 
 			yield* this.emitted(timed, emitGate);
 
-			this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
-			this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
+			this.emitCompletion();
 		} finally {
 			await this.destroy();
 		}
@@ -76,8 +49,4 @@ export abstract class UnbufferedTransformStream<
 	}
 
 	abstract _transform(block: Block): AsyncIterable<Block> | Iterable<Block>;
-
-	_flush(): AsyncIterable<Block> | Iterable<Block> {
-		return [];
-	}
 }

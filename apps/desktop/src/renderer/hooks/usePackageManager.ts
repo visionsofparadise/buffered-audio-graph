@@ -1,5 +1,12 @@
 import { useCallback } from "react";
-import { ensurePackageState, mutatePackageAt, packageInstallDirectory, runPackagePipeline } from "./packagePipeline";
+import {
+	ensurePackageState,
+	findPackageEntry,
+	mutatePackageAt,
+	packageInstallDirectory,
+	recordPackageError,
+	runPackagePipeline,
+} from "./packagePipeline";
 import type { AppContext } from "../Models/Context";
 
 export interface PackageManager {
@@ -29,10 +36,7 @@ export function usePackageManager(context: AppContext): PackageManager {
 			try {
 				await runPackagePipeline(entry, index, app, main);
 			} catch (error) {
-				mutatePackageAt(app, index, (target) => {
-					target.status = "error";
-					target.error = error instanceof Error ? error.message : String(error);
-				});
+				recordPackageError(app, index, error);
 			}
 		},
 		[app, main],
@@ -40,15 +44,15 @@ export function usePackageManager(context: AppContext): PackageManager {
 
 	const removePackage = useCallback(
 		async (requestedSpec: string): Promise<void> => {
-			const index = app.packages.findIndex((entry) => entry.requestedSpec === requestedSpec);
+			const found = findPackageEntry(app, requestedSpec);
 
-			if (index === -1) {
+			if (!found) {
 				return;
 			}
 
-			const entry = app.packages[index];
+			const { index, entry } = found;
 
-			if (!entry || entry.isBuiltIn || !entry.version) {
+			if (entry.isBuiltIn || !entry.version) {
 				return;
 			}
 
@@ -68,17 +72,13 @@ export function usePackageManager(context: AppContext): PackageManager {
 
 	const updatePackage = useCallback(
 		async (requestedSpec: string): Promise<void> => {
-			const index = app.packages.findIndex((entry) => entry.requestedSpec === requestedSpec);
+			const found = findPackageEntry(app, requestedSpec);
 
-			if (index === -1) {
+			if (!found) {
 				return;
 			}
 
-			const entry = app.packages[index];
-
-			if (!entry) {
-				return;
-			}
+			const { index, entry } = found;
 
 			if (entry.version) {
 				await main.unloadPackageNodes({
@@ -110,10 +110,7 @@ export function usePackageManager(context: AppContext): PackageManager {
 					main,
 				);
 			} catch (error) {
-				mutatePackageAt(app, index, (target) => {
-					target.status = "error";
-					target.error = error instanceof Error ? error.message : String(error);
-				});
+				recordPackageError(app, index, error);
 			}
 		},
 		[app, main, userDataPath],

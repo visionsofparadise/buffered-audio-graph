@@ -21,6 +21,13 @@ export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorat
 	const circleRefs = useRef<Array<SVGCircleElement | null>>([]);
 	const edgeRefs = useRef<Array<SVGLineElement | null>>([]);
 
+	const placedAnnotations = layout.annotations.flatMap((ann) => {
+		const point = layout.points[ann.pointIndex];
+		const anchor = anchors[ann.anchorIndex];
+
+		return point && anchor ? [{ ann, point, anchor }] : [];
+	});
+
 	useEffect(() => {
 		let rafId = 0;
 		const start = performance.now();
@@ -103,12 +110,7 @@ export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorat
 				);
 			})}
 
-			{layout.annotations.map((ann) => {
-				const point = layout.points[ann.pointIndex];
-				const anchor = anchors[ann.anchorIndex];
-
-				if (!point || !anchor) return null;
-
+			{placedAnnotations.map(({ ann, point, anchor }) => {
 				const isHovered = hoveredAnchorId === anchor.id;
 
 				return (
@@ -137,12 +139,7 @@ export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorat
 				/>
 			))}
 
-			{layout.annotations.map((ann) => {
-				const point = layout.points[ann.pointIndex];
-				const anchor = anchors[ann.anchorIndex];
-
-				if (!point || !anchor) return null;
-
+			{placedAnnotations.map(({ point, anchor }) => {
 				if (hoveredAnchorId !== anchor.id) return null;
 
 				return (
@@ -158,12 +155,7 @@ export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorat
 				);
 			})}
 
-			{layout.annotations.map((ann) => {
-				const point = layout.points[ann.pointIndex];
-				const anchor = anchors[ann.anchorIndex];
-
-				if (!point || !anchor) return null;
-
+			{placedAnnotations.map(({ ann, point, anchor }) => {
 				const isHovered = hoveredAnchorId === anchor.id;
 				const labelX = point.baseX + ann.labelOffsetX;
 				const labelY = point.baseY + ann.labelOffsetY;

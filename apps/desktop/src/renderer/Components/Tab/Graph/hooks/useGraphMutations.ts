@@ -90,6 +90,36 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			graphDefinition.mutate(callback, transactionKey ? { transactionKey } : undefined);
 		}
 
+		function mutateNode(nodeId: string, callback: (node: GraphNode) => void): void {
+			mutate((mutable) => {
+				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
+
+				if (!node) return;
+
+				callback(node);
+			});
+		}
+
+		function mutateArrayRows(
+			nodeId: string,
+			paramName: string,
+			callback: (rows: ReadonlyArray<unknown>) => ReadonlyArray<unknown> | undefined,
+		): void {
+			mutateNode(nodeId, (node) => {
+				if (!node.parameters) return;
+
+				const existing = node.parameters[paramName];
+
+				if (!Array.isArray(existing)) return;
+
+				const next = callback(existing as ReadonlyArray<unknown>);
+
+				if (!next) return;
+
+				node.parameters[paramName] = next;
+			});
+		}
+
 		function resolveAddVersion(packageName: string): string | null {
 			const { app } = contextRef.current;
 
@@ -243,11 +273,7 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function toggleBypass(nodeId: string): void {
-			mutate((mutable) => {
-				const node = mutable.nodes.find((graphNode) => graphNode.id === nodeId);
-
-				if (!node) return;
-
+			mutateNode(nodeId, (node) => {
 				const current = node.options?.bypass ?? false;
 
 				node.options = { ...node.options, bypass: !current };
@@ -268,11 +294,7 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			);
 			const defaults = buildDefaultParameters(schema);
 
-			mutate((mutable) => {
-				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
-
-				if (!node) return;
-
+			mutateNode(nodeId, (node) => {
 				node.parameters = defaults;
 			});
 		}
@@ -288,11 +310,7 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 
 			if (typeof path[0] !== "string") return;
 
-			mutate((mutable) => {
-				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
-
-				if (!node) return;
-
+			mutateNode(nodeId, (node) => {
 				node.parameters ??= {};
 
 				setNestedValue(node.parameters, path, value);
@@ -304,21 +322,15 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 
 			if (typeof path[0] !== "string") return;
 
-			mutate((mutable) => {
-				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
-
-				if (!node?.parameters) return;
+			mutateNode(nodeId, (node) => {
+				if (!node.parameters) return;
 
 				deleteNestedValue(node.parameters, path);
 			});
 		}
 
 		function addArrayRow(nodeId: string, paramName: string, defaultItem: Record<string, unknown>): void {
-			mutate((mutable) => {
-				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
-
-				if (!node) return;
-
+			mutateNode(nodeId, (node) => {
 				node.parameters ??= {};
 
 				const existing = node.parameters[paramName];
@@ -329,41 +341,21 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 		}
 
 		function deleteArrayRow(nodeId: string, paramName: string, rowIndex: number): void {
-			mutate((mutable) => {
-				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
-
-				if (!node?.parameters) return;
-
-				const existing = node.parameters[paramName];
-
-				if (!Array.isArray(existing)) return;
-
-				const rows = existing as Array<unknown>;
-
-				if (rowIndex < 0 || rowIndex >= rows.length) return;
-
-				node.parameters[paramName] = rows.filter((_, index) => index !== rowIndex);
-			});
+			mutateArrayRows(nodeId, paramName, (rows) =>
+				rowIndex < 0 || rowIndex >= rows.length ? undefined : rows.filter((_, index) => index !== rowIndex),
+			);
 		}
 
 		function reorderArrayRows(nodeId: string, paramName: string, fromIndex: number, toIndex: number): void {
-			mutate((mutable) => {
-				const node = mutable.nodes.find((candidate) => candidate.id === nodeId);
+			mutateArrayRows(nodeId, paramName, (rows) => {
+				if (fromIndex < 0 || fromIndex >= rows.length || toIndex < 0 || toIndex >= rows.length) return undefined;
 
-				if (!node?.parameters) return;
+				const reordered = [...rows];
+				const [moved] = reordered.splice(fromIndex, 1);
 
-				const existing = node.parameters[paramName];
+				reordered.splice(toIndex, 0, moved);
 
-				if (!Array.isArray(existing)) return;
-
-				const rows = [...(existing as Array<unknown>)];
-
-				if (fromIndex < 0 || fromIndex >= rows.length || toIndex < 0 || toIndex >= rows.length) return;
-
-				const [moved] = rows.splice(fromIndex, 1);
-
-				rows.splice(toIndex, 0, moved);
-				node.parameters[paramName] = rows;
+				return reordered;
 			});
 		}
 

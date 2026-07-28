@@ -1,6 +1,7 @@
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { collectPackageEntryCandidates, type PackageEntryManifest } from "@buffered-audio/core";
 import { app } from "electron";
 import { toJSONSchema } from "zod";
 import { SUPPORTED_API_VERSIONS } from "../../../Models/ApiVersion";
@@ -14,12 +15,7 @@ import {
 	type LoadedNodeInfo,
 } from "./Renderer";
 
-type PackageExports = string | Array<PackageExports> | { [key: string]: PackageExports } | null | undefined;
-
-interface InstalledPackageJson {
-	readonly exports?: PackageExports | { ".": PackageExports };
-	readonly main?: string;
-	readonly module?: string;
+interface InstalledPackageJson extends PackageEntryManifest {
 	readonly name?: string;
 	readonly version?: string;
 }
@@ -63,43 +59,12 @@ async function pathExists(path: string): Promise<boolean> {
 	}
 }
 
-function collectExportEntries(exportsValue: PackageExports): Array<string> {
-	if (!exportsValue) return [];
-
-	if (typeof exportsValue === "string") return [exportsValue];
-
-	if (Array.isArray(exportsValue)) return exportsValue.flatMap((value) => collectExportEntries(value));
-
-	const preferredKeys = ["import", "default", "require", "node"];
-	const orderedKeys = [
-		...preferredKeys.filter((key) => key in exportsValue),
-		...Object.keys(exportsValue).filter((key) => key !== "types" && !preferredKeys.includes(key)),
-	];
-
-	return orderedKeys.flatMap((key) => collectExportEntries(exportsValue[key]));
-}
-
 async function resolveLoadEntryPath(installDirectory: string): Promise<string> {
 	const raw = await readFile(join(installDirectory, "package.json"), "utf-8");
 	const packageJson = JSON.parse(raw) as InstalledPackageJson;
-	const rootExports =
-		packageJson.exports &&
-		typeof packageJson.exports === "object" &&
-		!Array.isArray(packageJson.exports) &&
-		"." in packageJson.exports
-			? packageJson.exports["."]
-			: packageJson.exports;
-	const candidates = [
-		...collectExportEntries(rootExports),
-		...(packageJson.module ? [packageJson.module] : []),
-		...(packageJson.main ? [packageJson.main] : []),
-	];
+	const candidates = collectPackageEntryCandidates(packageJson);
 
 	for (const candidate of candidates) {
-		if (!candidate || candidate.startsWith("#")) {
-			continue;
-		}
-
 		const resolvedPath = join(installDirectory, candidate);
 
 		if (await pathExists(resolvedPath)) {

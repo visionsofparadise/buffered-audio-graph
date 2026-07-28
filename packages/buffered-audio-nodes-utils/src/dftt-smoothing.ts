@@ -103,6 +103,61 @@ function complexIfft(
 	outIm.set(imaginaryResult);
 }
 
+function buildSeparableWindow(blockTime: number, blockFreq: number): Float32Array {
+	const winFreq = hanningWindow(blockFreq, false);
+	const winTime = hanningWindow(blockTime, false);
+	const win2d = new Float32Array(blockTime * blockFreq);
+
+	for (let tf = 0; tf < blockTime; tf++) {
+		for (let bf = 0; bf < blockFreq; bf++) {
+			win2d[tf * blockFreq + bf] = winTime[tf]! * winFreq[bf]!;
+		}
+	}
+
+	return win2d;
+}
+
+function getBlockOrigin(
+	globalBlock: number,
+	blocksPerBin: number,
+	hopTime: number,
+	hopFreq: number,
+): { readonly frameStart: number; readonly binStart: number } {
+	return {
+		frameStart: Math.floor(globalBlock / blocksPerBin) * hopTime,
+		binStart: (globalBlock % blocksPerBin) * hopFreq,
+	};
+}
+
+function transformBlockColumns(
+	rowRe: Float32Array,
+	rowIm: Float32Array,
+	colRe: Float32Array,
+	colIm: Float32Array,
+	scratchRe: Float32Array,
+	scratchIm: Float32Array,
+	scratchOutRe: Float32Array,
+	scratchOutIm: Float32Array,
+	blockTime: number,
+	blockFreq: number,
+	workspaceA: FftWorkspace,
+	workspaceB: FftWorkspace,
+): void {
+	for (let bf = 0; bf < blockFreq; bf++) {
+		for (let tf = 0; tf < blockTime; tf++) {
+			scratchRe[tf] = rowRe[tf * blockFreq + bf]!;
+			scratchIm[tf] = rowIm[tf * blockFreq + bf]!;
+		}
+
+		complexFft(scratchRe, scratchIm, scratchOutRe, scratchOutIm, workspaceA, workspaceB);
+
+		for (let tf = 0; tf < blockTime; tf++) {
+			colRe[bf * blockTime + tf] = scratchOutRe[tf]!;
+			colIm[bf * blockTime + tf] = scratchOutIm[tf]!;
+		}
+	}
+}
+
 function getWienerGain(signalMagnitudeSquared: number, noiseMagnitudeSquared: number): number {
 	if (noiseMagnitudeSquared === 0) return signalMagnitudeSquared === 0 ? 0 : 1;
 
@@ -190,16 +245,7 @@ export function applyDfttSmoothing(
 		profileMark = now;
 	};
 
-	const winFreq = hanningWindow(blockFreq, false);
-	const winTime = hanningWindow(blockTime, false);
-	const win2d = new Float32Array(blockSize);
-
-	for (let tf = 0; tf < blockTime; tf++) {
-		for (let bf = 0; bf < blockFreq; bf++) {
-			win2d[tf * blockFreq + bf] = winTime[tf]! * winFreq[bf]!;
-		}
-	}
-
+	const win2d = buildSeparableWindow(blockTime, blockFreq);
 	const blocksPerFrame = Math.ceil(numFrames / hopTime);
 	const blocksPerBin = Math.ceil(numBins / hopFreq);
 	const totalBlocks = blocksPerFrame * blocksPerBin;
@@ -214,11 +260,7 @@ export function applyDfttSmoothing(
 		const nlmBatch = new Float32Array(batchCount * blockSize);
 
 		for (let localBlock = 0; localBlock < batchCount; localBlock++) {
-			const globalBlock = firstGlobalBlock + localBlock;
-			const frameIndex = Math.floor(globalBlock / blocksPerBin);
-			const binIndex = globalBlock % blocksPerBin;
-			const frameStart = frameIndex * hopTime;
-			const binStart = binIndex * hopFreq;
+			const { frameStart, binStart } = getBlockOrigin(firstGlobalBlock + localBlock, blocksPerBin, hopTime, hopFreq);
 			const blockOffset = localBlock * blockSize;
 
 			for (let tf = 0; tf < blockTime; tf++) {
@@ -266,20 +308,21 @@ export function applyDfttSmoothing(
 		profileAdd("inverse");
 
 		for (let localBlock = 0; localBlock < batchCount; localBlock++) {
-			const globalBlock = firstGlobalBlock + localBlock;
-			const frameIndex = Math.floor(globalBlock / blocksPerBin);
-			const binIndex = globalBlock % blocksPerBin;
-			const frameStart = frameIndex * hopTime;
-			const binStart = binIndex * hopFreq;
+			const { frameStart: destinationFrameStart, binStart: destinationBinStart } = getBlockOrigin(
+				firstGlobalBlock + localBlock,
+				blocksPerBin,
+				hopTime,
+				hopFreq,
+			);
 			const blockOffset = localBlock * blockSize;
 
 			for (let tf = 0; tf < blockTime; tf++) {
-				const destinationFrame = frameStart + tf;
+				const destinationFrame = destinationFrameStart + tf;
 
 				if (destinationFrame >= numFrames) break;
 
 				for (let bf = 0; bf < blockFreq; bf++) {
-					const destinationBin = binStart + bf;
+					const destinationBin = destinationBinStart + bf;
 
 					if (destinationBin >= numBins) break;
 
@@ -321,16 +364,7 @@ function applyDfttSmoothingJs(
 ): void {
 	const { blockFreq, blockTime, hopFreq, hopTime, threshold } = dfttOptions;
 
-	const winFreq = hanningWindow(blockFreq, false);
-	const winTime = hanningWindow(blockTime, false);
-	const win2d = new Float32Array(blockTime * blockFreq);
-
-	for (let tf = 0; tf < blockTime; tf++) {
-		for (let bf = 0; bf < blockFreq; bf++) {
-			win2d[tf * blockFreq + bf] = winTime[tf]! * winFreq[bf]!;
-		}
-	}
-
+	const win2d = buildSeparableWindow(blockTime, blockFreq);
 	const windowSumSq = new Float32Array(numFrames * numBins);
 
 	output.fill(0);
@@ -414,47 +448,34 @@ function applyDfttSmoothingJs(
 				}
 			}
 
-			for (let tf = 0; tf < blockTime; tf++) {
-				for (let bf = 0; bf < blockFreq; bf++) {
-					colInRe[bf * blockTime + tf] = rawRowRe[tf * blockFreq + bf]!;
-					colInIm[bf * blockTime + tf] = rawRowIm[tf * blockFreq + bf]!;
-				}
-			}
-
-			for (let bf = 0; bf < blockFreq; bf++) {
-				for (let tf = 0; tf < blockTime; tf++) {
-					scratchRe[tf] = colInRe[bf * blockTime + tf]!;
-					scratchIm[tf] = colInIm[bf * blockTime + tf]!;
-				}
-
-				complexFft(scratchRe, scratchIm, scratchOutRe, scratchOutIm, colFwdWorkspaceA, colFwdWorkspaceB);
-
-				for (let tf = 0; tf < blockTime; tf++) {
-					rawColRe[bf * blockTime + tf] = scratchOutRe[tf]!;
-					rawColIm[bf * blockTime + tf] = scratchOutIm[tf]!;
-				}
-			}
-
-			for (let tf = 0; tf < blockTime; tf++) {
-				for (let bf = 0; bf < blockFreq; bf++) {
-					colInRe[bf * blockTime + tf] = nlmRowRe[tf * blockFreq + bf]!;
-					colInIm[bf * blockTime + tf] = nlmRowIm[tf * blockFreq + bf]!;
-				}
-			}
-
-			for (let bf = 0; bf < blockFreq; bf++) {
-				for (let tf = 0; tf < blockTime; tf++) {
-					scratchRe[tf] = colInRe[bf * blockTime + tf]!;
-					scratchIm[tf] = colInIm[bf * blockTime + tf]!;
-				}
-
-				complexFft(scratchRe, scratchIm, scratchOutRe, scratchOutIm, colFwdWorkspaceA, colFwdWorkspaceB);
-
-				for (let tf = 0; tf < blockTime; tf++) {
-					nlmColRe[bf * blockTime + tf] = scratchOutRe[tf]!;
-					nlmColIm[bf * blockTime + tf] = scratchOutIm[tf]!;
-				}
-			}
+			transformBlockColumns(
+				rawRowRe,
+				rawRowIm,
+				rawColRe,
+				rawColIm,
+				scratchRe,
+				scratchIm,
+				scratchOutRe,
+				scratchOutIm,
+				blockTime,
+				blockFreq,
+				colFwdWorkspaceA,
+				colFwdWorkspaceB,
+			);
+			transformBlockColumns(
+				nlmRowRe,
+				nlmRowIm,
+				nlmColRe,
+				nlmColIm,
+				scratchRe,
+				scratchIm,
+				scratchOutRe,
+				scratchOutIm,
+				blockTime,
+				blockFreq,
+				colFwdWorkspaceA,
+				colFwdWorkspaceB,
+			);
 
 			const sigmaSq = threshold * threshold;
 

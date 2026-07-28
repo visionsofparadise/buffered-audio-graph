@@ -29,6 +29,26 @@ export function mutatePackageAt(
 	});
 }
 
+export function recordPackageError(app: State<AppState>, index: number, error: unknown): void {
+	mutatePackageAt(app, index, (target) => {
+		target.status = "error";
+		target.error = error instanceof Error ? error.message : String(error);
+	});
+}
+
+export function findPackageEntry(
+	app: State<AppState>,
+	requestedSpec: string,
+): { readonly index: number; readonly entry: Snapshot<NodePackageState> } | undefined {
+	const index = app.packages.findIndex((entry) => entry.requestedSpec === requestedSpec);
+
+	if (index === -1) return undefined;
+
+	const entry = app.packages[index];
+
+	return entry ? { index, entry } : undefined;
+}
+
 export function ensurePackageState(
 	app: State<AppState>,
 	requestedSpec: string,
@@ -131,10 +151,7 @@ export async function ensureGraphPackagesInstalled(
 		try {
 			await runPackagePipeline(entry, index, app, main);
 		} catch (error) {
-			mutatePackageAt(app, index, (target) => {
-				target.status = "error";
-				target.error = error instanceof Error ? error.message : String(error);
-			});
+			recordPackageError(app, index, error);
 
 			throw error;
 		}

@@ -1,8 +1,8 @@
-import { BufferedStream, type StreamContext, type StreamSetupContext } from "..";
 import { sliceBlock } from "../../../utils/slice-block";
-import { toReadable } from "../../../utils/to-readable";
 import { createProgressGate, type ProgressGate } from "../utils/progress-gate";
+import { InstrumentedTransformStream } from "./instrumented-transform";
 import { BlockBuffer } from "./utils/block-buffer";
+import type { StreamContext } from "..";
 import type { BufferedAudioNode } from "../..";
 import type { TransformNodeProperties } from "../../transform";
 import type { Block } from "../block";
@@ -16,16 +16,11 @@ export interface BufferedTransformNodeProperties extends TransformNodeProperties
 
 export abstract class BufferedTransformStream<
 	N extends BufferedAudioNode<BufferedTransformNodeProperties> = BufferedAudioNode<BufferedTransformNodeProperties>,
-> extends BufferedStream<N> {
+> extends InstrumentedTransformStream<N> {
 	blockSize: number;
-
-	private framesBuffered = 0;
-	private framesEmitted = 0;
 
 	private buffer?: BlockBuffer;
 	private inferredChunkSize?: number;
-	private hasStarted = false;
-	private sourceTotalFrames?: number;
 
 	constructor(node: N, context: StreamContext) {
 		super(node, context);
@@ -54,33 +49,14 @@ export abstract class BufferedTransformStream<
 		return this.properties.streamChunkSize;
 	}
 
-	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
-		this.sourceTotalFrames = context.sourceTotalFrames;
-
-		await this._setup(context);
-
-		return this._pipe(input);
-	}
-
-	_setup(_context: StreamSetupContext): Promise<void> | void {
-		return;
-	}
-
-	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		return toReadable(this.blocks(input));
-	}
-
-	private async *blocks(input: ReadableStream<Block>): AsyncGenerator<Block> {
+	protected async *blocks(input: ReadableStream<Block>): AsyncGenerator<Block> {
 		const buffer = (this.buffer ??= new BlockBuffer());
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
 
 		try {
 			for await (const block of input) {
-				if (!this.hasStarted) {
-					this.hasStarted = true;
-					this.emitStarted();
-				}
+				this.markStarted();
 
 				this.inferredChunkSize ??= block.samples[0]?.length ?? 0;
 
@@ -115,9 +91,7 @@ export abstract class BufferedTransformStream<
 
 			yield* this.chunked(timed, emitGate);
 
-			this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-			this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
-			this.emitFinished({ framesDone: this.framesBuffered, processingMs: this.processingMs });
+			this.emitCompletion();
 		} finally {
 			await this.destroy();
 		}
@@ -177,9 +151,5 @@ export abstract class BufferedTransformStream<
 
 	async *_transform(buffered: BlockBuffer): AsyncIterable<Block> {
 		yield* buffered.iterate(this.outputChunkSize);
-	}
-
-	_flush(): AsyncIterable<Block> | Iterable<Block> {
-		return [];
 	}
 }

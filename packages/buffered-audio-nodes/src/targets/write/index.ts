@@ -9,6 +9,7 @@ import {
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
+import { createFfmpegPathField } from "../../utils/binary-fields";
 import { waitForDrain } from "../../utils/ffmpeg";
 import { getBytesPerSample, writeSample, buildWavHeader, buildRf64Header } from "./utils/wav";
 
@@ -54,11 +55,7 @@ export const encodingSchema = z.object({
 
 const schema = z.object({
 	path: z.string().default("").meta({ input: "file", mode: "save", accept: ".wav,.flac,.mp3,.aac" }),
-	ffmpegPath: z
-		.string()
-		.default("")
-		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
-		.describe("FFmpeg — audio/video processing tool"),
+	ffmpegPath: createFfmpegPathField(),
 	bitDepth: z.enum(["16", "24", "32", "32f"]).default("16"),
 	encoding: encodingSchema.optional().describe("Encode through ffmpeg to a non-WAV format. Requires `ffmpegPath`."),
 });

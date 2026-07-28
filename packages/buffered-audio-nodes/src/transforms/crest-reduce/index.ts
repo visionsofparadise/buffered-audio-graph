@@ -11,6 +11,8 @@ import {
 import { initFftBackend, linearToDb, type FftBackend } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
+import { accumulateBlock } from "../../utils/accumulate-block";
+import { createFftwAddonPathField, createVkfftAddonPathField } from "../../utils/binary-fields";
 import { LATTICE_ORDER } from "./utils/lattice";
 import { isPowerOfTwo } from "./utils/power-of-two";
 import { groupDelayLambda } from "./utils/search";
@@ -33,26 +35,8 @@ export const schema = z.object({
 		.describe(
 			"Analysis frame length in samples (default 2048 @ 48 kHz ≈ 43 ms; 75% overlap, Hann analysis window). Whole-file processing — output is produced after the full input is accumulated",
 		),
-	vkfftAddonPath: z
-		.string()
-		.default("")
-		.meta({
-			input: "file",
-			mode: "open",
-			binary: "vkfft-addon",
-			download: "https://github.com/visionsofparadise/vkfft-addon",
-		})
-		.describe("VkFFT native addon — GPU FFT acceleration"),
-	fftwAddonPath: z
-		.string()
-		.default("")
-		.meta({
-			input: "file",
-			mode: "open",
-			binary: "fftw-addon",
-			download: "https://github.com/visionsofparadise/fftw-addon",
-		})
-		.describe("FFTW native addon — CPU FFT acceleration"),
+	vkfftAddonPath: createVkfftAddonPathField(),
+	fftwAddonPath: createFftwAddonPathField(),
 });
 
 export interface CrestReduceProperties extends z.infer<typeof schema>, TransformNodeProperties {}
@@ -76,12 +60,11 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceNode> 
 	}
 
 	override _prepare(block: Block): Block {
-		const frames = block.samples[0]?.length ?? 0;
-
-		if (frames === 0 || block.samples.length === 0) return block;
-
-		this.truePeakAccumulator ??= new TruePeakArgmaxAccumulator(block.samples.length, block.sampleRate);
-		this.truePeakAccumulator.push(block.samples, frames);
+		this.truePeakAccumulator = accumulateBlock(
+			this.truePeakAccumulator,
+			block,
+			(sampleRate, channelCount) => new TruePeakArgmaxAccumulator(channelCount, sampleRate),
+		);
 
 		return block;
 	}

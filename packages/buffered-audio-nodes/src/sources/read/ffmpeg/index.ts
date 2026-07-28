@@ -9,14 +9,11 @@ import {
 import { deinterleaveBuffer } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../../package-metadata";
+import { createFfmpegPathField } from "../../../utils/binary-fields";
 
 export const ffmpegSchema = z.object({
 	path: z.string().default("").meta({ input: "file", mode: "open" }),
-	ffmpegPath: z
-		.string()
-		.default("")
-		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
-		.describe("FFmpeg — audio/video processing tool"),
+	ffmpegPath: createFfmpegPathField(),
 	ffprobePath: z
 		.string()
 		.default("")

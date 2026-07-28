@@ -1,6 +1,5 @@
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, X } from "lucide-react";
+import { useSortableRow } from "../hooks/useSortableRow";
 import { LeafField } from "./LeafField";
 import type { LeafParameter } from "../utils/buildParameters";
 import type { ParameterCallbacks } from "./utils/callbacks";
@@ -22,13 +21,7 @@ export function SortableArrayRow({
 	readonly dimmed?: boolean;
 	readonly callbacks: ParameterCallbacks;
 }) {
-	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rowId });
-
-	const style: React.CSSProperties = {
-		transform: CSS.Transform.toString(transform),
-		transition,
-		opacity: isDragging ? 0.4 : 1,
-	};
+	const { setNodeRef, style, attributes, listeners } = useSortableRow(rowId);
 
 	return (
 		<div ref={setNodeRef} style={style} className="flex flex-col gap-2.5">

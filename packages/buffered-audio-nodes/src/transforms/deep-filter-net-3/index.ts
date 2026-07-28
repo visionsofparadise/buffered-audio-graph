@@ -1,18 +1,16 @@
 import {
-	BufferedTransformStream,
 	TransformNode,
 	type Block,
 	type BlockBuffer,
-	type StreamContext,
 	type StreamSetupContext,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
-import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
-import { createResampleComposition } from "../../utils/resample-composition";
+import { createFfmpegPathField, createOnnxAddonPathField } from "../../utils/binary-fields";
+import { OnnxTransformStream } from "../../utils/onnx-stream";
 import { createDfnState, DFN3_HOP_SIZE, DFN3_SAMPLE_RATE, processDfnBlock, type DfnState } from "./utils/dfn";
-import type { FfmpegStream } from "../ffmpeg";
+import type { OnnxSession } from "../../utils/onnx-runtime";
 
 const DFN3_BUFFER_SIZE = 100 * DFN3_HOP_SIZE;
 
@@ -28,23 +26,10 @@ const schema = z.object({
 			download: "https://github.com/yuyun2000/SpeechDenoiser",
 		})
 		.describe("DeepFilterNet3 48 kHz denoiser model (.onnx)"),
-	ffmpegPath: z
-		.string()
-		.default("")
-		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
-		.describe(
-			"FFmpeg — used when the input audio is not 48 kHz to chain up/down resamplers around the inference stream; can be left blank for 48 kHz input.",
-		),
-	onnxAddonPath: z
-		.string()
-		.default("")
-		.meta({
-			input: "file",
-			mode: "open",
-			binary: "onnx-addon",
-			download: "https://github.com/visionsofparadise/onnx-runtime-addon",
-		})
-		.describe("ONNX Runtime native addon"),
+	ffmpegPath: createFfmpegPathField(
+		"FFmpeg — used when the input audio is not 48 kHz to chain up/down resamplers around the inference stream; can be left blank for 48 kHz input.",
+	),
+	onnxAddonPath: createOnnxAddonPathField(),
 	attenuation: z
 		.number()
 		.min(0)
@@ -55,46 +40,18 @@ const schema = z.object({
 
 export interface DeepFilterNet3Properties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3Node> {
+export class DeepFilterNet3Stream extends OnnxTransformStream<DeepFilterNet3Node> {
 	override blockSize = DFN3_BUFFER_SIZE;
 
 	private session?: OnnxSession;
 	private dfnStates: Array<DfnState> = [];
-	private readonly renderContext: StreamContext;
-	private upResample?: FfmpegStream;
-	private downResample?: FfmpegStream;
-
-	constructor(node: DeepFilterNet3Node, context: StreamContext) {
-		super(node, context);
-
-		this.renderContext = context;
-	}
 
 	override _setup(context: StreamSetupContext): void {
-		this.session = createOnnxSession(
-			this.properties.onnxAddonPath,
-			this.properties.modelPath,
-			{ executionProviders: ["cpu"] },
-			(message, data) => this.log(message, data),
-		);
-
-		const composition = createResampleComposition({
-			context,
-			streamContext: this.renderContext,
-			ffmpegPath: this.properties.ffmpegPath,
+		this.session = this.setupModelSession(context, {
+			modelPath: this.properties.modelPath,
 			modelRate: DFN3_SAMPLE_RATE,
+			executionProviders: ["cpu"],
 		});
-
-		if (composition) {
-			this.upResample = composition.upResample;
-			this.downResample = composition.downResample;
-		}
-	}
-
-	override _pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		if (!this.upResample || !this.downResample) return super._pipe(input);
-
-		return this.downResample._pipe(super._pipe(this.upResample._pipe(input)));
 	}
 
 	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {

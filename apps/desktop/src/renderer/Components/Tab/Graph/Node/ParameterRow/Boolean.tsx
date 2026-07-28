@@ -1,6 +1,5 @@
-import { cn } from "../../../../../utils/cn";
 import { Toggle } from "../../../../UI/Toggle";
-import { FieldLabel } from "./FieldLabel";
+import { FieldRow } from "./FieldRow";
 
 export interface BooleanParameter {
 	readonly kind: "boolean";
@@ -21,27 +20,20 @@ export function BooleanRow({
 	readonly onParameterChange?: (name: string, value: unknown) => void;
 	readonly onParameterUnset?: (name: string) => void;
 }) {
-	const controlDisabled = param.optional && !param.defined;
-	const setDefinedHandler =
-		onParameterChange || onParameterUnset
-			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-			: undefined;
-
 	return (
-		<div className={cn("flex items-center justify-between gap-3", dimmed && "opacity-40")}>
-			<FieldLabel
-				name={param.name}
-				optional={param.optional}
-				defined={param.defined}
-				onSetDefined={setDefinedHandler}
+		<FieldRow
+			param={param}
+			dimmed={dimmed}
+			className="flex items-center justify-between gap-3"
+			controlClassName="shrink-0"
+			onParameterChange={onParameterChange}
+			onParameterUnset={onParameterUnset}
+		>
+			<Toggle
+				value={param.value}
+				label={param.value ? "ON" : "OFF"}
+				onChange={onParameterChange ? (toggled) => onParameterChange(param.name, toggled) : undefined}
 			/>
-			<div className={cn("shrink-0", controlDisabled && "pointer-events-none opacity-40")}>
-				<Toggle
-					value={param.value}
-					label={param.value ? "ON" : "OFF"}
-					onChange={onParameterChange ? (toggled) => onParameterChange(param.name, toggled) : undefined}
-				/>
-			</div>
-		</div>
+		</FieldRow>
 	);
 }

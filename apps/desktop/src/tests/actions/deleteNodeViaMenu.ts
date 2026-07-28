@@ -1,17 +1,11 @@
+import { nodeHeaderPoint } from "../utils/graph";
 import { clickMenuItemByText, dumpMenuItems, sleep } from "../utils/page";
 import type { Page } from "puppeteer-core";
 
-export async function deleteNodeViaMenu(page: Page, nodeId: string): Promise<boolean> {
-	const nodeOrigin = await page.$eval(
-		`.react-flow__node[data-id="${nodeId}"]`,
-		(element): { x: number; y: number } => {
-			const rect = element.getBoundingClientRect();
+async function openNodeContextMenu(page: Page, nodeId: string): Promise<boolean> {
+	const header = await nodeHeaderPoint(page, nodeId);
 
-			return { x: rect.x, y: rect.y };
-		},
-	);
-
-	await page.mouse.click(nodeOrigin.x + 40, nodeOrigin.y + 14, { button: "right" });
+	await page.mouse.click(header.x, header.y, { button: "right" });
 
 	try {
 		await page.waitForSelector('[role="menuitem"]', { timeout: 3000 });
@@ -21,28 +15,17 @@ export async function deleteNodeViaMenu(page: Page, nodeId: string): Promise<boo
 
 	await sleep(120);
 
+	return true;
+}
+
+export async function deleteNodeViaMenu(page: Page, nodeId: string): Promise<boolean> {
+	if (!(await openNodeContextMenu(page, nodeId))) return false;
+
 	return clickMenuItemByText(page, "Delete Node");
 }
 
 export async function openNodeMenuAndDump(page: Page, nodeId: string): Promise<Array<string>> {
-	const nodeOrigin = await page.$eval(
-		`.react-flow__node[data-id="${nodeId}"]`,
-		(element): { x: number; y: number } => {
-			const rect = element.getBoundingClientRect();
-
-			return { x: rect.x, y: rect.y };
-		},
-	);
-
-	await page.mouse.click(nodeOrigin.x + 40, nodeOrigin.y + 14, { button: "right" });
-
-	try {
-		await page.waitForSelector('[role="menuitem"]', { timeout: 3000 });
-	} catch {
-		return [];
-	}
-
-	await sleep(120);
+	if (!(await openNodeContextMenu(page, nodeId))) return [];
 
 	return dumpMenuItems(page);
 }

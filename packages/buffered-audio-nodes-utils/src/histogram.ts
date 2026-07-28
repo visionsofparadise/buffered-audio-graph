@@ -1,3 +1,5 @@
+import { histogramMedian } from "./histogram-median";
+
 export interface AmplitudeHistogram {
 	buckets: Uint32Array;
 	bucketMax: number;
@@ -46,25 +48,5 @@ export function amplitudeHistogram(channels: ReadonlyArray<Float32Array>, bucket
 		}
 	}
 
-	const target = totalSamples / 2;
-	const bucketWidth = bucketMax / bucketCount;
-	let cumulative = 0;
-	let median = 0;
-
-	for (let bucketIndex = 0; bucketIndex < bucketCount; bucketIndex++) {
-		const count = buckets[bucketIndex] ?? 0;
-		const next = cumulative + count;
-
-		if (next >= target) {
-			const fraction = count > 0 ? (target - cumulative) / count : 0;
-
-			median = (bucketIndex + fraction) * bucketWidth;
-
-			break;
-		}
-
-		cumulative = next;
-	}
-
-	return { buckets, bucketMax, median };
+	return { buckets, bucketMax, median: histogramMedian(buckets, bucketCount, totalSamples, bucketMax) };
 }

@@ -1,7 +1,6 @@
-import { cn } from "../../../../../utils/cn";
 import { ButtonSelection } from "../../../../UI/ButtonSelection";
 import { Select } from "../../../../UI/Select";
-import { FieldLabel } from "./FieldLabel";
+import { FieldRow } from "./FieldRow";
 
 export interface EnumParameter {
 	readonly kind: "enum";
@@ -24,35 +23,29 @@ export function EnumRow({
 	readonly onParameterUnset?: (name: string) => void;
 }) {
 	const useButtons = param.options.every((opt) => opt.length <= 10);
-	const controlDisabled = param.optional && !param.defined;
-	const setDefinedHandler =
-		onParameterChange || onParameterUnset
-			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-			: undefined;
 
 	return (
-		<div className={cn("flex flex-col", dimmed && "opacity-40")}>
-			<FieldLabel
-				name={param.name}
-				optional={param.optional}
-				defined={param.defined}
-				onSetDefined={setDefinedHandler}
-			/>
-			<div className={cn("mt-1", controlDisabled && "pointer-events-none opacity-40")}>
-				{useButtons ? (
-					<ButtonSelection
-						active={param.value}
-						options={param.options}
-						onSelect={onParameterChange ? (option) => onParameterChange(param.name, option) : undefined}
-					/>
-				) : (
-					<Select
-						value={param.value}
-						options={param.options}
-						onChange={onParameterChange ? (option) => onParameterChange(param.name, option) : undefined}
-					/>
-				)}
-			</div>
-		</div>
+		<FieldRow
+			param={param}
+			dimmed={dimmed}
+			className="flex flex-col"
+			controlClassName="mt-1"
+			onParameterChange={onParameterChange}
+			onParameterUnset={onParameterUnset}
+		>
+			{useButtons ? (
+				<ButtonSelection
+					active={param.value}
+					options={param.options}
+					onSelect={onParameterChange ? (option) => onParameterChange(param.name, option) : undefined}
+				/>
+			) : (
+				<Select
+					value={param.value}
+					options={param.options}
+					onChange={onParameterChange ? (option) => onParameterChange(param.name, option) : undefined}
+				/>
+			)}
+		</FieldRow>
 	);
 }

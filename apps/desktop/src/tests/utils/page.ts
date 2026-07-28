@@ -55,19 +55,19 @@ export async function zoomOut(page: Page, ticks: number): Promise<void> {
 	await sleep(200);
 }
 
-export async function dragBetween(page: Page, from: Point, to: Point): Promise<void> {
-	await page.mouse.move(from.x, from.y);
-	await page.mouse.down();
-
-	const steps = 12;
-
+async function moveInSteps(page: Page, from: Point, to: Point, steps: number, delayMs: number): Promise<void> {
 	for (let step = 1; step <= steps; step++) {
 		const ratio = step / steps;
 
 		await page.mouse.move(from.x + (to.x - from.x) * ratio, from.y + (to.y - from.y) * ratio);
-		await sleep(15);
+		await sleep(delayMs);
 	}
+}
 
+export async function dragBetween(page: Page, from: Point, to: Point): Promise<void> {
+	await page.mouse.move(from.x, from.y);
+	await page.mouse.down();
+	await moveInSteps(page, from, to, 12, 15);
 	await page.mouse.up();
 }
 
@@ -77,16 +77,7 @@ export async function connectHandles(page: Page, from: Point, to: Point): Promis
 	await page.mouse.move(from.x, from.y);
 	await page.mouse.down();
 	await sleep(80);
-
-	const steps = 24;
-
-	for (let step = 1; step <= steps; step++) {
-		const ratio = step / steps;
-
-		await page.mouse.move(from.x + (to.x - from.x) * ratio, from.y + (to.y - from.y) * ratio);
-		await sleep(20);
-	}
-
+	await moveInSteps(page, from, to, 24, 20);
 	await page.mouse.move(to.x, to.y);
 	await sleep(120);
 	await page.mouse.move(to.x, to.y);
@@ -120,20 +111,20 @@ export async function synthClickInNode(page: Page, nodeId: string, selector: str
 	);
 }
 
-export async function clickMenuItemByText(page: Page, text: string): Promise<boolean> {
-	const items = await page.$$('[role="menuitem"]');
+async function clickMatchingElement(page: Page, selector: string, text: string): Promise<boolean> {
+	const elements = await page.$$(selector);
 
-	for (const item of items) {
-		const itemText = await item.evaluate((element) => element.textContent);
+	for (const element of elements) {
+		const elementText = await element.evaluate((node) => node.textContent);
 
-		if (!itemText.includes(text)) continue;
+		if (!elementText.includes(text)) continue;
 
-		await item.evaluate((element) => {
-			element.scrollIntoView({ block: "center" });
+		await element.evaluate((node) => {
+			node.scrollIntoView({ block: "center" });
 		});
 		await sleep(60);
 
-		const box = await item.boundingBox();
+		const box = await element.boundingBox();
 
 		if (box) {
 			await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -143,6 +134,10 @@ export async function clickMenuItemByText(page: Page, text: string): Promise<boo
 	}
 
 	return false;
+}
+
+export async function clickMenuItemByText(page: Page, text: string): Promise<boolean> {
+	return clickMatchingElement(page, '[role="menuitem"]', text);
 }
 
 export async function dumpMenuItems(page: Page): Promise<Array<string>> {
@@ -180,53 +175,11 @@ export async function dumpCmdkItems(page: Page): Promise<Array<string>> {
 }
 
 export async function clickCmdkItemByText(page: Page, text: string): Promise<boolean> {
-	const items = await page.$$("[data-catalog-item]");
-
-	for (const item of items) {
-		const itemText = await item.evaluate((element) => element.textContent);
-
-		if (!itemText.includes(text)) continue;
-
-		await item.evaluate((element) => {
-			element.scrollIntoView({ block: "center" });
-		});
-		await sleep(60);
-
-		const box = await item.boundingBox();
-
-		if (box) {
-			await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-
-			return true;
-		}
-	}
-
-	return false;
+	return clickMatchingElement(page, "[data-catalog-item]", text);
 }
 
 export async function clickButtonByText(page: Page, text: string): Promise<boolean> {
-	const buttons = await page.$$("button");
-
-	for (const button of buttons) {
-		const buttonText = await button.evaluate((element) => element.textContent);
-
-		if (!buttonText.includes(text)) continue;
-
-		await button.evaluate((element) => {
-			element.scrollIntoView({ block: "center" });
-		});
-		await sleep(60);
-
-		const box = await button.boundingBox();
-
-		if (box) {
-			await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-
-			return true;
-		}
-	}
-
-	return false;
+	return clickMatchingElement(page, "button", text);
 }
 
 export async function clickButtonInNodeByText(page: Page, nodeId: string, text: string): Promise<boolean> {
@@ -248,6 +201,29 @@ export async function clickButtonInNodeByText(page: Page, nodeId: string, text: 
 		},
 		nodeId,
 		text,
+	);
+}
+
+export async function setNativeInputValue(
+	page: Page,
+	selector: string,
+	value: string,
+	eventNames: ReadonlyArray<string>,
+): Promise<void> {
+	await page.$eval(
+		selector,
+		(element, nextValue: string, names: ReadonlyArray<string>) => {
+			const input = element as HTMLInputElement;
+			const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
+
+			descriptor?.set?.call(input, nextValue);
+
+			for (const name of names) {
+				input.dispatchEvent(new Event(name, { bubbles: true }));
+			}
+		},
+		value,
+		eventNames,
 	);
 }
 

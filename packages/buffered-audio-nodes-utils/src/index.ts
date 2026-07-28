@@ -25,9 +25,8 @@ export { getLraConsideredMinLufs, getLraConsideredStats } from "./loudness-range
 export type { LraConsideredStats } from "./loudness-range";
 export { MixedRadixFft } from "./mixed-radix-fft";
 export { replaceChannel } from "./replace-channel";
-export { SlidingWindowMaxStream, slidingWindowMax } from "./sliding-window-max";
-export { SlidingWindowMinStream, slidingWindowMin } from "./sliding-window-min";
-export { createFftWorkspace, fft, hanningWindow, ifft, istft, stft } from "./stft";
+export { SlidingWindowMaxStream, SlidingWindowMinStream, slidingWindowMax, slidingWindowMin } from "./sliding-window";
+export { createFftWorkspace, fft, hanningWindow, ifft, istft, normalizeOverlapAdd, stft } from "./stft";
 export type { FftWorkspace, StftOutput, StftResult } from "./stft";
 export { TruePeakAccumulator } from "./true-peak";
 export { TruePeakUpsampler } from "./true-peak-upsampler";

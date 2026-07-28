@@ -35,6 +35,18 @@ function assertNonnegativeInteger(value: number, name: string): void {
 	}
 }
 
+const OVERLAP_ADD_WINDOW_SUM_FLOOR = 1e-8;
+
+export function normalizeOverlapAdd(output: Float32Array, windowSum: Float32Array, outputLength: number): void {
+	for (let index = 0; index < outputLength; index++) {
+		const ws = windowSum[index] ?? 0;
+
+		if (ws > OVERLAP_ADD_WINDOW_SUM_FLOOR) {
+			output[index] = (output[index] ?? 0) / ws;
+		}
+	}
+}
+
 export const STFT_BATCH_SCRATCH_BYTES = 8 * 1024 * 1024;
 
 const HANN_WINDOW_CACHE_BYTES = 1024 * 1024;
@@ -240,13 +252,7 @@ export function istft(
 		}
 	}
 
-	for (let index = 0; index < outputLength; index++) {
-		const ws = windowSum[index] ?? 0;
-
-		if (ws > 1e-8) {
-			output[index] = (output[index] ?? 0) / ws;
-		}
-	}
+	normalizeOverlapAdd(output, windowSum, outputLength);
 
 	return output;
 }

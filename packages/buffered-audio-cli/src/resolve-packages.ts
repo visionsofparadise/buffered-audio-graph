@@ -4,16 +4,12 @@ import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { BufferedAudioNode, NodeRegistry } from "@buffered-audio/core";
+import { collectPackageEntryCandidates } from "@buffered-audio/core";
+import type { BufferedAudioNode, NodeRegistry, PackageEntryManifest } from "@buffered-audio/core";
 
 type NodeConstructor = new (options?: Record<string, unknown>) => BufferedAudioNode;
 
-type PackageExports = string | Array<PackageExports> | { [key: string]: PackageExports } | null | undefined;
-
-interface PackageManifest {
-	readonly exports?: PackageExports | { ".": PackageExports };
-	readonly main?: string;
-	readonly module?: string;
+interface PackageManifest extends PackageEntryManifest {
 	readonly name?: string;
 	readonly version?: string;
 }
@@ -30,40 +26,10 @@ function readManifest(packageDir: string): PackageManifest {
 	return JSON.parse(readFileSync(join(packageDir, "package.json"), "utf-8")) as PackageManifest;
 }
 
-function collectExportEntries(exportsValue: PackageExports): Array<string> {
-	if (!exportsValue) return [];
-
-	if (typeof exportsValue === "string") return [exportsValue];
-
-	if (Array.isArray(exportsValue)) return exportsValue.flatMap((value) => collectExportEntries(value));
-
-	const preferredKeys = ["import", "default", "require", "node"];
-	const orderedKeys = [
-		...preferredKeys.filter((key) => key in exportsValue),
-		...Object.keys(exportsValue).filter((key) => key !== "types" && !preferredKeys.includes(key)),
-	];
-
-	return orderedKeys.flatMap((key) => collectExportEntries(exportsValue[key]));
-}
-
 function resolveEntryPath(packageDir: string): string {
-	const manifest = readManifest(packageDir);
-	const rootExports =
-		manifest.exports &&
-		typeof manifest.exports === "object" &&
-		!Array.isArray(manifest.exports) &&
-		"." in manifest.exports
-			? manifest.exports["."]
-			: manifest.exports;
-	const candidates = [
-		...collectExportEntries(rootExports),
-		...(manifest.module ? [manifest.module] : []),
-		...(manifest.main ? [manifest.main] : []),
-	];
+	const candidates = collectPackageEntryCandidates(readManifest(packageDir));
 
 	for (const candidate of candidates) {
-		if (!candidate || candidate.startsWith("#")) continue;
-
 		const resolved = join(packageDir, candidate);
 
 		if (existsSync(resolved)) return resolved;

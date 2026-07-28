@@ -93,34 +93,5 @@ export function computeLogBandMappings(
 	sampleRate: number,
 	fftSize: number,
 ): ReadonlyArray<BandMapping> {
-	const logMin = Math.log(minFreq);
-	const logMax = Math.log(maxFreq);
-	const logStep = (logMax - logMin) / numBands;
-	const binWidth = sampleRate / fftSize;
-	const numLinearBins = fftSize / 2 + 1;
-
-	const mappings: Array<BandMapping> = [];
-
-	for (let band = 0; band < numBands; band++) {
-		const freqLow = Math.exp(logMin + band * logStep);
-		const freqHigh = Math.exp(logMin + (band + 1) * logStep);
-
-		const exactBinLow = freqLow / binWidth;
-		const exactBinHigh = freqHigh / binWidth;
-
-		const binStart = Math.max(0, Math.floor(exactBinLow));
-		const binEnd = Math.min(numLinearBins - 1, Math.ceil(exactBinHigh));
-
-		const weightStart = 1 - (exactBinLow - binStart);
-		const weightEnd = 1 - (binEnd - exactBinHigh);
-
-		mappings.push({
-			binStart,
-			binEnd: Math.max(binStart, binEnd),
-			weightStart: Math.max(0, Math.min(1, weightStart)),
-			weightEnd: Math.max(0, Math.min(1, weightEnd)),
-		});
-	}
-
-	return mappings;
+	return computeScaledBandMappings(numBands, minFreq, maxFreq, sampleRate, fftSize, Math.log, Math.exp);
 }

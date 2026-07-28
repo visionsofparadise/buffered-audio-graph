@@ -114,6 +114,8 @@ export class KWeightedSquaredSum {
 		const rlbA1 = this.rlbA1;
 		const rlbA2 = this.rlbA2;
 
+		output.fill(-0, 0, frames);
+
 		for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
 			const channel = channels[channelIndex] ?? channels[0] ?? new Float32Array(0);
 			const weight = weights[channelIndex] ?? 1;
@@ -126,44 +128,23 @@ export class KWeightedSquaredSum {
 			let ry1 = this.rlbY1[channelIndex] ?? 0;
 			let ry2 = this.rlbY2[channelIndex] ?? 0;
 
-			if (channelIndex === 0) {
-				for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
-					const x0 = channel[frameIndex] ?? 0;
-					const preY = preB0 * x0 + preB1 * px1 + preB2 * px2 - preA1 * py1 - preA2 * py2;
+			for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
+				const x0 = channel[frameIndex] ?? 0;
+				const preY = preB0 * x0 + preB1 * px1 + preB2 * px2 - preA1 * py1 - preA2 * py2;
 
-					px2 = px1;
-					px1 = x0;
-					py2 = py1;
-					py1 = preY;
+				px2 = px1;
+				px1 = x0;
+				py2 = py1;
+				py1 = preY;
 
-					const rlbY = rlbB0 * preY + rlbB1 * rx1 + rlbB2 * rx2 - rlbA1 * ry1 - rlbA2 * ry2;
+				const rlbY = rlbB0 * preY + rlbB1 * rx1 + rlbB2 * rx2 - rlbA1 * ry1 - rlbA2 * ry2;
 
-					rx2 = rx1;
-					rx1 = preY;
-					ry2 = ry1;
-					ry1 = rlbY;
+				rx2 = rx1;
+				rx1 = preY;
+				ry2 = ry1;
+				ry1 = rlbY;
 
-					output[frameIndex] = weight * rlbY * rlbY;
-				}
-			} else {
-				for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
-					const x0 = channel[frameIndex] ?? 0;
-					const preY = preB0 * x0 + preB1 * px1 + preB2 * px2 - preA1 * py1 - preA2 * py2;
-
-					px2 = px1;
-					px1 = x0;
-					py2 = py1;
-					py1 = preY;
-
-					const rlbY = rlbB0 * preY + rlbB1 * rx1 + rlbB2 * rx2 - rlbA1 * ry1 - rlbA2 * ry2;
-
-					rx2 = rx1;
-					rx1 = preY;
-					ry2 = ry1;
-					ry1 = rlbY;
-
-					output[frameIndex] = (output[frameIndex] ?? 0) + weight * rlbY * rlbY;
-				}
+				output[frameIndex] = (output[frameIndex] ?? 0) + weight * rlbY * rlbY;
 			}
 
 			this.preX1[channelIndex] = px1;

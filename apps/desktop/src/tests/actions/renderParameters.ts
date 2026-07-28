@@ -1,4 +1,4 @@
-import { sleep } from "../utils/page";
+import { setNativeInputValue, sleep } from "../utils/page";
 import type { Page } from "puppeteer-core";
 
 export async function isRenderParametersOpen(page: Page): Promise<boolean> {
@@ -20,18 +20,7 @@ export async function fillRenderParameter(page: Page, name: string, value: strin
 
 	await page.waitForSelector(selector, { timeout: 5000 });
 
-	await page.$eval(
-		selector,
-		(element, pathValue: string) => {
-			const input = element as HTMLInputElement;
-			const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
-
-			descriptor?.set?.call(input, pathValue);
-			input.dispatchEvent(new Event("input", { bubbles: true }));
-			input.dispatchEvent(new Event("change", { bubbles: true }));
-		},
-		value,
-	);
+	await setNativeInputValue(page, selector, value, ["input", "change"]);
 	await sleep(100);
 }
 

@@ -63,33 +63,15 @@ export function kalmanUpdateFrame(
 	outBleedImag.fill(0);
 
 	for (let refIndex = 0; refIndex < refCount; refIndex++) {
-		const state = states[refIndex]!;
-		const refReal = refReals[refIndex]!;
-		const refImag = refImags[refIndex]!;
-
-		for (let bin = 0; bin < numBins; bin++) {
-			const hPrevRe = state.hReal[bin]!;
-			const hPrevIm = state.hImag[bin]!;
-			const pPrev = state.stateVariance[bin]!;
-			const hPrevMagSq = hPrevRe * hPrevRe + hPrevIm * hPrevIm;
-			const psiDelta = oneMinusASquared * (hPrevMagSq + pPrev);
-
-			const hPriorRe = markovForgetting * hPrevRe;
-			const hPriorIm = markovForgetting * hPrevIm;
-			const pPrior = aSquared * pPrev + psiDelta;
-
-			state.hReal[bin] = hPriorRe;
-			state.hImag[bin] = hPriorIm;
-			state.stateVariance[bin] = pPrior;
-
-			const yReBin = refReal[bin]!;
-			const yImBin = refImag[bin]!;
-			const dRe = hPriorRe * yReBin - hPriorIm * yImBin;
-			const dIm = hPriorRe * yImBin + hPriorIm * yReBin;
-
-			outBleedReal[bin] = outBleedReal[bin]! + dRe;
-			outBleedImag[bin] = outBleedImag[bin]! + dIm;
-		}
+		predictReference(
+			states[refIndex]!,
+			refReals[refIndex]!,
+			refImags[refIndex]!,
+			numBins,
+			{ markovForgetting, aSquared, oneMinusASquared },
+			outBleedReal,
+			outBleedImag,
+		);
 	}
 
 	if (targetActive) {
@@ -97,38 +79,96 @@ export function kalmanUpdateFrame(
 	}
 
 	for (let refIndex = 0; refIndex < refCount; refIndex++) {
-		const state = states[refIndex]!;
-		const refReal = refReals[refIndex]!;
-		const refImag = refImags[refIndex]!;
+		correctReference(
+			states[refIndex]!,
+			refReals[refIndex]!,
+			refImags[refIndex]!,
+			numBins,
+			{ temporalSmoothing, oneMinusBeta, rOverK },
+			targetReal,
+			targetImag,
+			outBleedReal,
+			outBleedImag,
+		);
+	}
+}
 
-		for (let bin = 0; bin < numBins; bin++) {
-			const eRe = targetReal[bin]! - outBleedReal[bin]!;
-			const eIm = targetImag[bin]! - outBleedImag[bin]!;
+function predictReference(
+	state: KalmanState,
+	refReal: Float32Array,
+	refImag: Float32Array,
+	numBins: number,
+	coefficients: { readonly markovForgetting: number; readonly aSquared: number; readonly oneMinusASquared: number },
+	outBleedReal: Float32Array,
+	outBleedImag: Float32Array,
+): void {
+	const { markovForgetting, aSquared, oneMinusASquared } = coefficients;
 
-			const yReBin = refReal[bin]!;
-			const yImBin = refImag[bin]!;
-			const yMagSq = yReBin * yReBin + yImBin * yImBin;
-			const pPrior = state.stateVariance[bin]!;
+	for (let bin = 0; bin < numBins; bin++) {
+		const hPrevRe = state.hReal[bin]!;
+		const hPrevIm = state.hImag[bin]!;
+		const pPrev = state.stateVariance[bin]!;
+		const hPrevMagSq = hPrevRe * hPrevRe + hPrevIm * hPrevIm;
+		const psiDelta = oneMinusASquared * (hPrevMagSq + pPrev);
 
-			const eMagSq = eRe * eRe + eIm * eIm;
-			const psiNew =
-				temporalSmoothing * state.measurementVariance[bin]! + oneMinusBeta * (eMagSq + rOverK * yMagSq * pPrior);
+		const hPriorRe = markovForgetting * hPrevRe;
+		const hPriorIm = markovForgetting * hPrevIm;
+		const pPrior = aSquared * pPrev + psiDelta;
 
-			const psiSafe = psiNew + 1e-30;
-			const kRe = (pPrior * yReBin) / psiSafe;
-			const kIm = (pPrior * -yImBin) / psiSafe;
+		state.hReal[bin] = hPriorRe;
+		state.hImag[bin] = hPriorIm;
+		state.stateVariance[bin] = pPrior;
 
-			const correctionRe = kRe * eRe - kIm * eIm;
-			const correctionIm = kRe * eIm + kIm * eRe;
+		const yReBin = refReal[bin]!;
+		const yImBin = refImag[bin]!;
+		const dRe = hPriorRe * yReBin - hPriorIm * yImBin;
+		const dIm = hPriorRe * yImBin + hPriorIm * yReBin;
 
-			state.hReal[bin] = state.hReal[bin]! + correctionRe;
-			state.hImag[bin] = state.hImag[bin]! + correctionIm;
+		outBleedReal[bin] = outBleedReal[bin]! + dRe;
+		outBleedImag[bin] = outBleedImag[bin]! + dIm;
+	}
+}
 
-			const kDotY = kRe * yReBin - kIm * yImBin;
-			const reductionFactor = 1 - kDotY > 0 ? 1 - kDotY : 0;
+function correctReference(
+	state: KalmanState,
+	refReal: Float32Array,
+	refImag: Float32Array,
+	numBins: number,
+	coefficients: { readonly temporalSmoothing: number; readonly oneMinusBeta: number; readonly rOverK: number },
+	targetReal: Float32Array,
+	targetImag: Float32Array,
+	outBleedReal: Float32Array,
+	outBleedImag: Float32Array,
+): void {
+	const { temporalSmoothing, oneMinusBeta, rOverK } = coefficients;
 
-			state.stateVariance[bin] = reductionFactor * pPrior;
-			state.measurementVariance[bin] = psiNew;
-		}
+	for (let bin = 0; bin < numBins; bin++) {
+		const eRe = targetReal[bin]! - outBleedReal[bin]!;
+		const eIm = targetImag[bin]! - outBleedImag[bin]!;
+
+		const yReBin = refReal[bin]!;
+		const yImBin = refImag[bin]!;
+		const yMagSq = yReBin * yReBin + yImBin * yImBin;
+		const pPrior = state.stateVariance[bin]!;
+
+		const eMagSq = eRe * eRe + eIm * eIm;
+		const psiNew =
+			temporalSmoothing * state.measurementVariance[bin]! + oneMinusBeta * (eMagSq + rOverK * yMagSq * pPrior);
+
+		const psiSafe = psiNew + 1e-30;
+		const kRe = (pPrior * yReBin) / psiSafe;
+		const kIm = (pPrior * -yImBin) / psiSafe;
+
+		const correctionRe = kRe * eRe - kIm * eIm;
+		const correctionIm = kRe * eIm + kIm * eRe;
+
+		state.hReal[bin] = state.hReal[bin]! + correctionRe;
+		state.hImag[bin] = state.hImag[bin]! + correctionIm;
+
+		const kDotY = kRe * yReBin - kIm * yImBin;
+		const reductionFactor = 1 - kDotY > 0 ? 1 - kDotY : 0;
+
+		state.stateVariance[bin] = reductionFactor * pPrior;
+		state.measurementVariance[bin] = psiNew;
 	}
 }

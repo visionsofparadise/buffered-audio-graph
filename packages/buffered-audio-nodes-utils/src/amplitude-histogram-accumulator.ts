@@ -1,3 +1,5 @@
+import { histogramMedian } from "./histogram-median";
+
 export class AmplitudeHistogramAccumulator {
 	private readonly bucketCount: number;
 	private buckets: Uint32Array;
@@ -86,25 +88,7 @@ export class AmplitudeHistogramAccumulator {
 			return this.cachedResult;
 		}
 
-		const target = this.totalSamples / 2;
-		const bucketWidth = this.bucketMax / this.bucketCount;
-		let cumulative = 0;
-		let median = 0;
-
-		for (let bucketIndex = 0; bucketIndex < this.bucketCount; bucketIndex++) {
-			const count = this.buckets[bucketIndex] ?? 0;
-			const next = cumulative + count;
-
-			if (next >= target) {
-				const fraction = count > 0 ? (target - cumulative) / count : 0;
-
-				median = (bucketIndex + fraction) * bucketWidth;
-
-				break;
-			}
-
-			cumulative = next;
-		}
+		const median = histogramMedian(this.buckets, this.bucketCount, this.totalSamples, this.bucketMax);
 
 		this.cachedResult = { buckets: this.buckets, bucketMax: this.bucketMax, median };
 

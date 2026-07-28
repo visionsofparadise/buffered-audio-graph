@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { cn } from "../../../../../utils/cn";
 import { Input } from "../../../../UI/Input";
-import { FieldLabel } from "./FieldLabel";
+import { FieldRow } from "./FieldRow";
+import { useCommittedText } from "./hooks/useCommittedText";
 
 export interface StringParameter {
 	readonly kind: "string";
@@ -22,59 +21,21 @@ export function StringRow({
 	readonly onParameterChange?: (name: string, value: unknown) => void;
 	readonly onParameterUnset?: (name: string) => void;
 }) {
-	const [local, setLocal] = useState(param.value);
-	const localRef = useRef(param.value);
-
-	useEffect(() => {
-		localRef.current = param.value;
-		setLocal(param.value);
-	}, [param.value]);
-
-	const controlDisabled = param.optional && !param.defined;
-	const setDefinedHandler =
-		onParameterChange || onParameterUnset
-			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-			: undefined;
-
-	const updateLocal = (next: string): void => {
-		localRef.current = next;
-		setLocal(next);
-	};
-
-	const commit = (): void => {
-		const next = localRef.current;
-
-		if (next === param.value) return;
-
-		onParameterChange?.(param.name, next);
-	};
+	const text = useCommittedText(
+		param.value,
+		onParameterChange ? (next) => onParameterChange(param.name, next) : undefined,
+	);
 
 	return (
-		<div className={cn("flex flex-col", dimmed && "opacity-40")}>
-			<FieldLabel
-				name={param.name}
-				optional={param.optional}
-				defined={param.defined}
-				onSetDefined={setDefinedHandler}
-			/>
-			<div className={cn("mt-1", controlDisabled && "pointer-events-none opacity-40")}>
-				<Input
-					type="text"
-					value={local}
-					onChange={onParameterChange ? updateLocal : undefined}
-					onBlur={onParameterChange ? commit : undefined}
-					onKeyDown={
-						onParameterChange
-							? (event) => {
-									if (event.key === "Enter") {
-										event.currentTarget.blur();
-									}
-								}
-							: undefined
-					}
-					className="w-full"
-				/>
-			</div>
-		</div>
+		<FieldRow
+			param={param}
+			dimmed={dimmed}
+			className="flex flex-col"
+			controlClassName="mt-1"
+			onParameterChange={onParameterChange}
+			onParameterUnset={onParameterUnset}
+		>
+			<Input type="text" {...text} className="w-full" />
+		</FieldRow>
 	);
 }

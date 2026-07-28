@@ -9,6 +9,8 @@ import {
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
+import { accumulateBlock } from "../../utils/accumulate-block";
+import { iterateWithGain } from "../../utils/gain";
 import { resolveLoudnessGain } from "./utils/gain";
 
 const schema = z.object({
@@ -23,13 +25,11 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 	private accumulator?: IntegratedLufsAccumulator;
 
 	override _prepare(block: Block): Block {
-		const frames = block.samples[0]?.length ?? 0;
-		const channelCount = block.samples.length;
-
-		if (frames === 0 || channelCount === 0) return block;
-
-		this.accumulator ??= new IntegratedLufsAccumulator(block.sampleRate, channelCount);
-		this.accumulator.push(block.samples, frames);
+		this.accumulator = accumulateBlock(
+			this.accumulator,
+			block,
+			(sampleRate, channelCount) => new IntegratedLufsAccumulator(sampleRate, channelCount),
+		);
 
 		return block;
 	}
@@ -40,25 +40,7 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 
 		this.log("loudness measured", { integrated, gain, target: this.properties.target });
 
-		for await (const block of buffered.iterate(44100)) {
-			if (gain === 1) {
-				yield block;
-
-				continue;
-			}
-
-			const samples = block.samples.map((channel) => {
-				const output = new Float32Array(channel.length);
-
-				for (let index = 0; index < channel.length; index++) {
-					output[index] = (channel[index] ?? 0) * gain;
-				}
-
-				return output;
-			});
-
-			yield { samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
-		}
+		yield* iterateWithGain(buffered, gain, 44100);
 	}
 }
 

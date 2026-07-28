@@ -2,6 +2,7 @@ import { open, type FileHandle } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { awaitStreamClose } from "./await-stream-close";
 import { buildBlock, deinterleave, pullBytes } from "./block-io";
+import { iterateBlocks } from "./iterate-blocks";
 import type { BlockBuffer } from "./block-buffer";
 import type { Block } from "../../block";
 
@@ -69,14 +70,8 @@ export class ReverseBlockReader {
 		return buildBlock(deinterleave(buffer, this.channels), offset, this.sampleRate, this.bitDepth);
 	}
 
-	async *iterate(frames: number): AsyncIterableIterator<Block> {
-		for (;;) {
-			const block = await this.read(frames);
-
-			if ((block.samples[0]?.length ?? 0) === 0) return;
-
-			yield block;
-		}
+	iterate(frames: number): AsyncIterableIterator<Block> {
+		return iterateBlocks(this, frames);
 	}
 
 	async close(): Promise<void> {

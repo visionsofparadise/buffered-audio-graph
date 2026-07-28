@@ -8,15 +8,12 @@ import {
 import { interleave } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
+import { createFfmpegPathField } from "../../utils/binary-fields";
 import { appendStderr, buildInputArgs, buildOutputArgs, parseStdoutFrames, spawnFfmpegChild } from "./utils/process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
 const schema = z.object({
-	ffmpegPath: z
-		.string()
-		.default("")
-		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
-		.describe("FFmpeg — audio/video processing tool"),
+	ffmpegPath: createFfmpegPathField(),
 	args: z.array(z.string()).default([]),
 	outputSampleRate: z
 		.number()

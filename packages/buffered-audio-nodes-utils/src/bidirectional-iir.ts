@@ -29,6 +29,34 @@ export function getBidirectionalIirAlphas(
 	return { causal, bidirectional };
 }
 
+function runForwardPass(buffer: Float32Array, alpha: number, initial: number): number {
+	const oneMinusAlpha = 1 - alpha;
+	let y = initial;
+
+	for (let index = 0; index < buffer.length; index++) {
+		const x = buffer[index] ?? 0;
+
+		y = alpha * x + oneMinusAlpha * y;
+		buffer[index] = y;
+	}
+
+	return y;
+}
+
+function runBackwardPass(buffer: Float32Array, alpha: number, initial: number): number {
+	const oneMinusAlpha = 1 - alpha;
+	let y = initial;
+
+	for (let index = buffer.length - 1; index >= 0; index--) {
+		const x = buffer[index] ?? 0;
+
+		y = alpha * x + oneMinusAlpha * y;
+		buffer[index] = y;
+	}
+
+	return y;
+}
+
 export class BidirectionalIir {
 	private readonly smoothingMs: number;
 	private readonly alphaBidirectional: number;
@@ -48,26 +76,8 @@ export class BidirectionalIir {
 
 		if (this.smoothingMs <= 0) return output;
 
-		const alpha = this.alphaBidirectional;
-		const oneMinusAlpha = 1 - alpha;
-
-		let y = output[0] ?? 0;
-
-		for (let index = 0; index < output.length; index++) {
-			const x = output[index] ?? 0;
-
-			y = alpha * x + oneMinusAlpha * y;
-			output[index] = y;
-		}
-
-		y = output[output.length - 1] ?? 0;
-
-		for (let index = output.length - 1; index >= 0; index--) {
-			const x = output[index] ?? 0;
-
-			y = alpha * x + oneMinusAlpha * y;
-			output[index] = y;
-		}
+		runForwardPass(output, this.alphaBidirectional, output[0] ?? 0);
+		runBackwardPass(output, this.alphaBidirectional, output[output.length - 1] ?? 0);
 
 		return output;
 	}
@@ -77,18 +87,7 @@ export class BidirectionalIir {
 
 		if (this.smoothingMs <= 0) return output;
 
-		const alpha = this.alphaCausal;
-		const oneMinusAlpha = 1 - alpha;
-		let y = state.value;
-
-		for (let index = 0; index < output.length; index++) {
-			const x = output[index] ?? 0;
-
-			y = alpha * x + oneMinusAlpha * y;
-			output[index] = y;
-		}
-
-		state.value = y;
+		state.value = runForwardPass(output, this.alphaCausal, state.value);
 
 		return output;
 	}
@@ -98,18 +97,7 @@ export class BidirectionalIir {
 
 		if (this.smoothingMs <= 0) return output;
 
-		const alpha = this.alphaBidirectional;
-		const oneMinusAlpha = 1 - alpha;
-		let y = state.value;
-
-		for (let index = 0; index < output.length; index++) {
-			const x = output[index] ?? 0;
-
-			y = alpha * x + oneMinusAlpha * y;
-			output[index] = y;
-		}
-
-		state.value = y;
+		state.value = runForwardPass(output, this.alphaBidirectional, state.value);
 
 		return output;
 	}
@@ -119,15 +107,6 @@ export class BidirectionalIir {
 
 		if (buffer.length === 0) return;
 
-		const alpha = this.alphaBidirectional;
-		const oneMinusAlpha = 1 - alpha;
-		let y = buffer[buffer.length - 1] ?? 0;
-
-		for (let index = buffer.length - 1; index >= 0; index--) {
-			const x = buffer[index] ?? 0;
-
-			y = alpha * x + oneMinusAlpha * y;
-			buffer[index] = y;
-		}
+		runBackwardPass(buffer, this.alphaBidirectional, buffer[buffer.length - 1] ?? 0);
 	}
 }

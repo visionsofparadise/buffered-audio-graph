@@ -2,6 +2,7 @@ import { TruePeakUpsampler, linearToDb, stft, type FftBackend } from "@buffered-
 import { isBindingPeak } from "./binding";
 import { designDispersionAllpass, schroederTargetToDelay } from "./dispersion";
 import { LATTICE_ORDER, peakPriorityAmount, stepDownToReflection } from "./lattice";
+import { argmaxMagnitude } from "./magnitude";
 import { measureFrameTruePeakDb } from "./objective";
 import { searchBindingPeak } from "./search";
 import type { ControlTrajectory } from "./trajectory";
@@ -46,16 +47,11 @@ export class TruePeakArgmaxAccumulator {
 			if (samples === undefined || upsampler === undefined) continue;
 
 			const slice = samples.length === frames ? samples : samples.subarray(0, frames);
-			const upsampled = upsampler.upsample(slice);
+			const peak = argmaxMagnitude(upsampler.upsample(slice));
 
-			for (let index = 0; index < upsampled.length; index++) {
-				const value = upsampled[index] ?? 0;
-				const magnitude = value < 0 ? -value : value;
-
-				if (magnitude > this.runningMax) {
-					this.runningMax = magnitude;
-					this.peakInputSample = this.inputBase + Math.floor(index / 4);
-				}
+			if (peak.magnitude > this.runningMax) {
+				this.runningMax = peak.magnitude;
+				this.peakInputSample = this.inputBase + Math.floor(peak.index / 4);
 			}
 		}
 
@@ -64,16 +60,11 @@ export class TruePeakArgmaxAccumulator {
 
 	finalize(): { db: number; peakInputSample: number } {
 		for (const upsampler of this.upsamplers) {
-			const tail = upsampler.flush();
+			const peak = argmaxMagnitude(upsampler.flush());
 
-			for (let index = 0; index < tail.length; index++) {
-				const value = tail[index] ?? 0;
-				const magnitude = value < 0 ? -value : value;
-
-				if (magnitude > this.runningMax) {
-					this.runningMax = magnitude;
-					this.peakInputSample = Math.max(0, this.inputBase - 1);
-				}
+			if (peak.magnitude > this.runningMax) {
+				this.runningMax = peak.magnitude;
+				this.peakInputSample = Math.max(0, this.inputBase - 1);
 			}
 		}
 

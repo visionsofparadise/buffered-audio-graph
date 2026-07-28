@@ -1,6 +1,7 @@
 import { BlockBuffer } from "@buffered-audio/core";
 import { SlidingWindowMaxStream, TruePeakUpsampler, linearToDb } from "@buffered-audio/utils";
 import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./constants";
+import { upsampleChannels, writeMaxAcrossChannels } from "./upsample";
 
 export interface BuildBaseRateDetectionCacheArgs {
 	buffer: BlockBuffer;
@@ -45,43 +46,10 @@ export async function buildBaseRateDetectionCache(args: BuildBaseRateDetectionCa
 		if (chunkFrames === 0) break;
 
 		const upChunkLength = chunkFrames * OVERSAMPLE_FACTOR;
-		const upChannels: Array<Float32Array> = [];
-
-		for (let channelIdx = 0; channelIdx < channels.length; channelIdx++) {
-			const channel = channels[channelIdx];
-			const upsampler = upsamplers[channelIdx];
-
-			if (channel === undefined || upsampler === undefined) {
-				upChannels.push(new Float32Array(upChunkLength));
-
-				continue;
-			}
-
-			const slice = channel.length === chunkFrames ? channel : channel.subarray(0, chunkFrames);
-			let scratch = upsampleScratches[channelIdx];
-
-			if (scratch === undefined || scratch.length < chunkFrames * OVERSAMPLE_FACTOR) {
-				scratch = new Float32Array(chunkFrames * OVERSAMPLE_FACTOR);
-				upsampleScratches[channelIdx] = scratch;
-			}
-
-			upChannels.push(upsampler.upsample(slice, scratch));
-		}
-
+		const upChannels = upsampleChannels(channels, upsamplers, chunkFrames, upsampleScratches);
 		const detect4xChunk = detectScratch4x.subarray(0, upChunkLength);
 
-		for (let upIdx = 0; upIdx < upChunkLength; upIdx++) {
-			let max = 0;
-
-			for (let channelIdx = 0; channelIdx < upChannels.length; channelIdx++) {
-				const upSample = upChannels[channelIdx]?.[upIdx] ?? 0;
-				const absolute = Math.abs(upSample);
-
-				if (absolute > max) max = absolute;
-			}
-
-			detect4xChunk[upIdx] = max;
-		}
+		writeMaxAcrossChannels(upChannels, detect4xChunk, upChunkLength);
 
 		const detectBaseChunk = detectScratchBase.subarray(0, chunkFrames);
 

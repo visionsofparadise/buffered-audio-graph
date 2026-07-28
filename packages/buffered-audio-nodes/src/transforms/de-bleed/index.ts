@@ -21,6 +21,7 @@ import {
 } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
+import { createFftwAddonPathField, createVkfftAddonPathField } from "../../utils/binary-fields";
 import { readToBuffer } from "../../utils/read-to-buffer";
 import { createNlmWorkerPool, type NlmWorkerPool } from "./nlm-worker-pool";
 import {
@@ -66,26 +67,8 @@ const schema = z.object({
 	adaptationSpeed: z.number().min(0).max(10).multipleOf(0.1).default(3).describe("Adaptation Speed"),
 	fftSize: z.number().min(512).max(16384).multipleOf(256).default(4096).describe("FFT Size"),
 	hopSize: z.number().min(128).max(4096).multipleOf(64).default(1024).describe("Hop Size"),
-	vkfftAddonPath: z
-		.string()
-		.default("")
-		.meta({
-			input: "file",
-			mode: "open",
-			binary: "vkfft-addon",
-			download: "https://github.com/visionsofparadise/vkfft-addon",
-		})
-		.describe("VkFFT native addon — GPU FFT acceleration"),
-	fftwAddonPath: z
-		.string()
-		.default("")
-		.meta({
-			input: "file",
-			mode: "open",
-			binary: "fftw-addon",
-			download: "https://github.com/visionsofparadise/fftw-addon",
-		})
-		.describe("FFTW native addon — CPU FFT acceleration"),
+	vkfftAddonPath: createVkfftAddonPathField(),
+	fftwAddonPath: createFftwAddonPathField(),
 	dfttBackend: z.enum(["", "js", "fftw", "vkfft"]).default("").describe("DFTT Backend Override"),
 });
 

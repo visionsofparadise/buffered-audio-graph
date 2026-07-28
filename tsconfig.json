@@ -18,5 +18,5 @@
 		"incremental": true
 	},
 	"exclude": ["node_modules", "dist", "out", "build", "coverage", "**/.*"],
-	"include": []
+	"include": ["vitest.shared.config.ts"]
 }

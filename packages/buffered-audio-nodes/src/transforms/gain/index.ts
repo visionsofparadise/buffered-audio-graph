@@ -6,6 +6,7 @@ import {
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
+import { applyGain } from "../../utils/gain";
 
 const schema = z.object({
 	gain: z.number().min(-60).max(24).multipleOf(0.1).default(0).describe("Gain (dB)"),
@@ -23,17 +24,7 @@ export class GainStream extends UnbufferedTransformStream<GainNode> {
 			return;
 		}
 
-		const samples = block.samples.map((channel) => {
-			const output = new Float32Array(channel.length);
-
-			for (let index = 0; index < channel.length; index++) {
-				output[index] = (channel[index] ?? 0) * linear;
-			}
-
-			return output;
-		});
-
-		yield { samples, offset: block.offset, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
+		yield applyGain(block, linear);
 	}
 }
 

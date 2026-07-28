@@ -3,19 +3,22 @@ interface BiquadCoefficients {
 	fa: [number, number, number];
 }
 
-export function biquadFilter(
-	samples: Float32Array,
+function applyBiquadPass(
+	input: Float32Array,
+	output: Float32Array,
 	fb: [number, number, number],
 	fa: [number, number, number],
-): Float32Array {
-	const output = new Float32Array(samples.length);
+	reverse: boolean,
+): void {
+	const step = reverse ? -1 : 1;
+	let index = reverse ? input.length - 1 : 0;
 	let x1 = 0;
 	let x2 = 0;
 	let y1 = 0;
 	let y2 = 0;
 
-	for (let index = 0; index < samples.length; index++) {
-		const x0 = samples[index] ?? 0;
+	for (let remaining = input.length; remaining > 0; remaining--) {
+		const x0 = input[index] ?? 0;
 		const y0 = fb[0] * x0 + fb[1] * x1 + fb[2] * x2 - fa[1] * y1 - fa[2] * y2;
 
 		output[index] = y0;
@@ -23,7 +26,18 @@ export function biquadFilter(
 		x1 = x0;
 		y2 = y1;
 		y1 = y0;
+		index += step;
 	}
+}
+
+export function biquadFilter(
+	samples: Float32Array,
+	fb: [number, number, number],
+	fa: [number, number, number],
+): Float32Array {
+	const output = new Float32Array(samples.length);
+
+	applyBiquadPass(samples, output, fb, fa, false);
 
 	return output;
 }
@@ -31,51 +45,31 @@ export function biquadFilter(
 export function zeroPhaseBiquadFilter(signal: Float32Array, coefficients: BiquadCoefficients): void {
 	const { fb, fa } = coefficients;
 
-	let x1 = 0,
-		x2 = 0,
-		y1 = 0,
-		y2 = 0;
-
-	for (let index = 0; index < signal.length; index++) {
-		const x0 = signal[index] ?? 0;
-		const y0 = fb[0] * x0 + fb[1] * x1 + fb[2] * x2 - fa[1] * y1 - fa[2] * y2;
-
-		signal[index] = y0;
-		x2 = x1;
-		x1 = x0;
-		y2 = y1;
-		y1 = y0;
-	}
-
-	x1 = 0;
-	x2 = 0;
-	y1 = 0;
-	y2 = 0;
-
-	for (let index = signal.length - 1; index >= 0; index--) {
-		const x0 = signal[index] ?? 0;
-		const y0 = fb[0] * x0 + fb[1] * x1 + fb[2] * x2 - fa[1] * y1 - fa[2] * y2;
-
-		signal[index] = y0;
-		x2 = x1;
-		x1 = x0;
-		y2 = y1;
-		y1 = y0;
-	}
+	applyBiquadPass(signal, signal, fb, fa, false);
+	applyBiquadPass(signal, signal, fb, fa, true);
 }
 
 // eslint-disable-next-line comment-rules/no-restricted-comments
 // Low/high-pass coefficient forms follow Robert Bristow-Johnson's Audio EQ Cookbook (W3C copy).
+function cookbookIntermediates(
+	sampleRate: number,
+	frequency: number,
+	quality: number,
+): { readonly cosW0: number; readonly alpha: number; readonly a0: number } {
+	const w0 = (2 * Math.PI * frequency) / sampleRate;
+	const cosW0 = Math.cos(w0);
+	const sinW0 = Math.sin(w0);
+	const alpha = sinW0 / (2 * quality);
+
+	return { cosW0, alpha, a0: 1 + alpha };
+}
+
 export function lowPassCoefficients(
 	sampleRate: number,
 	frequency: number,
 	quality: number = Math.SQRT1_2,
 ): BiquadCoefficients {
-	const w0 = (2 * Math.PI * frequency) / sampleRate;
-	const cosW0 = Math.cos(w0);
-	const sinW0 = Math.sin(w0);
-	const alpha = sinW0 / (2 * quality);
-	const a0 = 1 + alpha;
+	const { cosW0, alpha, a0 } = cookbookIntermediates(sampleRate, frequency, quality);
 
 	return {
 		fb: [(1 - cosW0) / 2 / a0, (1 - cosW0) / a0, (1 - cosW0) / 2 / a0],
@@ -88,11 +82,7 @@ export function highPassCoefficients(
 	frequency: number,
 	quality: number = Math.SQRT1_2,
 ): BiquadCoefficients {
-	const w0 = (2 * Math.PI * frequency) / sampleRate;
-	const cosW0 = Math.cos(w0);
-	const sinW0 = Math.sin(w0);
-	const alpha = sinW0 / (2 * quality);
-	const a0 = 1 + alpha;
+	const { cosW0, alpha, a0 } = cookbookIntermediates(sampleRate, frequency, quality);
 
 	return {
 		fb: [(1 + cosW0) / 2 / a0, -(1 + cosW0) / a0, (1 + cosW0) / 2 / a0],

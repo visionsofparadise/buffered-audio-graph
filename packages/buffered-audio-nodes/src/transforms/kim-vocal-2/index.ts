@@ -1,10 +1,5 @@
 import {
-	BufferedTransformStream,
-	BlockBuffer,
-	createProgressGate,
 	TransformNode,
-	WHOLE_FILE,
-	type Block,
 	type StreamSetupContext,
 	type StreamContext,
 	type TransformNodeProperties,
@@ -12,11 +7,13 @@ import {
 import { bandpass, MixedRadixFft } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
+import { createFfmpegPathField, createOnnxAddonPathField } from "../../utils/binary-fields";
+import { BoundedWriter, buildWriteChannels } from "../../utils/model-blocks";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
-import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
-import { createResampleComposition } from "../../utils/resample-composition";
+import { WholeFileOnnxStream, type ModelPassArgs } from "../../utils/onnx-stream";
+import { SegmentPump } from "../../utils/segment-pump";
 import { buildTransitionWindow, createSegmentWorkspace, processSegment } from "./utils/segment";
-import type { FfmpegStream } from "../ffmpeg";
+import type { OnnxSession } from "../../utils/onnx-runtime";
 
 const schema = z.object({
 	modelPath: z
@@ -30,21 +27,8 @@ const schema = z.object({
 			download: "https://huggingface.co/seanghay/uvr_models",
 		})
 		.describe("MDX-Net vocal isolation model (.onnx)"),
-	ffmpegPath: z
-		.string()
-		.default("")
-		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
-		.describe("FFmpeg — audio/video processing tool"),
-	onnxAddonPath: z
-		.string()
-		.default("")
-		.meta({
-			input: "file",
-			mode: "open",
-			binary: "onnx-addon",
-			download: "https://github.com/visionsofparadise/onnx-runtime-addon",
-		})
-		.describe("ONNX Runtime native addon"),
+	ffmpegPath: createFfmpegPathField(),
+	onnxAddonPath: createOnnxAddonPathField(),
 	highPass: z.number().min(20).max(500).multipleOf(10).default(80).describe("High Pass"),
 	lowPass: z.number().min(1000).max(22050).multipleOf(100).default(20000).describe("Low Pass"),
 });
@@ -62,190 +46,76 @@ const TRANSITION_POWER = 1.0;
 
 const CHUNK_FRAMES = 44100;
 
-export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
-	override blockSize = WHOLE_FILE;
+export class KimVocal2Stream extends WholeFileOnnxStream<KimVocal2Node> {
+	protected override readonly modelChunkFrames = CHUNK_FRAMES;
 
 	private session!: OnnxSession;
 	private fftInstance: MixedRadixFft;
-	private readonly renderContext: StreamContext;
-	private upResample?: FfmpegStream;
-	private downResample?: FfmpegStream;
 
 	constructor(node: KimVocal2Node, context: StreamContext) {
 		super(node, context);
 		this.fftInstance = new MixedRadixFft(N_FFT);
-
-		this.renderContext = context;
 	}
 
 	override _setup(context: StreamSetupContext): void {
-		this.session = createOnnxSession(
-			this.properties.onnxAddonPath,
-			this.properties.modelPath,
-			{ executionProviders: filterOnnxProviders(context.executionProviders) },
-			(message, data) => this.log(message, data),
-		);
-
-		const composition = createResampleComposition({
-			context,
-			streamContext: this.renderContext,
-			ffmpegPath: this.properties.ffmpegPath,
+		this.session = this.setupModelSession(context, {
+			modelPath: this.properties.modelPath,
 			modelRate: SAMPLE_RATE,
+			executionProviders: filterOnnxProviders(context.executionProviders),
 		});
-
-		if (composition) {
-			this.upResample = composition.upResample;
-			this.downResample = composition.downResample;
-		}
 	}
 
-	override _pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		if (!this.upResample || !this.downResample) return super._pipe(input);
-
-		return this.downResample._pipe(super._pipe(this.upResample._pipe(input)));
-	}
-
-	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
-		const originalFrames = buffered.frames;
-		const channels = buffered.channels;
-
-		if (originalFrames === 0 || channels === 0) return;
-
-		const bitDepth = this.bitDepth;
-
-		await buffered.reset();
-
-		const output = new BlockBuffer();
-
-		try {
-			await this.runMainPass({
-				buffer: buffered,
-				output,
-				channels,
-				originalFrames,
-				bitDepth,
-			});
-
-			await output.reset();
-
-			yield* output.iterate(CHUNK_FRAMES);
-		} finally {
-			await output.close();
-		}
-	}
-
-	private async runMainPass(args: {
-		readonly buffer: BlockBuffer;
-		readonly output: BlockBuffer;
-		readonly channels: number;
-		readonly originalFrames: number;
-		readonly bitDepth: number | undefined;
-	}): Promise<void> {
+	protected override async runMainPass(args: ModelPassArgs): Promise<void> {
 		const { buffer, output, channels, originalFrames, bitDepth } = args;
-		const stride = Math.round((1 - OVERLAP) * SEGMENT_SAMPLES);
 		const isMono = channels < 2;
 
-		const writerState = { written: 0 };
+		const writer = new BoundedWriter({ output, sampleRate: SAMPLE_RATE, bitDepth, totalFrames: originalFrames });
 
 		const weight = buildTransitionWindow(SEGMENT_SAMPLES, TRANSITION_POWER);
 
 		const workspace = createSegmentWorkspace(SEGMENT_SAMPLES);
 
-		const segLeft = new Float32Array(SEGMENT_SAMPLES);
-		const segRight = new Float32Array(SEGMENT_SAMPLES);
-		let segFilled = 0;
-		let inputExhausted = false;
+		const pump = new SegmentPump(SEGMENT_SAMPLES, OVERLAP);
+		const segLeft = pump.left;
+		const segRight = pump.right;
 
 		const outAccumLeft = new Float32Array(SEGMENT_SAMPLES);
 		const outAccumRight = new Float32Array(SEGMENT_SAMPLES);
 		const sumWeight = new Float32Array(SEGMENT_SAMPLES);
 
-		const progressGate = createProgressGate(originalFrames);
-		let stableEmitted = 0;
+		await pump.run({
+			buffer,
+			writer,
+			channels,
+			chunkFrames: CHUNK_FRAMES,
+			originalFrames,
+			onSegment: async (chunkLength, nStable) => {
+				const processed = processSegment(
+					segLeft,
+					segRight,
+					0,
+					chunkLength,
+					isMono,
+					workspace,
+					this.fftInstance,
+					this.session,
+					COMPENSATE,
+				);
 
-		for (;;) {
-			if (!inputExhausted) {
-				while (segFilled < SEGMENT_SAMPLES) {
-					const need = SEGMENT_SAMPLES - segFilled;
-					const got = await pullNextChunkAt441({ buffer, channels, frames: Math.min(need, CHUNK_FRAMES) });
+				if (processed) {
+					for (let index = 0; index < chunkLength; index++) {
+						const wt = weight[index] ?? 1;
 
-					if (got === undefined || got[0].length === 0) {
-						inputExhausted = true;
-
-						break;
+						outAccumLeft[index] = (outAccumLeft[index] ?? 0) + (processed.left[index] ?? 0) * wt;
+						outAccumRight[index] = (outAccumRight[index] ?? 0) + (processed.right[index] ?? 0) * wt;
+						sumWeight[index] = (sumWeight[index] ?? 0) + wt;
 					}
-
-					const left = got[0];
-					const right = got[1];
-					const frames = left.length;
-
-					for (let index = 0; index < frames; index++) {
-						segLeft[segFilled + index] = left[index] ?? 0;
-						segRight[segFilled + index] = right[index] ?? 0;
-					}
-
-					segFilled += frames;
 				}
-			}
 
-			if (segFilled === 0) break;
-
-			const chunkLength = segFilled;
-			const processed = processSegment(
-				segLeft,
-				segRight,
-				0,
-				chunkLength,
-				isMono,
-				workspace,
-				this.fftInstance,
-				this.session,
-				COMPENSATE,
-			);
-
-			const isFinalIter = inputExhausted;
-			const nStable = isFinalIter ? chunkLength : stride;
-
-			if (processed) {
-				for (let index = 0; index < chunkLength; index++) {
-					const wt = weight[index] ?? 1;
-
-					outAccumLeft[index] = (outAccumLeft[index] ?? 0) + (processed.left[index] ?? 0) * wt;
-					outAccumRight[index] = (outAccumRight[index] ?? 0) + (processed.right[index] ?? 0) * wt;
-					sumWeight[index] = (sumWeight[index] ?? 0) + wt;
-				}
-			}
-
-			await this.emitStable({
-				nStable,
-				outAccumLeft,
-				outAccumRight,
-				sumWeight,
-				output,
-				channels,
-				bitDepth,
-				originalFrames,
-				writerState,
-			});
-
-			stableEmitted += nStable;
-
-			const doneFrames = Math.min(stableEmitted, originalFrames);
-
-			if (progressGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, originalFrames);
-
-			if (!isFinalIter) {
-				segLeft.copyWithin(0, nStable, SEGMENT_SAMPLES);
-				segRight.copyWithin(0, nStable, SEGMENT_SAMPLES);
-				segLeft.fill(0, SEGMENT_SAMPLES - nStable, SEGMENT_SAMPLES);
-				segRight.fill(0, SEGMENT_SAMPLES - nStable, SEGMENT_SAMPLES);
-				segFilled = SEGMENT_SAMPLES - nStable;
-			} else {
-				break;
-			}
-		}
-
-		await padTail(output, channels, originalFrames, writerState.written, SAMPLE_RATE, bitDepth);
+				await this.emitStable({ nStable, outAccumLeft, outAccumRight, sumWeight, channels, writer });
+			},
+			onProgress: (done, total) => this.emitProgress("process", done, total),
+		});
 	}
 
 	private async emitStable(args: {
@@ -253,23 +123,10 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 		readonly outAccumLeft: Float32Array;
 		readonly outAccumRight: Float32Array;
 		readonly sumWeight: Float32Array;
-		readonly output: BlockBuffer;
 		readonly channels: number;
-		readonly bitDepth: number | undefined;
-		readonly originalFrames: number;
-		readonly writerState: { written: number };
+		readonly writer: BoundedWriter;
 	}): Promise<void> {
-		const {
-			nStable,
-			outAccumLeft,
-			outAccumRight,
-			sumWeight,
-			output,
-			channels,
-			bitDepth,
-			originalFrames,
-			writerState,
-		} = args;
+		const { nStable, outAccumLeft, outAccumRight, sumWeight, channels, writer } = args;
 
 		if (nStable <= 0) return;
 
@@ -285,16 +142,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 
 		bandpass([outLeft, outRight], SAMPLE_RATE, this.properties.highPass, this.properties.lowPass);
 
-		const writeChannels = buildWriteChannels(outLeft, outRight, channels);
-		const remaining = Math.max(0, originalFrames - writerState.written);
-
-		if (remaining > 0) {
-			const take = Math.min(nStable, remaining);
-			const sliced = take === nStable ? writeChannels : writeChannels.map((channel) => channel.subarray(0, take));
-
-			await output.write(sliced, SAMPLE_RATE, bitDepth);
-			writerState.written += take;
-		}
+		await writer.write(buildWriteChannels(outLeft, outRight, channels), nStable);
 
 		outAccumLeft.copyWithin(0, nStable, SEGMENT_SAMPLES);
 		outAccumLeft.fill(0, SEGMENT_SAMPLES - nStable, SEGMENT_SAMPLES);
@@ -303,56 +151,6 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 		sumWeight.copyWithin(0, nStable, SEGMENT_SAMPLES);
 		sumWeight.fill(0, SEGMENT_SAMPLES - nStable, SEGMENT_SAMPLES);
 	}
-}
-
-async function pullNextChunkAt441(args: {
-	readonly buffer: BlockBuffer;
-	readonly channels: number;
-	readonly frames: number;
-}): Promise<readonly [Float32Array, Float32Array] | undefined> {
-	const { buffer, channels, frames } = args;
-
-	const chunk = await buffer.read(frames);
-	const got = chunk.samples[0]?.length ?? 0;
-
-	if (got === 0) return undefined;
-
-	const left = chunk.samples[0] ?? new Float32Array(got);
-	const right = channels >= 2 ? (chunk.samples[1] ?? left) : left;
-
-	return [left, right];
-}
-
-function buildWriteChannels(left: Float32Array, right: Float32Array, channels: number): Array<Float32Array> {
-	const out: Array<Float32Array> = [];
-
-	for (let channel = 0; channel < channels; channel++) {
-		if (channel === 0) out.push(left);
-		else if (channel === 1) out.push(right);
-		else out.push(left);
-	}
-
-	return out;
-}
-
-async function padTail(
-	output: BlockBuffer,
-	channels: number,
-	originalFrames: number,
-	written: number,
-	sampleRate: number,
-	bitDepth: number | undefined,
-): Promise<void> {
-	if (written >= originalFrames) return;
-
-	const missing = originalFrames - written;
-	const padChannels: Array<Float32Array> = [];
-
-	for (let channel = 0; channel < Math.max(1, channels); channel++) {
-		padChannels.push(new Float32Array(missing));
-	}
-
-	await output.write(padChannels, sampleRate, bitDepth);
 }
 
 export class KimVocal2Node extends TransformNode<KimVocal2Properties> {

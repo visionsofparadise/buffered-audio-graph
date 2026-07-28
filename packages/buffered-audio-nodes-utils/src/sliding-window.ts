@@ -1,12 +1,15 @@
+type Direction = 1 | -1;
+
 // eslint-disable-next-line comment-rules/no-restricted-comments
 // Monotonic deque per Lemire, "Streaming Maximum-Minimum Filter Using No More than Three Comparisons per Element" (2006).
-export function slidingWindowMax(input: Float32Array, halfWidth: number): Float32Array {
+function slidingWindowExtreme(input: Float32Array, halfWidth: number, direction: Direction): Float32Array {
 	const length = input.length;
 	const output = new Float32Array(length);
 
 	if (length === 0) return output;
 
 	const deque = new Int32Array(length);
+	const dequeValues = new Float32Array(length);
 	let dequeHead = 0;
 	let dequeTail = 0;
 	let nextRight = 0;
@@ -16,13 +19,14 @@ export function slidingWindowMax(input: Float32Array, halfWidth: number): Float3
 		const leftEdge = Math.max(0, outputIdx - halfWidth);
 
 		while (nextRight <= rightEdge) {
-			const value = input[nextRight] ?? 0;
+			const orderedValue = (input[nextRight] ?? 0) * direction;
 
-			while (dequeTail > dequeHead && (input[deque[dequeTail - 1] ?? 0] ?? 0) <= value) {
+			while (dequeTail > dequeHead && (dequeValues[dequeTail - 1] ?? 0) <= orderedValue) {
 				dequeTail--;
 			}
 
 			deque[dequeTail] = nextRight;
+			dequeValues[dequeTail] = orderedValue;
 			dequeTail++;
 			nextRight++;
 		}
@@ -37,8 +41,9 @@ export function slidingWindowMax(input: Float32Array, halfWidth: number): Float3
 	return output;
 }
 
-export class SlidingWindowMaxStream {
+class SlidingWindowExtremeStream {
 	private readonly halfWidth: number;
+	private readonly direction: Direction;
 	private readonly lookAhead: Float32Array;
 	private readonly deque: Int32Array;
 	private dequeHead = 0;
@@ -46,14 +51,13 @@ export class SlidingWindowMaxStream {
 	private consumedFrames = 0;
 	private emittedFrames = 0;
 
-	constructor(halfWidth: number) {
+	constructor(halfWidth: number, direction: Direction, callerName: string) {
 		if (halfWidth < 0 || !Number.isFinite(halfWidth)) {
-			throw new RangeError(
-				`SlidingWindowMaxStream: halfWidth must be a non-negative finite number, got ${halfWidth}`,
-			);
+			throw new RangeError(`${callerName}: halfWidth must be a non-negative finite number, got ${halfWidth}`);
 		}
 
 		this.halfWidth = halfWidth;
+		this.direction = direction;
 
 		const ringCapacity = 2 * halfWidth + 1;
 
@@ -64,6 +68,7 @@ export class SlidingWindowMaxStream {
 	push(chunk: Float32Array, isFinal: boolean): Float32Array {
 		const chunkLength = chunk.length;
 		const halfWidth = this.halfWidth;
+		const direction = this.direction;
 		const ringSize = this.lookAhead.length;
 		const dequeCapacity = this.deque.length;
 		const totalAfter = this.consumedFrames + chunkLength;
@@ -74,15 +79,15 @@ export class SlidingWindowMaxStream {
 
 		for (let chunkIdx = 0; chunkIdx < chunkLength; chunkIdx++) {
 			const inputIdx = this.consumedFrames;
-			const value = chunk[chunkIdx] ?? 0;
+			const orderedValue = (chunk[chunkIdx] ?? 0) * direction;
 
-			this.lookAhead[inputIdx % ringSize] = value;
+			this.lookAhead[inputIdx % ringSize] = orderedValue;
 
 			while (this.dequeTail > this.dequeHead) {
 				const tailIdx = this.deque[(this.dequeTail - 1) % dequeCapacity] ?? 0;
 				const tailValue = this.lookAhead[tailIdx % ringSize] ?? 0;
 
-				if (tailValue > value) break;
+				if (tailValue > orderedValue) break;
 
 				this.dequeTail--;
 			}
@@ -103,7 +108,7 @@ export class SlidingWindowMaxStream {
 
 			const frontIdx = this.deque[this.dequeHead % dequeCapacity] ?? 0;
 
-			output[outputCursor] = this.lookAhead[frontIdx % ringSize] ?? 0;
+			output[outputCursor] = (this.lookAhead[frontIdx % ringSize] ?? 0) * direction;
 			outputCursor++;
 			this.emittedFrames++;
 		}
@@ -124,7 +129,7 @@ export class SlidingWindowMaxStream {
 				} else {
 					const frontIdx = this.deque[this.dequeHead % dequeCapacity] ?? 0;
 
-					output[outputCursor] = this.lookAhead[frontIdx % ringSize] ?? 0;
+					output[outputCursor] = (this.lookAhead[frontIdx % ringSize] ?? 0) * direction;
 				}
 
 				outputCursor++;
@@ -133,5 +138,37 @@ export class SlidingWindowMaxStream {
 		}
 
 		return output;
+	}
+}
+
+export function slidingWindowMax(input: Float32Array, halfWidth: number): Float32Array {
+	return slidingWindowExtreme(input, halfWidth, 1);
+}
+
+export function slidingWindowMin(input: Float32Array, halfWidth: number): Float32Array {
+	return slidingWindowExtreme(input, halfWidth, -1);
+}
+
+export class SlidingWindowMaxStream {
+	private readonly window: SlidingWindowExtremeStream;
+
+	constructor(halfWidth: number) {
+		this.window = new SlidingWindowExtremeStream(halfWidth, 1, "SlidingWindowMaxStream");
+	}
+
+	push(chunk: Float32Array, isFinal: boolean): Float32Array {
+		return this.window.push(chunk, isFinal);
+	}
+}
+
+export class SlidingWindowMinStream {
+	private readonly window: SlidingWindowExtremeStream;
+
+	constructor(halfWidth: number) {
+		this.window = new SlidingWindowExtremeStream(halfWidth, -1, "SlidingWindowMinStream");
+	}
+
+	push(chunk: Float32Array, isFinal: boolean): Float32Array {
+		return this.window.push(chunk, isFinal);
 	}
 }

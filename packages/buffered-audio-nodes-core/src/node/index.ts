@@ -32,6 +32,15 @@ function parseNodeProperties<P extends BufferedAudioNodeProperties>(
 	}
 }
 
+export function appendChild<P extends BufferedAudioNodeProperties>(
+	node: BufferedAudioNode<P>,
+	child: BufferedAudioNode | Composition,
+): void {
+	const head = "head" in child ? child.head : child;
+
+	node.properties = { ...node.properties, children: [...(node.properties.children ?? []), head] } as P;
+}
+
 export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> {
 	static readonly packageName: string;
 	static readonly apiVersion: number = 1;

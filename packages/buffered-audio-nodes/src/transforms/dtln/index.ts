@@ -1,33 +1,32 @@
 import {
-	BlockBuffer,
-	BufferedTransformStream,
 	createProgressGate,
 	TransformNode,
-	WHOLE_FILE,
-	type Block,
-	type StreamContext,
 	type StreamSetupContext,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
 import { initFftBackend, type FftBackend } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
+import {
+	createFfmpegPathField,
+	createFftwAddonPathField,
+	createOnnxAddonPathField,
+	createVkfftAddonPathField,
+} from "../../utils/binary-fields";
+import { BoundedWriter, pullModelChunk } from "../../utils/model-blocks";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
-import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
-import { createResampleComposition } from "../../utils/resample-composition";
+import { WholeFileOnnxStream, type ModelPassArgs } from "../../utils/onnx-stream";
 import { BLOCK_LEN, BLOCK_SHIFT, DtlnBlockStream } from "./utils/dtln";
 import {
 	appendToStepBatch,
 	CHUNK_FRAMES,
 	commitStepBatch,
 	DTLN_SAMPLE_RATE,
-	padTail,
-	pullNextChunkAt16k,
 	STEP_BATCH_SIZE,
 	stepAllChannels,
 	WARMUP_SAMPLES,
 } from "./utils/pump";
-import type { FfmpegStream } from "../ffmpeg";
+import type { OnnxSession } from "../../utils/onnx-runtime";
 
 const schema = z.object({
 	modelPath1: z
@@ -52,77 +51,27 @@ const schema = z.object({
 			download: "https://github.com/breizhn/DTLN",
 		})
 		.describe("DTLN time-domain model (.onnx)"),
-	ffmpegPath: z
-		.string()
-		.default("")
-		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
-		.describe("FFmpeg — audio/video processing tool"),
-	onnxAddonPath: z
-		.string()
-		.default("")
-		.meta({
-			input: "file",
-			mode: "open",
-			binary: "onnx-addon",
-			download: "https://github.com/visionsofparadise/onnx-runtime-addon",
-		})
-		.describe("ONNX Runtime native addon"),
-	vkfftAddonPath: z
-		.string()
-		.default("")
-		.meta({
-			input: "file",
-			mode: "open",
-			binary: "vkfft-addon",
-			download: "https://github.com/visionsofparadise/vkfft-addon",
-		})
-		.describe("VkFFT native addon — GPU FFT acceleration"),
-	fftwAddonPath: z
-		.string()
-		.default("")
-		.meta({
-			input: "file",
-			mode: "open",
-			binary: "fftw-addon",
-			download: "https://github.com/visionsofparadise/fftw-addon",
-		})
-		.describe("FFTW native addon — CPU FFT acceleration"),
+	ffmpegPath: createFfmpegPathField(),
+	onnxAddonPath: createOnnxAddonPathField(),
+	vkfftAddonPath: createVkfftAddonPathField(),
+	fftwAddonPath: createFftwAddonPathField(),
 });
 
 export interface DtlnProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
-export class DtlnStream extends BufferedTransformStream<DtlnNode> {
-	override blockSize = WHOLE_FILE;
+export class DtlnStream extends WholeFileOnnxStream<DtlnNode> {
+	protected override readonly modelChunkFrames = CHUNK_FRAMES;
 
 	private session1!: OnnxSession;
 	private session2!: OnnxSession;
 	private fftBackend?: FftBackend;
 	private fftAddonOptions?: { vkfftPath?: string; fftwPath?: string };
-	private readonly renderContext: StreamContext;
-	private upResample?: FfmpegStream;
-	private downResample?: FfmpegStream;
-
-	constructor(node: DtlnNode, context: StreamContext) {
-		super(node, context);
-
-		this.renderContext = context;
-	}
 
 	override _setup(context: StreamSetupContext): void {
 		const onnxProviders = filterOnnxProviders(context.executionProviders);
 
-		this.session1 = createOnnxSession(
-			this.properties.onnxAddonPath,
-			this.properties.modelPath1,
-			{ executionProviders: onnxProviders },
-			(message, data) => this.log(message, data),
-		);
-		this.session2 = createOnnxSession(
-			this.properties.onnxAddonPath,
-			this.properties.modelPath2,
-			{ executionProviders: onnxProviders },
-			(message, data) => this.log(message, data),
-		);
+		this.session1 = this.createSession(this.properties.modelPath1, { executionProviders: onnxProviders });
+		this.session2 = this.createSession(this.properties.modelPath2, { executionProviders: onnxProviders });
 
 		const cpuProviders = context.executionProviders.filter((ep) => ep !== "gpu");
 		const fft = initFftBackend(cpuProviders.length > 0 ? cpuProviders : ["cpu"], this.properties);
@@ -130,61 +79,10 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 		this.fftBackend = fft.backend;
 		this.fftAddonOptions = fft.addonOptions;
 
-		const composition = createResampleComposition({
-			context,
-			streamContext: this.renderContext,
-			ffmpegPath: this.properties.ffmpegPath,
-			modelRate: DTLN_SAMPLE_RATE,
-		});
-
-		if (composition) {
-			this.upResample = composition.upResample;
-			this.downResample = composition.downResample;
-		}
+		this.setupResampleComposition(context, DTLN_SAMPLE_RATE);
 	}
 
-	override _pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		if (!this.upResample || !this.downResample) return super._pipe(input);
-
-		return this.downResample._pipe(super._pipe(this.upResample._pipe(input)));
-	}
-
-	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
-		const originalFrames = buffered.frames;
-		const channels = buffered.channels;
-
-		if (originalFrames === 0 || channels === 0) return;
-
-		const bitDepth = this.bitDepth;
-
-		await buffered.reset();
-
-		const output = new BlockBuffer();
-
-		try {
-			await this.runMainPass({
-				buffer: buffered,
-				output,
-				channels,
-				originalFrames,
-				bitDepth,
-			});
-
-			await output.reset();
-
-			yield* output.iterate(CHUNK_FRAMES);
-		} finally {
-			await output.close();
-		}
-	}
-
-	private async runMainPass(args: {
-		readonly buffer: BlockBuffer;
-		readonly output: BlockBuffer;
-		readonly channels: number;
-		readonly originalFrames: number;
-		readonly bitDepth: number | undefined;
-	}): Promise<void> {
+	protected override async runMainPass(args: ModelPassArgs): Promise<void> {
 		const { buffer, output, channels, originalFrames, bitDepth } = args;
 
 		const streams: Array<DtlnBlockStream> = [];
@@ -216,12 +114,17 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 
 		let warmupRemaining = WARMUP_SAMPLES;
 
-		const writerState = { written: 0 };
+		const writer = new BoundedWriter({
+			output,
+			sampleRate: DTLN_SAMPLE_RATE,
+			bitDepth,
+			totalFrames: originalFrames,
+		});
 
 		const progressGate = createProgressGate(originalFrames);
 
 		for (;;) {
-			const got16k = await pullNextChunkAt16k({ buffer, channels, frames: CHUNK_FRAMES });
+			const got16k = await pullModelChunk({ buffer, channels, frames: CHUNK_FRAMES });
 
 			if (got16k === undefined) break;
 
@@ -265,16 +168,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 					stepAccumLen = 0;
 
 					if (stepBatchLen >= STEP_BATCH_SIZE) {
-						await commitStepBatch({
-							stepBatch,
-							length: stepBatchLen,
-							channels,
-							output,
-							sampleRate: DTLN_SAMPLE_RATE,
-							bitDepth,
-							originalFrames,
-							writerState,
-						});
+						await commitStepBatch({ stepBatch, length: stepBatchLen, channels, writer });
 						stepBatchLen = 0;
 					}
 				}
@@ -306,16 +200,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 				samplesFed += BLOCK_SHIFT;
 
 				if (stepBatchLen >= STEP_BATCH_SIZE) {
-					await commitStepBatch({
-						stepBatch,
-						length: stepBatchLen,
-						channels,
-						output,
-						sampleRate: DTLN_SAMPLE_RATE,
-						bitDepth,
-						originalFrames,
-						writerState,
-					});
+					await commitStepBatch({ stepBatch, length: stepBatchLen, channels, writer });
 					stepBatchLen = 0;
 				}
 			}
@@ -342,35 +227,17 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 			warmupRemaining = result.warmupRemaining;
 
 			if (stepBatchLen >= STEP_BATCH_SIZE) {
-				await commitStepBatch({
-					stepBatch,
-					length: stepBatchLen,
-					channels,
-					output,
-					sampleRate: DTLN_SAMPLE_RATE,
-					bitDepth,
-					originalFrames,
-					writerState,
-				});
+				await commitStepBatch({ stepBatch, length: stepBatchLen, channels, writer });
 				stepBatchLen = 0;
 			}
 		}
 
 		if (stepBatchLen > 0) {
-			await commitStepBatch({
-				stepBatch,
-				length: stepBatchLen,
-				channels,
-				output,
-				sampleRate: DTLN_SAMPLE_RATE,
-				bitDepth,
-				originalFrames,
-				writerState,
-			});
+			await commitStepBatch({ stepBatch, length: stepBatchLen, channels, writer });
 			stepBatchLen = 0;
 		}
 
-		await padTail(output, channels, originalFrames, writerState.written, DTLN_SAMPLE_RATE, bitDepth);
+		await writer.padTail(channels);
 	}
 }
 

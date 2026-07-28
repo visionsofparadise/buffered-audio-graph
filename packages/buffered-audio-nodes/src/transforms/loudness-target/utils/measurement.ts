@@ -9,6 +9,7 @@ import {
 	linearToDb,
 } from "@buffered-audio/utils";
 import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./constants";
+import { upsampleChannels, writeMaxAcrossChannels } from "./upsample";
 import type { BlockBuffer } from "@buffered-audio/core";
 
 const HISTOGRAM_BUCKETS = 1024;
@@ -91,29 +92,7 @@ export class SourceMeasurementAccumulator {
 		this.loudness.push(channels, frames);
 		this.truePeak.push(channels, frames);
 
-		const upChannels: Array<Float32Array> = [];
-
-		for (let channelIdx = 0; channelIdx < channels.length; channelIdx++) {
-			const channel = channels[channelIdx];
-			const upsampler = this.upsamplers[channelIdx];
-
-			if (channel === undefined || upsampler === undefined) {
-				upChannels.push(new Float32Array(frames * OVERSAMPLE_FACTOR));
-
-				continue;
-			}
-
-			const slice = channel.length === frames ? channel : channel.subarray(0, frames);
-			let scratch = this.upsampleScratches[channelIdx];
-
-			if (scratch === undefined || scratch.length < frames * OVERSAMPLE_FACTOR) {
-				scratch = new Float32Array(frames * OVERSAMPLE_FACTOR);
-				this.upsampleScratches[channelIdx] = scratch;
-			}
-
-			upChannels.push(upsampler.upsample(slice, scratch));
-		}
-
+		const upChannels = upsampleChannels(channels, this.upsamplers, frames, this.upsampleScratches);
 		const upChunkLength = frames * OVERSAMPLE_FACTOR;
 
 		if (this.levelsScratch === null || this.levelsScratch.length < upChunkLength) {
@@ -126,18 +105,7 @@ export class SourceMeasurementAccumulator {
 
 		const levels = this.levelsScratch;
 
-		for (let upIdx = 0; upIdx < upChunkLength; upIdx++) {
-			let max = 0;
-
-			for (let channelIdx = 0; channelIdx < upChannels.length; channelIdx++) {
-				const upSample = upChannels[channelIdx]?.[upIdx] ?? 0;
-				const absolute = Math.abs(upSample);
-
-				if (absolute > max) max = absolute;
-			}
-
-			levels[upIdx] = max;
-		}
+		writeMaxAcrossChannels(upChannels, levels, upChunkLength);
 
 		const baseChunk = this.baseScratch.subarray(0, frames);
 

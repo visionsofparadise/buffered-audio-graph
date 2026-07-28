@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { cn } from "../../../../../utils/cn";
 import { Knob } from "../../../../UI/Knob";
-import { FieldLabel } from "./FieldLabel";
+import { FieldRow } from "./FieldRow";
 import { formatParamValue, snapToStep } from "./utils/numberParamUtils";
 
 export interface NumberParameter {
@@ -50,10 +49,6 @@ export function NumberRow({
 
 	const normalized = normalize(localValue);
 	const controlDisabled = (disabled ?? false) || (param.optional && !param.defined);
-	const setDefinedHandler =
-		onParameterChange || onParameterUnset
-			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-			: undefined;
 
 	const beginEdit = (): void => {
 		if (controlDisabled) return;
@@ -79,70 +74,63 @@ export function NumberRow({
 	};
 
 	return (
-		<div
-			className={cn("flex items-center justify-between gap-3", dimmed && "opacity-40")}
+		<FieldRow
+			param={param}
+			dimmed={dimmed}
 			title={param.description || undefined}
+			className="flex items-center justify-between gap-3"
+			controlClassName="flex shrink-0 flex-col items-center gap-1"
+			controlDisabled={controlDisabled}
+			onControlDoubleClick={beginEdit}
+			onParameterChange={onParameterChange}
+			onParameterUnset={onParameterUnset}
 		>
-			<FieldLabel
-				name={param.name}
-				optional={param.optional}
-				defined={param.defined}
-				onSetDefined={setDefinedHandler}
-			/>
-			<div
-				className={cn(
-					"flex shrink-0 flex-col items-center gap-1",
-					controlDisabled && "pointer-events-none opacity-40",
-				)}
-				onDoubleClick={beginEdit}
-			>
-				{editText !== null ? (
-					<input
-						ref={editInputRef}
-						type="number"
-						value={editText}
-						min={param.min}
-						max={param.max}
-						step={param.step}
-						onChange={(event) => setEditText(event.target.value)}
-						onBlur={commitEdit}
-						onKeyDown={(event) => {
-							if (event.key === "Enter") {
-								event.preventDefault();
-								commitEdit();
-							} else if (event.key === "Escape") {
-								event.preventDefault();
-								setEditText(null);
-							}
+			{editText !== null ? (
+				<input
+					ref={editInputRef}
+					type="number"
+					value={editText}
+					min={param.min}
+					max={param.max}
+					step={param.step}
+					onChange={(event) => setEditText(event.target.value)}
+					onBlur={commitEdit}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") {
+							event.preventDefault();
+							commitEdit();
+						} else if (event.key === "Escape") {
+							event.preventDefault();
+							setEditText(null);
+						}
+					}}
+					className="h-8 w-16 rounded-xs bg-surface px-2 text-center text-label tabular-nums text-text-primary outline-none"
+				/>
+			) : (
+				<>
+					<span className="type-value w-12 text-center text-label text-text-secondary">
+						{param.optional && !param.defined ? "AUTO" : formatParamValue(localValue, param.step)}
+					</span>
+					<Knob
+						value={normalized}
+						size={32}
+						hideValue
+						disabled={controlDisabled}
+						onChange={(norm: number) => {
+							draggingRef.current = true;
+							setLocalValue(snapToStep(denormalize(norm), param.step));
 						}}
-						className="h-8 w-16 rounded-xs bg-surface px-2 text-center text-label tabular-nums text-text-primary outline-none"
+						onChangeEnd={(norm: number) => {
+							draggingRef.current = false;
+
+							const committed = snapToStep(denormalize(norm), param.step);
+
+							setLocalValue(committed);
+							onParameterChange?.(param.name, committed);
+						}}
 					/>
-				) : (
-					<>
-						<span className="type-value w-12 text-center text-label text-text-secondary">
-							{param.optional && !param.defined ? "AUTO" : formatParamValue(localValue, param.step)}
-						</span>
-						<Knob
-							value={normalized}
-							size={32}
-							hideValue
-							disabled={controlDisabled}
-							onChange={(norm: number) => {
-								draggingRef.current = true;
-								setLocalValue(snapToStep(denormalize(norm), param.step));
-							}}
-							onChangeEnd={(norm: number) => {
-								draggingRef.current = false;
-
-								const committed = snapToStep(denormalize(norm), param.step);
-
-								setLocalValue(committed);
-								onParameterChange?.(param.name, committed);
-							}}
-						/>
-					</>
-				)}
-			</div>
-		</div>
+				</>
+			)}
+		</FieldRow>
 	);
 }

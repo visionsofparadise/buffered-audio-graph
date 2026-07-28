@@ -1,5 +1,3 @@
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { ExternalLink, GripVertical, X } from "lucide-react";
 import { cn } from "../../../../../utils/cn";
 import { basename } from "../../../../../utils/path";
@@ -12,6 +10,7 @@ import {
 	DropdownMenuTrigger,
 } from "../../../../UI/DropdownMenu";
 import { IconButton } from "../../../../UI/IconButton";
+import { useSortableRow } from "../hooks/useSortableRow";
 import { groupEntries, stageTitle, type Stage } from "./utils/helpers";
 import type { Vst3ScanEntry } from "../../../../../../shared/ipc/Vst3/Vst3ScanEntry";
 
@@ -36,13 +35,7 @@ export function SortableStageRow({
 	readonly onOpen: (rowIndex: number) => void;
 	readonly onRemove: () => void;
 }) {
-	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rowId });
-
-	const style: React.CSSProperties = {
-		transform: CSS.Transform.toString(transform),
-		transition,
-		opacity: isDragging ? 0.4 : 1,
-	};
+	const { setNodeRef, style, attributes, listeners } = useSortableRow(rowId);
 
 	const title = stageTitle(stage);
 	const groups = groupEntries(entries);

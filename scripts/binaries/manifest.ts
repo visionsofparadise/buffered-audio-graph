@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { s3AssetUrl } from "../utils/download";
 
 type Platform = "all" | "win32" | "linux" | "darwin";
 type Arch = "all" | "x64" | "arm64";
@@ -129,5 +130,5 @@ export function filterAssetsForTarget(assets: ReadonlyArray<ManifestAsset>, targ
 }
 
 export function assetUrl(manifest: Manifest, asset: ManifestAsset): string {
-	return `https://${manifest.bucket}.s3.${manifest.region}.amazonaws.com/sha256/${asset.sha256}`;
+	return s3AssetUrl(manifest.bucket, manifest.region, asset.sha256);
 }
