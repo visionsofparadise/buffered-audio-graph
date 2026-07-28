@@ -3,17 +3,28 @@
 import { createFftWorkspace, fft, hanningWindow, ifft, type FftWorkspace } from "./stft";
 import { getFftAddon, type FftBackend } from "./fft-backend";
 
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Gain-mask adaptation of Buades, Coll, and Morel, "A Non-Local Algorithm for Image Denoising" (2005), and Lukin and Todd, "Suppression of Musical Noise Artifacts in Audio Noise Reduction by Adaptive 2D Filtering" (2007).
 export interface DfttParams {
-	/** Block size along the frequency axis (32 bins). */
+	/**
+	 * Block size along the frequency axis (32 bins).
+	 */
 	readonly blockFreq: number;
-	/** Block size along the time axis (16 frames). */
+	/**
+	 * Block size along the time axis (16 frames).
+	 */
 	readonly blockTime: number;
-	/** Hop size along the frequency axis (8 bins). */
+	/**
+	 * Hop size along the frequency axis (8 bins).
+	 */
 	readonly hopFreq: number;
-	/** Hop size along the time axis (4 frames). */
+	/**
+	 * Hop size along the time axis (4 frames).
+	 */
 	readonly hopTime: number;
-	/** Wiener noise-floor standard deviation σ in |NLM|² / (|NLM|² + σ²), on the shared user-tuned scale. */
+	/**
+	 * Wiener noise-floor standard deviation σ in |NLM|² / (|NLM|² + σ²), on the shared user-tuned scale.
+	 */
 	readonly threshold: number;
 }
 
@@ -47,7 +58,6 @@ export function getDfttBatchBlockCount(blockSize: number, complexBlockSize: numb
 	return blockCount;
 }
 
-// Packs two real FFTs into one complex FFT via DFT linearity.
 function complexFft(
 	inRe: Float32Array,
 	inIm: Float32Array,
@@ -183,7 +193,6 @@ export function applyDfttSmoothing(
 		}
 	}
 
-	// Block starts and boundary clamping must match the JS path exactly.
 	const blocksPerFrame = Math.ceil(numFrames / hopTime);
 	const blocksPerBin = Math.ceil(numBins / hopFreq);
 	const totalBlocks = blocksPerFrame * blocksPerBin;
@@ -280,7 +289,6 @@ export function applyDfttSmoothing(
 		profileAdd("ola");
 	}
 
-	// Clamp to [0,1] — output is a gain mask.
 	for (let flatIndex = 0; flatIndex < maskLength; flatIndex++) {
 		const windowWeight = windowSumSq[flatIndex]!;
 
@@ -296,7 +304,6 @@ export function applyDfttSmoothing(
 	profileAdd("normalize");
 }
 
-// JS fallback (row/column 1D FFT), kept for no-addon environments.
 function applyDfttSmoothingJs(
 	nlmSmoothed: Float32Array,
 	rawMask: Float32Array,
@@ -324,23 +331,19 @@ function applyDfttSmoothingJs(
 	const blockRaw = new Float32Array(blockTime * blockFreq);
 	const blockNlm = new Float32Array(blockTime * blockFreq);
 
-	// [t * blockFreq + f]
 	const rawRowRe = new Float32Array(blockTime * blockFreq);
 	const rawRowIm = new Float32Array(blockTime * blockFreq);
 	const nlmRowRe = new Float32Array(blockTime * blockFreq);
 	const nlmRowIm = new Float32Array(blockTime * blockFreq);
 
-	// [f * blockTime + t]
 	const colInRe = new Float32Array(blockTime * blockFreq);
 	const colInIm = new Float32Array(blockTime * blockFreq);
 
-	// [f * blockTime + t]
 	const rawColRe = new Float32Array(blockTime * blockFreq);
 	const rawColIm = new Float32Array(blockTime * blockFreq);
 	const nlmColRe = new Float32Array(blockTime * blockFreq);
 	const nlmColIm = new Float32Array(blockTime * blockFreq);
 
-	// [f * blockTime + t]
 	const gainColRe = new Float32Array(blockTime * blockFreq);
 	const gainColIm = new Float32Array(blockTime * blockFreq);
 
@@ -354,10 +357,8 @@ function applyDfttSmoothingJs(
 	const rowScratchRe = new Float32Array(blockFreq);
 	const rowScratchIm = new Float32Array(blockFreq);
 
-	// [t * blockFreq + f]
 	const synthBlock = new Float32Array(blockTime * blockFreq);
 
-	// FFT workspaces reused across all blocks/rows/columns to avoid per-call allocation in the hot loop.
 	const rowFwdWorkspace = createFftWorkspace(blockFreq);
 	const colFwdWorkspaceA = createFftWorkspace(blockTime);
 	const colFwdWorkspaceB = createFftWorkspace(blockTime);
@@ -406,7 +407,6 @@ function applyDfttSmoothingJs(
 				}
 			}
 
-			// Transpose to column-major [f * blockTime + t].
 			for (let tf = 0; tf < blockTime; tf++) {
 				for (let bf = 0; bf < blockFreq; bf++) {
 					colInRe[bf * blockTime + tf] = rawRowRe[tf * blockFreq + bf]!;
@@ -519,7 +519,6 @@ function applyDfttSmoothingJs(
 		}
 	}
 
-	// Clamp to [0,1] — output is a gain mask.
 	for (let flatIdx = 0; flatIdx < numFrames * numBins; flatIdx++) {
 		const ws = windowSumSq[flatIdx]!;
 

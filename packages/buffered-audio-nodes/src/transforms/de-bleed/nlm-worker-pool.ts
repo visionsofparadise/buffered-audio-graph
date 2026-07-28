@@ -62,7 +62,6 @@ export function createNlmWorkerPool(
 	return {
 		mode: "worker",
 		async run(mask, output, numFrames, numBins, options): Promise<void> {
-			// Workers wrap the whole SharedArrayBuffer from offset 0; a nonzero-offset view would silently read/write the wrong region in worker mode only.
 			if (mask.byteOffset !== 0 || output.byteOffset !== 0) throw new Error("nlm worker pool: mask/output views must start at byteOffset 0");
 
 			const stripes = partition(numFrames, options.pasteBlockSize, threads);

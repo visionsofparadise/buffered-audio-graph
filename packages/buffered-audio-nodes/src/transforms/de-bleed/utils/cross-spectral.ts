@@ -15,7 +15,6 @@ export interface TransferAccumulator {
 	readonly weightedAutoPower: Float32Array;
 }
 
-/** Reuse one accumulator across the whole stream (re-creating per chunk resets the running sums). */
 export function createTransferAccumulator(numBins: number): TransferAccumulator {
 	return {
 		crossReal: new Float32Array(numBins),
@@ -24,7 +23,6 @@ export function createTransferAccumulator(numBins: number): TransferAccumulator 
 	};
 }
 
-/** `maxRefPow` must be the WHOLE-FILE max of `|R|²`, not per-chunk, or streaming weights drift from the one-shot estimator. */
 export function findMaxRefPower(
 	refReal: Float32Array,
 	refImag: Float32Array,
@@ -83,7 +81,6 @@ export function accumulateTransferChunk(
 	}
 }
 
-/** Final-division regulariser is `epsilon ?? 1e-10 · max(weightedAutoPower)`, computed across bins here because it cannot be known before the last chunk. */
 export function finalizeTransferFunction(
 	accumulator: TransferAccumulator,
 	epsilon?: number,

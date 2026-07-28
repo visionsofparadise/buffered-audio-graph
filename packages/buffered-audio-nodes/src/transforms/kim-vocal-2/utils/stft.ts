@@ -4,7 +4,7 @@ const N_FFT = 7680;
 const HOP_SIZE = 1024;
 const DIM_F = 3072;
 const DIM_T = 256;
-const NB_BINS = N_FFT / 2 + 1; // 3841
+const NB_BINS = N_FFT / 2 + 1;
 
 export function stft7680IntoTensor(fft: MixedRadixFft, signal: Float32Array, tensor: Float32Array, realOffset: number, imagOffset: number): void {
 	const win = hanningWindow(N_FFT);

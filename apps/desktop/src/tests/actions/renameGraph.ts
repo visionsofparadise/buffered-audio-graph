@@ -3,12 +3,6 @@ import type { Page } from "puppeteer-core";
 import { DEBOUNCE_WAIT_MS } from "../utils/constants";
 import { clickPoint, type Point, sleep } from "../utils/page";
 
-/**
- * Rename the graph by driving the active tab's `TabNameInput`: click the tab
- * bar's text input (scoped to the AppBar via the App-menu trigger so node
- * parameter inputs never match), select-all, type the name, commit with Enter,
- * and wait out the save debounce.
- */
 export async function renameGraph(page: Page, name: string): Promise<void> {
 	const inputPoint = await page.evaluate((): Point | null => {
 		const bar = document.querySelector('button[aria-label="App menu"]')?.closest("div.h-12");

@@ -11,8 +11,6 @@ interface NlmWorkerMessage {
 	readonly blockFrameEnd: number;
 }
 
-// Only wire up when running as a worker. Importing this module in a normal context
-// (e.g. the docs generator globbing src, or a bundler) must be a harmless no-op, not a throw.
 const port = parentPort;
 
 if (port) {

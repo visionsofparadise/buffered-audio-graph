@@ -1,3 +1,4 @@
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Loudness-range gating and percentile selection follow EBU Tech 3342 v3.0.
 const ABSOLUTE_GATE_LUFS = -70;
 const RELATIVE_GATE_OFFSET_LU = -20;
@@ -51,7 +52,6 @@ export function computeLoudnessRange(shortTerm: ReadonlyArray<number>): number {
 	return (considered[highIndex] ?? 0) - (considered[lowIndex] ?? 0);
 }
 
-// Project-local loudness-target anchors over Tech 3342's gated set; min and median are not LRA metrics.
 export function getLraConsideredStats(shortTerm: ReadonlyArray<number>): LraConsideredStats {
 	const considered = getConsideredLoudness(shortTerm);
 

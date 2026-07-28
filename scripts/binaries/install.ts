@@ -1,28 +1,3 @@
-/**
- * Install the target-filtered subset of bundled binaries into
- * `apps/desktop/binaries/`, alongside an install-time `manifest.json`
- * that maps schema binary keys to on-disk filenames.
- *
- * Usage:
- *   npm run binaries:install -- [--target <platform>-<arch>]
- *
- * Behaviour:
- *   - Hydrates the cache by running the fetch logic first (downloads
- *     any missing entries for the target, verifies sha256).
- *   - Clears existing regular files at the top level of
- *     `apps/desktop/binaries/` so stale per-arch binaries from a prior
- *     target don't leak. Subdirectories and dotfiles are left alone.
- *   - Copies each included cache entry to
- *     `apps/desktop/binaries/<filename>`.
- *   - Writes `apps/desktop/binaries/manifest.json`:
- *       { target: "<platform>-<arch>",
- *         binaries: { [schemaKey]: filename } }
- *     Only assets with a non-null `key` appear in `binaries`. Unkeyed
- *     assets (e.g. onnxruntime-*.dll, htdemucs.onnx.data) are present
- *     on disk but not exposed to the schema layer.
- *   - For non-Windows targets, sets the executable bit (0o755) on
- *     ffmpeg/ffprobe so the packaged app can spawn them on Linux/macOS.
- */
 import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 
@@ -40,13 +15,6 @@ function resolveDesktopBinariesDir(): string {
 	return path.join(resolveRepoRoot(), "apps", "desktop", "binaries");
 }
 
-/**
- * Removes every regular file at the top level of `directory`, leaving
- * the directory itself, any subdirectories, and any dotfiles in place.
- *
- * Dotfiles are preserved because they may include tooling markers
- * (e.g. .gitkeep) that should survive a repopulation.
- */
 async function clearTopLevelRegularFiles(directory: string): Promise<number> {
 	let entries: Array<Dirent>;
 
@@ -79,11 +47,6 @@ async function clearTopLevelRegularFiles(directory: string): Promise<number> {
 	return removed;
 }
 
-/**
- * Copies `source` to `destination`, replacing an existing file. On
- * non-Windows targets, sets executable permission on ffmpeg/ffprobe so
- * the packaged app can spawn them.
- */
 async function installAsset(
 	source: string,
 	destination: string,

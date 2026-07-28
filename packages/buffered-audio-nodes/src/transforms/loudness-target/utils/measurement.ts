@@ -59,7 +59,7 @@ export class SourceMeasurementAccumulator {
 	private readonly persistBitDepth: number | undefined;
 	private levelsScratch: Float32Array | null = null;
 	private baseScratch: Float32Array | null = null;
-	private dbScratch: Float32Array | null = null; // see toDbScratch
+	private dbScratch: Float32Array | null = null;
 	private readonly upsampleScratches: Array<Float32Array> = [];
 	private pushedFrames = 0;
 
@@ -167,9 +167,6 @@ export class SourceMeasurementAccumulator {
 		}
 	}
 
-	// LINEAR pooled slider output -> dB, into a reused scratch. The histogram keeps the linear axis; only the
-	// detection-envelope buffer stores dB (never converts `pooled`/`trailing` in place — an axis mixup silently
-	// corrupts limitAutoDb / the predictor).
 	private toDbScratch(linear: Float32Array): Float32Array {
 		if (this.dbScratch === null || this.dbScratch.length < linear.length) {
 			this.dbScratch = new Float32Array(linear.length);
@@ -187,7 +184,6 @@ export class SourceMeasurementAccumulator {
 	async finalize(): Promise<SourceMeasurement> {
 		if (this.pushedFrames === 0) return emptyMeasurement();
 
-		// Final isFinal=true push drains the slider's deferred trailing outputs before assembly; histogram totals depend on it.
 		const trailing = this.slidingWindow.push(new Float32Array(0), true);
 
 		if (trailing.length > 0) {
@@ -232,7 +228,6 @@ export class SourceMeasurementAccumulator {
 	}
 }
 
-// Retained: measurement.unit.test.ts caller + _process fallback when the accumulator was not populated on the way in.
 export async function measureSource(buffer: BlockBuffer, sampleRate: number, limitPercentile: number, halfWidth: number): Promise<SourceMeasurement> {
 	const frames = buffer.frames;
 	const channelCount = buffer.channels;

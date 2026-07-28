@@ -4,7 +4,6 @@
  * @see Meyer-Elshamy-Fingscheidt 2020; Spriet, Doclo, Moonen 2010.
  */
 
-// DEBLEED_LAMBDA_DOM / _Y_RES / _S_RES env overrides available; sum-to-one is not enforced.
 const LAMBDA_DOM = Number(process.env.DEBLEED_LAMBDA_DOM) || 0.2;
 const LAMBDA_Y_RES = Number(process.env.DEBLEED_LAMBDA_Y_RES) || 0.25;
 const LAMBDA_S_RES = Number(process.env.DEBLEED_LAMBDA_S_RES) || 0.15;
@@ -19,10 +18,8 @@ export interface MwfParams {
 	readonly oversubtraction: number;
 }
 
-// DEBLEED_LAMBDA_SCALE env override available.
 const LAMBDA_SCALE = Number(process.env.DEBLEED_LAMBDA_SCALE) || 5.0;
 
-// HF_BOOST / HF_EXPONENT read env with `!== undefined` (not `||`) so an explicit `0` disables the ramp rather than falling through to the default.
 const HF_BOOST = process.env.DEBLEED_HF_BOOST !== undefined ? Number(process.env.DEBLEED_HF_BOOST) : 200;
 const HF_EXPONENT = process.env.DEBLEED_HF_EXPONENT !== undefined ? Number(process.env.DEBLEED_HF_EXPONENT) : 2;
 
@@ -111,19 +108,6 @@ export function computeMwfMask(
 	}
 }
 
-/**
- * After the final mask has been applied to the target STFT (post-NLM+DFTT
- * smoothing) the resulting `|Ŝ_m(ℓ,k)|²` must be stored into the PSD state
- * so the NEXT frame's `computeMwfMask` can read it as `Φ̂_ŜŜ(ℓ-1,k)` for the
- * dominant-bin construction.
- *
- * `outputReal` / `outputImag` are the masked target STFT for this frame —
- * `Ŝ_m(ℓ,k) = G_final[k] · Y_m(ℓ,k)`.
- *
- * Note that for the streaming chunked architecture this function should be
- * called once per output frame per target channel. The previous-frame PSD
- * is stored on the per-(target channel) `InterfererPsdState`.
- */
 export function updatePrevOutputPsd(
 	outputReal: Float32Array,
 	outputImag: Float32Array,

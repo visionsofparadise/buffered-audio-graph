@@ -23,8 +23,6 @@ export async function buildBaseRateDetectionCache(
 
 	const sourceBitDepth = buffer.bitDepth;
 
-	// Fresh per-channel BS.1770-4 polyphase upsamplers for THIS walk only — MUST NOT be shared with
-	// any other upsampler set (each carries different 12-tap signal history).
 	const upsamplers: Array<TruePeakUpsampler> = [];
 
 	for (let channelIdx = 0; channelIdx < channelCount; channelIdx++) {
@@ -34,15 +32,11 @@ export async function buildBaseRateDetectionCache(
 	const slidingWindow = new SlidingWindowMaxStream(halfWidth);
 	const detectScratch4x = new Float32Array(CHUNK_FRAMES * OVERSAMPLE_FACTOR);
 	const detectScratchBase = new Float32Array(CHUNK_FRAMES);
-	// Converts the LINEAR pooled slider output to dB before the envelope write (see measurement.ts's toDbScratch).
-	// Must grow on demand, NOT a fixed CHUNK_FRAMES: the slider's final push emits chunkFrames + halfWidth samples,
-	// which can exceed CHUNK_FRAMES — a fixed scratch would truncate the tail and diverge from the accumulator.
 	let dbScratch: Float32Array | null = null;
 	const upsampleScratches: Array<Float32Array> = [];
 
 	let consumedBaseFrames = 0;
 
-	// processAndEmit leaves the cursor at end-of-buffer after _process; this caller reads from frame 0.
 	await buffer.reset();
 
 	for (;;) {
@@ -126,7 +120,6 @@ export async function buildBaseRateDetectionCache(
 		if (chunkFrames < CHUNK_FRAMES) break;
 	}
 
-	// Flush in-flight writes so downstream reset-then-read sees a consistent state.
 	await detectionEnvelope.flushWrites();
 
 	return detectionEnvelope;

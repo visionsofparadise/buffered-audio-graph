@@ -1,11 +1,3 @@
-/**
- * Shared helpers for reading `binaries.manifest.json` and filtering its
- * assets for a target `<platform>-<arch>`. Used by both `fetch.ts` and
- * `install.ts`.
- *
- * Keeps the manifest shape and target-filter logic in one place so the
- * two consumers cannot drift.
- */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,10 +6,6 @@ export type Platform = "all" | "win32" | "linux" | "darwin";
 export type Arch = "all" | "x64" | "arm64";
 
 export interface ManifestAsset {
-	// Schema binary key in @buffered-audio/nodes Zod schemas, or null
-	// for assets that are installed to disk but not exposed as a schema
-	// binary (e.g. ONNX Runtime shared libs loaded dynamically by the
-	// addon; HTDemucs external-data sidecar loaded automatically by ORT).
 	key: string | null;
 	platform: Platform;
 	arch: Arch;
@@ -42,11 +30,6 @@ export interface Target {
 const VALID_PLATFORMS: ReadonlyArray<Target["platform"]> = ["win32", "linux", "darwin"];
 const VALID_ARCHES: ReadonlyArray<Target["arch"]> = ["x64", "arm64"];
 
-/**
- * Resolves the absolute path to `binaries.manifest.json` at the repo root.
- * This script lives at `<repo>/scripts/binaries/manifest.ts`, so the
- * repo root is two levels up from the script's directory.
- */
 export function resolveManifestPath(): string {
 	const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 	const repoRoot = path.resolve(scriptDir, "..", "..");
@@ -67,10 +50,6 @@ export async function readManifest(): Promise<Manifest> {
 	return JSON.parse(raw) as Manifest;
 }
 
-/**
- * Parses `<platform>-<arch>` into a Target. Throws on malformed input or
- * unsupported platform/arch.
- */
 export function parseTarget(value: string): Target {
 	const parts = value.split("-");
 
@@ -100,10 +79,6 @@ export function parseTarget(value: string): Target {
 	};
 }
 
-/**
- * Returns the host target resolved from Node's process.platform / arch,
- * or throws if the host is not one of the three supported combinations.
- */
 export function resolveHostTarget(): Target {
 	const platform = process.platform;
 	const arch = process.arch;
@@ -130,14 +105,6 @@ export function formatTarget(target: Target): string {
 	return `${target.platform}-${target.arch}`;
 }
 
-/**
- * Parses `--target <platform>-<arch>` / `--target=<platform>-<arch>` from
- * a list of CLI argument tokens. Defaults to the host target when no
- * --target flag is present.
- *
- * Throws on unknown flags so typos surface immediately rather than
- * silently defaulting.
- */
 export function parseTargetArgs(argv: ReadonlyArray<string>): Target {
 	let explicit: string | undefined;
 
@@ -163,11 +130,6 @@ export function parseTargetArgs(argv: ReadonlyArray<string>): Target {
 	return explicit === undefined ? resolveHostTarget() : parseTarget(explicit);
 }
 
-/**
- * Returns the subset of manifest assets that should be installed for the
- * given target. An asset is included when its platform/arch is either
- * "all" or matches the target exactly.
- */
 export function filterAssetsForTarget(
 	assets: ReadonlyArray<ManifestAsset>,
 	target: Target,
@@ -179,10 +141,6 @@ export function filterAssetsForTarget(
 	);
 }
 
-/**
- * Constructs the public S3 URL for a content-addressed asset. Matches the
- * virtual-hosted-style URL pattern documented in the service design.
- */
 export function assetUrl(manifest: Manifest, asset: ManifestAsset): string {
 	return `https://${manifest.bucket}.s3.${manifest.region}.amazonaws.com/sha256/${asset.sha256}`;
 }

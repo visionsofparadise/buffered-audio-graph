@@ -68,7 +68,6 @@ export function subscribeRenderEvents(events: RenderEvents, getSourceLabel: () =
 }
 
 export function createEventSink(write: EventWriter = (text) => process.stdout.write(text)): { subscribe(job: RenderJob): void; printSummary(jobs: ReadonlyArray<RenderJob>): void } {
-	// Keyed by streamId, not label: id-less same-type nodes share a label but each has a unique streamId.
 	const totals = new Map<number, { label: string; framesDone: number; processingMs?: number }>();
 
 	const subscribe = (job: RenderJob): void => {

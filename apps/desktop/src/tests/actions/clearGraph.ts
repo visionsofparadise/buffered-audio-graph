@@ -3,7 +3,6 @@ import type { Page } from "puppeteer-core";
 import { nodeCount, waitForNodeCount } from "../utils/graph";
 import { sleep } from "../utils/page";
 
-/** Select each node (header click) and press Delete until the graph is empty, resolving whether it cleared. */
 export async function clearGraph(page: Page): Promise<boolean> {
 	for (let attempt = 0; attempt < 6; attempt++) {
 		const ids = await page.$$eval(".react-flow__node", (elements) =>

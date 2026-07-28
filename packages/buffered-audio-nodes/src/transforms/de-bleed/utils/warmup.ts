@@ -30,7 +30,6 @@ export function validateTransferSeed(transfer: TransferFunction): SeedValidation
 			continue;
 		}
 
-		// Denormals are finite but break Kalman propagation; flag anything between 0 and the float32 minimum normal (~1.18e-38). Real zeros pass.
 		const minNormal = 1.175494e-38;
 		const reAbs = hReBin < 0 ? -hReBin : hReBin;
 		const imAbs = hImBin < 0 ? -hImBin : hImBin;

@@ -34,11 +34,6 @@ export function buildModelInput(
 	return { inputData, xData };
 }
 
-/**
- * Collapses the 4 stem OLA accumulators (interleaved L/R per stem) into a stereo pair for the first
- * `nStable` samples: normalizes each sample by the OLA `sumWeight`, applies per-stem gains, then
- * de-normalizes with the global `{ mean, std }` used before inference.
- */
 export function mixStemsToStereo(
 	stemAccum: ReadonlyArray<Float32Array>,
 	sumWeight: Float32Array,

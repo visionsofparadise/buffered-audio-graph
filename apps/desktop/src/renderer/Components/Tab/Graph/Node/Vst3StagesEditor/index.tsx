@@ -37,9 +37,6 @@ export function Vst3StagesEditor({
 }) {
 	const [entries, setEntries] = useState<ReadonlyArray<Vst3ScanEntry>>([]);
 	const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
-	// launchId → the stage's stable rowId (not its positional index): editor
-	// windows outlive reorders/removals, so a later `saved` must resolve to the
-	// stage that was launched, wherever it now sits.
 	const launchRowByIdRef = useRef<Map<string, string>>(new Map());
 
 	const rows = param.rows.map((row) => ({ rowId: row.rowId, stage: readStage(row.fields) }));
@@ -144,8 +141,8 @@ export function Vst3StagesEditor({
 				const rowId = rowIdsRef.current[rowIndex];
 
 				if (rowId !== undefined) launchRowByIdRef.current.set(result.launchId, rowId);
-			} catch {
-				// empty: failed spawn surfaces via exited if the child started
+			} catch (error) {
+				void error;
 			}
 		},
 		[main],

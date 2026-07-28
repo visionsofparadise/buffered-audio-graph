@@ -1,9 +1,3 @@
-/**
- * Pure STFT-frame geometry for the streaming chunked two-pass process (see design-de-bleed.md,
- * 2026-04-21 streaming entry and 2026-05-02 edge-pad entry). Virtual zero-pad of `fftSize - hopSize`
- * samples at each boundary makes the OLA windowSum fully determined at the file edges; the process
- * pass runs over the virtual signal and clips written samples back to the real range.
- */
 
 export interface ProcessGeometry {
 	readonly edgePadSamples: number;
@@ -66,11 +60,6 @@ export interface WriteClip {
 	readonly sliceLength: number;
 }
 
-/**
- * Maps a chunk's center region from virtual iSTFT sample positions to real output positions,
- * clipping to `[0, totalFrames)`. Returns `undefined` when the clipped region is empty (the caller
- * skips the chunk). `cleanedLength` is the iSTFT output length used as the final chunk's center end.
- */
 export function computeWriteClip(args: {
 	readonly outStart: number;
 	readonly winStart: number;

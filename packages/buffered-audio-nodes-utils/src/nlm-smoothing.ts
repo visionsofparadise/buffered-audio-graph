@@ -1,19 +1,29 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight DSP loop with bounds-checked typed array access */
 
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Gain-mask adaptation of Buades, Coll, and Morel, "A Non-Local Algorithm for Image Denoising" (2005), and Lukin and Todd, "Suppression of Musical Noise Artifacts in Audio Noise Reduction by Adaptive 2D Filtering" (2007).
 
 export interface NlmParams {
-	/** Patch size for similarity comparison (8). */
+	/**
+	 * Patch size for similarity comparison (8).
+	 */
 	readonly patchSize: number;
-	/** Search range along the frequency axis, ±bins (8). */
+	/**
+	 * Search range along the frequency axis, ±bins (8).
+	 */
 	readonly searchFreqRadius: number;
-	/** Search range into the past along the time axis, in frames (16). */
+	/**
+	 * Search range into the past along the time axis, in frames (16).
+	 */
 	readonly searchTimePre: number;
-	/** Search range into the future along the time axis, in frames (4). */
+	/**
+	 * Search range into the future along the time axis, in frames (4).
+	 */
 	readonly searchTimePost: number;
-	/** Paste block size; the paper uses 4x4 and de-bleed uses a measured 8x8 adaptation. */
 	readonly pasteBlockSize: number;
-	/** Smoothing threshold h in W = exp(-||v - v'||² / h²). Scaled from user artifactSmoothing. */
+	/**
+	 * Smoothing threshold h in W = exp(-||v - v'||² / h²). Scaled from user artifactSmoothing.
+	 */
 	readonly threshold: number;
 }
 
@@ -27,7 +37,6 @@ export function applyNlmSmoothing(
 	applyNlmSmoothingRange(mask, numFrames, numBins, nlmOptions, output, 0, numFrames);
 }
 
-// Writes only its aligned block-frame range, so disjoint ranges can share the input and output buffers.
 export function applyNlmSmoothingRange(
 	mask: Float32Array,
 	numFrames: number,

@@ -25,8 +25,8 @@ export async function resolveBinary(name: string, providedPath?: string): Promis
 		const resolved = stdout.trim().split("\n")[0]?.trim();
 
 		if (resolved) return resolved;
-	} catch {
-		// not found in PATH
+	} catch (error) {
+		void error;
 	}
 
 	throw new Error(`Binary "${name}" not found. Provide a path via the unit's binaryPath property or set the ${envVar} environment variable.`);

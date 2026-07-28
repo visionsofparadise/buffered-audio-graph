@@ -1,25 +1,3 @@
-/**
- * Fetch the audio test fixtures into `<repo>/../fixtures/audio/`.
- *
- * The kept `@buffered-audio/nodes` and `@buffered-audio/utils` test
- * suites read WAV fixtures from the out-of-repo `../fixtures/audio/`
- * directory (see `packages/buffered-audio-nodes/src/utils/test-binaries.ts`
- * and `packages/buffered-audio-nodes-utils/src/test-fixtures.ts`). Those
- * WAVs are not committed to the repo; they are hosted in the dedicated
- * public, content-addressed `buffered-audio-test-fixtures` S3 bucket
- * (managed by the `Fixtures` CDK stack in `apps/service/`) and fetched
- * here so CI / publish runs can execute the fixture-dependent tests.
- *
- * Reads are public, so this uses Node's built-in `fetch`/`crypto` and
- * intentionally does NOT pull in the AWS SDK (mirrors
- * `scripts/binaries/fetch.ts`).
- *
- * Usage: npm run fixtures:audio
- *
- * Exit codes:
- *   0 — every asset present in `../fixtures/audio/` with verified sha256.
- *   1 — download failure, hash mismatch, or any other fatal error.
- */
 import { createHash } from "node:crypto"
 import { createWriteStream, promises as fs } from "node:fs"
 import path from "node:path"
@@ -47,8 +25,6 @@ function resolveRepoRoot(): string {
 }
 
 function resolveAudioDir(): string {
-	// Matches the `../fixtures/audio` location read by test-binaries.ts /
-	// test-fixtures.ts (fixturesDir = <repoRoot>/../fixtures).
 	return path.resolve(resolveRepoRoot(), "..", "fixtures", "audio")
 }
 

@@ -60,7 +60,6 @@ async function importPackageDir(packageDir: string): Promise<Record<string, unkn
 }
 
 function locateAmbientPackageDir(name: string): string | undefined {
-	// require.resolve(name) throws ERR_PACKAGE_PATH_NOT_EXPORTED for exports-restricted packages, so walk the resolver's candidate node_modules bases directly.
 	const require = createRequire(join(process.cwd(), "noop.js"));
 	const searchPaths = require.resolve.paths(name) ?? [];
 
@@ -97,9 +96,6 @@ async function fetchPackage(name: string, version: string, cacheDir: string): Pr
 function indexExports(mod: Record<string, unknown>): Map<string, NodeConstructor> {
 	const packageMap = new Map<string, NodeConstructor>();
 
-	// Bag node lookups go by `nodeName` (what `pack()` writes), not by export binding
-	// name. Index every export that has a string `nodeName`; ignore the rest (factory
-	// functions, types, etc.).
 	for (const value of Object.values(mod)) {
 		if (typeof value !== "function") continue;
 

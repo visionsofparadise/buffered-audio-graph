@@ -131,8 +131,6 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 	}): Promise<void> {
 		const { buffer, output, channels, originalFrames, bitDepth } = args;
 
-		// Per-channel DTLN streaming state. LSTM states are per-channel; the OLA
-		// scratch and sliding input window are per-channel.
 		const streams: Array<DtlnBlockStream> = [];
 
 		for (let channel = 0; channel < channels; channel++) {
@@ -223,7 +221,6 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 			}
 		}
 
-		// flush() returns the trailing BLOCK_LEN - BLOCK_SHIFT = 384 samples per channel.
 		const flushOutputs: Array<Float32Array> = [];
 
 		for (let channel = 0; channel < channels; channel++) flushOutputs.push(streams[channel]?.flush() ?? new Float32Array(0));
@@ -247,7 +244,6 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 			stepBatchLen = 0;
 		}
 
-		// Zero-pad: warm-up trimming can leave written < originalFrames.
 		await padTail(output, channels, originalFrames, writerState.written, DTLN_SAMPLE_RATE, bitDepth);
 	}
 }

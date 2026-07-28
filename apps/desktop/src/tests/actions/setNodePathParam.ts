@@ -2,11 +2,6 @@ import type { Page } from "puppeteer-core";
 
 import { sleep } from "../utils/page";
 
-/**
- * Controlled file/string params commit on blur. Native value + input (not
- * keyboard.type) so paths with `{{…}}` set cleanly; brief sleep so onChange
- * updates localRef before blur commits.
- */
 export async function setNodePathParam(page: Page, nodeId: string, value: string): Promise<void> {
 	const selector = `.react-flow__node[data-id="${nodeId}"] input[type="text"]`;
 

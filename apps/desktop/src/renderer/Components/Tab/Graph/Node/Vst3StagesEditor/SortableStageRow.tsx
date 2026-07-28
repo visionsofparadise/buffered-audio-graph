@@ -54,7 +54,6 @@ export function SortableStageRow({
 			className="flex flex-col gap-2"
 		>
 			<div className="flex items-center gap-1.5">
-				{/* nodrag prevents React Flow from intercepting the sortable pointer events. */}
 				<div
 					className="nodrag flex cursor-grab items-center text-text-secondary active:cursor-grabbing"
 					{...attributes}

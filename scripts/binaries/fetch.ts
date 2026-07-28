@@ -1,22 +1,3 @@
-/**
- * Fetch bundled-binary assets from the content-addressed S3 bucket into a
- * local cache at `<repo>/.binaries-cache/<sha256>/<filename>`.
- *
- * Usage:
- *   npm run binaries:fetch -- [--target <platform>-<arch>]
- *
- * Default target is the host platform/arch. The cache is shared across
- * all consumers on a machine and is content-addressed by sha256 — a
- * manifest bump never invalidates a cache entry.
- *
- * Reads are public (see service/design-service.md), so this script uses
- * Node's built-in `fetch` and `crypto` and intentionally does NOT pull in
- * the AWS SDK.
- *
- * Exit codes:
- *   0 — all included assets present in cache with verified sha256.
- *   1 — download failure, hash mismatch, or any other fatal error.
- */
 import { createHash } from "node:crypto";
 import { createWriteStream, promises as fs } from "node:fs";
 import { Readable } from "node:stream";
@@ -67,12 +48,6 @@ async function fileExists(filePath: string): Promise<boolean> {
 	}
 }
 
-/**
- * Downloads `url` to `destination`, verifying sha256 streamed during the
- * write. Writes to a sibling `.tmp` file and renames into place on
- * success; throws on hash mismatch without leaving a corrupt file in
- * place of the final path.
- */
 async function downloadAndVerify(
 	url: string,
 	destination: string,
@@ -108,7 +83,6 @@ async function downloadAndVerify(
 			writeStream,
 		);
 	} catch (error) {
-		// Best-effort cleanup of partial temp file.
 		await fs.rm(tempPath, { force: true });
 		throw error;
 	}
@@ -125,11 +99,6 @@ async function downloadAndVerify(
 	await fs.rename(tempPath, destination);
 }
 
-/**
- * Ensures a single asset is present in the cache at
- * `<cacheDir>/<sha256>/<filename>` with a verified hash. Returns the
- * absolute path of the cache entry.
- */
 export async function ensureCached(
 	manifest: Manifest,
 	asset: ManifestAsset,
@@ -196,9 +165,6 @@ async function main(): Promise<void> {
 	console.warn(`[fetch] done — ${included.length} assets cached for ${formatTarget(target)}`);
 }
 
-// Run main only when this file is executed directly (not when imported
-// by install.ts). `import.meta.url` is a file:// URL; process.argv[1] is
-// a filesystem path — convert it to a file:// URL before comparing.
 const entryArgv = process.argv[1];
 
 if (entryArgv !== undefined && import.meta.url === pathToFileURL(entryArgv).href) {

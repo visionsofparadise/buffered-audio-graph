@@ -1,3 +1,4 @@
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Monotonic deque per Lemire, "Streaming Maximum-Minimum Filter Using No More than Three Comparisons per Element" (2006).
 export function slidingWindowMin(input: Float32Array, halfWidth: number): Float32Array {
 	const length = input.length;

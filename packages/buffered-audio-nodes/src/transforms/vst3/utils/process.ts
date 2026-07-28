@@ -33,7 +33,6 @@ export interface VstStage {
 }
 
 const READY_LINE = "READY\n";
-// 5-min floor: heavy plugin chains cold-start in ~60s; see design-vst3.md Known limitation 4.
 const READY_TIMEOUT_MS = 300_000;
 
 export function observeVstHostStderr(stderr: NodeJS.ReadableStream): () => string {
@@ -50,11 +49,6 @@ export function observeVstHostStderr(stderr: NodeJS.ReadableStream): () => strin
 	return () => diagnosticTail.toString("utf8");
 }
 
-/**
- * Rejection of {@link VstHostHandle.ready} when the subprocess exits before `READY`.
- * The exit `code` distinguishes a native crash (`0xC0000005` = `3221225477`) from
- * the wrapper's clean error exits (1 = plugin/preset load failure, 2 = bad CLI args).
- */
 export class VstHostExitedBeforeReadyError extends Error {
 	readonly code: number | null;
 	readonly stderr: string;
@@ -67,7 +61,6 @@ export class VstHostExitedBeforeReadyError extends Error {
 	}
 }
 
-// Caller must await `ready` before writing audio to stdin, or the first write races the plugin-chain load.
 export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostHandle {
 	const proc: ChildProcess = spawn(binaryPath, [...args], {
 		stdio: ["pipe", "pipe", "pipe"],
@@ -83,9 +76,6 @@ export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): V
 	const getStderrTail = observeVstHostStderr(stderr);
 
 	const ready = new Promise<void>((resolve, reject) => {
-		// Buffer stdout bytes until we see `READY\n`. Anything after the newline
-		// belongs to the audio stream and must be preserved — push it back as a
-		// synthetic `data` event so downstream readers see it.
 		const seen: Array<Buffer> = [];
 
 		const cleanup = (): void => {
@@ -141,14 +131,11 @@ export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): V
 	});
 
 	stdin.on("error", () => {
-		// EPIPE swallowed; surfaced via stderr / exit code.
 	});
 
 	return { proc, stdin, stdout, stderr, ready, getStderrTail };
 }
 
-// Deterministic wrapper exit codes (0 clean, 1 load failure, 2 bad args); any other
-// before-READY code is a native init crash, safe to retry (precedes any stdin write).
 const CLEAN_WRAPPER_EXIT_CODES: ReadonlySet<number> = new Set([0, 1, 2]);
 
 function isRetryableInitCrash(error: unknown): error is VstHostExitedBeforeReadyError {
@@ -163,7 +150,6 @@ export interface SpawnVstHostReadyOptions {
 	readonly onRetry?: (failedAttempt: number, error: VstHostExitedBeforeReadyError) => void;
 }
 
-// @see design-vst3 2026-06-01: retry only pre-READY, only on hard-crash codes; fail-fast on 1/2 and timeout.
 export async function spawnVstHostReady(binaryPath: string, args: ReadonlyArray<string>, options: SpawnVstHostReadyOptions = {}): Promise<VstHostHandle> {
 	const maxAttempts = options.maxAttempts ?? 5;
 	const backoffMs = options.backoffMs ?? 750;
@@ -185,8 +171,6 @@ export async function spawnVstHostReady(binaryPath: string, args: ReadonlyArray<
 		}
 	}
 
-	// Unreachable for maxAttempts >= 1: the loop returns a ready handle or
-	// throws above. Guards the degenerate maxAttempts < 1 case explicitly.
 	throw new Error(`spawnVstHostReady: exhausted ${maxAttempts} attempts without a result`);
 }
 
@@ -267,9 +251,6 @@ export async function processStreamingThroughVstHost(
 
 	await buffer.reset();
 
-	// Each stdout `data` event may deliver an unaligned byte count (OS pipe boundary is
-	// arbitrary), so a leftover tail is carried between events and only aligned f32le frames
-	// are written. Writes are serialised — `BlockBuffer.write` is not safe under concurrent callers.
 	let outputBytesReceived = 0;
 	let stdoutTail: Buffer = Buffer.alloc(0);
 	let stdoutError: Error | undefined;

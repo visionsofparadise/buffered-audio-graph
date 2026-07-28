@@ -2,6 +2,7 @@ import { BlockSumAccumulator } from "./block-sum";
 import { KWeightedSquaredSum } from "./k-weighted-squared-sum";
 import { computeLoudnessRange } from "./loudness-range";
 
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // K-weighting, 400 ms blocks, and integrated gating follow ITU-R BS.1770-5.
 
 const LUFS_OFFSET = -0.691;
@@ -68,7 +69,6 @@ export class IntegratedLufsAccumulator {
 	private finalized = false;
 
 	constructor(sampleRate: number, channelCount: number, channelWeights?: ReadonlyArray<number>) {
-		// Validation lives in KWeightedSquaredSum; re-throw with this class's prefix so callers/tests matching on it still see it.
 		if (channelCount <= 0) {
 			throw new Error(`IntegratedLufsAccumulator: channelCount must be positive, got ${channelCount}`);
 		}
@@ -85,7 +85,11 @@ export class IntegratedLufsAccumulator {
 		this.blocks = new BlockSumAccumulator(this.blockSize, blockStep);
 	}
 
-	// `channels[c]` needs >= `frames` valid samples from index 0 (oversized OK); state advances as if appended to one contiguous buffer.
+	/**
+	 * State advances as if appended to one contiguous buffer.
+	 *
+	 * @param channels `channels[c]` needs >= `frames` valid samples from index 0 (oversized OK)
+	 */
 	push(channels: ReadonlyArray<Float32Array>, frames: number): void {
 		if (this.finalized) {
 			throw new Error("IntegratedLufsAccumulator: push() called after finalize()");
@@ -133,7 +137,6 @@ export class LoudnessAccumulator {
 	private sourceFrames = 0;
 
 	constructor(sampleRate: number, channelCount: number, channelWeights?: ReadonlyArray<number>) {
-		// Validate at the wrapper (mirroring IntegratedLufsAccumulator) so callers see consistent error prefixes.
 		if (channelCount <= 0) {
 			throw new Error(`LoudnessAccumulator: channelCount must be positive, got ${channelCount}`);
 		}

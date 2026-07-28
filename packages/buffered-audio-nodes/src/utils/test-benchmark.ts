@@ -38,8 +38,8 @@ export async function runBenchmark(name: string, transform: TransformNode, input
 	} finally {
 		try {
 			await unlink(tempPath);
-		} catch {
-			// Temp file may not exist
+		} catch (error) {
+			void error;
 		}
 	}
 }

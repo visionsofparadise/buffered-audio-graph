@@ -23,7 +23,6 @@ export function StringRow({
 	readonly onParameterUnset?: (name: string) => void;
 }) {
 	const [local, setLocal] = useState(param.value);
-	// Same-tick input+blur (e.g. smoke helper) commits before setState re-renders.
 	const localRef = useRef(param.value);
 
 	useEffect(() => {

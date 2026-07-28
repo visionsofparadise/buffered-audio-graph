@@ -5,6 +5,7 @@ import { type Anchors, gainDbAt } from "./curve";
 import { applyBackwardPassOverChunkBuffer, windowSamplesFromMs } from "./envelope";
 import { buildBaseRateDetectionCache } from "./source-caches";
 
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // BS.1770-4 inter-sample-peak capture rate; used by measurement.ts + source-caches.ts detection max-pool.
 export const OVERSAMPLE_FACTOR = 4;
 
@@ -13,31 +14,22 @@ export const CHUNK_FRAMES = 44_100;
 export const BOOST_LOWER_BOUND = -30;
 export const BOOST_UPPER_BOUND = 30;
 
-// pivot+ε lower bound avoids (limitDb−pivotDb) div-by-zero in curve.ts:gainDbAt.
 const LIMIT_EPSILON_DB = 0.01;
 
-// peakGainDb proportional-feedback damping (QA-tuned 0.8; see design-loudness-target §Iteration).
 const PEAK_DAMPING = 0.8;
 
-// peakGainDb attenuation floor (dB).
 const PEAK_GAIN_DB_FLOOR = -60;
 
-// Min |slope| for the B-axis secant step (QA-tuned 0.05).
 const MIN_SECANT_SLOPE = 0.05;
 
 export const DEFAULT_MAX_ATTEMPTS = 10;
 export const DEFAULT_TOLERANCE = 0.5;
 
-// Per-attempt gain LUT (gainDb -> linear gain). Keyed on the curve's output gainDb, not detection dB: the upper
-// segment's slope is unbounded as (limitDb−pivotDb) → LIMIT_EPSILON_DB, so input-side quantization would be amplified
-// arbitrarily; output-side is flat. Math.pow fallback outside the domain covers deep brick-wall values.
 const GAIN_LUT_MIN_DB = -80;
 const GAIN_LUT_MAX_DB = 40;
 const GAIN_LUT_STEP_DB = 0.01;
 const GAIN_LUT_INV_STEP = 1 / GAIN_LUT_STEP_DB;
 const GAIN_LUT_SIZE = Math.round((GAIN_LUT_MAX_DB - GAIN_LUT_MIN_DB) / GAIN_LUT_STEP_DB) + 1;
-// Stored-silence detection value: linearToDb(0) clamps to −200 dB. Used as the missing-sample sentinel so a gap reads
-// as silence (not full-scale) on the dB detection axis.
 const GAIN_LUT_STORED_SILENCE_DB = -200;
 
 function buildGainLut(): Float64Array {
@@ -83,10 +75,7 @@ export interface IterateResult {
 	bestPeakGainDb: number;
 	attempts: ReadonlyArray<IterationAttempt>;
 	converged: boolean;
-	// 0 when a pre-built detectionEnvelope was supplied.
 	detectionCacheBuildMs: number;
-	// The winning attempt's stored exact BS.1770 measurements (captured at measurement time). `converged` is
-	// derived from the winning attempt's errors. null on pass-through.
 	winnerOutputLufs: number | null;
 	winnerOutputTruePeakDb: number | null;
 	winnerOutputLra: number | null;
@@ -107,7 +96,6 @@ export interface IterateForTargetsArgs {
 	tolerance?: number;
 	peakTolerance: number;
 	seedB?: number | undefined;
-	// Pre-built base-rate detection envelope (ownership transfers; closed by this call). Must be bit-identical to buildBaseRateDetectionCache output for the same buffer/halfWidth.
 	detectionEnvelope?: BlockBuffer | undefined;
 	onAttempt?: (attempt: IterationAttempt, attemptIndex: number) => void;
 	progress?: (done: number, total: number) => void;
@@ -180,7 +168,6 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 	const forwardEnvelopeBuffer = new BlockBuffer();
 	const minHeldEnvelopeBuffer = new BlockBuffer();
-	// activeRef / winningRef ping-pong: swapped by pointer on a best-attempt update (no envelope copy).
 	const activeBufferA = new BlockBuffer();
 	const activeBufferB = new BlockBuffer();
 
@@ -199,15 +186,12 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		let bestBoost = currentBoost;
 		let bestPeakGainDb = currentPeakGainDb;
 		let bestScore = Infinity;
-		// The winning attempt's stored exact measurements + errors, kept alongside the ping-pong best-selection
-		// so `converged` and the reported winner numbers come from the held (winning) envelope's attempt.
 		let winnerOutputLufs: number | null = null;
 		let winnerOutputTruePeakDb: number | null = null;
 		let winnerOutputLra: number | null = null;
 		let winnerLufsErr = Infinity;
 		let winnerPeakErr = Infinity;
 
-		// Infinity seed leaves the first secant call (attempt ≥ 2) uncapped by the asymmetric-damping rule.
 		let previousStepMagnitude = Infinity;
 		const attemptWork = frames * 4;
 		const totalWork = maxAttempts * attemptWork;
@@ -268,9 +252,6 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			attempts.push(attempt);
 			onAttempt?.(attempt, attemptIdx);
 
-			// Best-attempt score = max of each axis's error over its own gate tolerance. `score < 1 ⇔ passes both
-			// gates`, so a gate-failing attempt can never beat a gate-passing one — the winner matches the gates.
-			// Both divisors are schema-positive (`.gt(0)`).
 			const lufsScoreTerm = Math.abs(lufsErr) / tolerance;
 			const peakScoreTerm = skipPeak ? 0 : Math.abs(peakErr) / peakTolerance;
 			const score = Math.max(lufsScoreTerm, peakScoreTerm);
@@ -320,9 +301,6 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			}
 		}
 
-		// `converged` from the winning attempt's stored (exact) errors, using the SAME dual predicate as the
-		// in-loop exit (2-dp match OR per-axis tolerance; skipPeak respected). winningPopulated=false leaves the
-		// seeded Infinity errors → converged false, matching the empty/pathological semantics.
 		const converged = winningPopulated
 			&& (
 				(Math.round(Math.abs(winnerLufsErr) * 100) === 0 && (skipPeak || Math.round(Math.abs(winnerPeakErr) * 100) === 0))
@@ -342,13 +320,10 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			winnerOutputLra,
 		};
 	} finally {
-		// detectionEnvelope has no downstream consumer — close on every path. The winner is returned via
-		// IterateResult and outlives this call; the losing ping-pong buffer is closed below.
 		await detectionEnvelope.close();
 
 		await forwardEnvelopeBuffer.close();
 		await minHeldEnvelopeBuffer.close();
-		// Pathological branch (no best-attempt update ever fired — impossible for non-zero frames): close both.
 		if (!winningPopulated) {
 			await activeBufferA.close();
 			await activeBufferB.close();
@@ -364,7 +339,6 @@ export interface StreamCurveAndForwardIirArgs {
 	detectionEnvelope: BlockBuffer;
 	anchors: Anchors;
 	iir: BidirectionalIir;
-	// Must match the detection-cache slider's halfWidth (identical span on both ends is the brick-wall exactness invariant).
 	halfWidth: number;
 	forwardEnvelopeBuffer: BlockBuffer;
 	minHeldEnvelopeBuffer: BlockBuffer;
@@ -387,7 +361,6 @@ export async function streamCurveAndForwardIir(
 
 	const gWindowScratch = new Float32Array(CHUNK_FRAMES);
 
-	// Built once per attempt, not per sample.
 	const gainLut = buildGainLut();
 
 	const detectionSampleRate = detectionEnvelope.sampleRate;
@@ -405,7 +378,6 @@ export async function streamCurveAndForwardIir(
 		const gWindowChunk = gWindowScratch.subarray(0, chunkLength);
 
 		for (let outputIdx = 0; outputIdx < chunkLength; outputIdx++) {
-			// windowChunk holds dB (producers convert at write); feed straight to gainDbAt.
 			const levelDb = windowChunk[outputIdx] ?? GAIN_LUT_STORED_SILENCE_DB;
 			const gainDb = gainDbAt(levelDb, anchors);
 
@@ -425,7 +397,6 @@ export async function streamCurveAndForwardIir(
 			const forwardChunk = iir.applyForwardPass(minHeldChunk, forwardState);
 
 			await forwardEnvelopeBuffer.write([forwardChunk], detectionSampleRate, detectionBitDepth);
-			// minHeldChunk is a fresh Float32Array from SlidingWindowMinStream.push; safe to write without copying.
 			await minHeldEnvelopeBuffer.write([minHeldChunk], detectionSampleRate, detectionBitDepth);
 		}
 
@@ -559,7 +530,6 @@ function clampBoost(boost: number): number {
 	return boost;
 }
 
-// pivot+ε lower bound avoids (limitDb−pivotDb) div-by-zero in curve.ts:gainDbAt.
 export function clampLimit(limitDb: number, pivotDb: number, sourcePeakDb: number): number {
 	if (!Number.isFinite(limitDb)) return sourcePeakDb;
 

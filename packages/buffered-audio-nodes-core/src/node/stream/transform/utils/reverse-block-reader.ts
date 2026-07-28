@@ -95,7 +95,6 @@ export class ReverseBlockReader {
 		const totalBytes = this.frames * this.bytesPerFrame;
 		const stream = new ReverseReadable(this.path, totalBytes, this.bytesPerFrame, this.windowBytes);
 
-		// Node crashes on an unhandled stream error; retain it so read can surface the original failure.
 		stream.once("error", (error: Error) => {
 			this.streamError = error;
 		});
@@ -123,7 +122,6 @@ class ReverseReadable extends Readable {
 	}
 
 	override _read(): void {
-		// Node does not observe a promise returned by _read, so failures must enter the stream via destroy.
 		void this.readWindow();
 	}
 

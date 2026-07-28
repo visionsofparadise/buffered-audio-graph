@@ -158,8 +158,8 @@ export function useGraphDefinition(
 							});
 						});
 					}
-				} catch {
-					// empty: invalid external edit; next valid write reconciles
+				} catch (error) {
+					void error;
 				}
 			})();
 		};

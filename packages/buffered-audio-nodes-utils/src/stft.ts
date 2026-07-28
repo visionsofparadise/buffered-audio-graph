@@ -3,6 +3,7 @@ import { ByteBoundedCache } from "./byte-bounded-cache";
 import type { FftBackend } from "./fft-backend";
 import { getFftAddon } from "./fft-backend";
 
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Radix-2 transforms follow Cooley and Tukey, "An Algorithm for the Machine Calculation of Complex Fourier Series" (1965).
 export interface StftResult {
 	readonly real: Float32Array;
@@ -237,6 +238,7 @@ export function istft(result: StftResult, hopSize: number, outputLength: number,
 
 const hanningWindowCache = new ByteBoundedCache<string, Float32Array>(HANN_WINDOW_CACHE_BYTES);
 
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Periodic and symmetric Hann windows follow Harris, "On the Use of Windows for Harmonic Analysis with the Discrete Fourier Transform" (1978).
 export function hanningWindow(size: number, periodic = true): Float32Array {
 	assertPositiveInteger(size, "Hann window size");

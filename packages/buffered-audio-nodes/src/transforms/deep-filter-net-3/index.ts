@@ -6,7 +6,7 @@ import { createResampleComposition } from "../../utils/resample-composition";
 import type { FfmpegStream } from "../ffmpeg";
 import { createDfnState, DFN3_HOP_SIZE, DFN3_SAMPLE_RATE, processDfnBlock, type DfnState } from "./utils/dfn";
 
-const DFN3_BUFFER_SIZE = 100 * DFN3_HOP_SIZE; // = 48000 frames = 1 s blocks at 48 kHz
+const DFN3_BUFFER_SIZE = 100 * DFN3_HOP_SIZE;
 
 export const schema = z.object({
 	modelPath: z
@@ -45,7 +45,6 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 	}
 
 	override _setup(context: StreamSetupContext): void {
-		// CPU-only: DML rejects DFN3 ops; see design-onnx-providers.
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
 
 		const composition = createResampleComposition({ context, streamContext: this.renderContext, ffmpegPath: this.properties.ffmpegPath, modelRate: DFN3_SAMPLE_RATE });
@@ -71,7 +70,6 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 
 		if (frames === 0 || channels === 0) return;
 
-		// Single-call read(frames) is safe only because blockSize bounds the block, not because processDfnBlock streams.
 		await buffered.reset();
 		const chunk = await buffered.read(frames);
 

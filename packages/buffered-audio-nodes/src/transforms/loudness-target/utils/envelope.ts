@@ -1,12 +1,10 @@
 import { BlockBuffer } from "@buffered-audio/core";
 import type { BidirectionalIir } from "@buffered-audio/utils";
 
-// Sliding-window-min primitive: https://en.wikipedia.org/wiki/Sliding_window_minimum
 export function windowSamplesFromMs(smoothingMs: number, sampleRate: number): number {
 	return Math.max(1, Math.round((smoothingMs * sampleRate) / 1000));
 }
 
-// When provided, `minHeldBuffer.frames` MUST equal `sourceBuffer.frames` (read in lockstep; throws on mismatch).
 export async function applyBackwardPassOverChunkBuffer(args: {
 	sourceBuffer: BlockBuffer;
 	destBuffer: BlockBuffer;
@@ -33,10 +31,6 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 	const sr = sourceBuffer.sampleRate;
 	const bd = sourceBuffer.bitDepth;
 
-	// Backward IIR = forward IIR over reversed time. The reverse reader hands back chunkSize frames at a
-	// time walking end→start, already in reverse time order — the same cadence (full chunks from the end,
-	// ragged chunk last) and the same values the prior hand-rolled reverse-stripe walk produced, so the
-	// fp sequence fed to the IIR is unchanged and the output stays bit-exact.
 	const filteredReversed = new BlockBuffer();
 
 	try {
@@ -52,8 +46,6 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 
 				if (reversed === undefined || reversed.length === 0) break;
 
-				// State seeds from the source's last sample — the first sample the reverse reader yields —
-				// matching `applyBackwardPassInPlace`'s init rule.
 				if (!seeded) {
 					backwardState.value = reversed[0] ?? 0;
 					seeded = true;
@@ -69,8 +61,6 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 			await sourceReader.close();
 		}
 
-		// Un-reverse into dest, folding the per-sample clamp into the same walk. Reading the reversed
-		// filtered buffer backward restores forward time order; minHeldBuffer is read forward in lockstep.
 		if (minHeldBuffer !== undefined) await minHeldBuffer.reset();
 
 		const filteredReader = await filteredReversed.openReverseReader();

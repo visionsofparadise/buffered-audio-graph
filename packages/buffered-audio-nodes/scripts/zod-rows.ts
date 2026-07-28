@@ -1,10 +1,5 @@
 import type { z } from "zod";
 
-/**
- * One rendered row of the generated Markdown parameter table.
- *
- * Columns correspond to: `| Parameter | Type | Default | Description |`.
- */
 export interface Row {
 	name: string;
 	type: string;
@@ -12,10 +7,6 @@ export interface Row {
 	description: string;
 }
 
-/**
- * Aggregated metadata collected by walking `optional`/`default` wrappers down
- * to an underlying schema type.
- */
 interface Unwrapped {
 	schema: z.ZodType;
 	optional: boolean;
@@ -64,16 +55,11 @@ export function zodToRows(schema: z.ZodType, prefix = ""): Array<Row> {
 		return rows;
 	}
 
-	// Non-object top-level: emit a single row for the whole schema.
 	appendRows(rows, prefix, schema);
 
 	return rows;
 }
 
-/**
- * Emit rows for a single field located at `path`. For object and array fields
- * this recurses so that nested shapes flatten into the same table.
- */
 function appendRows(rows: Array<Row>, path: string, schema: z.ZodType): void {
 	const unwrapped = unwrap(schema);
 	const def = getDef(unwrapped.schema);
@@ -120,10 +106,6 @@ function appendRows(rows: Array<Row>, path: string, schema: z.ZodType): void {
 	rows.push(makeRow(path, primitiveTypeLabel(unwrapped), unwrapped));
 }
 
-/**
- * Build a finished `Row` from a resolved field path, pre-computed type label,
- * and the collected wrapper metadata for the field.
- */
 function makeRow(path: string, baseType: string, unwrapped: Unwrapped): Row {
 	const typeLabel = unwrapped.optional && !unwrapped.hasDefault ? `${baseType}, optional` : baseType;
 	const defaultString = unwrapped.hasDefault ? `\`${stringifyDefault(unwrapped.defaultValue)}\`` : "—";
@@ -137,11 +119,6 @@ function makeRow(path: string, baseType: string, unwrapped: Unwrapped): Row {
 	};
 }
 
-/**
- * Walk through `optional` and `default` wrapper schemas, collecting flags and
- * metadata along the way. The resulting `schema` is the innermost concrete
- * type (object, array, number, string, boolean, enum).
- */
 function unwrap(schema: z.ZodType): Unwrapped {
 	let current: z.ZodType = schema;
 	let optional = false;
@@ -150,7 +127,6 @@ function unwrap(schema: z.ZodType): Unwrapped {
 	let description = readDescription(current);
 	let meta = readMeta(current);
 
-	// Walk through `optional` and `default` wrappers. Both expose `.unwrap()`.
 	for (;;) {
 		const def = getDef(current);
 		const isOptional = def.type === "optional";
@@ -177,11 +153,6 @@ function unwrap(schema: z.ZodType): Unwrapped {
 	return { schema: current, optional, hasDefault, defaultValue, description, meta };
 }
 
-/**
- * Render the primitive portion of a type label (the caller composes `[]` and
- * `, optional` suffixes around this). Accepts the unwrapped schema so callers
- * can reuse metadata collected during the wrapper walk.
- */
 function primitiveTypeLabel(unwrapped: Unwrapped): string {
 	const def = getDef(unwrapped.schema);
 
@@ -210,16 +181,9 @@ function primitiveTypeLabel(unwrapped: Unwrapped): string {
 		return literalLabelsForSchema(unwrapped.schema)?.join(" \\| ") ?? def.type;
 	}
 
-	// Fallback — unknown leaf type. Surface the def type so the generator
-	// output flags it rather than silently rendering an empty label.
 	return def.type;
 }
 
-/**
- * When a union's members are all `z.literal(...)` values, render them as a
- * pipe-separated literal-type label (e.g. `16 \| 24` or `"a" \| "b"`). Returns
- * `null` when any member is not a literal — the caller then falls back.
- */
 function unionLiteralLabels(schema: z.ZodType): Array<string> | null {
 	const def = (schema as unknown as { _zod: { def: { options?: ReadonlyArray<z.ZodType> } } })._zod.def;
 	const options = def.options;
@@ -239,11 +203,6 @@ function unionLiteralLabels(schema: z.ZodType): Array<string> | null {
 	return labels;
 }
 
-/**
- * Render `z.literal(...)` values as column labels. In Zod v4 a single literal
- * schema carries an array of values (to support `z.literal([a, b])`); each is
- * quoted when it's a string and stringified raw otherwise.
- */
 function literalLabelsForSchema(schema: z.ZodType): Array<string> | null {
 	const def = (schema as unknown as { _zod: { def: { type: string; values?: ReadonlyArray<unknown> } } })._zod.def;
 
@@ -252,11 +211,6 @@ function literalLabelsForSchema(schema: z.ZodType): Array<string> | null {
 	return def.values.map((value) => (typeof value === "string" ? `"${value}"` : String(value)));
 }
 
-/**
- * Render the `(min to max, step N)` suffix for a numeric schema based on its
- * Zod check list. Returns `null` when the number has no min/max/multipleOf
- * check.
- */
 function numberConstraints(schema: z.ZodType): string | null {
 	const def = getDef(schema);
 	const checks = (def.checks ?? []) as ReadonlyArray<{ _zod: { def: { check: string; value: number } } }>;
@@ -290,10 +244,6 @@ function numberConstraints(schema: z.ZodType): string | null {
 	return parts.length === 0 ? null : parts.join(", ");
 }
 
-/**
- * Compose the description column: base description plus an appended download
- * link when the field carries `.meta({ download, binary })`.
- */
 function renderDescription(unwrapped: Unwrapped): string {
 	const base = unwrapped.description ?? "";
 	const meta = unwrapped.meta;
@@ -307,37 +257,27 @@ function renderDescription(unwrapped: Unwrapped): string {
 	return base;
 }
 
-/**
- * Serialise a default value for inline rendering in the Default column. Primitives
- * use `String()`; objects/arrays/strings use `JSON.stringify` so the rendered
- * table shows something like `"peaking"` or `[]` verbatim.
- */
 function stringifyDefault(value: unknown): string {
 	if (typeof value === "string") return JSON.stringify(value);
 	if (typeof value === "object") return JSON.stringify(value);
 	if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
 	if (value === undefined) return "undefined";
 
-	// symbol, function — fall back to JSON representation (returns "undefined"
-	// when serialisation fails, which is rare for a Zod default value).
 	return JSON.stringify(value);
 }
 
-/** Access the `_zod.def` escape hatch in a single typed location. */
 function getDef(schema: z.ZodType): { type: string; checks?: unknown; element?: unknown } {
 	const raw = (schema as unknown as { _zod: { def: { type: string; checks?: unknown; element?: unknown } } })._zod.def;
 
 	return raw;
 }
 
-/** Read the `.description` public getter. Returns `undefined` when unset. */
 function readDescription(schema: z.ZodType): string | undefined {
 	const description = (schema as unknown as { description?: string | undefined }).description;
 
 	return typeof description === "string" ? description : undefined;
 }
 
-/** Invoke the `.meta()` public getter when available. */
 function readMeta(schema: z.ZodType): Record<string, unknown> | undefined {
 	const candidate = (schema as unknown as { meta?: () => Record<string, unknown> | undefined }).meta;
 
@@ -348,14 +288,12 @@ function readMeta(schema: z.ZodType): Record<string, unknown> | undefined {
 	return value ?? undefined;
 }
 
-/** Read the `_zod.def.defaultValue` off a `ZodDefault`. */
 function readDefaultValue(schema: z.ZodType): unknown {
 	const def = (schema as unknown as { _zod: { def: { defaultValue?: unknown } } })._zod.def;
 
 	return def.defaultValue;
 }
 
-/** Call `.unwrap()` when the schema exposes it (optional/default wrappers). */
 function callUnwrap(schema: z.ZodType): z.ZodType | undefined {
 	const candidate = (schema as unknown as { unwrap?: () => z.ZodType }).unwrap;
 
@@ -364,7 +302,6 @@ function callUnwrap(schema: z.ZodType): z.ZodType | undefined {
 	return candidate.call(schema);
 }
 
-/** Read `.shape` on a `ZodObject`. */
 function getShape(schema: z.ZodType): Record<string, z.ZodType> {
 	return (schema as unknown as { shape: Record<string, z.ZodType> }).shape;
 }

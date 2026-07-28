@@ -4,7 +4,6 @@ import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
 export interface RenderGraphInput {
 	jobId: string;
 	definition: GraphDefinition;
-	/** Template parameter bindings forwarded to `createRenderJobs` for substitution. */
 	parameters?: Record<string, string>;
 }
 

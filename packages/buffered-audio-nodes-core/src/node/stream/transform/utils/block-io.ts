@@ -56,7 +56,6 @@ export async function pullBytes(stream: Readable, isEnded: () => boolean, bytesN
 				resolve();
 			};
 
-			// Error and close must wake an in-flight read so stream failure settles instead of hanging.
 			stream.once("readable", wake);
 			stream.once("end", wake);
 			stream.once("error", wake);

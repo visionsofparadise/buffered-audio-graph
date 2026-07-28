@@ -3,10 +3,8 @@ import { peakPriorityAmount } from "./lattice";
 import { measureFrameTruePeakDb } from "./objective";
 import { measureBufferTruePeakDb } from "./windowed";
 
-// 3 dB binding proximity band (QA-tuned, not exposed) — see design-crest-reduce §Internal calibration.
 export const BINDING_DELTA_DB = 3;
 
-// min phase-only crest headroom to bind (QA-tuned 0.5) — see design-crest-reduce §Internal calibration.
 export const BINDING_HEADROOM_MIN = 0.5;
 
 export interface WindowBinding {
@@ -18,7 +16,6 @@ export interface WindowBinding {
 	readonly frameTruePeakDb: number;
 }
 
-// The gate's single global TP measurement; composes the one streaming-measure impl (no resident whole-signal array).
 export async function measureWholeSignalTruePeakDb(buffer: BlockBuffer, sampleRate: number): Promise<number> {
 	return measureBufferTruePeakDb(buffer, sampleRate);
 }
@@ -61,8 +58,6 @@ export function classifyWindow(channelWindows: ReadonlyArray<Float32Array>, glob
 }
 
 export function isBindingPeak(frameTruePeakDb: number, headroom: number, globalTruePeakDb: number, isGlobalTpFrame = false): boolean {
-	// The measureFrameTruePeakDb silence floor (−200 dB) can never be within BINDING_DELTA_DB of a real
-	// peak, so silent windows are correctly non-binding.
 	const proximate = frameTruePeakDb >= globalTruePeakDb - BINDING_DELTA_DB;
 
 	return headroom > BINDING_HEADROOM_MIN && (proximate || isGlobalTpFrame);

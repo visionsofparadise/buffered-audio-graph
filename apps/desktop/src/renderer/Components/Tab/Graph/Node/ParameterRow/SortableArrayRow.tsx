@@ -33,7 +33,6 @@ export function SortableArrayRow({
 	return (
 		<div ref={setNodeRef} style={style} className="flex flex-col gap-2.5">
 			<div className="flex items-center justify-between gap-2">
-				{/* nodrag prevents React Flow from intercepting pointer events the sortable listeners need. */}
 				<div
 					className="nodrag flex cursor-grab items-center gap-1.5 text-text-secondary active:cursor-grabbing"
 					{...attributes}

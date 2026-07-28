@@ -14,7 +14,6 @@ export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, R
 		const signal = jobManager.getOrCreateSignal(jobId);
 
 		try {
-			// Bridges the desktop's `NodeClass` values to core's bare-ctor `NodeRegistry`: same object, structural superset, blocked only by `Map` generic invariance.
 			const jobs = createRenderJobs(definition, nodeRegistry as unknown as NodeRegistry, { signal, parameters });
 
 			for (const job of jobs) {

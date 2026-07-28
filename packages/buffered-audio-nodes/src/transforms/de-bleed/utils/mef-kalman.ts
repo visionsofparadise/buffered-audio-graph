@@ -123,7 +123,6 @@ export function kalmanUpdateFrame(
 			state.hReal[bin] = state.hReal[bin]! + correctionRe;
 			state.hImag[bin] = state.hImag[bin]! + correctionIm;
 
-			// `max(…, 0)` is a non-MEF numerical-safety clamp: finite-precision can make the reduction factor slightly negative when K·Y ≈ 1.
 			const kDotY = kRe * yReBin - kIm * yImBin;
 			const reductionFactor = 1 - kDotY > 0 ? 1 - kDotY : 0;
 

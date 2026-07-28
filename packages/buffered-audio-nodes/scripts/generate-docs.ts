@@ -5,21 +5,12 @@ import { glob } from "node:fs/promises";
 import type { z } from "zod";
 import { zodToRows, type Row } from "./zod-rows";
 
-/**
- * Minimal shape a discovered class must satisfy to be documented. All three
- * fields must be present and non-empty; `schema` must be a Zod schema.
- */
 interface NodeClass {
 	readonly nodeName: string;
 	readonly description: string;
 	readonly schema: z.ZodType;
 }
 
-/**
- * Discovered node class plus the source file it was imported from. The source
- * path is the `index.ts` location that yielded the class; it becomes the
- * `[Source]` link target in the rendered block.
- */
 interface DiscoveredNode {
 	readonly cls: NodeClass;
 	readonly sourcePath: string;
@@ -30,15 +21,6 @@ const PACKAGE_ROOT = resolve(SCRIPT_DIR, "..");
 const SRC_ROOT = resolve(PACKAGE_ROOT, "src");
 const README_PATH = resolve(PACKAGE_ROOT, "README.md");
 
-/**
- * Determine whether an exported value is a class with the required statics.
- *
- * Classes in TypeScript compile to functions with a non-default `prototype`.
- * We accept any function that declares all three documented statics because
- * the generator is a discovery tool — adding an `instanceof` check against the
- * core base class would require importing core here, and the statics are the
- * authoritative signal already.
- */
 function isNodeClass(value: unknown): value is NodeClass {
 	if (typeof value !== "function") return false;
 
@@ -51,24 +33,10 @@ function isNodeClass(value: unknown): value is NodeClass {
 	return true;
 }
 
-/**
- * Import every `src/**\/*.ts` file (except the package barrel, test files, and
- * declaration files) and collect exported classes that satisfy
- * {@link isNodeClass}. Deduplicated by class identity — a node re-exported from
- * multiple files is kept once, with the first discovery's source path
- * preserved.
- *
- * The glob scans all `.ts` sources (not just `index.ts`) so that node classes
- * living at non-index paths — e.g. `transforms/de-click/de-crackle.ts` — are
- * discovered. The `isNodeClass` filter plus identity-based dedup ensure that
- * utility modules, types-only files, and re-exports don't produce false
- * positives or duplicates.
- */
 async function discoverNodes(): Promise<Array<DiscoveredNode>> {
 	const paths: Array<string> = [];
 
 	for await (const entry of glob("**/*.ts", { cwd: SRC_ROOT })) {
-		// Normalize path separators so Windows and POSIX produce identical matches.
 		const normalized = entry.split("\\").join("/");
 
 		if (normalized === "index.ts") continue;
@@ -103,16 +71,10 @@ async function discoverNodes(): Promise<Array<DiscoveredNode>> {
 	return discovered;
 }
 
-/** Render the parameter table body for a set of rows. */
 function renderRows(rows: ReadonlyArray<Row>): string {
 	return rows.map((row) => `| \`${row.name}\` | ${row.type} | ${row.default} | ${row.description} |`).join("\n");
 }
 
-/**
- * Render a single node's section: heading, description, source link, and the
- * parameter table. Section ends with no trailing newline — the caller glues
- * sections together.
- */
 function renderNodeSection(node: DiscoveredNode): string {
 	const relativeSource = relative(PACKAGE_ROOT, node.sourcePath).split("\\").join("/");
 	const rows = zodToRows(node.cls.schema);
@@ -135,19 +97,10 @@ ${renderRows(rows)}`;
 ${table}`;
 }
 
-/** Render the full `## Nodes` body — all discovered node sections joined. */
 function renderNodesBlock(nodes: ReadonlyArray<DiscoveredNode>): string {
 	return nodes.map(renderNodeSection).join("\n\n");
 }
 
-/**
- * Replace the README's `## Nodes` section body (everything between the
- * `## Nodes` heading and the next `## ` heading, exclusive of both) with the
- * generated block wrapped in blank lines.
- *
- * Throws when the markers can't be located so the script fails loudly instead
- * of silently emitting a malformed README.
- */
 function replaceNodesSection(readme: string, generatedBlock: string): string {
 	const lines = readme.split("\n");
 	const headingIndex = lines.findIndex((line) => line.trim() === "## Nodes");

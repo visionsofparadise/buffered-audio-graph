@@ -3,7 +3,6 @@ import type * as Wavefile from "wavefile";
 import wavefileExports from "wavefile/dist/wavefile";
 import { BlockBuffer, type SourceMetadata } from "@buffered-audio/core";
 
-// Import wavefile's CJS entry by explicit path so every runtime resolves it identically and tsup `noExternal` bundles it into dist/; do NOT switch to a bare import or `createRequire` (unbundlable → leaves `wavefile` unresolved in dependency-less pacote extracts).
 const { WaveFile } = wavefileExports as typeof Wavefile;
 
 export interface WavSamples {

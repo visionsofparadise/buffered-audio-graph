@@ -126,10 +126,7 @@ describe("processLatticeChannel — normalized first-order section is exactly al
 	// sample-for-sample passthrough. A pure integer M-sample delay is an
 	// all-pass: it changes neither the 4× true peak nor the RMS (both
 	// shift-invariant), so it is crest-invariant and correct for the
-	// node's contract. (Option (b) of 5F.2 — assert the TRUE property, not
-	// a false "sample-exact" claim. The node-level strength=0 bit-exact
-	// bypass is SEPARATE — the stream never enters the lattice there — and
-	// is asserted bit-exact in unit.test.ts; it is unaffected by this.)
+	// node's contract.
 	it("an all-zero (identity) trajectory is EXACTLY an M-sample delay (z⁻ᴹ — an all-pass, crest-invariant; NOT sample-exact)", () => {
 		const signal = makeDense(4096);
 		const trajectory = staticTrajectory(new Array<number>(LATTICE_ORDER).fill(0), 16);

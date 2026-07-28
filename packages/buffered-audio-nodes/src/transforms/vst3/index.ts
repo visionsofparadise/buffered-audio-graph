@@ -37,17 +37,22 @@ export interface Vst3Properties extends TransformNodeProperties {
 	readonly vstHostPath: string;
 	readonly stages: ReadonlyArray<VstStage>;
 	readonly bypass?: boolean;
-	// test-only: spawn `node <stub>` by passing `node` as vstHostPath + [stub] here.
+	/**
+	 * test-only: spawn `node <stub>` by passing `node` as vstHostPath + [stub] here.
+	 */
 	readonly extraArgs?: ReadonlyArray<string>;
-	// test-only: override the 30000 ms monitor interval so heavy tests can force ticks.
+	/**
+	 * test-only: override the 30000 ms monitor interval so heavy tests can force ticks.
+	 */
 	readonly monitorIntervalMs?: number;
-	// test-only: replace process-tree sampling so heavy tests can drive monitor outcomes.
+	/**
+	 * test-only: replace process-tree sampling so heavy tests can drive monitor outcomes.
+	 */
 	readonly monitorSampler?: ProcessLivenessOptions["sampler"];
 }
 
 export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends UnbufferedTransformStream<Vst3Node<P>> {
 	override *_transform(block: Block): Generator<Block> {
-		// Bypass: pass audio through unchanged (no subprocess spawn).
 		yield block;
 	}
 }
@@ -90,7 +95,6 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 			String(channels),
 		];
 
-		// Retries the pre-READY init crash (Windows 0xC0000005 / exit 3221225477); see design-vst3.md (2026-06-01).
 		const handle = await spawnVstHostReady(this.properties.vstHostPath, args, {
 			onRetry: (failedAttempt, error) => {
 				this.log("vst-host init crash, retrying", { attempt: failedAttempt, error: error.message }, "warn");
@@ -152,8 +156,8 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 		if (cleanup) {
 			try {
 				await cleanup();
-			} catch {
-				// Temp-file cleanup is best-effort.
+			} catch (error) {
+				void error;
 			}
 		}
 	}

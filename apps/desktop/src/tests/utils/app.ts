@@ -14,12 +14,6 @@ export function log(message: string): void {
 	process.stdout.write(`${message}\n`);
 }
 
-/**
- * Attach the console/pageerror collectors to a page, deduped. Registered against
- * every page target as early as it is created (before any interaction) so a
- * load-time renderer crash ahead of page acquisition is still caught — Phase 1
- * review note.
- */
 export function attachCollectors(page: Page): void {
 	if (collectorAttached.has(page)) return;
 
@@ -71,8 +65,8 @@ export async function waitForCdp(port: number, timeoutMs: number): Promise<void>
 			const status = await httpGetStatus(`http://127.0.0.1:${port}/json/version`);
 
 			if (status === 200) return;
-		} catch {
-			// Endpoint not up yet.
+		} catch (error) {
+			void error;
 		}
 
 		await sleep(500);
@@ -96,13 +90,6 @@ export async function findAppPage(browser: Browser, timeoutMs: number): Promise<
 	throw new Error("Could not find the app renderer page over CDP");
 }
 
-/**
- * Launch the desktop app over Electron Forge's dev start with a remote debugging
- * port, against the isolated smoke profile. Stdout/stderr are piped to this
- * process's stderr with an `[app]` prefix. `BAG_VST3_SMOKE_CLOSE_MS` makes the
- * Vst3/launchEditor handler append --close-after-ms so an opened plugin GUI
- * auto-closes.
- */
 export function launchApp(port: number): ChildProcess {
 	const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 	const child: ChildProcess = spawn(
@@ -133,8 +120,8 @@ export function killProcessTree(child: ChildProcess): void {
 	} else {
 		try {
 			process.kill(-pid, "SIGKILL");
-		} catch {
-			// Process group already gone.
+		} catch (error) {
+			void error;
 		}
 	}
 }

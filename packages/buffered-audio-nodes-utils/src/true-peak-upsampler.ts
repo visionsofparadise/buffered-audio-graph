@@ -1,3 +1,4 @@
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Four-phase, 12-tap FIR coefficient columns from ITU-R BS.1770-5 Annex 2.
 
 const TAPS_PER_PHASE_4X = 12;

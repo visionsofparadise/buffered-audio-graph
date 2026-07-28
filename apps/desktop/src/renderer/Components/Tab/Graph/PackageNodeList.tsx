@@ -58,13 +58,6 @@ export function PackageNodeList({ app, onSelect }: Props) {
 	const listRef = useRef<HTMLDivElement>(null);
 	const [query, setQuery] = useState("");
 
-	// Radix focuses the first menu item when the menu opens, and does so in an
-	// effect whose timing races a one-shot focus() here. Reclaim focus on a short
-	// interval so that however Radix's focus settles, the next tick returns it to
-	// the search field before any typing — deterministic where a single rAF was
-	// flaky. Safe because the category submenus open on hover, not on focus, so a
-	// reclaim never blocks browsing. The window is brief; after it, focus is left
-	// wherever the user put it.
 	useEffect(() => {
 		const input = inputRef.current;
 

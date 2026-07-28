@@ -10,7 +10,6 @@ import { ReverseBlockReader } from "./reverse-block-reader";
 
 const HIGH_WATER_MARK = 10 * 1024 * 1024;
 
-// reset() overwrites in place; bytes past the new write region remain until overwritten.
 export class BlockBuffer {
 	private _frames = 0;
 	private _channels = 0;
@@ -288,7 +287,6 @@ export class BlockBuffer {
 
 		rs.destroy();
 
-		// Windows keeps the temp file busy until the close event after destroy.
 		await awaitStreamClose(rs);
 	}
 }

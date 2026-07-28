@@ -220,7 +220,7 @@ describe("deBleed integration", () => {
 // ----- Phase 4.2 ------------------------------------------------------------
 
 describe("deBleed multi-reference scaling (Phase 4.2)", () => {
-	// Probes `computeMsadDecision` directly because the per-stream MSAD state inside `_process` is internal and not surfaced.
+	// Probes `computeMsadDecision` directly because the per-stream MSAD state inside `_transform` is internal and not surfaced.
 	it("MSAD reports each speaker active during its own speech and inactive during silence (5-mic config)", () => {
 		const numBins = 64;
 		const channelCount = 5; // [target, ref0, ref1, ref2, ref3]

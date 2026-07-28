@@ -40,12 +40,6 @@ export async function clickPoint(page: Page, point: Point): Promise<void> {
 	await page.mouse.click(point.x, point.y);
 }
 
-/**
- * Zoom the React Flow canvas out by `ticks` wheel steps over the pane centre.
- * The seeded empty bag's `fitView` zooms to maxZoom (2×) once the first node
- * mounts; at 2× the nodes are large and a handle-to-handle connect drag spans a
- * long diagonal that fails to register, so zooming out first keeps the drag short.
- */
 export async function zoomOut(page: Page, ticks: number): Promise<void> {
 	const pane = await rectOf(page, ".react-flow__pane");
 
@@ -77,13 +71,6 @@ export async function dragBetween(page: Page, from: Point, to: Point): Promise<v
 	await page.mouse.up();
 }
 
-/**
- * Drag a React Flow connection from one handle to another. More deliberate than
- * `dragBetween`: it hovers the source handle before pressing and dwells on the
- * target handle before releasing, so React Flow registers the drop target (a
- * fast diagonal drag between distant handles can otherwise release with no
- * hovered target and drop the connection).
- */
 export async function connectHandles(page: Page, from: Point, to: Point): Promise<void> {
 	await page.mouse.move(from.x, from.y);
 	await sleep(80);
@@ -100,7 +87,6 @@ export async function connectHandles(page: Page, from: Point, to: Point): Promis
 		await sleep(20);
 	}
 
-	// Dwell on the target handle so React Flow's drop-target detection latches.
 	await page.mouse.move(to.x, to.y);
 	await sleep(120);
 	await page.mouse.move(to.x, to.y);
@@ -108,12 +94,6 @@ export async function connectHandles(page: Page, from: Point, to: Point): Promis
 	await page.mouse.up();
 }
 
-/**
- * Click a neutral point on the React Flow pane (offset into its top-left
- * quarter, clear of the centred nodes and the corner overlays) to move focus
- * out of any field before undo/redo — the Canvas keydown handler ignores
- * Ctrl+Z while an INPUT/TEXTAREA has focus.
- */
 export async function defocus(page: Page): Promise<void> {
 	const pane = await rectOf(page, ".react-flow__pane");
 
@@ -123,7 +103,6 @@ export async function defocus(page: Page): Promise<void> {
 	await sleep(100);
 }
 
-/** Synthetic DOM `.click()` on a body element inside a node, matched by selector. */
 export async function synthClickInNode(page: Page, nodeId: string, selector: string): Promise<boolean> {
 	return page.evaluate(
 		(id: string, sel: string): boolean => {
@@ -172,7 +151,6 @@ export async function dumpMenuItems(page: Page): Promise<Array<string>> {
 	);
 }
 
-/** The full text of the currently open dropdown menu (`[role="menu"]`) — captures non-item rows like the read-only version label. */
 export async function openMenuText(page: Page): Promise<string> {
 	return page.evaluate((): string => {
 		const menu = document.querySelector('[role="menu"]');
@@ -181,7 +159,6 @@ export async function openMenuText(page: Page): Promise<string> {
 	});
 }
 
-/** Poll until the open picker renders at least one entry (menuitem), or time out. */
 export async function waitForMenuItems(page: Page, timeoutMs: number): Promise<number> {
 	const deadline = Date.now() + timeoutMs;
 
@@ -196,14 +173,12 @@ export async function waitForMenuItems(page: Page, timeoutMs: number): Promise<n
 	return 0;
 }
 
-/** The visible node rows in the open catalog (`[data-catalog-item]`), trimmed. */
 export async function dumpCmdkItems(page: Page): Promise<Array<string>> {
 	return page.$$eval("[data-catalog-item]", (elements) =>
 		elements.map((element) => (element.textContent).replace(/\s+/g, " ").trim().slice(0, 40)),
 	);
 }
 
-/** Click the catalog row whose text contains `text` via a real mouse click; returns whether one was found. */
 export async function clickCmdkItemByText(page: Page, text: string): Promise<boolean> {
 	const items = await page.$$("[data-catalog-item]");
 
@@ -229,7 +204,6 @@ export async function clickCmdkItemByText(page: Page, text: string): Promise<boo
 	return false;
 }
 
-/** Click a plain `<button>` (not a menuitem) whose text contains `text` — used for the Settings left-nav rows. */
 export async function clickButtonByText(page: Page, text: string): Promise<boolean> {
 	const buttons = await page.$$("button");
 
@@ -255,12 +229,6 @@ export async function clickButtonByText(page: Page, text: string): Promise<boole
 	return false;
 }
 
-/**
- * Click a plain (non-Radix) button inside a node by its text via a synthetic DOM
- * click. React Flow's node pointer handling swallows CDP mouse events on body
- * buttons, but a dispatched `.click()` fires the button's onClick directly (the
- * Phase 1 `.click()` caveat is Radix-trigger-specific: those need real pointerdown).
- */
 export async function clickButtonInNodeByText(page: Page, nodeId: string, text: string): Promise<boolean> {
 	return page.evaluate(
 		(id: string, needle: string): boolean => {
@@ -283,11 +251,6 @@ export async function clickButtonInNodeByText(page: Page, nodeId: string, text: 
 	);
 }
 
-/**
- * The VST3 scan-root paths currently rendered in the open Settings modal.
- * Excludes any `Remove …` buttons inside graph nodes (a VST3 stage row's remove
- * control shares the `Remove ` prefix) so only the modal's root rows are read.
- */
 export async function scanRootLabels(page: Page): Promise<Array<string>> {
 	return page.$$eval('button[aria-label^="Remove "]', (buttons) =>
 		buttons

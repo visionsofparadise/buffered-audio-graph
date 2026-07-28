@@ -45,7 +45,6 @@ export class BlockSumAccumulator {
 		const ringSize = this.ringSize;
 		const activeBlockSums = this.activeBlockSums;
 
-		// Open blocks are exactly [nextBlockToClose, nextBlockToOpen); each counter advances only at its next sample boundary.
 		let samplesProcessed = this.samplesProcessed;
 		let nextBlockToOpen = this.nextBlockToOpen;
 		let nextBlockToClose = this.nextBlockToClose;

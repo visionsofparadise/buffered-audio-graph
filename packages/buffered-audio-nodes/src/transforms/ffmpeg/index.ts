@@ -118,7 +118,6 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		if (!stdout || this.stdoutEnded) return Promise.resolve();
 
-		// Node re-arms 'readable' only while readableLength <= highWaterMark, so parking on buffered bytes never wakes.
 		if (stdout.readableLength > 0) return Promise.resolve();
 
 		if (stdout.readableEnded) {

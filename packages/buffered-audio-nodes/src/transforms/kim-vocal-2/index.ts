@@ -31,11 +31,11 @@ const N_FFT = 7680;
 const HOP_SIZE = 1024;
 const DIM_T = 256;
 const COMPENSATE = 1.009;
-const SEGMENT_SAMPLES = N_FFT + (DIM_T - 1) * HOP_SIZE; // 268800
+const SEGMENT_SAMPLES = N_FFT + (DIM_T - 1) * HOP_SIZE;
 const OVERLAP = 0.25;
 const TRANSITION_POWER = 1.0;
 
-const CHUNK_FRAMES = 44100; // 44.1 kHz input-side chunk
+const CHUNK_FRAMES = 44100;
 
 export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 	override blockSize = WHOLE_FILE;
@@ -112,7 +112,6 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 
 		const writerState = { written: 0 };
 
-		// OLA weight window: triangular raised to TRANSITION_POWER.
 		const weight = buildTransitionWindow(SEGMENT_SAMPLES, TRANSITION_POWER);
 
 		const workspace = createSegmentWorkspace(SEGMENT_SAMPLES);
@@ -122,7 +121,6 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 		let segFilled = 0;
 		let inputExhausted = false;
 
-		// kim-vocal-2 is a single-stem vocal separator (vs. htdemucs's 4 stems), so one OLA accumulator pair.
 		const outAccumLeft = new Float32Array(SEGMENT_SAMPLES);
 		const outAccumRight = new Float32Array(SEGMENT_SAMPLES);
 		const sumWeight = new Float32Array(SEGMENT_SAMPLES);
@@ -170,8 +168,6 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 					outAccumRight[index] = (outAccumRight[index] ?? 0) + (processed.right[index] ?? 0) * wt;
 					sumWeight[index] = (sumWeight[index] ?? 0) + wt;
 				}
-			} else {
-				// Rare no-model-output case: mirror the original's `continue` (no weight added) to preserve OLA division semantics.
 			}
 
 			await this.emitStable({
@@ -253,7 +249,6 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 	}
 }
 
-// === Helpers ===
 
 async function pullNextChunkAt441(args: {
 	readonly buffer: BlockBuffer;

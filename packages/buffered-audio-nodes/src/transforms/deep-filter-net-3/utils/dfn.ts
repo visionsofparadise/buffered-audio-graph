@@ -49,7 +49,6 @@ export function processDfnBlock(dfnState: DfnState, signal: Float32Array, sessio
 		if (enhanced) {
 			const outFrame = enhanced.data;
 			const writeStart = offset;
-			// Trim against originalLength so the final partial block doesn't write past the buffer (padded zeros inferred, not emitted).
 			const writeEnd = Math.min(writeStart + DFN3_HOP_SIZE, originalLength);
 			const copyLen = writeEnd - writeStart;
 

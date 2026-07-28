@@ -1,6 +1,5 @@
 import { statSync, writeFileSync } from "node:fs";
 
-/** Write a 1-second 48 kHz 16-bit mono sine as a standard PCM WAV — the Read WAV input for the render assertion. */
 export function writeSineWav(filePath: string): void {
 	const sampleRate = 48000;
 	const seconds = 1;
@@ -15,12 +14,12 @@ export function writeSineWav(filePath: string): void {
 	buffer.write("WAVE", 8, "ascii");
 	buffer.write("fmt ", 12, "ascii");
 	buffer.writeUInt32LE(16, 16);
-	buffer.writeUInt16LE(1, 20); // PCM
-	buffer.writeUInt16LE(1, 22); // mono
+	buffer.writeUInt16LE(1, 20);
+	buffer.writeUInt16LE(1, 22);
 	buffer.writeUInt32LE(sampleRate, 24);
-	buffer.writeUInt32LE(sampleRate * bytesPerSample, 28); // byte rate
-	buffer.writeUInt16LE(bytesPerSample, 32); // block align
-	buffer.writeUInt16LE(16, 34); // bits per sample
+	buffer.writeUInt32LE(sampleRate * bytesPerSample, 28);
+	buffer.writeUInt16LE(bytesPerSample, 32);
+	buffer.writeUInt16LE(16, 34);
 	buffer.write("data", 36, "ascii");
 	buffer.writeUInt32LE(dataSize, 40);
 

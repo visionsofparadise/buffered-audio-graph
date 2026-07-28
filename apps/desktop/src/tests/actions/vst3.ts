@@ -2,13 +2,6 @@ import type { Page } from "puppeteer-core";
 
 import { sleep } from "../utils/page";
 
-/**
- * Open a stage's plugin picker. The picker trigger is a Radix DropdownMenu inside
- * a React Flow node; React Flow's node pointerdown handling swallows the trigger's
- * pointer events over CDP (Phase 1 finding), so the picker is opened via keyboard
- * (focus + Enter) — Radix opens on the trigger's keydown, which React Flow ignores.
- * Returns true once the menu is present.
- */
 export async function openStagePicker(page: Page, nodeId: string): Promise<boolean> {
 	const triggerSelector = `.react-flow__node[data-id="${nodeId}"] button[aria-label="Select plugin"]`;
 
@@ -18,11 +11,8 @@ export async function openStagePicker(page: Page, nodeId: string): Promise<boole
 
 	if (!handle) return false;
 
-	// Radix sets data-state="open" on the trigger whose own menu is open — the
-	// authoritative signal that THIS picker (not a stray node-catalog menu) opened.
 	const isOpen = (): Promise<boolean> => handle.evaluate((element) => element.getAttribute("data-state") === "open");
 
-	// Close any stray menu (e.g. the add-node catalog) before opening this one.
 	await page.keyboard.press("Escape");
 	await sleep(150);
 
@@ -49,7 +39,6 @@ export async function openStagePicker(page: Page, nodeId: string): Promise<boole
 	return false;
 }
 
-/** The text of a node's stage-picker trigger (the resolved plugin title or empty state). */
 export async function stageTriggerText(page: Page, nodeId: string): Promise<string> {
 	return page.$eval(
 		`.react-flow__node[data-id="${nodeId}"] button[aria-label="Select plugin"]`,

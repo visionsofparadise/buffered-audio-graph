@@ -1,7 +1,6 @@
 export interface ApplyBaseRateChunkArgs {
 	chunkSamples: ReadonlyArray<Float32Array>;
 	smoothedGain: Float32Array;
-	// When supplied, each slot MUST be sized exactly to its channel's chunkSamples length (asserted).
 	output?: Array<Float32Array>;
 }
 
@@ -45,7 +44,6 @@ export function applyBaseRateChunk(args: ApplyBaseRateChunkArgs): Array<Float32A
 			continue;
 		}
 
-		// Fail loud on a mis-sized envelope slice rather than silently zero-filling via the `?? 0` fallback.
 		if (smoothedGain.length < channel.length) {
 			throw new Error(
 				`applyBaseRateChunk: smoothedGain length (${smoothedGain.length}) is shorter than chunk length (${channel.length}); caller must slice the envelope to match`,

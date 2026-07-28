@@ -9,8 +9,6 @@ import type { ControlTrajectory } from "./trajectory";
 
 const WALK_CHUNK_FRAMES = 1 << 16;
 
-// Mirrors lattice.ts TRANSIENT_ENERGY_RATIO (module-private there); both
-// sides must compute the same per-frame transient flag.
 const TRANSIENT_ENERGY_RATIO = 2.0;
 
 function stftFrameCount(signalLength: number, frameSize: number, hopSize: number): number {
@@ -19,8 +17,6 @@ function stftFrameCount(signalLength: number, frameSize: number, hopSize: number
 	return Math.floor((signalLength - frameSize) / hopSize) + 1;
 }
 
-// Node-local (tracks the argmax the Item-7 gate needs, unlike the shared accumulator). The per-channel
-// upsampler's 12-tap history carries across pushes, so the result is bit-identical to a whole-buffer walk.
 export class TruePeakArgmaxAccumulator {
 	private readonly upsamplers: Array<TruePeakUpsampler>;
 	private runningMax = 0;
@@ -82,7 +78,6 @@ export class TruePeakArgmaxAccumulator {
 	}
 }
 
-// Streaming whole-signal 4× true peak; retained for the binding.ts measureWholeSignalTruePeakDb caller.
 export async function measureBufferTruePeakDb(buffer: BlockBuffer, sampleRate: number): Promise<number> {
 	const channelCount = buffer.channels;
 	const totalFrames = buffer.frames;
@@ -292,10 +287,7 @@ export async function streamLatticeTrajectory(
 	return { trajectory, frameCount, signalLength, windowPeaks, bindingMask };
 }
 
-// Emission-time per-chunk applicator; carries per-channel state + the absolute sample index across chunks,
-// so the output is bit-identical to a contiguous pass. Recurrence transcribed verbatim from processLatticeChannel.
 export class LatticeApplyState {
-	// Mirrors lattice.ts MAX_REFLECTION (module-private there); both sides must clamp identically.
 	private static readonly MAX_REFLECTION = 0.95;
 	private static readonly SCALE = 1;
 

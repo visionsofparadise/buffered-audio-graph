@@ -1,7 +1,6 @@
 import { BidirectionalIir } from "@buffered-audio/utils";
 import { GROUP_DELAY_CEILING_MS } from "./search";
 
-// pre-smoothing: decorrelation-amount envelope; post-smoothing: reconstructed rows.
 export interface ControlTrajectory {
 	readonly rows: ReadonlyArray<Float32Array>;
 	readonly baseRows?: ReadonlyArray<Float32Array>;
@@ -12,7 +11,6 @@ export interface ControlTrajectory {
 	readonly peakSampleIndex?: Int32Array;
 }
 
-// pull scalar toward 0 at onsets before the spill IIR (QA-tuned 0.5); feeds spill only, not the exact hold.
 export const TRANSIENT_PULLBACK = 0.5;
 
 export function trajectoryFrameRate(sampleRate: number, hopSize: number): number {
@@ -23,7 +21,6 @@ export function trajectoryFrameRate(sampleRate: number, hopSize: number): number
 	return rate > 0 && Number.isFinite(rate) ? rate : 1;
 }
 
-// Wexact = group-delay span in frames (settling lead-in + causal smear); never a function of smoothing.
 export function exactHoldHalfWidthFrames(sampleRate: number, hopSize: number): number {
 	if (!(sampleRate > 0) || !(hopSize > 0)) return 1;
 
@@ -39,8 +36,6 @@ export function smoothControlTrajectory(
 	exactHoldFrames: number,
 	hopSize: number,
 ): ControlTrajectory {
-	// CONTRACT: only ever called on a streamLatticeTrajectory result, which always populates
-	// baseRows/amountEnv/peakSampleIndex (OPTIONAL only for the byte-frozen path); a missing field here is a wiring bug.
 	const baseRows = trajectory.baseRows ?? [];
 	const amountEnv = trajectory.amountEnv ?? new Float32Array(0);
 	const peakSampleIndex = trajectory.peakSampleIndex ?? new Int32Array(0);

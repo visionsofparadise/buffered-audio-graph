@@ -6,7 +6,8 @@
 
 import type { KalmanState } from "./mef-kalman";
 
-// MEF Table 1 hyperparameters. DEBLEED_MSAD_ALPHA (Eq. 35), DEBLEED_MSAD_THETA (Eq. 37), DEBLEED_MSAD_BETA_PSD are env-overridable for RX-spectral-shape tuning; SNR_THRESHOLD (Eq. 33), NOISE_OVERESTIMATION (Eq. 32), BAND_COUNT (Eq. 36) are fixed MEF.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// MEF Table 1 hyperparameters (Eqs. 32,33,35,36,37)
 const SNR_THRESHOLD = 0.25;
 const ALPHA = Number(process.env.DEBLEED_MSAD_ALPHA) || 0.1;
 const MSAD_THRESHOLD = Number(process.env.DEBLEED_MSAD_THETA) || 0.2;
@@ -14,11 +15,11 @@ const NOISE_OVERESTIMATION = 4;
 const BAND_COUNT = 10;
 const PSD_SMOOTHING = Number(process.env.DEBLEED_MSAD_BETA_PSD) || 0.5;
 
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Minimum Statistics tracker constants (Martin 2001).
 const MS_SUBWINDOW_COUNT = 8;
 const MS_FRAMES_PER_SUBWINDOW = 12;
 const MS_BIAS_CORRECTION = 2.0;
-// Initial PSD floor — small positive value so the min-tracker has a finite starting point (avoids div-by-zero).
 const MS_INITIAL_NOISE = 1e-8;
 
 export interface MinimumStatisticsState {
@@ -96,7 +97,6 @@ function updateNoisePsd(state: MinimumStatisticsState, smoothedPsd: Float32Array
 			if (slotMin < globalMin) globalMin = slotMin;
 		}
 
-		// If still +∞ (no full sub-window completed yet), keep the prior estimate.
 		if (Number.isFinite(globalMin)) {
 			state.noisePsd[bin] = MS_BIAS_CORRECTION * globalMin;
 		}
@@ -137,7 +137,8 @@ function computeChannelDecision(
 		const yy = smoothedPsd[bin]!;
 		const inner = yPowMinusOver < yy ? yPowMinusOver : yy;
 		const numerator = inner > 0 ? inner : 0;
-		// Eq. 32 uses the OVERESTIMATED noise PSD β_NN·Φ̂_NN (NOT raw Φ̂_NN) throughout, per MEF §4.1.
+		// eslint-disable-next-line comment-rules/no-restricted-comments
+		// Eq. 32, per MEF §4.1
 		const xiBin = noiseOver > 0 ? numerator / noiseOver : 0;
 
 		xi[bin] = xiBin;
@@ -173,28 +174,8 @@ function computeChannelDecision(
 	return phiMsad > MSAD_THRESHOLD;
 }
 
-/**
- * Compute the per-frame MSAD decision across all channels.
- *
- * Inputs: STFT bin values for the target channel and each reference channel
- * for the current frame, plus the per-channel MSAD state objects (smoothed
- * PSD + noise tracker), in the order `[target, ref0, ref1, ...]`.
- *
- * Per MEF Eq. 31 the SPR (signal-power ratio) is a multichannel quantity:
- *
- *   SPR_m(ℓ,k) = 10·log₁₀[ξ_*,m(ℓ,k) / max_μ ξ_*,μ(ℓ,k)]
- *
- * with `ξ_*,m = Φ̂_{YY,m} − Φ̂_{NN,m}` (the cleaned PSD, lower-bounded at 0).
- * SPR > 0 dB picks the channel with the loudest cleaned PSD at bin k —
- * equivalent to "channel m has more signal at bin k than any other channel."
- * Since MEF only checks the SIGN of SPR (Eq. 33: `SPR > 0`), we can skip the
- * log-domain conversion and just check whether channel m's cleaned PSD is
- * the maximum across channels (after a guard for ties).
- *
- * Updates each channel's `smoothedPsd` and `noiseTracker` as a side effect.
- *
- * Returns `{ targetActive, referenceActive: [μ0, μ1, ...] }`.
- */
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// SPR per MEF Eq. 31; sign test per Eq. 33
 export function computeMsadDecision(
 	channelReals: ReadonlyArray<Float32Array>,
 	channelImags: ReadonlyArray<Float32Array>,
@@ -208,7 +189,6 @@ export function computeMsadDecision(
 
 	const numBins = channelStates[0]!.smoothedPsd.length;
 
-	// Step 1: update smoothed PSD + Minimum Statistics noise PSD per channel.
 	for (let chIdx = 0; chIdx < channelCount; chIdx++) {
 		const state = channelStates[chIdx]!;
 
@@ -216,8 +196,6 @@ export function computeMsadDecision(
 		updateNoisePsd(state.noiseTracker, state.smoothedPsd);
 	}
 
-	// Step 2: cleaned PSD ξ_*,m = max(Φ̂_YY − Φ̂_NN, 0) per channel per bin.
-	// Then per bin, find max-channel — that channel has SPR > 0 dB at bin k.
 	const cleanedPsds = new Array<Float32Array>(channelCount);
 
 	for (let chIdx = 0; chIdx < channelCount; chIdx++) {
@@ -234,8 +212,6 @@ export function computeMsadDecision(
 		cleanedPsds[chIdx] = cleaned;
 	}
 
-	// Step 3: per channel, build SPR-positive mask (1 iff this channel's
-	// cleaned PSD is the strict max across channels at bin k).
 	const sprMasks = Array.from({ length: channelCount }, () => new Uint8Array(numBins));
 
 	for (let bin = 0; bin < numBins; bin++) {
@@ -251,15 +227,11 @@ export function computeMsadDecision(
 			}
 		}
 
-		// Strict positivity gate: SPR > 0 dB requires the channel's cleaned PSD
-		// to actually exceed the others, AND be > 0 (else cleaned PSD is below
-		// the noise floor in every channel — no signal to ratio against).
 		if (maxChannel >= 0 && maxValue > 0) {
 			sprMasks[maxChannel]![bin] = 1;
 		}
 	}
 
-	// Step 4: per channel, compute Eqs. 32–37 against its SPR-positive mask.
 	const decisions = new Array<boolean>(channelCount);
 
 	for (let chIdx = 0; chIdx < channelCount; chIdx++) {

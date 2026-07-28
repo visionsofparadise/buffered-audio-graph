@@ -17,13 +17,6 @@ export class JobManager {
 		return { id, signal: controller.signal };
 	}
 
-	/**
-	 * Get the abort signal for an existing job, or create a new entry for an
-	 * externally-minted jobId. Used by atomic per-node IPCs where the renderer
-	 * mints a jobId once and reuses it across multiple node-render calls — the
-	 * first call lazily registers an AbortController; subsequent calls share it
-	 * so `abortJob(jobId)` cancels every in-flight node under that job.
-	 */
 	getOrCreateSignal(id: string): AbortSignal {
 		const existing = this.activeJobs.get(id);
 

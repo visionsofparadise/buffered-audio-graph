@@ -69,9 +69,6 @@ const SavedStateSchema = AppStateSchema.pick({
 })
 	.extend({
 		packages: z.array(z.unknown()).optional(),
-		// Not picked (which would inherit `.default([])`): Zod v4's `.partial()` keeps
-		// a picked field's default, so a state.json lacking the key would parse to `[]`
-		// instead of `undefined` — losing the first-run vs. user-emptied distinction.
 		vst3ScanRoots: z.array(z.string()).optional(),
 	})
 	.partial();

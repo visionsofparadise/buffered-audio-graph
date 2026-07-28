@@ -4,7 +4,6 @@ import { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND } from "./iterate";
 
 export { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND };
 
-// Linear-amplitude floor below which a bucket's E[g²] contribution is treated as zero.
 const LINEAR_AMPLITUDE_EPSILON = 1e-12;
 
 export function predictOutputLufs(
@@ -47,7 +46,6 @@ export function predictOutputLufs(
 	return sourceLufs + lufsShift;
 }
 
-// log2(60/0.1)≈10 for the bracket; 50 allows sub-tolerance refinement / flat predictor regions.
 const MAX_BISECT_ITERATIONS = 50;
 
 export interface PredictInitialBArgs {
@@ -94,8 +92,6 @@ export function predictInitialB(args: PredictInitialBArgs): number {
 	const upperErr = upperLufs - targetLufs;
 
 	if (!Number.isFinite(lowerErr) || !Number.isFinite(upperErr) || Math.sign(lowerErr) === Math.sign(upperErr)) {
-		// No root in bracket — return the boundary with the smaller
-		// residual. Iteration's secant takes it from there.
 		const lowerAbs = Number.isFinite(lowerErr) ? Math.abs(lowerErr) : Infinity;
 		const upperAbs = Number.isFinite(upperErr) ? Math.abs(upperErr) : Infinity;
 

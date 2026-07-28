@@ -1,3 +1,4 @@
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Monotonic deque per Lemire, "Streaming Maximum-Minimum Filter Using No More than Three Comparisons per Element" (2006).
 export function slidingWindowMax(input: Float32Array, halfWidth: number): Float32Array {
 	const length = input.length;
@@ -7,7 +8,7 @@ export function slidingWindowMax(input: Float32Array, halfWidth: number): Float3
 
 	const deque = new Int32Array(length);
 	let dequeHead = 0;
-	let dequeTail = 0; // exclusive; deque is [dequeHead, dequeTail)
+	let dequeTail = 0;
 	let nextRight = 0;
 
 	for (let outputIdx = 0; outputIdx < length; outputIdx++) {
@@ -116,7 +117,6 @@ export class SlidingWindowMaxStream {
 				}
 
 				if (this.dequeTail === this.dequeHead) {
-					// Defensive: unreachable for non-empty inputs (deque always holds ≥ the most-recent input index until it falls out of the left edge, and outputIdx ≤ consumedFrames - 1).
 					output[outputCursor] = 0;
 				} else {
 					const frontIdx = this.deque[this.dequeHead % dequeCapacity] ?? 0;

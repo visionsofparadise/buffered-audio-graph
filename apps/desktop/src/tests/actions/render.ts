@@ -9,7 +9,6 @@ export interface RenderToastState {
 	readonly error: string | null;
 }
 
-/** The render toast's live state, keyed off its unique "In progress"/"Failed" footer status span. */
 export async function renderToastState(page: Page): Promise<RenderToastState> {
 	return page.evaluate((): RenderToastState => {
 		const spans = Array.from(document.querySelectorAll("span"));
@@ -26,7 +25,6 @@ export async function renderToastState(page: Page): Promise<RenderToastState> {
 	});
 }
 
-/** Whether the toolbar Render button is enabled (the render gate open — every pinned pair installed and ready). */
 export async function isRenderEnabled(page: Page): Promise<boolean> {
 	return page.evaluate((): boolean => {
 		const button = Array.from(document.querySelectorAll("button")).find((candidate) =>
@@ -37,7 +35,6 @@ export async function isRenderEnabled(page: Page): Promise<boolean> {
 	});
 }
 
-/** Click the toolbar Render action (present as "Render" while idle, "Abort" while running). */
 export async function clickRender(page: Page): Promise<void> {
 	const render = await rectByText(page, "button", "Render");
 
@@ -46,7 +43,6 @@ export async function clickRender(page: Page): Promise<void> {
 	await clickPoint(page, render);
 }
 
-/** Dismiss the render toast (its `×` clears a shown error or aborts a running render). */
 export async function dismissRenderToast(page: Page): Promise<void> {
 	const dismiss = (await rectOf(page, 'button[aria-label="Dismiss"]')) ?? (await rectOf(page, 'button[aria-label="Cancel render"]'));
 
@@ -55,7 +51,6 @@ export async function dismissRenderToast(page: Page): Promise<void> {
 	await sleep(200);
 }
 
-/** Wait until a render settles with its output present and the toast gone, or the toast reports failure. */
 export async function waitForRenderOutput(
 	page: Page,
 	outputPath: string,
@@ -76,7 +71,6 @@ export async function waitForRenderOutput(
 	return { ok: false, error: "timed out waiting for render completion" };
 }
 
-/** Wait for the render toast to report failure and return its error text, or null on timeout. */
 export async function waitForRenderError(page: Page, timeoutMs: number): Promise<string | null> {
 	const deadline = Date.now() + timeoutMs;
 

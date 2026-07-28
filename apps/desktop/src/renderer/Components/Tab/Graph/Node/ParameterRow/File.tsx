@@ -34,7 +34,6 @@ export function FileRow({
 	readonly renderEpoch?: number;
 }) {
 	const [local, setLocal] = useState(param.value);
-	// Same-tick input+blur (e.g. smoke helper) commits before setState re-renders.
 	const localRef = useRef(param.value);
 
 	useEffect(() => {

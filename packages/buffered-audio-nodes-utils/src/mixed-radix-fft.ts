@@ -1,3 +1,4 @@
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Mixed-radix transforms follow Cooley and Tukey, "An Algorithm for the Machine Calculation of Complex Fourier Series" (1965); all state is per-instance.
 export class MixedRadixFft {
 	private readonly size: number;

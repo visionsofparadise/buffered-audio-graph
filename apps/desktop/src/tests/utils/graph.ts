@@ -86,14 +86,12 @@ export async function waitForEdgeAgreement(page: Page, expected: number, timeout
 	);
 }
 
-/** The current value of a node's first text input (its file-path param), or null when absent. */
 export async function paramInputValue(page: Page, nodeId: string): Promise<string | null> {
 	return page
 		.$eval(`.react-flow__node[data-id="${nodeId}"] input[type="text"]`, (element) => (element).value)
 		.catch(() => null);
 }
 
-/** Whether a node renders bypassed (its body carries `.opacity-60`). */
 export async function isNodeBypassed(page: Page, nodeId: string): Promise<boolean> {
 	return page.evaluate((id: string): boolean => {
 		const node = document.querySelector(`.react-flow__node[data-id="${id}"]`);

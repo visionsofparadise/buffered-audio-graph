@@ -4,7 +4,6 @@ import { DEBOUNCE_WAIT_MS } from "../utils/constants";
 import { nodeCount, nodeIdByLabel, renderedNodeSummary } from "../utils/graph";
 import { clickCmdkItemByText, clickPoint, dumpCmdkItems, rectByText, sleep } from "../utils/page";
 
-/** Open the Add-node catalog from the TopLeftOverlay trigger; resolves once the search input is present. */
 async function openAddNodeCatalog(page: Page): Promise<void> {
 	const trigger = await rectByText(page, "button", "Add node");
 
@@ -16,9 +15,7 @@ async function openAddNodeCatalog(page: Page): Promise<void> {
 }
 
 export interface AddNodeOptions {
-	/** cmdk search query typed into the input (defaults to the node label). */
 	readonly search?: string;
-	/** "click" picks the matching row with the mouse; "keyboard" uses ArrowDown+Enter (the cmdk-in-Radix focus check). */
 	readonly method?: "click" | "keyboard";
 }
 
@@ -32,7 +29,6 @@ export async function addNode(page: Page, nodeLabel: string, expectedCount: numb
 	await sleep(250);
 
 	if (method === "keyboard") {
-		// Type-and-Enter picks the first (here, only) match from the search field.
 		await page.keyboard.press("Enter");
 	} else {
 		const clicked = await clickCmdkItemByText(page, nodeLabel);

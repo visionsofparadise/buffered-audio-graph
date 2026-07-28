@@ -4,5 +4,4 @@ import { NodeContainer } from "../../Node/Container";
 
 export const NODE_TYPES: NodeTypes = { bufferedAudioNode: NodeContainer };
 export const EDGE_TYPES: EdgeTypes = { bufferedAudioEdge: EdgeContainer };
-// Stable identity — `?? {}` would reseed the modal on every parent render.
 export const EMPTY_REMEMBERED_PARAMETERS: Record<string, string> = {};

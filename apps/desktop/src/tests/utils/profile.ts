@@ -34,7 +34,6 @@ export interface PersistedBag {
 	readonly edges: ReadonlyArray<unknown>;
 }
 
-/** Parse the persisted smoke bag from disk. Read after a settle wait (`DEBOUNCE_WAIT_MS`) so the debounced writer has flushed. */
 export function readPersistedBag(): PersistedBag {
 	return JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
 }
@@ -43,7 +42,6 @@ export interface PersistedGraphState {
 	readonly positions?: Record<string, { x: number; y: number }>;
 }
 
-/** The persisted per-node positions for a bag (`graphs/{bagId}.json`), or `{}` before the debounced writer has created the file. */
 export function readGraphPositions(bagId: string): Record<string, { x: number; y: number }> {
 	try {
 		const graphState = JSON.parse(readFileSync(join(PROFILE_DIR, "graphs", `${bagId}.json`), "utf8")) as PersistedGraphState;
@@ -54,7 +52,6 @@ export function readGraphPositions(bagId: string): Record<string, { x: number; y
 	}
 }
 
-/** Poll `graphs/{bagId}.json` until `nodeId` has (or lacks) a positions entry, absorbing the ~800ms positions-write debounce. */
 export async function waitForPositionEntry(bagId: string, nodeId: string, present: boolean, timeoutMs: number): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
 
@@ -87,7 +84,6 @@ export interface PersistedStage {
 	readonly presetPath?: string;
 }
 
-/** Read the first stage of the persisted VST3 node, or null if absent. */
 export function readVst3FirstStage(): PersistedStage | null {
 	const bag = readPersistedBag();
 	const vst3 = bag.nodes.find((node) => node.nodeName === VST3_NODE);
@@ -100,7 +96,6 @@ export function readVst3FirstStage(): PersistedStage | null {
 	return stage;
 }
 
-/** The built-in nodes package version carried by the first added node in the saved bag (per-node `packageVersion`), or null. */
 export function readBuiltinVersion(): string | null {
 	try {
 		return readPersistedBag().nodes.find((node) => typeof node.packageVersion === "string" && node.packageVersion.length > 0)?.packageVersion ?? null;
@@ -166,7 +161,6 @@ export async function waitForRestoredDependency(timeoutMs: number): Promise<Pers
 	return readRestoredDependencyState();
 }
 
-/** Poll the persisted bag until the VST3 first stage's presetPath is non-empty, or time out. */
 export async function waitForPresetCommit(timeoutMs: number): Promise<string | null> {
 	const deadline = Date.now() + timeoutMs;
 
@@ -193,8 +187,6 @@ export function seedProfile(): string {
 
 	writeFileSync(BAG_PATH, JSON.stringify(bag, null, 2));
 
-	// Restoring a tab must register the bag's exact dependency even when the
-	// catalog advances independently to a newer version during startup.
 	const restoredBag = {
 		id: restoredBagId,
 		apiVersion: 1,

@@ -6,11 +6,6 @@ export function computeTotalSamples(buckets: Uint32Array): number {
 	return totalSamples;
 }
 
-/**
- * Linear-interpolated percentile over an amplitude histogram: walks the cumulative bucket counts to the
- * `percent` target and interpolates within the crossing bucket. Returns 0 for an empty distribution and
- * `bucketMax` when the target sits past the final bucket.
- */
 export function amplitudePercentile(buckets: Uint32Array, bucketMax: number, totalSamples: number, percent: number): number {
 	if (totalSamples === 0 || bucketMax === 0) return 0;
 

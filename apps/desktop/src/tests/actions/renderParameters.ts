@@ -6,7 +6,6 @@ export async function isRenderParametersOpen(page: Page): Promise<boolean> {
 	return page.evaluate((): boolean => document.querySelector("[data-render-params-confirm]") !== null);
 }
 
-/** collectParameters is async IPC — an immediate presence check races the gate. */
 export async function waitForRenderParametersOpen(page: Page, timeoutMs = 5000): Promise<boolean> {
 	try {
 		await page.waitForSelector("[data-render-params-confirm]", { timeout: timeoutMs });

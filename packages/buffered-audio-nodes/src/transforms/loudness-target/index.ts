@@ -95,8 +95,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		this.learnTimingMs.sourceMeasurement += Date.now() - tMeasure0;
 
-		// Ownership moves out of the field here: iterateForTargets closes whatever it is handed; the
-		// frames-mismatch / no-loudness paths close locally.
 		const capturedDetectionEnvelope = this.capturedDetectionEnvelope;
 
 		this.capturedDetectionEnvelope = null;
@@ -228,8 +226,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		this.winningLimitDb = result.bestLimitDb;
 		this.winningPeakGainDb = result.bestPeakGainDb;
 
-		// Headline numbers are the winning attempt's exact BS.1770 measurement (the applied envelope is the
-		// winner's), not the last attempt.
 		const outputLufsRepr = result.winnerOutputLufs !== null ? result.winnerOutputLufs.toFixed(2) : "n/a";
 		const outputLraRepr = result.winnerOutputLra !== null ? result.winnerOutputLra.toFixed(2) : "n/a";
 		const lufsDeltaRepr = result.winnerOutputLufs !== null ? (result.winnerOutputLufs - targetLufs).toFixed(2) : "n/a";
@@ -321,7 +317,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			this.winningSmoothedEnvelopeBuffer = null;
 		}
 
-		// Non-null only when finalize never ran (upstream error); the normal path hands ownership to iterateForTargets.
 		if (this.capturedDetectionEnvelope !== null) {
 			await this.capturedDetectionEnvelope.close();
 			this.capturedDetectionEnvelope = null;

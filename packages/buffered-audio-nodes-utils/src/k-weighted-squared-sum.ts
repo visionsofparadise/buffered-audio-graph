@@ -1,5 +1,6 @@
 import { preFilterCoefficients, rlbFilterCoefficients } from "./biquad";
 
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // K-weighting filter cascade and channel summation follow ITU-R BS.1770-5.
 export class KWeightedSquaredSum {
 	private readonly channelCount: number;
@@ -69,7 +70,12 @@ export class KWeightedSquaredSum {
 		}
 	}
 
-	// `channels[c]` and `output` need >= `frames` entries from index 0 (oversized OK); `output[i]` gets the K-weighted channel-weighted squared sum at frame `i`; biquad state advances as if appended contiguously.
+	/**
+	 * Biquad state advances as if appended contiguously.
+	 *
+	 * @param channels `channels[c]` needs >= `frames` entries from index 0 (oversized OK)
+	 * @param output needs >= `frames` entries from index 0; `output[i]` gets the K-weighted channel-weighted squared sum at frame `i`
+	 */
 	push(channels: ReadonlyArray<Float32Array>, frames: number, output: Float64Array): void {
 		if (channels.length !== this.channelCount) {
 			throw new Error(`KWeightedSquaredSum: push got ${channels.length} channels, expected ${this.channelCount}`);
@@ -102,8 +108,6 @@ export class KWeightedSquaredSum {
 		const rlbA1 = this.rlbA1;
 		const rlbA2 = this.rlbA2;
 
-		// Channel-outer with biquad state in scalars; channel 0 writes `output`, later channels add.
-		// output[f] accumulates in channel order exactly as the prior frame-outer form (0 + x === x).
 		for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
 			const channel = channels[channelIndex] ?? channels[0] ?? new Float32Array(0);
 			const weight = weights[channelIndex] ?? 1;

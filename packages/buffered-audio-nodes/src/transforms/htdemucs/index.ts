@@ -38,10 +38,10 @@ export interface HtdemucsProperties extends z.infer<typeof schema>, TransformNod
 const HTDEMUCS_SAMPLE_RATE = 44100;
 const FFT_SIZE = 4096;
 const HOP_SIZE = 1024;
-const SEGMENT_SAMPLES = 343980; // 7.8s at 44100Hz
+const SEGMENT_SAMPLES = 343980;
 const OVERLAP = 0.25;
 const TRANSITION_POWER = 1.0;
-const CHUNK_FRAMES = 44100; // 44.1 kHz native rate
+const CHUNK_FRAMES = 44100;
 const STEM_OUTPUTS = 4 * 2;
 
 export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
@@ -59,7 +59,6 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 	}
 
 	override _setup(context: StreamSetupContext): void {
-		// CPU-only: DML session-create throw; see design-onnx-providers.
 		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
 
 		const composition = createResampleComposition({ context, streamContext: this.renderContext, ffmpegPath: this.properties.ffmpegPath, modelRate: HTDEMUCS_SAMPLE_RATE });
@@ -123,10 +122,9 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 
 		const writerState = { written: 0 };
 
-		// OLA weight window: triangular raised to TRANSITION_POWER.
 		const weight = buildTriangularWeight(SEGMENT_SAMPLES, TRANSITION_POWER);
 
-		const pad = Math.floor(HOP_SIZE / 2) * 3; // 1536
+		const pad = Math.floor(HOP_SIZE / 2) * 3;
 		const le = Math.ceil(SEGMENT_SAMPLES / HOP_SIZE);
 		const padEnd = pad + le * HOP_SIZE - SEGMENT_SAMPLES;
 		const paddedLen = SEGMENT_SAMPLES + pad + padEnd;
@@ -277,7 +275,6 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 
 		const { outLeft, outRight } = mixStemsToStereo(stemAccum, sumWeight, stemGains, stats, nStable);
 
-		// Bandpass at 44.1 kHz native rate, per the original behaviour.
 		bandpass([outLeft, outRight], HTDEMUCS_SAMPLE_RATE, this.properties.highPass, this.properties.lowPass);
 
 		const writeChannels = buildWriteChannels(outLeft, outRight, channels);
@@ -304,7 +301,6 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 	}
 }
 
-// === Helpers ===
 
 async function computeStreamingStats(buffer: BlockBuffer, channels: number): Promise<{ readonly mean: number; readonly std: number }> {
 	await buffer.reset();
@@ -318,7 +314,6 @@ async function computeStreamingStats(buffer: BlockBuffer, channels: number): Pro
 
 		if (frames === 0) break;
 
-		// Reference normalizes over both channels jointly; mono treats channel 0 as both L and R.
 		const left = chunk.samples[0];
 		const right = channels >= 2 ? chunk.samples[1] : chunk.samples[0];
 

@@ -16,7 +16,6 @@ export class AmplitudeHistogramAccumulator {
 		this.buckets = new Uint32Array(bucketCount);
 	}
 
-	// Consumes `frames` samples per channel; throws if any channel has fewer than `frames` samples or if `finalize` was already called.
 	push(channels: ReadonlyArray<Float32Array>, frames: number): void {
 		if (this.finalized) {
 			throw new Error("AmplitudeHistogramAccumulator: push() called after finalize()");

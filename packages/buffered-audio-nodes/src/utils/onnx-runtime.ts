@@ -24,10 +24,6 @@ interface OnnxAddonSession {
 	dispose(): void;
 	inputNames(): Array<string>;
 	outputNames(): Array<string>;
-	// Added in onnx-runtime-addon v1.1.0. Returns the EP name actually
-	// resolved by ORT for this session (e.g. "DmlExecutionProvider",
-	// "CUDAExecutionProvider", "CPUExecutionProvider"). Older addon builds
-	// don't have this method — callers must handle a missing implementation.
 	getProvider?(): string;
 }
 

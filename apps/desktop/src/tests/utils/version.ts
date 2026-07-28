@@ -1,4 +1,3 @@
-/** Numeric dotted-version comparison: is `version` ≥ `target`? */
 export function versionAtLeast(version: string, target: string): boolean {
 	const left = version.split(".").map((part) => Number.parseInt(part, 10) || 0);
 	const right = target.split(".").map((part) => Number.parseInt(part, 10) || 0);

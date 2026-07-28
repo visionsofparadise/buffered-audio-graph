@@ -84,7 +84,6 @@ export class Vst3LaunchEditorMainIpc extends AsyncMainIpc<Vst3LaunchEditorIpcPar
 		const launchId = crypto.randomUUID();
 		const args = buildArgs(input, presetPath);
 
-		// Editor children are spawned detached and must outlive the app.
 		const child = spawn(cli.path, [...args], { detached: true, stdio: ["ignore", "pipe", "pipe"] });
 
 		logger.info("Launched VST3 editor", { namespace: "vst3", launchId, pluginPath: input.pluginPath, presetPath });

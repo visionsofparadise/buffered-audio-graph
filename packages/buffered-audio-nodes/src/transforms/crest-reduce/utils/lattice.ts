@@ -1,16 +1,16 @@
-// byte-frozen Gray–Markel/RMV reference; live path is windowed.ts — see design-crest-reduce item 8.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// byte-frozen Gray–Markel/RMV reference; live path is windowed.ts — see design-crest-reduce.md 2026-05-16 FUNDAMENTAL REFRAME entry (normalized-lattice grounding).
 
 import { stft, type FftBackend, type StftResult } from "@buffered-audio/utils";
 import { designDispersionAllpass, schroederTargetToDelay } from "./dispersion";
 import type { ControlTrajectory } from "./trajectory";
 
-// 8 cascaded lattice sections — low order = bounded group delay.
 export const LATTICE_ORDER = 8;
 
-// Onset threshold: frame energy exceeding the previous frame's by this ratio flags a transient.
 const TRANSIENT_ENERGY_RATIO = 2.0;
 
-// RMV §III |k|<1 stability clamp; kept in sync with dispersion.ts MAX_POLE_RADIUS.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// RMV §III |k|<1 stability clamp
 const MAX_REFLECTION = 0.95;
 
 export interface LatticeAnalysis {
@@ -22,14 +22,14 @@ export interface LatticeAnalysis {
 	readonly signalLength: number;
 }
 
-// RMV §III Eq. 3.3a/3.3b step-down recursion — see design-crest-reduce item 8 part (c).2.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// RMV §III Eq. 3.3a/3.3b step-down recursion — see design-crest-reduce.md 2026-05-16 FUNDAMENTAL REFRAME entry, normalized-lattice grounding (c) step 2.
 export function stepDownToReflection(denominator: ReadonlyArray<number> | Float32Array): Float32Array {
 	const order = denominator.length - 1;
 	const reflection = new Float32Array(Math.max(0, order));
 
 	if (order <= 0) return reflection;
 
-	// `current` is a^{(m)} for the current order m, normalized so a_0 = 1.
 	let current = Array.from(denominator, (value) => value);
 	const lead = current[0] ?? 1;
 
@@ -50,14 +50,13 @@ export function stepDownToReflection(denominator: ReadonlyArray<number> | Float3
 			next[index] = ((current[index] ?? 0) - km * (current[mOrder - index] ?? 0)) / denom;
 		}
 
-		next[0] = 1; // structurally exact (a_0 ≡ 1); avoid FP drift
+		next[0] = 1;
 		current = next;
 	}
 
 	return reflection;
 }
 
-// crest→headroom map, project glue (not sourced) — see design-crest-reduce Targeting.
 export function peakPriorityAmount(signal: Float32Array, windowStart: number, windowLen: number): number {
 	const end = Math.min(signal.length, windowStart + windowLen);
 	let peak = 0;
@@ -81,7 +80,6 @@ export function peakPriorityAmount(signal: Float32Array, windowStart: number, wi
 	if (rms <= 0) return 0;
 
 	const crest = peak / rms;
-	// √2 ≈ 1.414 is a single sine's crest (no headroom); 6 is strongly peaky. Smoothstep between them.
 	const CREST_FLOOR = Math.SQRT2;
 	const CREST_CEIL = 6;
 	const tNorm = Math.max(0, Math.min(1, (crest - CREST_FLOOR) / (CREST_CEIL - CREST_FLOOR)));
@@ -89,7 +87,6 @@ export function peakPriorityAmount(signal: Float32Array, windowStart: number, wi
 	return tNorm * tNorm * (3 - 2 * tNorm);
 }
 
-// analysis-only STFT (synthesis is the time-domain lattice, not OLA) — no OLA failure mode; see design-crest-reduce items 1/8/9.
 export function extractLatticeTrajectory(
 	channelSignals: ReadonlyArray<Float32Array>,
 	sumSignal: Float32Array,
@@ -105,7 +102,7 @@ export function extractLatticeTrajectory(
 	const signalLength = sumSignal.length;
 
 	const rows: Array<Float32Array> = new Array<Float32Array>(frameCount);
-	const identity = new Float32Array(order); // all-zero kₘ = the trivial all-pass
+	const identity = new Float32Array(order);
 	const transientMask = new Float32Array(frameCount);
 	const sumMagnitude = new Float32Array(halfSize);
 	let previousEnergy = 0;
@@ -147,7 +144,6 @@ export function extractLatticeTrajectory(
 	};
 }
 
-// kₘ=0 section is exactly z⁻¹; all-zero cascade = M-sample delay, crest-invariant (not sample-exact) — see design-crest-reduce identity contract.
 export function processLatticeChannel(signal: Float32Array, smoothedTrajectory: ControlTrajectory, strength: number, order: number, hopSize: number): Float32Array {
 	const length = signal.length;
 	const output = new Float32Array(length);
@@ -174,9 +170,10 @@ export function processLatticeChannel(signal: Float32Array, smoothedTrajectory: 
 
 			const cCoeff = Math.sqrt(Math.max(0, 1 - kCoeff * kCoeff));
 			const delayed = state[section] ?? 0;
+			// eslint-disable-next-line comment-rules/no-restricted-comments
 			// Orthogonal first-order normalized all-pass section (RMV Fig. 4(b)): energy-preserving every sample.
-			const toDelay = cCoeff * signalValue + kCoeff * delayed; // → next sₘ
-			const sectionOut = -kCoeff * signalValue + cCoeff * delayed; // → xₘ₊₁
+			const toDelay = cCoeff * signalValue + kCoeff * delayed;
+			const sectionOut = -kCoeff * signalValue + cCoeff * delayed;
 
 			state[section] = toDelay;
 			signalValue = sectionOut;

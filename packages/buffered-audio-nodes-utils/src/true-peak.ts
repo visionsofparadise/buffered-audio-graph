@@ -26,7 +26,11 @@ export class TruePeakAccumulator {
 		this.upsamplers = upsamplers;
 	}
 
-	// `channels[c]` needs >= `frames` valid samples from index 0 (oversized OK); advances per-channel upsampler state as if appended contiguously.
+	/**
+	 * Advances per-channel upsampler state as if appended contiguously.
+	 *
+	 * @param channels `channels[c]` needs >= `frames` valid samples from index 0 (oversized OK)
+	 */
 	push(channels: ReadonlyArray<Float32Array>, frames: number): void {
 		if (this.finalizedResult !== undefined) throw new Error("TruePeakAccumulator: push after finalize");
 

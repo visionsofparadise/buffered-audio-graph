@@ -16,7 +16,6 @@ export const TEMPLATED_OUTPUT_WAV_PATH = join(PROFILE_DIR, "templated-out.wav");
 
 export const BUILTIN_PACKAGE = "@buffered-audio/nodes";
 export const STALE_BUILTIN_VERSION = "0.22.0";
-/** Core's leaf-must-be-a-target validation ships in nodes ≥ 0.21.0 (bundles core ≥ 0.10.0). */
 export const ZERO_TARGET_MIN_VERSION = "0.21.0";
 
 export const SOURCE_NODE = "Read WAV";

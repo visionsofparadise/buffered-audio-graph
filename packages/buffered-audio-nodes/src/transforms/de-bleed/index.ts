@@ -138,7 +138,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				throw new Error(`de-bleed: dfttBackend='fftw' could not load FFTW addon at ${fftwAddonPath}.`);
 			}
 		} else {
-			// dfttBackend === "vkfft"
 			if (!vkfftAddonPath) {
 				throw new Error("de-bleed: dfttBackend='vkfft' requires vkfftAddonPath to be set on the node.");
 			}
@@ -577,7 +576,6 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				if (progressGate(doneFrames, Date.now())) this.emitProgress("process", doneFrames, processStftFrames);
 			}
 
-			// Defensive trailing zero-pad against off-by-one in the final chunk's clip math.
 			if (outputBuffer.frames < totalFrames) {
 				const padFrames = totalFrames - outputBuffer.frames;
 				const zeroSamples: Array<Float32Array> = [];

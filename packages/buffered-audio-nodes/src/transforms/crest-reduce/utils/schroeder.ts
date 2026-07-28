@@ -1,6 +1,9 @@
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Schroeder (1970) near-optimal low-crest phase, per Ojarand & Min (2017) §I.A Eqs. (2)–(3),
-// DOI 10.5755/j01.eie.23.2.18001 — see design-crest-reduce.md §Algorithm Specification item 1.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// DOI 10.5755/j01.eie.23.2.18001 — see design-crest-reduce.md 2026-05-16 Node conception entry.
 
+// eslint-disable-next-line comment-rules/no-restricted-comments
 // Boyd (1986) §III Shapiro-Rudin real-signal achievable crest-factor bound (CF ≤ 2 ⇒ ≤ 6.02 dB).
 export const SHAPIRO_RUDIN_ACHIEVABLE_CREST_FACTOR_DB = 6.02;
 
@@ -21,7 +24,6 @@ export function relativePower(magnitude: ReadonlyArray<number> | Float32Array): 
 	}
 
 	if (total <= 0) {
-		// silent frame → uniform distribution (flat-spectrum limit)
 		power.fill(1 / binCount);
 
 		return power;
@@ -34,7 +36,8 @@ export function relativePower(magnitude: ReadonlyArray<number> | Float32Array): 
 	return power;
 }
 
-// Ojarand & Min (2017) Eq. (2) Schroeder near-optimal phase — see design-crest-reduce §Algorithm Specification item 1.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// Ojarand & Min (2017) Eq. (2) Schroeder near-optimal phase — see design-crest-reduce.md 2026-05-16 Node conception entry.
 export function schroederTargetPhase(magnitude: ReadonlyArray<number> | Float32Array, phi1 = 0): Float32Array {
 	const binCount = magnitude.length;
 	const phase = new Float32Array(binCount);
@@ -42,7 +45,6 @@ export function schroederTargetPhase(magnitude: ReadonlyArray<number> | Float32A
 	if (binCount === 0) return phase;
 
 	const power = relativePower(magnitude);
-	// cumulative holds Σ (k−j)p_j; bin i is 1-based in Eq. (2), so bin 0 has an empty inner sum ⇒ phase Φ_1.
 	let cumulative = 0;
 
 	for (let bin = 0; bin < binCount; bin++) {

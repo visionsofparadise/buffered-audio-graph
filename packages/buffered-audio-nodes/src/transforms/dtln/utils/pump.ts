@@ -2,9 +2,9 @@ import type { BlockBuffer } from "@buffered-audio/core";
 import { BLOCK_SHIFT, type DtlnBlockStream, WARMUP_SHIFTS } from "./dtln";
 
 export const DTLN_SAMPLE_RATE = 16000;
-export const CHUNK_FRAMES = 16000; // 1 s at 16 kHz
-export const STEP_BATCH_SIZE = 16000; // ~125 BLOCK_SHIFTs
-export const WARMUP_SAMPLES = WARMUP_SHIFTS * BLOCK_SHIFT; // 384
+export const CHUNK_FRAMES = 16000;
+export const STEP_BATCH_SIZE = 16000;
+export const WARMUP_SAMPLES = WARMUP_SHIFTS * BLOCK_SHIFT;
 
 export function stepAllChannels(args: {
 	readonly channels: number;
@@ -49,7 +49,6 @@ export function appendToStepBatch(args: {
 	let offset = 0;
 	let warmupLeft = warmupRemaining;
 
-	// Drop warm-up samples: zeros from the pre-first-inference sliding window, dropped to match `processDtlnFrames`.
 	if (warmupLeft > 0) {
 		const drop = Math.min(warmupLeft, length);
 
@@ -61,7 +60,6 @@ export function appendToStepBatch(args: {
 
 	while (offset < length) {
 		if (batchLen >= batchSize) {
-			// Caller must flush the batch before appending; this guards that contract.
 			throw new Error(`appendToStepBatch: batch overflow (offset=${String(offset)}, length=${String(length)}, batchLen=${String(batchLen)}, batchSize=${String(batchSize)}). Caller must flush before appending more.`);
 		}
 

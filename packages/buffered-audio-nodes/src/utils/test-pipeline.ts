@@ -45,8 +45,8 @@ export async function runTransform(inputPath: string, transform: TransformNode, 
 	} finally {
 		try {
 			await unlink(tempPath);
-		} catch {
-			// Temp file may not exist if pipeline failed before write
+		} catch (error) {
+			void error;
 		}
 	}
 }

@@ -1,12 +1,14 @@
-// Abel & Smith (2006), DAFx-06 §2–3 Eq. (1)–(12) — see design-crest-reduce.md §Algorithm Specification item 9.
-// (a) Schroeder→δ and (b) β schedule are project glue, not Abel & Smith — see design-crest-reduce item 9.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// Abel & Smith (2006), DAFx-06 §2–3 Eq. (1)–(12) — see design-crest-reduce.md 2026-05-16 bounded grounding exploration entry.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// (a) Schroeder→δ and (b) β schedule are project glue, not Abel & Smith — see design-crest-reduce.md 2026-05-16 bounded grounding exploration entry.
 
 import { schroederTargetPhase } from "./schroeder";
 
-// RMV §III |k|<1 stability clamp; kept in sync with lattice.ts.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// RMV §III |k|<1 stability clamp
 const MAX_POLE_RADIUS = 0.95;
 
-// β = 0.5 constant (project choice; Abel & Smith leave β free).
 export function betaForBand(_bandIndex: number): number {
 	return 0.5;
 }
@@ -26,7 +28,6 @@ export function schroederTargetToDelay(magnitude: ReadonlyArray<number> | Float3
 		const hi = bin === binCount - 1 ? binCount - 1 : bin + 1;
 		const dPhi = (phase[hi] ?? 0) - (phase[lo] ?? 0);
 		const span = (hi - lo) * dOmega;
-		// τ = −dφ/dω; Schroeder φ monotone-decreasing ⇒ τ ≥ 0.
 		const tau = span > 0 ? -dPhi / span : 0;
 
 		delay[bin] = scale * Math.max(0, tau);
@@ -35,7 +36,8 @@ export function schroederTargetToDelay(magnitude: ReadonlyArray<number> | Float3
 	return delay;
 }
 
-// Abel & Smith Eq. (10)–(12): the narrow-band approx (Δ≪1) avoids the η−√(η²−1) catastrophic cancellation as η→1.
+// eslint-disable-next-line comment-rules/no-restricted-comments
+// Abel & Smith Eq. (10)–(12)
 export function poleRadius(halfWidth: number, beta: number): number {
 	const delta = Math.max(0, halfWidth);
 	const betaClamped = Math.max(1e-6, Math.min(1 - 1e-6, beta));
@@ -43,10 +45,8 @@ export function poleRadius(halfWidth: number, beta: number): number {
 	let rho: number;
 
 	if (delta < 1e-3) {
-		// Eq. (12) narrow-band approximation (Δ ≪ 1).
 		rho = 1 - Math.sqrt(betaClamped / (1 - betaClamped)) * delta;
 	} else {
-		// Eq. (10)–(11) exact closed form.
 		const eta = (1 - betaClamped * Math.cos(delta)) / (1 - betaClamped);
 
 		rho = eta - Math.sqrt(Math.max(0, eta * eta - 1));
@@ -99,7 +99,6 @@ export function designDispersionAllpass(
 	const omegaAt = (bin: number): number => bin * dOmega;
 	const deltaAt = (bin: number): number => (scaled[bin] ?? 0) + constantDelay;
 
-	// Cumulative area S(ω) = ∫₀^ω δ' dω' at each bin (trapezoidal).
 	const cumulative = new Float32Array(binCount);
 
 	for (let bin = 1; bin < binCount; bin++) {
@@ -116,7 +115,6 @@ export function designDispersionAllpass(
 	})();
 
 	if (totalArea <= 0 || maxTau <= 0) {
-		// δ' ≡ 0 (identity target — no headroom / silent frame): identity all-pass, all-zero trajectory.
 		return { denominator: Float32Array.from([1]), poles };
 	}
 
@@ -152,13 +150,12 @@ export function designDispersionAllpass(
 		polynomial = next;
 	};
 
-	// Band 0 — the DC-centred real-pole band (half-band area π).
 	{
 		const omegaHi = omegaAtArea(Math.PI);
 		const rho = poleRadius(omegaHi, betaForBand(bandIndex));
 
 		poles.push({ rho, theta: 0 });
-		convolve([1, -rho]); // (1 − ρ z⁻¹), a real pole at +ρ
+		convolve([1, -rho]);
 		degree += 1;
 		bandIndex += 1;
 	}
@@ -169,13 +166,12 @@ export function designDispersionAllpass(
 	while (bandOrder * Math.PI - areaCursor >= 2 * Math.PI - EPS && degree + 2 <= order) {
 		const omegaLo = omegaAtArea(areaCursor);
 		const omegaHi = omegaAtArea(areaCursor + 2 * Math.PI);
-		// Eq. (8): θ = (ω₊+ω₋)/2; Eq. (11): Δ = (ω₊−ω₋)/2.
 		const theta = (omegaLo + omegaHi) / 2;
 		const halfWidth = (omegaHi - omegaLo) / 2;
 		const rho = poleRadius(halfWidth, betaForBand(bandIndex));
 
 		poles.push({ rho, theta });
-		convolve([1, -2 * rho * Math.cos(theta), rho * rho]); // interior conjugate-pair → real biquad
+		convolve([1, -2 * rho * Math.cos(theta), rho * rho]);
 		degree += 2;
 		bandIndex += 1;
 		areaCursor += 2 * Math.PI;
@@ -186,7 +182,7 @@ export function designDispersionAllpass(
 		const rho = poleRadius(Math.PI - omegaLo, betaForBand(bandIndex));
 
 		poles.push({ rho, theta: Math.PI });
-		convolve([1, rho]); // (1 + ρ z⁻¹), a real pole at −ρ
+		convolve([1, rho]);
 		degree += 1;
 	}
 
@@ -194,7 +190,7 @@ export function designDispersionAllpass(
 
 	for (let index = 0; index < polynomial.length; index++) denominator[index] = polynomial[index] ?? 0;
 
-	denominator[0] = 1; // structurally exact (monic); guard FP drift
+	denominator[0] = 1;
 
 	return { denominator, poles };
 }
