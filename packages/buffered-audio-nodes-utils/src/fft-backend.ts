@@ -5,14 +5,18 @@ export type FftBackend = "vkfft" | "fftw" | "js";
 
 interface FftAddon {
 	batchFft(input: Float32Array, fftSize: number, batchCount: number): { re: Float32Array; im: Float32Array };
+
 	batchIfft(re: Float32Array, im: Float32Array, fftSize: number, batchCount: number): Float32Array;
+
 	batchFft2D(
 		input: Float32Array,
 		rows: number,
 		cols: number,
 		batchCount: number,
 	): { re: Float32Array; im: Float32Array };
+
 	batchIfft2D(re: Float32Array, im: Float32Array, rows: number, cols: number, batchCount: number): Float32Array;
+
 	batchFftInto?(
 		input: Float32Array,
 		outRe: Float32Array,
@@ -20,6 +24,7 @@ interface FftAddon {
 		fftSize: number,
 		batchCount: number,
 	): void;
+
 	batchIfftInto?(re: Float32Array, im: Float32Array, outTime: Float32Array, fftSize: number, batchCount: number): void;
 }
 
@@ -99,6 +104,7 @@ export function initFftBackend(
 
 export function getFftAddon(backend: FftBackend, options?: { vkfftPath?: string; fftwPath?: string }): FftAddon | null {
 	if (backend === "vkfft") return tryLoadVkfft(options?.vkfftPath);
+
 	if (backend === "fftw") return tryLoadFftw(options?.fftwPath);
 
 	return null;

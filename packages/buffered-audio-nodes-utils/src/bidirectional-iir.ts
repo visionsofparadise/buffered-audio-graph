@@ -36,6 +36,7 @@ export class BidirectionalIir {
 
 	constructor(options: BidirectionalIirOptions) {
 		this.smoothingMs = options.smoothingMs;
+
 		const alphas = getBidirectionalIirAlphas(options.sampleRate, options.smoothingMs);
 
 		this.alphaBidirectional = alphas.bidirectional;
@@ -115,6 +116,7 @@ export class BidirectionalIir {
 
 	applyBackwardPassInPlace(buffer: Float32Array): void {
 		if (this.smoothingMs <= 0) return;
+
 		if (buffer.length === 0) return;
 
 		const alpha = this.alphaBidirectional;

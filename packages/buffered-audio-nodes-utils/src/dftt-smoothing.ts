@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight DSP loop with bounds-checked typed array access */
 
-import { createFftWorkspace, fft, hanningWindow, ifft, type FftWorkspace } from "./stft";
 import { getFftAddon, type FftBackend } from "./fft-backend";
+import { createFftWorkspace, fft, hanningWindow, ifft, type FftWorkspace } from "./stft";
 
 // eslint-disable-next-line comment-rules/no-restricted-comments
 // Gain-mask adaptation of Buades, Coll, and Morel, "A Non-Local Algorithm for Image Denoising" (2005), and Lukin and Todd, "Suppression of Musical Noise Artifacts in Audio Noise Reduction by Adaptive 2D Filtering" (2007).

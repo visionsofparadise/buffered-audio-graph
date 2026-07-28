@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { ByteBoundedCache } from "./byte-bounded-cache";
-import type { FftBackend } from "./fft-backend";
 import { getFftAddon } from "./fft-backend";
+import type { FftBackend } from "./fft-backend";
 
 // eslint-disable-next-line comment-rules/no-restricted-comments
 // Radix-2 transforms follow Cooley and Tukey, "An Algorithm for the Machine Calculation of Complex Fourier Series" (1965).
@@ -305,6 +305,7 @@ export function fft(input: Float32Array, workspace?: FftWorkspace): { re: Float3
 	const size = input.length;
 
 	assertRadix2Size(size);
+
 	if (workspace !== undefined) assertWorkspaceCapacity(workspace, size);
 
 	const re = workspace ? workspace.re : new Float32Array(size);
@@ -326,7 +327,9 @@ export function ifft(re: Float32Array, im: Float32Array, workspace?: FftWorkspac
 	const size = re.length;
 
 	assertRadix2Size(size);
+
 	if (im.length !== size) throw new Error(`IFFT real and imaginary lengths must match, got ${size} and ${im.length}`);
+
 	if (workspace !== undefined) assertWorkspaceCapacity(workspace, size);
 
 	const outRe = workspace ? workspace.outRe : Float32Array.from(re);

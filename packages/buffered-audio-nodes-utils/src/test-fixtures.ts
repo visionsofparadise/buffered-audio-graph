@@ -1,6 +1,6 @@
+import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
 
 const fixturesDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../fixtures");
 
@@ -16,7 +16,7 @@ export function requireFixture(name: keyof typeof fixtures): string {
 	const path = fixtures[name];
 
 	if (!existsSync(path)) {
-		console.log(`[skip] fixture not found: ${name} (${path})`);
+		console.warn(`[skip] fixture not found: ${name} (${path})`);
 
 		return "";
 	}

@@ -54,6 +54,7 @@ export class SlidingWindowMinStream {
 		}
 
 		this.halfWidth = halfWidth;
+
 		const ringCapacity = 2 * halfWidth + 1;
 
 		this.lookAhead = new Float32Array(ringCapacity);

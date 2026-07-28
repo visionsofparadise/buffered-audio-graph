@@ -28,6 +28,7 @@ export class MixedRadixFft {
 		this.auxIm = new Float32Array(size);
 
 		this.permutation = computePermutation(size, this.radices);
+
 		const { twiddleRe, twiddleIm } = computeTwiddles(this.radices);
 
 		this.twiddleRe = twiddleRe;
@@ -52,6 +53,7 @@ export class MixedRadixFft {
 
 		for (const radix of this.radices) {
 			groupSize *= radix;
+
 			const subSize = groupSize / radix;
 
 			if (radix === 2) {
@@ -293,6 +295,7 @@ function computePermutation(size: number, radices: Array<number>): Uint32Array {
 
 		for (const radix of radices) {
 			base = base / radix;
+
 			const digit = remainder % radix;
 
 			remainder = Math.floor(remainder / radix);
@@ -323,6 +326,7 @@ function computeTwiddles(radices: Array<number>): { twiddleRe: Float32Array; twi
 
 	for (const radix of radices) {
 		groupSize *= radix;
+
 		const subSize = groupSize / radix;
 
 		for (let kk = 1; kk < radix; kk++) {

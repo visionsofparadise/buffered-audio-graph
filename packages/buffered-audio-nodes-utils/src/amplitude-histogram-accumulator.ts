@@ -99,6 +99,7 @@ export class AmplitudeHistogramAccumulator {
 				const fraction = count > 0 ? (target - cumulative) / count : 0;
 
 				median = (bucketIndex + fraction) * bucketWidth;
+
 				break;
 			}
 

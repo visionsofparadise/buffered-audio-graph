@@ -59,6 +59,7 @@ export function amplitudeHistogram(channels: ReadonlyArray<Float32Array>, bucket
 			const fraction = count > 0 ? (target - cumulative) / count : 0;
 
 			median = (bucketIndex + fraction) * bucketWidth;
+
 			break;
 		}
 
