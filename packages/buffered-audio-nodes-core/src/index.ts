@@ -17,9 +17,9 @@ export {
 	type StreamSetupContext,
 } from "./node/stream";
 export type { Block } from "./node/stream/block";
+export { SourceNode } from "./node/source";
 export {
 	BufferedSourceStream,
-	SourceNode,
 	type RenderTiming,
 	type SourceMetadata,
 	type SourceNodeProperties,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { BufferedAudioNode } from "../node";
-import { SourceNode } from "../node/stream/source";
+import { SourceNode } from "../node/source";
 import { TargetNode } from "../node/stream/target";
 import { TransformNode, type TransformNodeProperties } from "../node/transform";
 import { validateGraphDefinition, type GraphDefinition, type NodeRegistry } from "./definition";

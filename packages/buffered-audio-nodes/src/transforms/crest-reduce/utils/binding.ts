@@ -1,7 +1,5 @@
-import type { BlockBuffer } from "@buffered-audio/core";
 import { peakPriorityAmount } from "./lattice";
 import { measureFrameTruePeakDb } from "./objective";
-import { measureBufferTruePeakDb } from "./windowed";
 
 export const BINDING_DELTA_DB = 3;
 
@@ -14,10 +12,6 @@ export interface WindowBinding {
 	readonly peakMagnitude: number;
 	readonly headroom: number;
 	readonly frameTruePeakDb: number;
-}
-
-export async function measureWholeSignalTruePeakDb(buffer: BlockBuffer, sampleRate: number): Promise<number> {
-	return measureBufferTruePeakDb(buffer, sampleRate);
 }
 
 export function classifyWindow(

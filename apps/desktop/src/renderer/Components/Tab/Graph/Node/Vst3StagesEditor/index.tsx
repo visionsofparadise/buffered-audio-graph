@@ -8,7 +8,7 @@ import type { MainEvents } from "../../../../../Models/MainEvents";
 import type { Vst3EditorEventPayload } from "../../../../../../shared/ipc/Vst3/Vst3EditorEvent";
 import type { Vst3ScanEntry } from "../../../../../../shared/ipc/Vst3/Vst3ScanEntry";
 import type { ArrayParameter } from "../utils/buildParameters";
-import type { ParameterCallbacks } from "../ParameterRow/ParameterField";
+import type { ParameterCallbacks } from "../ParameterRow/utils/callbacks";
 import { paramLabelClass } from "../ParameterRow/utils/labels";
 import { readStage, type Stage } from "./utils/helpers";
 import { SortableStageRow } from "./SortableStageRow";

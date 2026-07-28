@@ -4,7 +4,7 @@ import { Power, TriangleAlert } from "lucide-react";
 import type { Main } from "../../../../Models/Main";
 import type { MainEvents } from "../../../../Models/MainEvents";
 import { NodeMenu } from "./Menu";
-import type { ParameterCallbacks } from "./ParameterRow/ParameterField";
+import type { ParameterCallbacks } from "./ParameterRow/utils/callbacks";
 import { ParameterField } from "./ParameterRow/ParameterField";
 import type { Parameter } from "./utils/buildParameters";
 import { Vst3StagesEditor } from "./Vst3StagesEditor";

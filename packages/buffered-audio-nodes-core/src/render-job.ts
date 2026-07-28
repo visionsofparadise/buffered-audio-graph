@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
-import { BufferedSourceStream, type RenderTiming, type SourceNode } from "./node/stream/source";
+import { BufferedSourceStream, type RenderTiming } from "./node/stream/source";
+import type { SourceNode } from "./node/source";
 import { BufferedTargetStream } from "./node/stream/target";
 import { BufferedTransformStream } from "./node/stream/transform/buffered-transform";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";

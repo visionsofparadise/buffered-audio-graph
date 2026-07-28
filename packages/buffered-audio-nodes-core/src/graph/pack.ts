@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { resolvePackageVersion } from "../utils/resolve-package-version";
 import { validateGraphDefinition, type GraphDefinition, type GraphEdge, type GraphNode } from "./definition";
 import type { BufferedAudioNode } from "../node";
-import type { SourceNode } from "../node/stream/source";
+import type { SourceNode } from "../node/source";
 
 export function pack(
 	sources: ReadonlyArray<SourceNode>,

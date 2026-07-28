@@ -2,12 +2,8 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { BufferedAudioNode } from "../node";
 import type { Block } from "../node/stream/block";
-import {
-	BufferedSourceStream,
-	SourceNode,
-	type SourceMetadata,
-	type SourceNodeProperties,
-} from "../node/stream/source";
+import { SourceNode } from "../node/source";
+import { BufferedSourceStream, type SourceMetadata, type SourceNodeProperties } from "../node/stream/source";
 import { BufferedTargetStream, TargetNode, type TargetNodeProperties } from "../node/stream/target";
 import { createRenderJobs } from "./create-render-jobs";
 import type { GraphDefinition, NodeRegistry } from "./definition";

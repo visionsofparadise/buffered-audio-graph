@@ -9,13 +9,8 @@ import {
 import { applyBaseRateChunk } from "./apply";
 import { type Anchors, gainDbAt } from "./curve";
 import { applyBackwardPassOverChunkBuffer, windowSamplesFromMs } from "./envelope";
+import { CHUNK_FRAMES } from "./constants";
 import { buildBaseRateDetectionCache } from "./source-caches";
-
-// eslint-disable-next-line comment-rules/no-restricted-comments
-// BS.1770-4 inter-sample-peak capture rate; used by measurement.ts + source-caches.ts detection max-pool.
-export const OVERSAMPLE_FACTOR = 4;
-
-export const CHUNK_FRAMES = 44_100;
 
 export const BOOST_LOWER_BOUND = -30;
 export const BOOST_UPPER_BOUND = 30;

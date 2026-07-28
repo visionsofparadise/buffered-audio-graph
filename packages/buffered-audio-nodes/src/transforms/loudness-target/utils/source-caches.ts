@@ -1,6 +1,6 @@
 import { BlockBuffer } from "@buffered-audio/core";
 import { SlidingWindowMaxStream, TruePeakUpsampler, linearToDb } from "@buffered-audio/utils";
-import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./iterate";
+import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./constants";
 
 export interface BuildBaseRateDetectionCacheArgs {
 	buffer: BlockBuffer;

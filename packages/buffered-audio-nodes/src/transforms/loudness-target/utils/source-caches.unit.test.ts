@@ -1,7 +1,7 @@
 import { BlockBuffer } from "@buffered-audio/core";
 import { SlidingWindowMaxStream, TruePeakUpsampler, linearToDb } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
-import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./iterate";
+import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./constants";
 import { SourceMeasurementAccumulator } from "./measurement";
 import { buildBaseRateDetectionCache } from "./source-caches";
 

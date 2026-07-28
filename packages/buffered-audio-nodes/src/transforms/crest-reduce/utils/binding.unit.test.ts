@@ -1,13 +1,8 @@
 import { BlockBuffer } from "@buffered-audio/core";
 import { TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
-import {
-	BINDING_DELTA_DB,
-	BINDING_HEADROOM_MIN,
-	classifyWindow,
-	isBindingPeak,
-	measureWholeSignalTruePeakDb,
-} from "./binding";
+import { BINDING_DELTA_DB, BINDING_HEADROOM_MIN, classifyWindow, isBindingPeak } from "./binding";
+import { measureBufferTruePeakDb } from "./windowed";
 
 // ─────────────────────────────────────────────────────────────────────
 // crest-reduce binding-gate suite — RE-SPEC'd to the 2026-05-17 KEYSTONE
@@ -33,7 +28,7 @@ const HOP_SIZE = FRAME_SIZE / 4;
  * Reference whole-signal 4× true peak (dBTP) — a SINGLE fresh
  * `TruePeakAccumulator` over the contiguous samples (the
  * `utils/objective.ts` fresh-accumulator discipline). The streaming
- * `measureWholeSignalTruePeakDb` must equal THIS to FP (the per-channel
+ * `measureBufferTruePeakDb` must equal THIS to FP (the per-channel
  * upsampler's 12-tap history carries across `upsample`, so a chunked
  * walk and one contiguous push produce the identical running max).
  */
@@ -356,7 +351,7 @@ describe("the gate on fixtures (high-crest binds; already-limited is all-identit
 	});
 });
 
-describe("measureWholeSignalTruePeakDb — streaming whole-signal 4× TP (no materialization)", () => {
+describe("measureBufferTruePeakDb — streaming whole-signal 4× TP (no materialization)", () => {
 	async function bufferOf(channels: ReadonlyArray<Float32Array>): Promise<BlockBuffer> {
 		const buffer = new BlockBuffer();
 
@@ -370,7 +365,7 @@ describe("measureWholeSignalTruePeakDb — streaming whole-signal 4× TP (no mat
 		const signal = makeHeadroomBearing(SAMPLE_RATE, SAMPLE_RATE);
 		const buffer = await bufferOf([signal]);
 
-		const streamed = await measureWholeSignalTruePeakDb(buffer, SAMPLE_RATE);
+		const streamed = await measureBufferTruePeakDb(buffer, SAMPLE_RATE);
 
 		await buffer.close();
 
@@ -382,7 +377,7 @@ describe("measureWholeSignalTruePeakDb — streaming whole-signal 4× TP (no mat
 		const right = makeDense(SAMPLE_RATE, SAMPLE_RATE);
 		const buffer = await bufferOf([left, right]);
 
-		const streamed = await measureWholeSignalTruePeakDb(buffer, SAMPLE_RATE);
+		const streamed = await measureBufferTruePeakDb(buffer, SAMPLE_RATE);
 
 		await buffer.close();
 
@@ -394,7 +389,7 @@ describe("measureWholeSignalTruePeakDb — streaming whole-signal 4× TP (no mat
 
 		await buffer.flushWrites();
 
-		const streamed = await measureWholeSignalTruePeakDb(buffer, SAMPLE_RATE);
+		const streamed = await measureBufferTruePeakDb(buffer, SAMPLE_RATE);
 
 		await buffer.close();
 

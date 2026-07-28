@@ -1,6 +1,6 @@
 import type { BufferedAudioNode } from "../node";
 import type { GraphDefinition, NodeRegistry } from "./definition";
-import type { SourceNode } from "../node/stream/source";
+import type { SourceNode } from "../node/source";
 import type { TransformNode } from "../node/transform";
 
 const canConnect = (node: BufferedAudioNode): node is SourceNode | TransformNode =>

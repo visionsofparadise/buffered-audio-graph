@@ -4,7 +4,7 @@ import { cn } from "../../../../../utils/cn";
 import { Plus } from "lucide-react";
 import type { ArrayParameter } from "../utils/buildParameters";
 import { humanizeFieldName, paramLabelClass } from "./utils/labels";
-import type { ParameterCallbacks } from "./ParameterField";
+import type { ParameterCallbacks } from "./utils/callbacks";
 import { SortableArrayRow } from "./SortableArrayRow";
 
 export function ArrayRow({

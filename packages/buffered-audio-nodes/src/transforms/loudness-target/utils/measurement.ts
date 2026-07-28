@@ -9,9 +9,7 @@ import {
 	getLraConsideredStats,
 	linearToDb,
 } from "@buffered-audio/utils";
-import { OVERSAMPLE_FACTOR } from "./iterate";
-
-const CHUNK_FRAMES = 44_100;
+import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./constants";
 
 const HISTOGRAM_BUCKETS = 1024;
 

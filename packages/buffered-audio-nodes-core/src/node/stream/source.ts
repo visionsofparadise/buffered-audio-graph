@@ -1,5 +1,4 @@
-import { BufferedAudioNode, type BufferedAudioNodeProperties, type Composition } from "..";
-import { RenderJob, type RenderOptions } from "../../render-job";
+import type { BufferedAudioNode, BufferedAudioNodeProperties } from "..";
 import { createProgressGate } from "./utils/progress-gate";
 import { BufferedStream, type StreamSetupContext } from ".";
 import type { Block } from "./block";
@@ -94,17 +93,5 @@ export abstract class BufferedSourceStream<
 			},
 			{ highWaterMark },
 		);
-	}
-}
-
-export abstract class SourceNode<P extends SourceNodeProperties = SourceNodeProperties> extends BufferedAudioNode<P> {
-	to(child: BufferedAudioNode | Composition): void {
-		const head = "head" in child ? child.head : child;
-
-		this.properties = { ...this.properties, children: [...(this.properties.children ?? []), head] } as P;
-	}
-
-	createRenderJob(options?: RenderOptions): RenderJob {
-		return new RenderJob(this, options);
 	}
 }
