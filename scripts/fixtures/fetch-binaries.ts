@@ -1,7 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-
-import { fetchForTarget } from "../binaries/fetch.ts";
+import { fetchForTarget } from "../binaries/fetch";
 import {
 	filterAssetsForTarget,
 	formatTarget,
@@ -10,7 +9,7 @@ import {
 	readManifest,
 	resolveRepoRoot,
 	type Target,
-} from "../binaries/manifest.ts";
+} from "../binaries/manifest";
 
 const KEY_TO_FIXTURE_FILENAME: Record<string, string> = {
 	"onnx-addon": "onnx_addon.node",
@@ -102,6 +101,7 @@ async function main(): Promise<void> {
 
 		if (destFilename === null) {
 			console.warn(`[fixtures:binaries] skip     ${asset.filename} (not needed by tests)`);
+
 			continue;
 		}
 

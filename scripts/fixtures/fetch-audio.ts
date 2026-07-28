@@ -79,16 +79,17 @@ async function downloadAndVerify(url: string, destination: string, expectedSha25
 			bodyStream,
 			async function* (source: AsyncIterable<Buffer | Uint8Array>) {
 				for await (const chunk of source) {
-					const buf = chunk instanceof Buffer ? chunk : Buffer.from(chunk);
+					const buffer = chunk instanceof Buffer ? chunk : Buffer.from(chunk);
 
-					hash.update(buf);
-					yield buf;
+					hash.update(buffer);
+					yield buffer;
 				}
 			},
 			writeStream,
 		);
 	} catch (error) {
 		await fs.rm(tempPath, { force: true });
+
 		throw error;
 	}
 
@@ -96,6 +97,7 @@ async function downloadAndVerify(url: string, destination: string, expectedSha25
 
 	if (actualSha256 !== expectedSha256) {
 		await fs.rm(tempPath, { force: true });
+
 		throw new Error(`sha256 mismatch for ${url} — expected ${expectedSha256}, got ${actualSha256}`);
 	}
 
@@ -119,6 +121,7 @@ async function main(): Promise<void> {
 
 			if (existing === asset.sha256) {
 				console.warn(`[fixtures] cache hit  ${asset.filename}`);
+
 				continue;
 			}
 

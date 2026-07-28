@@ -1,7 +1,6 @@
 import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
-
-import { fetchForTarget } from "./fetch.ts";
+import { fetchForTarget } from "./fetch";
 import {
 	formatTarget,
 	type Manifest,
@@ -9,7 +8,7 @@ import {
 	parseTargetArgs,
 	resolveRepoRoot,
 	type Target,
-} from "./manifest.ts";
+} from "./manifest";
 
 function resolveDesktopBinariesDir(): string {
 	return path.join(resolveRepoRoot(), "apps", "desktop", "binaries");
@@ -34,6 +33,7 @@ async function clearTopLevelRegularFiles(directory: string): Promise<number> {
 
 	for (const entry of entries) {
 		if (!entry.isFile()) continue;
+
 		if (entry.name.startsWith(".")) continue;
 
 		await fs.rm(path.join(directory, entry.name), { force: true });
