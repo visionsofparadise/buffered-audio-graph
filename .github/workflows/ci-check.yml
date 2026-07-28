@@ -1,0 +1,36 @@
+name: Repo Check
+
+on:
+   push:
+      branches: [main]
+   pull_request:
+   workflow_dispatch:
+
+jobs:
+   check:
+      # Every configured linter over the whole repo: prettier, eslint + tsc via
+      # turbo, stylelint, markdownlint, textlint, knip, jscpd. Deliberately
+      # unfiltered by path — knip, jscpd and prettier are whole-tree verdicts,
+      # and a change anywhere can break one.
+      runs-on: ubuntu-latest
+
+      steps:
+         - uses: actions/checkout@v4
+
+         - uses: actions/setup-node@v4
+           with:
+              node-version: "24.18"
+
+         - name: Install dependencies
+           run: npm ci
+
+         - name: Check (every configured linter, repo-wide)
+           run: npm run check
+
+         - name: Fail if check had to fix anything
+           run: |
+              if [ -n "$(git status --porcelain)" ]; then
+                 git status --porcelain
+                 git diff
+                 exit 1
+              fi

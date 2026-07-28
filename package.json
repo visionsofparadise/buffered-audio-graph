@@ -9,7 +9,7 @@
 	],
 	"scripts": {
 		"start": "turbo start",
-		"check": "turbo check",
+		"check": "prettier --write . && turbo check && stylelint \"**/*.css\" --fix --allow-empty-input && concurrently \"markdownlint-cli2 \\\"**/*.md\\\"\" \"textlint \\\"**/*.md\\\"\" \"knip --no-progress\" \"jscpd .\"",
 		"lint": "turbo lint",
 		"format": "prettier --write .",
 		"unit": "turbo unit",
@@ -24,6 +24,7 @@
 		"@eslint/js": "^9.0.0",
 		"@html-eslint/eslint-plugin": "^0.64.0",
 		"@stylistic/eslint-plugin": "^5.10.0",
+		"concurrently": "^10.0.4",
 		"eslint": "^9.0.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-import-resolver-typescript": "^4.4.5",
