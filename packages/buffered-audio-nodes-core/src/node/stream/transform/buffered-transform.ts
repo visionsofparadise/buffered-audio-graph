@@ -1,11 +1,11 @@
 import { BufferedStream, type StreamContext, type StreamSetupContext } from "..";
-import type { BufferedAudioNode } from "../..";
 import { sliceBlock } from "../../../utils/slice-block";
 import { toReadable } from "../../../utils/to-readable";
-import type { TransformNodeProperties } from "../../transform";
-import type { Block } from "../block";
 import { createProgressGate, type ProgressGate } from "../utils/progress-gate";
 import { BlockBuffer } from "./utils/block-buffer";
+import type { BufferedAudioNode } from "../..";
+import type { TransformNodeProperties } from "../../transform";
+import type { Block } from "../block";
 
 export const WHOLE_FILE = Infinity;
 

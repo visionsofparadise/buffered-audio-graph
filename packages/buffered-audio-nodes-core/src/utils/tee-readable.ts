@@ -42,6 +42,7 @@ export function teeReadable<T>(
 				const demanding = liveBranches();
 
 				if (demanding.length === 0) return;
+
 				if (!demanding.every((branch) => branch.demandResolvers.length > 0)) return;
 
 				let result: ReadableStreamReadResult<Block>;

@@ -3,10 +3,10 @@ import { createReadStream, createWriteStream, type ReadStream, type WriteStream 
 import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Block } from "../../block";
 import { awaitStreamClose } from "./await-stream-close";
 import { buildBlock, deinterleave, pullBytes } from "./block-io";
 import { ReverseBlockReader } from "./reverse-block-reader";
+import type { Block } from "../../block";
 
 const HIGH_WATER_MARK = 10 * 1024 * 1024;
 

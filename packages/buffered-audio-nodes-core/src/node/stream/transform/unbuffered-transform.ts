@@ -1,9 +1,9 @@
 import { BufferedStream, type StreamSetupContext } from "..";
-import type { BufferedAudioNode } from "../..";
 import { toReadable } from "../../../utils/to-readable";
+import { createProgressGate, type ProgressGate } from "../utils/progress-gate";
+import type { BufferedAudioNode } from "../..";
 import type { TransformNodeProperties } from "../../transform";
 import type { Block } from "../block";
-import { createProgressGate, type ProgressGate } from "../utils/progress-gate";
 
 export abstract class UnbufferedTransformStream<
 	N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>,

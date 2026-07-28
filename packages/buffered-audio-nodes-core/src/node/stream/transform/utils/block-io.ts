@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight deinterleave loop with bounds-checked typed array access */
-import type { Readable } from "node:stream";
 import type { Block } from "../../block";
+import type { Readable } from "node:stream";
 
 export function deinterleave(buffer: Buffer, channels: number): Array<Float32Array> {
 	const bytesPerFrame = channels * 4;
@@ -69,6 +69,7 @@ export async function pullBytes(stream: Readable, isEnded: () => boolean, bytesN
 	}
 
 	if (chunks.length === 0) return Buffer.alloc(0);
+
 	if (chunks.length === 1) return chunks[0]!;
 
 	return Buffer.concat(chunks);

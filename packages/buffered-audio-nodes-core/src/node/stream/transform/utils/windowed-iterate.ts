@@ -64,6 +64,7 @@ export async function windowedIterate(
 
 			if (scratchFilled > preload) {
 				for (let channel = 0; channel < channels; channel++) scratch[channel]!.fill(0, scratchFilled, windowSize);
+
 				await onWindow(scratch, windowIndex);
 			}
 
@@ -95,6 +96,7 @@ export async function windowedIterate(
 			}
 
 			scratchFilled += chunkFrames;
+
 			if (scratchFilled < windowSize) {
 				for (let channel = 0; channel < channels; channel++) scratch[channel]!.fill(0, scratchFilled, windowSize);
 

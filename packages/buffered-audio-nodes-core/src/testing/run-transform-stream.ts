@@ -1,10 +1,10 @@
-import type { BufferedAudioNode } from "../node";
-import type { BufferedStream, StreamContext, StreamIdentity, StreamSetupContext } from "../node/stream";
-import type { Block } from "../node/stream/block";
 import { BufferedTransformStream } from "../node/stream/transform/buffered-transform";
 import { UnbufferedTransformStream } from "../node/stream/transform/unbuffered-transform";
 import { createTestSetupContext, createTestStreamContext } from "./contexts";
 import { drainBlocks, readableFrom } from "./streams";
+import type { BufferedAudioNode } from "../node";
+import type { BufferedStream, StreamContext, StreamIdentity, StreamSetupContext } from "../node/stream";
+import type { Block } from "../node/stream/block";
 
 export interface CapturedEvent {
 	kind: "started" | "progress" | "log" | "finished";

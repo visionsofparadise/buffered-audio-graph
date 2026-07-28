@@ -1,8 +1,8 @@
-import { BufferedStream, type StreamSetupContext } from ".";
 import { BufferedAudioNode, type BufferedAudioNodeProperties, type Composition } from "..";
 import { RenderJob, type RenderOptions } from "../../render-job";
-import type { Block } from "./block";
 import { createProgressGate } from "./utils/progress-gate";
+import { BufferedStream, type StreamSetupContext } from ".";
+import type { Block } from "./block";
 
 export interface SourceMetadata {
 	readonly sampleRate: number;
@@ -46,6 +46,7 @@ export abstract class BufferedSourceStream<
 			{
 				pull: async (controller) => {
 					if (done) return;
+
 					if (signal?.aborted) {
 						done = true;
 						await this.destroy();
@@ -77,6 +78,7 @@ export abstract class BufferedSourceStream<
 
 						this.framesRead += chunk.samples[0]?.length ?? 0;
 						controller.enqueue(chunk);
+
 						if (readGate(this.framesRead, Date.now()))
 							this.emitProgress("read", this.framesRead, sourceTotalFrames);
 					} catch (error) {

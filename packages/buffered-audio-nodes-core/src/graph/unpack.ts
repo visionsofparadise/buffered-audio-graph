@@ -1,7 +1,7 @@
 import type { BufferedAudioNode } from "../node";
+import type { GraphDefinition, NodeRegistry } from "./definition";
 import type { SourceNode } from "../node/stream/source";
 import type { TransformNode } from "../node/transform";
-import type { GraphDefinition, NodeRegistry } from "./definition";
 
 const canConnect = (node: BufferedAudioNode): node is SourceNode | TransformNode =>
 	typeof (node as { to?: unknown }).to === "function";
@@ -48,6 +48,7 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 		const toNode = nodeMap.get(edge.to);
 
 		if (!fromNode) throw new Error(`Edge references unknown node: "${edge.from}"`);
+
 		if (!toNode) throw new Error(`Edge references unknown node: "${edge.to}"`);
 
 		if (canConnect(fromNode)) {

@@ -1,9 +1,9 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { Readable } from "node:stream";
-import type { Block } from "../../block";
 import { awaitStreamClose } from "./await-stream-close";
-import type { BlockBuffer } from "./block-buffer";
 import { buildBlock, deinterleave, pullBytes } from "./block-io";
+import type { BlockBuffer } from "./block-buffer";
+import type { Block } from "../../block";
 
 const REVERSE_STRIPE_BYTES = 10 * 1024 * 1024;
 
@@ -98,6 +98,7 @@ export class ReverseBlockReader {
 
 	private ensureStream(): ReverseReadable {
 		if (this.stream) return this.stream;
+
 		if (this.path === undefined) throw new Error("ReverseBlockReader: no source file");
 
 		const totalBytes = this.frames * this.bytesPerFrame;

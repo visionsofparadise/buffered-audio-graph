@@ -1,13 +1,13 @@
 import { EventEmitter } from "node:events";
-import type { BufferedAudioNode } from "./node";
-import type { BufferedStream, ExecutionProvider, RenderEvents, StreamContext, StreamSetupContext } from "./node/stream";
-import type { Block } from "./node/stream/block";
 import { BufferedSourceStream, type RenderTiming, type SourceNode } from "./node/stream/source";
 import { BufferedTargetStream } from "./node/stream/target";
 import { BufferedTransformStream } from "./node/stream/transform/buffered-transform";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
 import { assertFirstBlockSampleRate } from "./utils/assert-first-block-sample-rate";
 import { teeReadable } from "./utils/tee-readable";
+import type { BufferedAudioNode } from "./node";
+import type { BufferedStream, ExecutionProvider, RenderEvents, StreamContext, StreamSetupContext } from "./node/stream";
+import type { Block } from "./node/stream/block";
 
 const RENDER_LIVENESS_INTERVAL_MS = 30_000;
 
@@ -127,7 +127,9 @@ export class RenderJob {
 
 	async render(): Promise<void> {
 		if (this.started) throw new Error("RenderJob is single-use; render() was already called");
+
 		this.started = true;
+
 		const renderCalledAt = performance.now();
 		const livenessInterval = setInterval(() => {
 			this.events.emit("liveness", { createdAt: Date.now(), elapsedMs: performance.now() - renderCalledAt });

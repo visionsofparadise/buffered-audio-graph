@@ -1,5 +1,5 @@
-import type { EventEmitter } from "node:events";
 import type { BufferedAudioNode } from "..";
+import type { EventEmitter } from "node:events";
 
 export type ExecutionProvider = "gpu" | "cpu-native" | "cpu";
 

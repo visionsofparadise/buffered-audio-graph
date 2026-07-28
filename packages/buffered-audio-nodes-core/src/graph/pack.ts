@@ -1,8 +1,8 @@
 import { randomUUID } from "crypto";
-import type { BufferedAudioNode } from "../node";
-import type { SourceNode } from "../node/stream/source";
 import { resolvePackageVersion } from "../utils/resolve-package-version";
 import { validateGraphDefinition, type GraphDefinition, type GraphEdge, type GraphNode } from "./definition";
+import type { BufferedAudioNode } from "../node";
+import type { SourceNode } from "../node/stream/source";
 
 export function pack(
 	sources: ReadonlyArray<SourceNode>,
@@ -36,6 +36,7 @@ export function pack(
 
 	const ensureId = (node: BufferedAudioNode): string => {
 		if (node.id) return node.id;
+
 		const id = randomUUID();
 
 		node.properties = { ...node.properties, id };
@@ -45,6 +46,7 @@ export function pack(
 
 	const walk = (node: BufferedAudioNode): void => {
 		if (visited.has(node)) return;
+
 		visited.add(node);
 
 		const constructor = node.constructor as typeof BufferedAudioNode;

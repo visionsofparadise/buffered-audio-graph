@@ -67,6 +67,7 @@ export function substituteParameters(definition: GraphDefinition, parameters: Re
 		const messages: Array<string> = [];
 
 		if (unboundNames.size > 0) messages.push(`unbound placeholders: ${[...unboundNames].join(", ")}`);
+
 		if (unknownNames.length > 0) messages.push(`unknown parameters: ${unknownNames.join(", ")}`);
 
 		throw new Error(`Parameter substitution failed — ${messages.join("; ")}`);

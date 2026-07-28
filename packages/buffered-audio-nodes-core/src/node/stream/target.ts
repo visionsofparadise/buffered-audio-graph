@@ -1,7 +1,7 @@
-import { BufferedStream, type StreamSetupContext } from ".";
 import { BufferedAudioNode, type BufferedAudioNodeProperties } from "..";
-import type { Block } from "./block";
 import { createProgressGate } from "./utils/progress-gate";
+import { BufferedStream, type StreamSetupContext } from ".";
+import type { Block } from "./block";
 
 export interface TargetNodeProperties extends BufferedAudioNodeProperties {}
 
