@@ -527,7 +527,11 @@ describe("graph editing and persistence", () => {
 		const editorSelector = `.react-flow__node[data-id="${duplicateChannelsId}"] input[type="number"][step="1"]`;
 
 		await page.waitForSelector(editorSelector, { timeout: 5000 });
-		await page.focus(editorSelector);
+
+		const editorIsFocused = await page.$eval(editorSelector, (element) => element === document.activeElement);
+
+		expect(editorIsFocused, "double-click focuses the number editor").toBe(true);
+
 		await page.keyboard.down("Control");
 		await page.keyboard.press("A");
 		await page.keyboard.up("Control");

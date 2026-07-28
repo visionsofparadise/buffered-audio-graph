@@ -172,12 +172,6 @@ export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorat
 				const handleEnter = () => setHoveredAnchorId(anchor.id);
 				const handleLeave = () => setHoveredAnchorId(null);
 				const handleClick = () => onAnchorClick?.(anchor.id);
-				const handleKeyDown = (event: React.KeyboardEvent) => {
-					if (event.key === "Enter" || event.key === " ") {
-						event.preventDefault();
-						handleClick();
-					}
-				};
 
 				return (
 					<g key={`label-${anchor.id}`}>
@@ -199,18 +193,16 @@ export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorat
 							height={LABEL_HEIGHT}
 							style={{ overflow: "visible" }}
 						>
-							<div
-								role="button"
-								tabIndex={0}
+							<button
+								type="button"
 								className={cn(
-									"flex h-full items-center justify-start gap-3",
+									"flex h-full w-full items-center justify-start gap-3 outline-none focus-visible:ring-1 focus-visible:ring-accent-primary",
 									isEndAligned ? "flex-row-reverse" : "flex-row",
 								)}
 								style={{ cursor: "pointer" }}
 								onMouseEnter={handleEnter}
 								onMouseLeave={handleLeave}
 								onClick={handleClick}
-								onKeyDown={handleKeyDown}
 							>
 								{anchor.icon !== undefined && (
 									<span className={isHovered ? "text-text-primary" : "text-text-secondary"}>
@@ -230,7 +222,7 @@ export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorat
 										<span className="type-label whitespace-nowrap text-dimmed">{anchor.secondaryLabel}</span>
 									)}
 								</div>
-							</div>
+							</button>
 						</foreignObject>
 					</g>
 				);

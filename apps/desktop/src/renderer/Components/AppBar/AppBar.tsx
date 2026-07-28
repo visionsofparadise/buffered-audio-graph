@@ -112,29 +112,28 @@ export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) =>
 				return (
 					<div
 						key={tab.id}
-						role="button"
-						tabIndex={0}
-						onClick={() => selectTab(tab.id)}
-						onKeyDown={(event) => {
-							if (event.target !== event.currentTarget) return;
-
-							if (event.key === "Enter" || event.key === " ") {
-								event.preventDefault();
-								selectTab(tab.id);
-							}
-						}}
 						className={cn(
-							"app-no-drag group flex h-full cursor-pointer items-center gap-2 px-4 text-body",
+							"app-no-drag group flex h-full items-center gap-2 pr-4 text-body",
 							isActive ? "bg-text-primary text-surface" : "text-text-secondary hover:text-text-primary",
 						)}
 					>
-						<ProjectIcon name={tab.label} size={16} className="mr-1" />
 						{isActive ? (
-							<TabNameInput key={tab.label} tabId={tab.id} label={tab.label} onRename={context.renameTab} />
+							<div className="flex h-full items-center gap-2 pl-4">
+								<ProjectIcon name={tab.label} size={16} className="mr-1" />
+								<TabNameInput key={tab.label} tabId={tab.id} label={tab.label} onRename={context.renameTab} />
+							</div>
 						) : (
-							<span className="max-w-[180px] truncate whitespace-nowrap" title={tab.label}>
-								{tab.label}
-							</span>
+							<button
+								type="button"
+								data-tab-select
+								onClick={() => selectTab(tab.id)}
+								className="flex h-full cursor-pointer items-center gap-2 pl-4 outline-none focus-visible:ring-1 focus-visible:ring-accent-primary"
+							>
+								<ProjectIcon name={tab.label} size={16} className="mr-1" />
+								<span className="max-w-[180px] truncate whitespace-nowrap" title={tab.label}>
+									{tab.label}
+								</span>
+							</button>
 						)}
 						<button
 							type="button"
@@ -144,7 +143,7 @@ export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) =>
 								closeTab(tab.id);
 							}}
 							className={cn(
-								"inline-flex items-center justify-center p-1 transition-opacity",
+								"inline-flex items-center justify-center p-1 outline-none transition-opacity focus-visible:ring-1 focus-visible:ring-accent-primary",
 								isActive ? "text-surface hover:bg-surface/20" : "text-text-secondary hover:text-text-primary",
 								isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100",
 							)}

@@ -8,7 +8,11 @@ export async function selectSmokeTab(page: Page): Promise<void> {
 	if (!closeButton) throw new Error("Persisted smoke tab was not found");
 
 	await closeButton.evaluate((element) => {
-		element.parentElement?.click();
+		const select = element.parentElement?.querySelector<HTMLElement>("[data-tab-select]");
+
+		if (!select) throw new Error("Tab select control was not found beside the close button");
+
+		select.click();
 	});
 
 	const deadline = Date.now() + 10000;

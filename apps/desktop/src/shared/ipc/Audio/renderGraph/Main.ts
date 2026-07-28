@@ -7,7 +7,7 @@ import {
 	type RenderGraphIpcParameters,
 	type RenderGraphIpcReturn,
 } from "./Renderer";
-import type { NodeRegistry, ProgressPayload, StreamIdentity } from "@buffered-audio/core";
+import type { ProgressPayload, StreamIdentity } from "@buffered-audio/core";
 
 export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, RenderGraphIpcReturn> {
 	action = RENDER_GRAPH_ACTION;
@@ -19,7 +19,7 @@ export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, R
 		const signal = jobManager.getOrCreateSignal(jobId);
 
 		try {
-			const jobs = createRenderJobs(definition, nodeRegistry as unknown as NodeRegistry, { signal, parameters });
+			const jobs = createRenderJobs(definition, nodeRegistry, { signal, parameters });
 
 			for (const job of jobs) {
 				job.events.on("progress", (identity: StreamIdentity, payload: ProgressPayload): void => {
