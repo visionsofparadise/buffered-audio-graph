@@ -17,7 +17,7 @@ import { predictInitialB } from "./utils/solve";
 
 const FLOOR_PIVOT_EPSILON_DB = 0.01;
 
-export const schema = z
+const schema = z
 	.object({
 		targetLufs: z.number().min(-50).max(0).multipleOf(0.1).default(-16).describe("Target integrated loudness (LUFS)"),
 		pivot: z

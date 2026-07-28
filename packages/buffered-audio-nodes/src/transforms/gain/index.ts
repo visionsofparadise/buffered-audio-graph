@@ -7,7 +7,7 @@ import {
 } from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 
-export const schema = z.object({
+const schema = z.object({
 	gain: z.number().min(-60).max(24).multipleOf(0.1).default(0).describe("Gain (dB)"),
 });
 

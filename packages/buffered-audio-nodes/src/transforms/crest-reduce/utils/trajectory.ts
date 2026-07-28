@@ -11,7 +11,7 @@ export interface ControlTrajectory {
 	readonly peakSampleIndex?: Int32Array;
 }
 
-export const TRANSIENT_PULLBACK = 0.5;
+const TRANSIENT_PULLBACK = 0.5;
 
 export function trajectoryFrameRate(sampleRate: number, hopSize: number): number {
 	if (!(sampleRate > 0) || !(hopSize > 0)) return 1;

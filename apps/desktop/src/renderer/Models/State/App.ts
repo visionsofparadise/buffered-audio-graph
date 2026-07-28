@@ -40,7 +40,7 @@ const NodePackageStateSchema = z.object({
 	origin: z.enum(["catalog", "dependency"]).default("catalog"),
 });
 
-export const AppStateSchema = z.object({
+const AppStateSchema = z.object({
 	tabs: z.array(TabEntrySchema).default([]),
 	activeTabId: z.string().nullable().default(null),
 	windowBounds: WindowBoundsSchema.optional(),

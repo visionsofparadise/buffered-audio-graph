@@ -10,7 +10,7 @@ export const SEARCH_GRID_POINTS = 64;
 
 export const SEARCH_REFINE_ITERS = 20;
 
-export const TARGET_PEAK_POWER_RATIO = 0.5;
+const TARGET_PEAK_POWER_RATIO = 0.5;
 
 export function groupDelayLambda(sampleRate: number, order: number = LATTICE_ORDER): number {
 	if (order <= 0 || !(sampleRate > 0)) return 0;

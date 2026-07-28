@@ -8,7 +8,7 @@ import {
 import { PACKAGE_NAME } from "../../package-metadata";
 import { balanceScales, panGains } from "./utils/pan-law";
 
-export const schema = z.object({
+const schema = z.object({
 	pan: z
 		.number()
 		.min(-1)

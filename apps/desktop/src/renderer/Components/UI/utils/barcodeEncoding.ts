@@ -1,4 +1,4 @@
-export const CODE_39: Record<string, string> = {
+const CODE_39: Record<string, string> = {
 	"0": "nnnwwnwnn",
 	"1": "wnnwnnnnw",
 	"2": "nnwwnnnnw",

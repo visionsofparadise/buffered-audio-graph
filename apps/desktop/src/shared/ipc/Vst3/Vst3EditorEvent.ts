@@ -5,7 +5,7 @@ const openEventSchema = z.object({ event: z.literal("open"), path: z.string() })
 const savedEventSchema = z.object({ event: z.literal("saved"), path: z.string() });
 const closedEventSchema = z.object({ event: z.literal("closed") });
 
-export const vst3EditorStdoutEventSchema = z.discriminatedUnion("event", [
+const vst3EditorStdoutEventSchema = z.discriminatedUnion("event", [
 	readyEventSchema,
 	openEventSchema,
 	savedEventSchema,
@@ -14,7 +14,7 @@ export const vst3EditorStdoutEventSchema = z.discriminatedUnion("event", [
 
 export type Vst3EditorStdoutEvent = z.infer<typeof vst3EditorStdoutEventSchema>;
 
-export interface Vst3EditorExitedEvent {
+interface Vst3EditorExitedEvent {
 	readonly event: "exited";
 	readonly code: number | null;
 	readonly stderrTail: string;

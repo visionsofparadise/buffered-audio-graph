@@ -8,7 +8,7 @@ import {
 import { PACKAGE_NAME } from "../../package-metadata";
 import { quantizationLevels, quantizeSample } from "./utils/quantize";
 
-export const schema = z.object({
+const schema = z.object({
 	bitDepth: z
 		.union([z.literal(16), z.literal(24)])
 		.default(16)

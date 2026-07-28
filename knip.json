@@ -1,0 +1,56 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"workspaces": {
+		".": {
+			"entry": [
+				"scripts/binaries/fetch.ts",
+				"scripts/binaries/install.ts",
+				"scripts/fixtures/fetch-audio.ts",
+				"scripts/fixtures/fetch-binaries.ts"
+			],
+			"project": ["scripts/**/*.ts"]
+		},
+		"packages/buffered-audio-nodes-core": {
+			"entry": ["src/index.ts", "src/testing/index.ts"],
+			"project": ["src/**/*.{ts,tsx}"]
+		},
+		"packages/buffered-audio-nodes-utils": {
+			"entry": ["src/index.ts"],
+			"project": ["src/**/*.{ts,tsx}"]
+		},
+		"packages/buffered-audio-nodes": {
+			"entry": ["src/index.ts", "scripts/generate-docs.ts"],
+			"project": ["src/**/*.{ts,tsx}"]
+		},
+		"packages/buffered-audio-cli": {
+			"entry": ["src/cli.ts"],
+			"project": ["src/**/*.{ts,tsx}"],
+			"ignoreDependencies": ["@buffered-audio/nodes"]
+		},
+		"apps/desktop": {
+			"entry": [
+				"src/main/index.ts",
+				"src/preload/index.ts",
+				"src/renderer/index.tsx",
+				"forge.config.ts",
+				"vite.main.config.ts",
+				"vite.preload.config.ts",
+				"vite.renderer.config.ts",
+				"vitest.config.ts",
+				"vitest.heavy.config.ts"
+			],
+			"project": ["src/**/*.{ts,tsx}", "*.{ts,tsx,mjs}"],
+			"ignoreDependencies": ["@fontsource/azeret-mono", "tailwindcss"]
+		},
+		"apps/service": {
+			"entry": ["src/app.ts"],
+			"project": ["src/**/*.{ts,tsx}"],
+			"ignoreDependencies": ["tsx"]
+		}
+	},
+	"ignoreDependencies": [
+		"check-dependency-version-consistency",
+		"textlint-filter-rule-comments",
+		"textlint-rule-no-dead-link"
+	]
+}

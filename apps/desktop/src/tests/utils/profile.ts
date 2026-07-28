@@ -19,7 +19,7 @@ import {
 import { sleep } from "./page";
 import { writeSineWav } from "./wav";
 
-export interface PersistedNode {
+interface PersistedNode {
 	readonly id?: string;
 	readonly nodeName?: string;
 	readonly packageVersion?: string;
@@ -38,11 +38,11 @@ export function readPersistedBag(): PersistedBag {
 	return JSON.parse(readFileSync(BAG_PATH, "utf8")) as PersistedBag;
 }
 
-export interface PersistedGraphState {
+interface PersistedGraphState {
 	readonly positions?: Record<string, { x: number; y: number }>;
 }
 
-export function readGraphPositions(bagId: string): Record<string, { x: number; y: number }> {
+function readGraphPositions(bagId: string): Record<string, { x: number; y: number }> {
 	try {
 		const graphState = JSON.parse(
 			readFileSync(join(PROFILE_DIR, "graphs", `${bagId}.json`), "utf8"),
@@ -81,7 +81,7 @@ export interface PersistedPackage {
 	readonly origin?: "catalog" | "dependency";
 }
 
-export interface PersistedState {
+interface PersistedState {
 	readonly packages?: ReadonlyArray<PersistedPackage>;
 }
 
@@ -115,7 +115,7 @@ export function readBuiltinVersion(): string | null {
 	}
 }
 
-export function readBuiltInPackageState(): PersistedPackage | null {
+function readBuiltInPackageState(): PersistedPackage | null {
 	try {
 		const state = JSON.parse(readFileSync(join(PROFILE_DIR, "state.json"), "utf8")) as PersistedState;
 
@@ -125,7 +125,7 @@ export function readBuiltInPackageState(): PersistedPackage | null {
 	}
 }
 
-export function readRestoredDependencyState(): PersistedPackage | null {
+function readRestoredDependencyState(): PersistedPackage | null {
 	try {
 		const state = JSON.parse(readFileSync(join(PROFILE_DIR, "state.json"), "utf8")) as PersistedState;
 

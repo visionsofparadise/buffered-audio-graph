@@ -1,4 +1,3 @@
-/* eslint-disable barrel-files/avoid-barrel-files */
 export type { Composition } from "./node";
 export type { FileInputMeta, NodeSchema } from "./node/schema";
 

@@ -86,12 +86,6 @@ export async function waitForEdgeAgreement(page: Page, expected: number, timeout
 	);
 }
 
-export async function paramInputValue(page: Page, nodeId: string): Promise<string | null> {
-	return page
-		.$eval(`.react-flow__node[data-id="${nodeId}"] input[type="text"]`, (element) => element.value)
-		.catch(() => null);
-}
-
 export async function isNodeBypassed(page: Page, nodeId: string): Promise<boolean> {
 	return page.evaluate((id: string): boolean => {
 		const node = document.querySelector(`.react-flow__node[data-id="${id}"]`);

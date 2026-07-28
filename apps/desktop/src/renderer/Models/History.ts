@@ -9,12 +9,12 @@ export interface GraphMeta {
 
 export const graphMeta = createMeta<GraphMeta>();
 
-export interface HistoryBatch {
+interface HistoryBatch {
 	state: State<object, GraphMeta, GraphMeta>;
 	ops: Array<Op>;
 }
 
-export interface HistoryEntry {
+interface HistoryEntry {
 	transactionKey: string;
 	batches: Array<HistoryBatch>;
 }

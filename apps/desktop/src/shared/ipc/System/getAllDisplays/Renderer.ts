@@ -1,6 +1,6 @@
 import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
 
-export interface DisplayWorkArea {
+interface DisplayWorkArea {
 	readonly x: number;
 	readonly y: number;
 	readonly width: number;

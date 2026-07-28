@@ -52,7 +52,7 @@ export const encodingSchema = z.object({
 		.describe("Output sample rate (Hz). When set, ffmpeg resamples on encode."),
 });
 
-export const schema = z.object({
+const schema = z.object({
 	path: z.string().default("").meta({ input: "file", mode: "save", accept: ".wav,.flac,.mp3,.aac" }),
 	ffmpegPath: z
 		.string()

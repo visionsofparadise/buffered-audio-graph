@@ -10,7 +10,7 @@ const CHUNK_FRAMES = 48000;
 
 export const DIAGNOSTIC_TAIL_BYTES = 64 * 1024;
 
-export interface VstHostTransferProgress {
+interface VstHostTransferProgress {
 	readonly framesDone: number;
 	readonly framesTotal: number;
 	readonly bytesDone: number;
@@ -62,7 +62,7 @@ export class VstHostExitedBeforeReadyError extends Error {
 	}
 }
 
-export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostHandle {
+function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostHandle {
 	const proc: ChildProcess = spawn(binaryPath, [...args], {
 		stdio: ["pipe", "pipe", "pipe"],
 	});

@@ -59,7 +59,7 @@ import { WindowReader } from "./utils/window-reader";
 import { computeChunkWindow, computeProcessGeometry, computeWriteClip } from "./utils/geometry";
 import { createNlmWorkerPool, type NlmWorkerPool } from "./nlm-worker-pool";
 
-export const schema = z.object({
+const schema = z.object({
 	references: z.array(z.string()).default([]).describe("References"),
 	reductionStrength: z.number().min(0).max(10).multipleOf(0.1).default(5).describe("Reduction Strength"),
 	artifactSmoothing: z.number().min(0).max(10).multipleOf(0.1).default(5).describe("Artifact Smoothing"),

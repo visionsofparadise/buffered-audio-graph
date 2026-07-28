@@ -10,8 +10,6 @@ export interface NodeClass {
 	new (properties?: Record<string, unknown>): BufferedAudioNode;
 }
 
-export type NodeRegistry = ReadonlyMap<string, ReadonlyMap<string, ReadonlyMap<string, NodeClass>>>;
-
 export type NodeRegistryMap = Map<string, Map<string, Map<string, NodeClass>>>;
 
 export function createNodeRegistry(): NodeRegistryMap {
@@ -42,12 +40,4 @@ export function unregisterPackage(registry: NodeRegistryMap, packageName: string
 	if (packageVersions.size === 0) {
 		registry.delete(packageName);
 	}
-}
-
-export function resolvePackageNodes(
-	registry: NodeRegistryMap,
-	packageName: string,
-	packageVersion: string,
-): Map<string, NodeClass> | undefined {
-	return registry.get(packageName)?.get(packageVersion);
 }

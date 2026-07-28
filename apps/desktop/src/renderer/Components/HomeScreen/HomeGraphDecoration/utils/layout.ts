@@ -26,7 +26,7 @@ const ANCHOR_Y_CLAMP = 60;
 export const LABEL_WIDTH = 280;
 export const LABEL_HEIGHT = 44;
 
-export interface PointLayout {
+interface PointLayout {
 	readonly baseX: number;
 	readonly baseY: number;
 	readonly phaseX: number;
@@ -36,12 +36,12 @@ export interface PointLayout {
 	readonly isAnchor: boolean;
 }
 
-export interface EdgeLayout {
+interface EdgeLayout {
 	readonly endpointA: number;
 	readonly endpointB: number;
 }
 
-export interface AnnotationLayout {
+interface AnnotationLayout {
 	readonly anchorIndex: number;
 	readonly pointIndex: number;
 	readonly labelOffsetX: number;

@@ -1,0 +1,19 @@
+{
+	"minLines": 5,
+	"minTokens": 50,
+	"gitignore": true,
+	"absolute": true,
+	"threshold": 0,
+	"reporters": ["consoleFull"],
+	"ignore": [
+		"**/archive/**",
+		"**/.*/**",
+		"**/*.md",
+		"**/*.test.ts",
+		"**/*.test.tsx",
+		"apps/service/cdk.out/**",
+		"package-lock.json",
+		"pnpm-lock.yaml",
+		"yarn.lock"
+	]
+}

@@ -29,7 +29,7 @@ import {
 	WARMUP_SAMPLES,
 } from "./utils/pump";
 
-export const schema = z.object({
+const schema = z.object({
 	modelPath1: z
 		.string()
 		.default("")

@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type Platform = "all" | "win32" | "linux" | "darwin";
-export type Arch = "all" | "x64" | "arm64";
+type Platform = "all" | "win32" | "linux" | "darwin";
+type Arch = "all" | "x64" | "arm64";
 
 export interface ManifestAsset {
 	key: string | null;
@@ -30,7 +30,7 @@ export interface Target {
 const VALID_PLATFORMS: ReadonlyArray<Target["platform"]> = ["win32", "linux", "darwin"];
 const VALID_ARCHES: ReadonlyArray<Target["arch"]> = ["x64", "arm64"];
 
-export function resolveManifestPath(): string {
+function resolveManifestPath(): string {
 	const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 	const repoRoot = path.resolve(scriptDir, "..", "..");
 
@@ -50,7 +50,7 @@ export async function readManifest(): Promise<Manifest> {
 	return JSON.parse(raw) as Manifest;
 }
 
-export function parseTarget(value: string): Target {
+function parseTarget(value: string): Target {
 	const parts = value.split("-");
 
 	if (parts.length !== 2) {
@@ -73,7 +73,7 @@ export function parseTarget(value: string): Target {
 	};
 }
 
-export function resolveHostTarget(): Target {
+function resolveHostTarget(): Target {
 	const platform = process.platform;
 	const arch = process.arch;
 

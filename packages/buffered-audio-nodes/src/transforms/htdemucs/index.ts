@@ -25,7 +25,7 @@ export interface StemGains {
 	readonly other: number;
 }
 
-export const schema = z.object({
+const schema = z.object({
 	modelPath: z
 		.string()
 		.default("")

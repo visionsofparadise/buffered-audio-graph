@@ -8,7 +8,7 @@ import {
 import { PACKAGE_NAME } from "../../package-metadata";
 import { applyAllpass, invertSamples, phaseCoefficient } from "./utils/phase-shift";
 
-export const schema = z.object({
+const schema = z.object({
 	invert: z.boolean().default(true).describe("Invert"),
 	angle: z.number().min(-180).max(180).multipleOf(1).optional().describe("Angle"),
 });

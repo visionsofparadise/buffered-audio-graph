@@ -10,7 +10,7 @@ import { PACKAGE_NAME } from "../../package-metadata";
 import { readWavSamples } from "../../utils/read-to-buffer";
 import { applyInsert, computeInsertOverlap } from "./utils/insert";
 
-export const schema = z.object({
+const schema = z.object({
 	insertPath: z
 		.string()
 		.default("")

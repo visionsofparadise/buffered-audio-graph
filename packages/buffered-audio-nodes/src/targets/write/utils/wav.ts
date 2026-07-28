@@ -53,7 +53,7 @@ export function writeSample(buffer: Buffer, offset: number, sample: number, bitD
 	}
 }
 
-export function writeFmtAndDataChunks(
+function writeFmtAndDataChunks(
 	header: Buffer,
 	offset: number,
 	sampleRate: number,
@@ -116,6 +116,6 @@ export function buildRf64Header(dataSize: number, sampleRate: number, channels: 
 	return header;
 }
 
-export function writeBigUInt64LE(buffer: Buffer, offset: number, value: number): void {
+function writeBigUInt64LE(buffer: Buffer, offset: number, value: number): void {
 	buffer.writeBigUInt64LE(BigInt(Math.floor(value)), offset);
 }

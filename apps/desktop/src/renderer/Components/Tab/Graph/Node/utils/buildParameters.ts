@@ -22,7 +22,7 @@ export interface ArrayParameter {
 	readonly rows: ReadonlyArray<ArrayRow>;
 }
 
-export interface ArrayRow {
+interface ArrayRow {
 	readonly rowId: string;
 	readonly fields: ReadonlyArray<LeafParameter>;
 }

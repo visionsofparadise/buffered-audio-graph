@@ -28,8 +28,8 @@ const PEAK_GAIN_DB_FLOOR = -60;
 
 const MIN_SECANT_SLOPE = 0.05;
 
-export const DEFAULT_MAX_ATTEMPTS = 10;
-export const DEFAULT_TOLERANCE = 0.5;
+const DEFAULT_MAX_ATTEMPTS = 10;
+const DEFAULT_TOLERANCE = 0.5;
 
 const GAIN_LUT_MIN_DB = -80;
 const GAIN_LUT_MAX_DB = 40;
@@ -337,7 +337,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 	}
 }
 
-export interface StreamCurveAndForwardIirArgs {
+interface StreamCurveAndForwardIirArgs {
 	detectionEnvelope: BlockBuffer;
 	anchors: Anchors;
 	iir: BidirectionalIir;
@@ -347,7 +347,7 @@ export interface StreamCurveAndForwardIirArgs {
 	progress?: (done: number, total: number) => void;
 }
 
-export async function streamCurveAndForwardIir(args: StreamCurveAndForwardIirArgs): Promise<void> {
+async function streamCurveAndForwardIir(args: StreamCurveAndForwardIirArgs): Promise<void> {
 	const { detectionEnvelope, anchors, iir, halfWidth, forwardEnvelopeBuffer, minHeldEnvelopeBuffer, progress } = args;
 	const totalFrames = detectionEnvelope.frames;
 
@@ -409,7 +409,7 @@ export async function streamCurveAndForwardIir(args: StreamCurveAndForwardIirArg
 	await minHeldEnvelopeBuffer.flushWrites();
 }
 
-export interface MeasureAttemptArgs {
+interface MeasureAttemptArgs {
 	source: BlockBuffer;
 	sampleRate: number;
 	channelCount: number;
@@ -417,13 +417,13 @@ export interface MeasureAttemptArgs {
 	progress?: (done: number, total: number) => void;
 }
 
-export interface MeasureAttemptResult {
+interface MeasureAttemptResult {
 	readonly outputLufs: number;
 	readonly outputLra: number;
 	readonly outputTruePeakDb: number;
 }
 
-export async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<MeasureAttemptResult> {
+async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<MeasureAttemptResult> {
 	const { source, sampleRate, channelCount, gSmoothed, progress } = args;
 	const accumulator = new LoudnessAccumulator(sampleRate, channelCount);
 	const truePeakAccumulator = new TruePeakAccumulator(sampleRate, channelCount);

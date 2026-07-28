@@ -20,11 +20,8 @@
 		"directory": "packages/buffered-audio-cli"
 	},
 	"scripts": {
-		"check": "concurrently \"eslint . --fix --cache --format ../../agent-eslint.js\" \"tsc --noEmit --pretty false 2>&1 | node ../../agent-tsc.js\"",
-		"check:verbose": "concurrently \"eslint .\" \"tsc --noEmit\"",
-		"lint": "eslint . --fix --cache --format ../../agent-eslint.js",
-		"lint:verbose": "eslint .",
-		"lint:fix": "eslint . --fix",
+		"check": "eslint . --fix --cache && tsc --noEmit",
+		"lint": "eslint . --fix --cache",
 		"build": "tsup",
 		"unit": "vitest run --project unit",
 		"integration": "vitest run --project integration"
@@ -32,7 +29,6 @@
 	"devDependencies": {
 		"@buffered-audio/nodes": "0.24.3",
 		"@types/node": "^25.3.5",
-		"concurrently": "*",
 		"tsup": "^8.0.0",
 		"typescript": "*",
 		"vitest": "^3.0.0"

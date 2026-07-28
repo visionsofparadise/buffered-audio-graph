@@ -25,7 +25,7 @@ export function erbToFreq(erb: number): number {
 	return (Math.pow(10, erb / 21.4) - 1) / 0.00437;
 }
 
-export function computeScaledBandMappings(
+function computeScaledBandMappings(
 	numBands: number,
 	minFreq: number,
 	maxFreq: number,

@@ -11,7 +11,7 @@ import { interleave } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { appendStderr, buildInputArgs, buildOutputArgs, parseStdoutFrames, spawnFfmpegChild } from "./utils/process";
 
-export const schema = z.object({
+const schema = z.object({
 	ffmpegPath: z
 		.string()
 		.default("")

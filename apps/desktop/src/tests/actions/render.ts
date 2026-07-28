@@ -3,13 +3,13 @@ import type { Page } from "puppeteer-core";
 import { clickPoint, rectByText, rectOf, sleep } from "../utils/page";
 import { fileSize } from "../utils/wav";
 
-export interface RenderToastState {
+interface RenderToastState {
 	readonly present: boolean;
 	readonly failed: boolean;
 	readonly error: string | null;
 }
 
-export async function renderToastState(page: Page): Promise<RenderToastState> {
+async function renderToastState(page: Page): Promise<RenderToastState> {
 	return page.evaluate((): RenderToastState => {
 		const spans = Array.from(document.querySelectorAll("span"));
 		const status = spans.find((span) => span.textContent === "In progress" || span.textContent === "Failed");

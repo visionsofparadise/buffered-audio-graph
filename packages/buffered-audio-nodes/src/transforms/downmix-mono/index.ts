@@ -3,7 +3,7 @@ import { UnbufferedTransformStream, TransformNode, type Block } from "@buffered-
 import { PACKAGE_NAME } from "../../package-metadata";
 import { downmixToMono } from "./utils/mix";
 
-export const schema = z.object({});
+const schema = z.object({});
 
 export class DownmixMonoStream extends UnbufferedTransformStream {
 	override *_transform(chunk: Block): Generator<Block> {

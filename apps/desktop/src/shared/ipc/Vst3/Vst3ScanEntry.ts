@@ -1,4 +1,4 @@
-export type Vst3ScanEntryStatus = "pending" | "ready" | "error";
+type Vst3ScanEntryStatus = "pending" | "ready" | "error";
 
 export interface Vst3ScanEntry {
 	readonly entryKey: string;

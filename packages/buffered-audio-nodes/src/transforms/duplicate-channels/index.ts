@@ -7,7 +7,7 @@ import {
 } from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 
-export const schema = z.object({
+const schema = z.object({
 	channels: z.number().int().min(2).max(8).default(2).describe("Output channel count"),
 });
 

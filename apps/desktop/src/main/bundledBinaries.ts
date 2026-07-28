@@ -3,7 +3,7 @@ import { existsSync, promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 
-export function getBundledBinariesPath(): string {
+function getBundledBinariesPath(): string {
 	if (app.isPackaged) {
 		return path.join(process.resourcesPath, "binaries");
 	}
@@ -93,7 +93,7 @@ const VST3_CLI_FILENAMES: Record<string, string> = {
 	"darwin-arm64": "vst-demon-cli-darwin-arm64",
 };
 
-export class UnsupportedVst3CliPlatformError extends Error {
+class UnsupportedVst3CliPlatformError extends Error {
 	public constructor(target: string) {
 		super(`No bundled vst-demon-cli binary for platform target "${target}".`);
 

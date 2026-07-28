@@ -3,10 +3,6 @@
 // eslint-disable-next-line comment-rules/no-restricted-comments
 // DOI 10.5755/j01.eie.23.2.18001 — see design-crest-reduce.md 2026-05-16 Node conception entry.
 
-// eslint-disable-next-line comment-rules/no-restricted-comments
-// Boyd (1986) §III Shapiro-Rudin real-signal achievable crest-factor bound (CF ≤ 2 ⇒ ≤ 6.02 dB).
-export const SHAPIRO_RUDIN_ACHIEVABLE_CREST_FACTOR_DB = 6.02;
-
 export function relativePower(magnitude: ReadonlyArray<number> | Float32Array): Float32Array {
 	const binCount = magnitude.length;
 	const power = new Float32Array(binCount);

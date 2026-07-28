@@ -46,7 +46,7 @@ export function getFreePort(): Promise<number> {
 	});
 }
 
-export function httpGetStatus(url: string): Promise<number> {
+function httpGetStatus(url: string): Promise<number> {
 	return new Promise((resolveStatus, rejectStatus) => {
 		const request = http.get(url, (response) => {
 			response.resume();

@@ -14,7 +14,7 @@ const cutRegionSchema = z.object({
 	end: z.number().min(0).max(86400).describe("End (seconds)"),
 });
 
-export const schema = z.object({
+const schema = z.object({
 	regions: z.array(cutRegionSchema).default([]).describe("Regions"),
 });
 

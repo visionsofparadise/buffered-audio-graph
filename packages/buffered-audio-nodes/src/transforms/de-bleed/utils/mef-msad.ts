@@ -22,7 +22,7 @@ const MS_FRAMES_PER_SUBWINDOW = 12;
 const MS_BIAS_CORRECTION = 2.0;
 const MS_INITIAL_NOISE = 1e-8;
 
-export interface MinimumStatisticsState {
+interface MinimumStatisticsState {
 	readonly noisePsd: Float32Array;
 	readonly currentMin: Float32Array;
 	readonly subwindowMins: Float32Array;

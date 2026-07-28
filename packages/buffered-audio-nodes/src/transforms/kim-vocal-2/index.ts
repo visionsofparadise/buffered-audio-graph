@@ -18,7 +18,7 @@ import { createResampleComposition } from "../../utils/resample-composition";
 import type { FfmpegStream } from "../ffmpeg";
 import { buildTransitionWindow, createSegmentWorkspace, processSegment } from "./utils/segment";
 
-export const schema = z.object({
+const schema = z.object({
 	modelPath: z
 		.string()
 		.default("")

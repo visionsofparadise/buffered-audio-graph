@@ -10,7 +10,7 @@ import {
 import { PACKAGE_NAME } from "../../package-metadata";
 import { computeTrimRegion, findFirstAbove, findLastAbove } from "./utils/silence";
 
-export const schema = z.object({
+const schema = z.object({
 	threshold: z.number().min(0).max(1).multipleOf(0.001).default(0.001).describe("Threshold"),
 	margin: z.number().min(0).max(1).multipleOf(0.001).default(0.01).describe("Margin"),
 	start: z.boolean().default(true).describe("Start"),

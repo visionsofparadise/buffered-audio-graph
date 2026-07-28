@@ -11,7 +11,7 @@ import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { resolveLoudnessGain } from "./utils/gain";
 
-export const schema = z.object({
+const schema = z.object({
 	target: z.number().min(-50).max(0).multipleOf(0.1).default(-16).describe("Target integrated loudness (LUFS)"),
 });
 

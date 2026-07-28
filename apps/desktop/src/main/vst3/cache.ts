@@ -28,13 +28,13 @@ export interface ModuleStat {
 export const isCacheHit = (record: CacheRecord | undefined, stat: ModuleStat): record is CacheRecord =>
 	record?.size === stat.size && record.mtimeMs === stat.mtimeMs;
 
-export const parseCache = (raw: string): ScanCache => {
+const parseCache = (raw: string): ScanCache => {
 	const result = cacheSchema.safeParse(JSON.parse(raw));
 
 	return result.success ? result.data : {};
 };
 
-export const serializeCache = (cache: ScanCache): string => JSON.stringify(cache, null, "\t");
+const serializeCache = (cache: ScanCache): string => JSON.stringify(cache, null, "\t");
 
 export const readCache = (cachePath: string, logger: Logger): ScanCache => {
 	let raw: string;

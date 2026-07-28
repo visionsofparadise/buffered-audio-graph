@@ -1,14 +1,11 @@
 import {
 	Close,
 	Content,
-	Description,
 	Overlay,
 	Portal,
 	Root,
 	Title,
-	Trigger,
 	type DialogContentProps,
-	type DialogDescriptionProps,
 	type DialogOverlayProps,
 	type DialogTitleProps,
 } from "@radix-ui/react-dialog";
@@ -16,11 +13,9 @@ import type { ComponentPropsWithoutRef } from "react";
 import { cn } from "../../utils/cn";
 
 export const Dialog = Root;
-export const DialogTrigger = Trigger;
 export const DialogClose = Close;
-export const DialogPortal = Portal;
 
-export function DialogOverlay({ className, ...props }: DialogOverlayProps) {
+function DialogOverlay({ className, ...props }: DialogOverlayProps) {
 	return <Overlay className={cn("fixed inset-0 z-50 bg-black/60", className)} {...props} />;
 }
 
@@ -51,8 +46,4 @@ export function DialogFooter({ className, ...props }: ComponentPropsWithoutRef<"
 
 export function DialogTitle({ className, ...props }: DialogTitleProps) {
 	return <Title className={cn("type-label text-body text-text-primary", className)} {...props} />;
-}
-
-export function DialogDescription({ className, ...props }: DialogDescriptionProps) {
-	return <Description className={cn("text-body text-text-secondary", className)} {...props} />;
 }

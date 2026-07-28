@@ -1,4 +1,3 @@
-/* eslint-disable barrel-files/avoid-barrel-files */
 export { AmplitudeHistogramAccumulator } from "./amplitude-histogram-accumulator";
 export { bandpass } from "./bandpass";
 export { BidirectionalIir } from "./bidirectional-iir";

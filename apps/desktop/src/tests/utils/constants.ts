@@ -1,6 +1,6 @@
 import { join, resolve } from "node:path";
 
-export const DESKTOP_DIR = resolve(import.meta.dirname, "../../..");
+const DESKTOP_DIR = resolve(import.meta.dirname, "../../..");
 export const REPO_ROOT = resolve(DESKTOP_DIR, "..", "..");
 export const PROFILE_DIR = join(DESKTOP_DIR, ".smoke-profile");
 export const BAG_PATH = join(DESKTOP_DIR, ".smoke-seed.bag");
@@ -8,7 +8,6 @@ export const RESTORED_BAG_PATH = join(PROFILE_DIR, "smoke-restored.bag");
 export const BAG_NAME = "Smoke Bag";
 export const RESTORED_BAG_NAME = "Restored Bag";
 export const PATH_SENTINEL = "C:/smoke/input.wav";
-export const PATH_SENTINEL_2 = "C:/smoke/param-undo.wav";
 export const INPUT_WAV_PATH = join(PROFILE_DIR, "smoke-input.wav");
 export const OUTPUT_WAV_PATH = join(PROFILE_DIR, "smoke-output.wav");
 export const TEMPLATED_WRITE_PATH = "{{outDir}}/templated-out.wav";

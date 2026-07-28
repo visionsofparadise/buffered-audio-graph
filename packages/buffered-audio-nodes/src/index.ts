@@ -1,4 +1,3 @@
-/* eslint-disable barrel-files/avoid-barrel-files */
 export { read } from "./sources/read";
 export { ReadWavNode, readWav, ReadWavStream, wavSchema, type ReadWavProperties } from "./sources/read/wav";
 export { readSample } from "./sources/read/wav/utils/wav-format";

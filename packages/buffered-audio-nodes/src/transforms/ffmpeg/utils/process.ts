@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { Block } from "@buffered-audio/core";
 
-export const STDERR_CAP_BYTES = 64 * 1024;
+const STDERR_CAP_BYTES = 64 * 1024;
 
 export interface FfmpegChildHandle {
 	readonly child: ChildProcessWithoutNullStreams;

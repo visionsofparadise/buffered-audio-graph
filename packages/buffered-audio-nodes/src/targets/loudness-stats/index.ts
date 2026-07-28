@@ -11,7 +11,7 @@ import { AmplitudeHistogramAccumulator, LoudnessAccumulator, TruePeakAccumulator
 import { PACKAGE_NAME } from "../../package-metadata";
 import { amplitudePercentile, computeTotalSamples } from "./utils/stats";
 
-export const schema = z.object({
+const schema = z.object({
 	bucketCount: z.number().int().positive().default(1024).describe("Amplitude histogram bucket count"),
 	outputPath: z
 		.string()
@@ -22,7 +22,7 @@ export const schema = z.object({
 
 export interface LoudnessStatsProperties extends z.infer<typeof schema>, TargetNodeProperties {}
 
-export interface AmplitudeDistribution {
+interface AmplitudeDistribution {
 	readonly buckets: Uint32Array;
 	readonly bucketMax: number;
 	readonly totalSamples: number;

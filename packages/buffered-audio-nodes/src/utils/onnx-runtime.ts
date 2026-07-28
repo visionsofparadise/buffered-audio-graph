@@ -6,7 +6,7 @@ export interface OnnxSession {
 	dispose(): void;
 }
 
-export interface OnnxTensor {
+interface OnnxTensor {
 	readonly data: Float32Array;
 	readonly dims: ReadonlyArray<number>;
 }

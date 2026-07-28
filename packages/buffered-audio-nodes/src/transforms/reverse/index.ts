@@ -4,7 +4,7 @@ import { PACKAGE_NAME } from "../../package-metadata";
 
 const CHUNK_FRAMES = 44100;
 
-export const schema = z.object({});
+const schema = z.object({});
 
 export class ReverseStream extends BufferedTransformStream {
 	override blockSize = WHOLE_FILE;

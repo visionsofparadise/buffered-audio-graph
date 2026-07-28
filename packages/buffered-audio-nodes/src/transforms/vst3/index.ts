@@ -14,7 +14,7 @@ import { PACKAGE_NAME } from "../../package-metadata";
 import { startProcessLivenessMonitor, type ProcessLivenessOptions } from "../../utils/process-liveness";
 import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
 
-export const stageSchema = z.object({
+const stageSchema = z.object({
 	pluginPath: z.string().meta({ input: "file", mode: "open", accept: ".vst3" }).describe("VST3 plugin file or bundle"),
 	pluginName: z
 		.string()

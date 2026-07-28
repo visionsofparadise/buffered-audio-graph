@@ -4,11 +4,11 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
-		"check": "concurrently \"eslint . --fix --cache --format ../../agent-eslint.js\" \"tsc --noEmit --pretty false 2>&1 | node ../../agent-tsc.js\"",
-		"check:verbose": "concurrently \"eslint .\" \"tsc --noEmit\"",
+		"check": "eslint . --fix --cache && tsc --noEmit",
 		"synth": "cdk synth",
 		"diff": "cdk diff",
-		"deploy": "cdk deploy --require-approval never"
+		"deploy": "cdk deploy --require-approval never",
+		"lint": "eslint . --fix --cache"
 	},
 	"dependencies": {
 		"aws-cdk-lib": "^2.250.0",
@@ -16,7 +16,6 @@
 	},
 	"devDependencies": {
 		"aws-cdk": "^2.1118.2",
-		"concurrently": "*",
 		"tsx": "^4.21.0",
 		"typescript": "*"
 	}

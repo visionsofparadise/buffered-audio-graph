@@ -3,7 +3,7 @@ import type { BrowserWindow } from "electron";
 import type { Vst3EditorEventPayload } from "../ipc/Vst3/Vst3EditorEvent";
 import type { Vst3ScanEntry } from "../ipc/Vst3/Vst3ScanEntry";
 
-export interface WindowBounds {
+interface WindowBounds {
 	readonly x: number;
 	readonly y: number;
 	readonly width: number;

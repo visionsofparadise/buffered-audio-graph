@@ -3,7 +3,14 @@
 	"tasks": {
 		"check": {
 			"dependsOn": ["^build"],
-			"inputs": ["src/**", "./tsconfig.json"],
+			"inputs": [
+				"src/**",
+				"index.html",
+				"./tsconfig.json",
+				"./package.json",
+				"../../tsconfig.json",
+				"../../eslint.config.js"
+			],
 			"outputs": []
 		},
 		"build": {

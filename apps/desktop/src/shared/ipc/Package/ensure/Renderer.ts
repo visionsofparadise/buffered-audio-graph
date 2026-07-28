@@ -36,7 +36,7 @@ export interface EnsurePackageInput {
 	readonly packageSpec: string;
 }
 
-export interface EnsurePackageResult {
+interface EnsurePackageResult {
 	readonly packageName: string;
 	readonly packageVersion: string;
 	readonly apiVersion: number;

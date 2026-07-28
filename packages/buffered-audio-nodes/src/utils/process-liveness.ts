@@ -16,7 +16,7 @@ export interface ProcessLivenessOptions {
 	readonly onError?: (error: unknown) => void;
 }
 
-export async function sampleProcessTreeCpu(rootPid: number): Promise<{ cpuMs: number; pidCount: number }> {
+async function sampleProcessTreeCpu(rootPid: number): Promise<{ cpuMs: number; pidCount: number }> {
 	const pids = await pidtree(rootPid, { root: true });
 
 	try {

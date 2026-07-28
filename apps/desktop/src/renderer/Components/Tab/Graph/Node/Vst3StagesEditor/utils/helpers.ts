@@ -8,7 +8,7 @@ export interface Stage {
 	readonly presetPath: string;
 }
 
-export interface VendorGroup {
+interface VendorGroup {
 	vendorFolder: string;
 	entries: Array<Vst3ScanEntry>;
 }

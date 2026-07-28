@@ -10,7 +10,7 @@ import {
 import { PACKAGE_NAME } from "../../package-metadata";
 import { findPeak, resolveScale } from "./utils/peak";
 
-export const schema = z.object({
+const schema = z.object({
 	ceiling: z.number().min(0).max(1).multipleOf(0.01).default(1.0).describe("Ceiling"),
 });
 

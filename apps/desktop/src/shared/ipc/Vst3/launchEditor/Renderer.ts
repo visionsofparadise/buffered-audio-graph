@@ -6,7 +6,7 @@ export interface Vst3LaunchEditorInput {
 	presetPath?: string;
 }
 
-export interface Vst3LaunchEditorResult {
+interface Vst3LaunchEditorResult {
 	launchId: string;
 	presetPath: string;
 }

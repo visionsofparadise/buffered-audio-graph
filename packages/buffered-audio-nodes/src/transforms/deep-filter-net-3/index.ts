@@ -16,7 +16,7 @@ import { createDfnState, DFN3_HOP_SIZE, DFN3_SAMPLE_RATE, processDfnBlock, type 
 
 const DFN3_BUFFER_SIZE = 100 * DFN3_HOP_SIZE;
 
-export const schema = z.object({
+const schema = z.object({
 	modelPath: z
 		.string()
 		.default("")

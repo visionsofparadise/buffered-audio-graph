@@ -8,7 +8,7 @@ import {
 import { PACKAGE_NAME } from "../../package-metadata";
 import { CHUNK_FRAMES, silenceChunkSizes } from "./utils/chunk-frames";
 
-export const schema = z.object({
+const schema = z.object({
 	before: z.number().min(0).max(300).multipleOf(0.001).default(0).describe("Before"),
 	after: z.number().min(0).max(300).multipleOf(0.001).default(0).describe("After"),
 });
