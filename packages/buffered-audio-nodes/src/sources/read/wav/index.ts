@@ -1,3 +1,4 @@
+import { open, type FileHandle } from "node:fs/promises";
 import {
 	BufferedSourceStream,
 	SourceNode,
@@ -5,7 +6,6 @@ import {
 	type SourceMetadata,
 	type SourceNodeProperties,
 } from "@buffered-audio/core";
-import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../../package-metadata";
 import { DEFAULT_CHUNK_SIZE, parseWavFormat, readSample, type WavFormat } from "./utils/wav-format";

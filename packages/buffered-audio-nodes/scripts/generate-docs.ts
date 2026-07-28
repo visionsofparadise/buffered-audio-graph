@@ -1,9 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { glob } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { glob } from "node:fs/promises";
-import type { z } from "zod";
 import { zodToRows, type Row } from "./zod-rows";
+import type { z } from "zod";
 
 interface NodeClass {
 	readonly nodeName: string;
@@ -27,7 +27,9 @@ function isNodeClass(value: unknown): value is NodeClass {
 	const candidate = value as { nodeName?: unknown; description?: unknown; schema?: unknown };
 
 	if (typeof candidate.nodeName !== "string" || candidate.nodeName === "") return false;
+
 	if (typeof candidate.description !== "string") return false;
+
 	if (candidate.schema === undefined || candidate.schema === null) return false;
 
 	return true;
@@ -40,10 +42,15 @@ async function discoverNodes(): Promise<Array<DiscoveredNode>> {
 		const normalized = entry.split("\\").join("/");
 
 		if (normalized === "index.ts") continue;
+
 		if (normalized.endsWith(".d.ts")) continue;
+
 		if (normalized.endsWith(".test.ts")) continue;
+
 		if (normalized.endsWith(".unit.test.ts")) continue;
+
 		if (normalized.endsWith(".integration.test.ts")) continue;
+
 		if (normalized.endsWith(".spec.ts")) continue;
 
 		paths.push(resolve(SRC_ROOT, entry));
@@ -59,6 +66,7 @@ async function discoverNodes(): Promise<Array<DiscoveredNode>> {
 
 		for (const value of Object.values(mod)) {
 			if (!isNodeClass(value)) continue;
+
 			if (seen.has(value)) continue;
 
 			seen.add(value);
@@ -116,6 +124,7 @@ function replaceNodesSection(readme: string, generatedBlock: string): string {
 
 		if (line?.startsWith("## ")) {
 			nextHeadingIndex = index;
+
 			break;
 		}
 	}

@@ -75,6 +75,7 @@ export function startProcessLivenessMonitor(
 		}
 
 		if (hasStopped()) return;
+
 		if (previousCpuMs === undefined) {
 			previousCpuMs = sample.cpuMs;
 
@@ -111,6 +112,7 @@ export function startProcessLivenessMonitor(
 	return async () => {
 		stopped = true;
 		clearInterval(intervalHandle);
+
 		const currentTick = inFlightTick;
 
 		if (currentTick === undefined) return;

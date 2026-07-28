@@ -1,4 +1,3 @@
-import type { BlockBuffer } from "@buffered-audio/core";
 import {
 	AmplitudeHistogramAccumulator,
 	LoudnessAccumulator,
@@ -10,6 +9,7 @@ import {
 	linearToDb,
 } from "@buffered-audio/utils";
 import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./constants";
+import type { BlockBuffer } from "@buffered-audio/core";
 
 const HISTOGRAM_BUCKETS = 1024;
 
@@ -99,6 +99,7 @@ export class SourceMeasurementAccumulator {
 
 			if (channel === undefined || upsampler === undefined) {
 				upChannels.push(new Float32Array(frames * OVERSAMPLE_FACTOR));
+
 				continue;
 			}
 
@@ -291,6 +292,7 @@ function computeLimitAutoDb(
 
 		if (cumulative >= targetCount) {
 			limitBucket = bucketIndex;
+
 			break;
 		}
 	}

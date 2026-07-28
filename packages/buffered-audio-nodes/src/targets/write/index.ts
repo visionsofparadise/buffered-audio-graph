@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { open, type FileHandle } from "node:fs/promises";
-import { z } from "zod";
 import {
 	BufferedTargetStream,
 	TargetNode,
@@ -8,6 +7,7 @@ import {
 	type StreamSetupContext,
 	type TargetNodeProperties,
 } from "@buffered-audio/core";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { waitForDrain } from "../../utils/ffmpeg";
 import { getBytesPerSample, writeSample, buildWavHeader, buildRf64Header } from "./utils/wav";
@@ -105,6 +105,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 	private async initialize(chunk: Block): Promise<void> {
 		if (this.initialized) return;
+
 		this.initialized = true;
 
 		this.sampleRate = chunk.sampleRate;
@@ -230,9 +231,11 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		switch (encoding.format) {
 			case "flac":
 				args.push("-codec:a", "flac");
+
 				break;
 			case "mp3":
 				args.push("-codec:a", "libmp3lame");
+
 				if (encoding.vbr !== undefined) {
 					args.push("-q:a", String(encoding.vbr));
 				} else {
@@ -242,6 +245,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 				break;
 			case "aac":
 				args.push("-codec:a", "aac", "-b:a", `${encoding.bitrate ?? 192}k`);
+
 				break;
 		}
 

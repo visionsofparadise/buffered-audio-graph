@@ -1,5 +1,5 @@
-import type { BlockBuffer } from "@buffered-audio/core";
 import { BLOCK_SHIFT, type DtlnBlockStream, WARMUP_SHIFTS } from "./dtln";
+import type { BlockBuffer } from "@buffered-audio/core";
 
 export const DTLN_SAMPLE_RATE = 16000;
 export const CHUNK_FRAMES = 16000;
@@ -24,6 +24,7 @@ export function stepAllChannels(args: {
 
 		if (!stream || !input) {
 			stepOutputs.push(new Float32Array(BLOCK_SHIFT));
+
 			continue;
 		}
 
@@ -74,6 +75,7 @@ export function appendToStepBatch(args: {
 			const dest = stepBatch[channel];
 
 			if (!sourceChannel || !dest) continue;
+
 			dest.set(sourceChannel.subarray(offset, offset + copy), batchLen);
 		}
 

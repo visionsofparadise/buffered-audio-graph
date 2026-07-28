@@ -1,5 +1,5 @@
-import type { StreamContext, StreamSetupContext } from "@buffered-audio/core";
 import { ffmpeg, FfmpegStream } from "../transforms/ffmpeg";
+import type { StreamContext, StreamSetupContext } from "@buffered-audio/core";
 
 export function createResampleComposition(options: {
 	context: StreamSetupContext;

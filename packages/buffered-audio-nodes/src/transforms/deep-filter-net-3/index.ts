@@ -11,8 +11,8 @@ import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { createResampleComposition } from "../../utils/resample-composition";
-import type { FfmpegStream } from "../ffmpeg";
 import { createDfnState, DFN3_HOP_SIZE, DFN3_SAMPLE_RATE, processDfnBlock, type DfnState } from "./utils/dfn";
+import type { FfmpegStream } from "../ffmpeg";
 
 const DFN3_BUFFER_SIZE = 100 * DFN3_HOP_SIZE;
 
@@ -107,6 +107,7 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 		if (frames === 0 || channels === 0) return;
 
 		await buffered.reset();
+
 		const chunk = await buffered.read(frames);
 
 		while (this.dfnStates.length < channels) {

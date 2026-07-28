@@ -79,7 +79,9 @@ export function notAnomalous(samples: Array<Float32Array>): ValidationResult {
 			}
 
 			if (sample === 0) zeroCount++;
+
 			if (Math.abs(sample) >= 1.0) clipCount++;
+
 			totalSamples++;
 		}
 	}

@@ -8,6 +8,7 @@ export function buildTriangularWeight(segmentSamples: number, transitionPower: n
 	const half = segmentSamples / 2;
 
 	for (let index = 0; index < half; index++) weight[index] = Math.pow((index + 1) / half, transitionPower);
+
 	for (let index = 0; index < half; index++) weight[segmentSamples - 1 - index] = weight[index] ?? 0;
 
 	return weight;

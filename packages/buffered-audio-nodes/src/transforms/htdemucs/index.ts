@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
 	BufferedTransformStream,
 	BlockBuffer,
@@ -11,12 +10,13 @@ import {
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
 import { bandpass } from "@buffered-audio/utils";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { createResampleComposition } from "../../utils/resample-composition";
-import type { FfmpegStream } from "../ffmpeg";
 import { buildTriangularWeight, computeStftScaled, reflectPad } from "./utils/dsp";
 import { buildModelInput, extractStems, mixStemsToStereo, type StftWorkspace } from "./utils/stems";
+import type { FfmpegStream } from "../ffmpeg";
 
 export interface StemGains {
 	readonly vocals: number;
@@ -197,6 +197,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 		const stemAccum: Array<Float32Array> = [];
 
 		for (let stem = 0; stem < STEM_OUTPUTS; stem++) stemAccum.push(new Float32Array(SEGMENT_SAMPLES));
+
 		const sumWeight = new Float32Array(SEGMENT_SAMPLES);
 
 		const { stems } = this.properties;
@@ -215,6 +216,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 
 					if (got === undefined || got[0].length === 0) {
 						inputExhausted = true;
+
 						break;
 					}
 
@@ -260,6 +262,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 			const xOut = result.output ?? result[Object.keys(result)[0] ?? ""];
 
 			extractStems(xtOut, xOut, workspace, stemAccum, weight, 0, chunkLength, SEGMENT_SAMPLES);
+
 			for (let index = 0; index < chunkLength; index++) {
 				sumWeight[index] = (sumWeight[index] ?? 0) + (weight[index] ?? 0);
 			}
@@ -346,6 +349,7 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 			const stemAccumulator = stemAccum[stem];
 
 			if (!stemAccumulator) continue;
+
 			stemAccumulator.copyWithin(0, nStable, SEGMENT_SAMPLES);
 			stemAccumulator.fill(0, SEGMENT_SAMPLES - nStable, SEGMENT_SAMPLES);
 		}
@@ -375,11 +379,13 @@ async function computeStreamingStats(
 
 		if (left) {
 			for (let index = 0; index < frames; index++) sum += left[index] ?? 0;
+
 			count += frames;
 		}
 
 		if (right) {
 			for (let index = 0; index < frames; index++) sum += right[index] ?? 0;
+
 			count += frames;
 		}
 

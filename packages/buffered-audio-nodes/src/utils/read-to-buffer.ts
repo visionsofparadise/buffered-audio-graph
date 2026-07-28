@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
-import type * as Wavefile from "wavefile";
-import wavefileExports from "wavefile/dist/wavefile";
 import { BlockBuffer, type SourceMetadata } from "@buffered-audio/core";
+import wavefileExports from "wavefile/dist/wavefile";
+import type * as Wavefile from "wavefile";
 
 const { WaveFile } = wavefileExports as typeof Wavefile;
 

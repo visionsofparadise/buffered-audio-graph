@@ -1,5 +1,5 @@
-import type * as Wavefile from "wavefile";
 import wavefileExports from "wavefile/dist/wavefile";
+import type * as Wavefile from "wavefile";
 
 const { WaveFile } = wavefileExports as typeof Wavefile;
 

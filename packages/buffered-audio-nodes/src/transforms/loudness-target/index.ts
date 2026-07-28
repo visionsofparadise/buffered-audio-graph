@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
 	BufferedTransformStream,
 	BlockBuffer,
@@ -8,6 +7,7 @@ import {
 	type Block,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { applyBaseRateChunk } from "./utils/apply";
 import { windowSamplesFromMs } from "./utils/envelope";

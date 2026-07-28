@@ -2,6 +2,7 @@ import type { OnnxSession } from "../../../utils/onnx-runtime";
 
 export const DFN3_SAMPLE_RATE = 48000;
 export const DFN3_HOP_SIZE = 480;
+
 const DFN3_STATE_SIZE = 45304;
 
 export interface DfnState {

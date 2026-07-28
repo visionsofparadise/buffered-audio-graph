@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
 	BufferedTransformStream,
 	type BlockBuffer,
@@ -10,6 +9,7 @@ import {
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
 import { initFftBackend, linearToDb, type FftBackend } from "@buffered-audio/utils";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { LATTICE_ORDER } from "./utils/lattice";
 import { isPowerOfTwo } from "./utils/power-of-two";

@@ -7,9 +7,9 @@ import {
 	linearToDb,
 } from "@buffered-audio/utils";
 import { applyBaseRateChunk } from "./apply";
+import { CHUNK_FRAMES } from "./constants";
 import { type Anchors, gainDbAt } from "./curve";
 import { applyBackwardPassOverChunkBuffer, windowSamplesFromMs } from "./envelope";
-import { CHUNK_FRAMES } from "./constants";
 import { buildBaseRateDetectionCache } from "./source-caches";
 
 export const BOOST_LOWER_BOUND = -30;
@@ -266,6 +266,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				winnerOutputLra = measured.outputLra;
 				winnerLufsErr = lufsErr;
 				winnerPeakErr = peakErr;
+
 				const previousActive = activeRef;
 
 				activeRef = winningRef;
@@ -321,6 +322,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 		await forwardEnvelopeBuffer.close();
 		await minHeldEnvelopeBuffer.close();
+
 		if (!winningPopulated) {
 			await activeBufferA.close();
 			await activeBufferB.close();
@@ -380,6 +382,7 @@ async function streamCurveAndForwardIir(args: StreamCurveAndForwardIirArgs): Pro
 		}
 
 		consumedFrames += chunkLength;
+
 		const isFinal = consumedFrames >= totalFrames;
 		const minHeldChunk = minStream.push(gWindowChunk, isFinal);
 
@@ -431,6 +434,7 @@ async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<MeasureAt
 
 	await source.reset();
 	await gSmoothed.reset();
+
 	const totalFrames = source.frames;
 	let framesDone = 0;
 
@@ -515,7 +519,9 @@ function computeBoostStep(attempts: ReadonlyArray<IterationAttempt>, previousSte
 
 function clampBoost(boost: number): number {
 	if (!Number.isFinite(boost)) return 0;
+
 	if (boost < BOOST_LOWER_BOUND) return BOOST_LOWER_BOUND;
+
 	if (boost > BOOST_UPPER_BOUND) return BOOST_UPPER_BOUND;
 
 	return boost;
@@ -527,7 +533,9 @@ export function clampLimit(limitDb: number, pivotDb: number, sourcePeakDb: numbe
 	const lower = pivotDb + LIMIT_EPSILON_DB;
 
 	if (lower > sourcePeakDb) return sourcePeakDb;
+
 	if (limitDb < lower) return lower;
+
 	if (limitDb > sourcePeakDb) return sourcePeakDb;
 
 	return limitDb;

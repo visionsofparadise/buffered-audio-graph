@@ -1,10 +1,10 @@
-import { z } from "zod";
 import {
 	UnbufferedTransformStream,
 	TransformNode,
 	type Block,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 
 const schema = z.object({

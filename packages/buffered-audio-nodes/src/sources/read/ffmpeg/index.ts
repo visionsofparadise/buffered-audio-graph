@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { z } from "zod";
 import {
 	BufferedSourceStream,
 	SourceNode,
@@ -8,6 +7,7 @@ import {
 	type SourceNodeProperties,
 } from "@buffered-audio/core";
 import { deinterleaveBuffer } from "@buffered-audio/utils";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../../package-metadata";
 
 export const ffmpegSchema = z.object({

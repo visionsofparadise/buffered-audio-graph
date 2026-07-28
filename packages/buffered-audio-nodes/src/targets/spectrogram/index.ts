@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
+import { open, type FileHandle } from "node:fs/promises";
 import {
 	BufferedTargetStream,
 	TargetNode,
@@ -13,7 +14,6 @@ import {
 	hanningWindow,
 	type FftWorkspace,
 } from "@buffered-audio/utils";
-import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { computeSpectrogramFrames } from "./utils/frames";
@@ -100,6 +100,7 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 
 	private async initialize(chunk: Block): Promise<void> {
 		if (this.initialized) return;
+
 		this.initialized = true;
 
 		this.channels = chunk.samples.length;
@@ -125,6 +126,7 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 		}
 
 		this.sampleBuffers = [];
+
 		for (let channel = 0; channel < this.channels; channel++) {
 			this.sampleBuffers.push(new Float32Array(this.sampleBufferCapacity));
 		}

@@ -1,5 +1,4 @@
 import { open, type FileHandle } from "node:fs/promises";
-import { z } from "zod";
 import {
 	BufferedTargetStream,
 	TargetNode,
@@ -7,6 +6,7 @@ import {
 	type StreamSetupContext,
 	type TargetNodeProperties,
 } from "@buffered-audio/core";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { updateMinMax, writeMinMaxPoint } from "./utils/minmax";
 

@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { BufferedTransformStream, type Block, type BlockBuffer, TransformNode, WHOLE_FILE } from "@buffered-audio/core";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 
 const CHUNK_FRAMES = 44100;

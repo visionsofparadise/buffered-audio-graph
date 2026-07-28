@@ -3,6 +3,7 @@ import path from "node:path";
 
 export interface OnnxSession {
 	run(inputs: Record<string, OnnxTensor>): Record<string, OnnxTensor>;
+
 	dispose(): void;
 }
 
@@ -21,9 +22,13 @@ interface OnnxAddon {
 
 interface OnnxAddonSession {
 	run(inputs: Record<string, OnnxTensor>): Record<string, OnnxTensor>;
+
 	dispose(): void;
+
 	inputNames(): Array<string>;
+
 	outputNames(): Array<string>;
+
 	getProvider?(): string;
 }
 

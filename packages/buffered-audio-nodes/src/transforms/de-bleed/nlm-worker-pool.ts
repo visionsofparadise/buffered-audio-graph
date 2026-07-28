@@ -8,6 +8,7 @@ import { applyNlmSmoothingRange, type NlmParams } from "@buffered-audio/utils";
 export interface NlmWorkerPool {
 	readonly mode: "worker" | "in-thread";
 	run(mask: Float32Array, output: Float32Array, numFrames: number, numBins: number, options: NlmParams): Promise<void>;
+
 	close(): Promise<void>;
 }
 

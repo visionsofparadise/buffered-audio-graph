@@ -58,6 +58,7 @@ export function mixStemsToStereo(
 			const arrR = stemAccum[stem * 2 + 1];
 
 			if (arrL) mixedL += (sw === 0 ? 0 : (arrL[index] ?? 0) / sw) * gain;
+
 			if (arrR) mixedR += (sw === 0 ? 0 : (arrR[index] ?? 0) / sw) * gain;
 		}
 

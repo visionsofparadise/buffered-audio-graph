@@ -53,6 +53,7 @@ export async function buildBaseRateDetectionCache(args: BuildBaseRateDetectionCa
 
 			if (channel === undefined || upsampler === undefined) {
 				upChannels.push(new Float32Array(upChunkLength));
+
 				continue;
 			}
 

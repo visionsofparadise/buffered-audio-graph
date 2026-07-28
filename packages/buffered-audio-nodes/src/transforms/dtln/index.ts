@@ -15,7 +15,6 @@ import { PACKAGE_NAME } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { createResampleComposition } from "../../utils/resample-composition";
-import type { FfmpegStream } from "../ffmpeg";
 import { BLOCK_LEN, BLOCK_SHIFT, DtlnBlockStream } from "./utils/dtln";
 import {
 	appendToStepBatch,
@@ -28,6 +27,7 @@ import {
 	stepAllChannels,
 	WARMUP_SAMPLES,
 } from "./utils/pump";
+import type { FfmpegStream } from "../ffmpeg";
 
 const schema = z.object({
 	modelPath1: z
@@ -203,11 +203,13 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 		const stepAccum: Array<Float32Array> = [];
 
 		for (let channel = 0; channel < channels; channel++) stepAccum.push(new Float32Array(BLOCK_SHIFT));
+
 		let stepAccumLen = 0;
 
 		const stepBatch: Array<Float32Array> = [];
 
 		for (let channel = 0; channel < channels; channel++) stepBatch.push(new Float32Array(STEP_BATCH_SIZE));
+
 		let stepBatchLen = 0;
 
 		let samplesFed = 0;
@@ -239,6 +241,7 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 					const dest = stepAccum[channel];
 
 					if (!sourceChannel || !dest) continue;
+
 					dest.set(sourceChannel.subarray(consumed, consumed + take), stepAccumLen);
 				}
 

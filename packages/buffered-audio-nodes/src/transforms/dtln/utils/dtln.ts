@@ -187,14 +187,17 @@ export function processDtlnFrames(
 
 	for (const out of stepOutputs) {
 		if (writeIdx >= needed) break;
+
 		if (skip >= out.length) {
 			skip -= out.length;
+
 			continue;
 		}
 
 		const start = skip;
 
 		skip = 0;
+
 		const take = Math.min(out.length - start, needed - writeIdx);
 
 		output.set(out.subarray(start, start + take), writeIdx);

@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
 	BufferedTransformStream,
 	type BlockBuffer,
@@ -7,6 +6,7 @@ import {
 	type Block,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { computeTrimRegion, findFirstAbove, findLastAbove } from "./utils/silence";
 
@@ -38,6 +38,7 @@ export class TrimStream extends BufferedTransformStream<TrimNode> {
 			const abs = this.scanOffset + localFirst;
 
 			if (abs < this.firstAbove) this.firstAbove = abs;
+
 			this.lastAbove = Math.max(
 				this.lastAbove,
 				this.scanOffset + findLastAbove(block.samples, chunkFrames, threshold),

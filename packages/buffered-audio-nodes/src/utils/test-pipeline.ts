@@ -2,10 +2,10 @@ import { randomBytes } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SourceMetadata, TransformNode } from "@buffered-audio/core";
 import { read } from "../sources/read";
 import { write, type WavBitDepth } from "../targets/write";
 import { readToBuffer } from "./read-to-buffer";
+import type { SourceMetadata, TransformNode } from "@buffered-audio/core";
 
 export interface TransformTestResult {
 	readonly input: Array<Float32Array>;

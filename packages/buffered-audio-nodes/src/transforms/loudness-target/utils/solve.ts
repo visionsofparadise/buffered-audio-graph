@@ -1,6 +1,6 @@
-import type { DetectionHistogram } from "./measurement";
 import { type Anchors, gainDbAt } from "./curve";
 import { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND } from "./iterate";
+import type { DetectionHistogram } from "./measurement";
 
 export { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND };
 
@@ -11,6 +11,7 @@ export function predictOutputLufs(sourceLufs: number, anchors: Anchors, histogra
 	const bucketCount = buckets.length;
 
 	if (bucketCount === 0 || bucketMax <= 0 || totalSamples === 0) return -Infinity;
+
 	if (!Number.isFinite(sourceLufs)) return -Infinity;
 
 	const bucketWidth = bucketMax / bucketCount;
@@ -110,6 +111,7 @@ export function predictInitialB(args: PredictInitialBArgs): number {
 
 		if (Math.abs(midErr) < tolerance) {
 			bestB = mid;
+
 			break;
 		}
 

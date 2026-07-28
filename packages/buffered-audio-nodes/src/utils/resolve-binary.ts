@@ -1,5 +1,5 @@
-import { access, constants } from "node:fs/promises";
 import { execFile } from "node:child_process";
+import { access, constants } from "node:fs/promises";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);

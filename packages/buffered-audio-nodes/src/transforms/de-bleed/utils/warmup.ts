@@ -22,11 +22,13 @@ export function validateTransferSeed(transfer: TransferFunction): SeedValidation
 
 		if (Number.isNaN(hReBin) || Number.isNaN(hImBin)) {
 			nanCount++;
+
 			continue;
 		}
 
 		if (!Number.isFinite(hReBin) || !Number.isFinite(hImBin)) {
 			nonFiniteCount++;
+
 			continue;
 		}
 
@@ -36,6 +38,7 @@ export function validateTransferSeed(transfer: TransferFunction): SeedValidation
 
 		if ((reAbs > 0 && reAbs < minNormal) || (imAbs > 0 && imAbs < minNormal)) {
 			nonFiniteCount++;
+
 			continue;
 		}
 
@@ -45,6 +48,7 @@ export function validateTransferSeed(transfer: TransferFunction): SeedValidation
 	}
 
 	if (nanCount > 0) return { degenerate: true, reason: `NaN in ${nanCount} bin(s)` };
+
 	if (nonFiniteCount > 0) return { degenerate: true, reason: `Inf/denormal in ${nonFiniteCount} bin(s)` };
 
 	if (maxMag === 0) return { degenerate: true, reason: "all-zero seed" };

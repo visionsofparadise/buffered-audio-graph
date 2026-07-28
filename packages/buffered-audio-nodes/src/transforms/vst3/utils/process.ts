@@ -2,9 +2,9 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { BlockBuffer } from "@buffered-audio/core";
 import { deinterleaveBuffer, interleave } from "@buffered-audio/utils";
 import { waitForDrain } from "../../../utils/ffmpeg";
+import type { BlockBuffer } from "@buffered-audio/core";
 
 const CHUNK_FRAMES = 48000;
 
@@ -268,6 +268,7 @@ export async function processStreamingThroughVstHost(
 		if (stdoutError !== undefined) return;
 
 		outputBytesReceived += chunk.length;
+
 		const combined = stdoutTail.length === 0 ? chunk : Buffer.concat([stdoutTail, chunk]);
 		const alignedFrames = Math.floor(combined.length / bytesPerFrame);
 		const alignedBytes = alignedFrames * bytesPerFrame;
@@ -304,6 +305,7 @@ export async function processStreamingThroughVstHost(
 
 	await stdoutEnd;
 	await writeChain;
+
 	const exit = await exited;
 
 	if (stdoutError !== undefined) throw stdoutError;

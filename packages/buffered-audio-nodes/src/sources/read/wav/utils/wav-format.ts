@@ -15,10 +15,12 @@ export interface WavFormat {
 export function readSample(data: Buffer, offset: number, bitsPerSample: number, audioFormat: number): number {
 	if (audioFormat === 3) {
 		if (bitsPerSample === 32) return data.readFloatLE(offset);
+
 		if (bitsPerSample === 64) return data.readDoubleLE(offset);
 	}
 
 	if (bitsPerSample === 16) return data.readInt16LE(offset) / 0x8000;
+
 	if (bitsPerSample === 24) {
 		const byte0 = data[offset] ?? 0;
 		const byte1 = data[offset + 1] ?? 0;
@@ -29,6 +31,7 @@ export function readSample(data: Buffer, offset: number, bitsPerSample: number, 
 	}
 
 	if (bitsPerSample === 32) return data.readInt32LE(offset) / 0x80000000;
+
 	if (bitsPerSample === 8) return ((data[offset] ?? 128) - 128) / 128;
 
 	return 0;
@@ -58,6 +61,7 @@ export async function parseWavFormat(fh: FileHandle, path: string): Promise<WavF
 
 	while (offset < fileSize) {
 		await fh.read(chunkHeader, 0, 8, offset);
+
 		const chunkId = chunkHeader.toString("ascii", 0, 4);
 		const chunkSize = chunkHeader.readUInt32LE(4);
 
@@ -68,6 +72,7 @@ export async function parseWavFormat(fh: FileHandle, path: string): Promise<WavF
 			ds64DataSize = Number(ds64Data.readBigUInt64LE(8));
 		} else if (chunkId === "fmt ") {
 			if (chunkSize < 16) throw new Error("WAV fmt chunk too small");
+
 			const fmtData = Buffer.alloc(chunkSize);
 
 			await fh.read(fmtData, 0, chunkSize, offset + 8);
@@ -81,13 +86,16 @@ export async function parseWavFormat(fh: FileHandle, path: string): Promise<WavF
 			format = { sampleRate, channels, bitsPerSample, audioFormat, blockAlign, dataOffset: 0, dataSize: 0 };
 		} else if (chunkId === "data") {
 			if (!format) throw new Error("WAV file has data chunk before fmt chunk");
+
 			const dataSize = isRf64 && ds64DataSize !== undefined ? ds64DataSize : chunkSize;
 
 			format = { ...format, dataOffset: offset + 8, dataSize };
+
 			break;
 		}
 
 		offset += 8 + chunkSize;
+
 		if (chunkSize % 2 !== 0) offset++;
 	}
 

@@ -1,5 +1,4 @@
 import { open, type FileHandle } from "node:fs/promises";
-import { z } from "zod";
 import {
 	BufferedTargetStream,
 	TargetNode,
@@ -8,6 +7,7 @@ import {
 	type TargetNodeProperties,
 } from "@buffered-audio/core";
 import { AmplitudeHistogramAccumulator, LoudnessAccumulator, TruePeakAccumulator } from "@buffered-audio/utils";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { amplitudePercentile, computeTotalSamples } from "./utils/stats";
 
@@ -61,6 +61,7 @@ export class LoudnessStatsStream extends BufferedTargetStream<LoudnessStatsNode>
 
 	private ensureInit(chunk: Block): void {
 		if (this.statsInitialized) return;
+
 		this.statsInitialized = true;
 		this.channels = chunk.samples.length;
 		this.sampleRate = chunk.sampleRate;

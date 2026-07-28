@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight DSP loops with bounds-checked typed array access */
-import { z } from "zod";
 import {
 	BufferedTransformStream,
 	BlockBuffer,
@@ -20,8 +19,10 @@ import {
 	type StftOutput,
 	type StftResult,
 } from "@buffered-audio/utils";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { readToBuffer } from "../../utils/read-to-buffer";
+import { createNlmWorkerPool, type NlmWorkerPool } from "./nlm-worker-pool";
 import {
 	accumulateTransferChunk,
 	createTransferAccumulator,
@@ -29,6 +30,7 @@ import {
 	findMaxRefPower,
 	type TransferFunction,
 } from "./utils/cross-spectral";
+import { computeChunkWindow, computeProcessGeometry, computeWriteClip } from "./utils/geometry";
 import {
 	adaptationSpeedToMarkovForgetting,
 	createKalmanState,
@@ -36,15 +38,6 @@ import {
 	type KalmanParams,
 	type KalmanState,
 } from "./utils/mef-kalman";
-import {
-	computeMwfMask,
-	createInterfererPsdState,
-	reductionStrengthToOversubtraction,
-	updateInterfererPsd,
-	updatePrevOutputPsd,
-	type InterfererPsdState,
-	type MwfParams,
-} from "./utils/mef-mwf";
 import {
 	applyIspRestoration,
 	computeMsadDecision,
@@ -54,10 +47,17 @@ import {
 	type IspState,
 	type MsadChannelState,
 } from "./utils/mef-msad";
+import {
+	computeMwfMask,
+	createInterfererPsdState,
+	reductionStrengthToOversubtraction,
+	updateInterfererPsd,
+	updatePrevOutputPsd,
+	type InterfererPsdState,
+	type MwfParams,
+} from "./utils/mef-mwf";
 import { coldStartSeed, validateTransferSeed } from "./utils/warmup";
 import { WindowReader } from "./utils/window-reader";
-import { computeChunkWindow, computeProcessGeometry, computeWriteClip } from "./utils/geometry";
-import { createNlmWorkerPool, type NlmWorkerPool } from "./nlm-worker-pool";
 
 const schema = z.object({
 	references: z.array(z.string()).default([]).describe("References"),
@@ -275,6 +275,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		);
 
 		await buffer.reset();
+
 		for (let channelIndex = 0; channelIndex < channels; channelIndex++) targetPaddeds[channelIndex]!.fill(0);
 
 		const targetSamples = warmupFrames * hopSize + (fftSize - hopSize);
@@ -433,6 +434,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		this.log("warm-up seed complete", { warmupSeconds: WARMUP_SECONDS });
 
 		await buffered.reset();
+
 		for (const refBuffer of referenceBuffers) await refBuffer.reset();
 
 		const kalmanStatesByCh: Array<Array<KalmanState>> = seedsByChannel.map((seeds) =>
@@ -469,6 +471,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		const refReaders: Array<WindowReader> = referenceBuffers.map(() => new WindowReader(1, windowSamples));
 
 		await targetReader.preload(buffered, edgePadSamples);
+
 		for (let refIndex = 0; refIndex < refCount; refIndex++) {
 			await refReaders[refIndex]!.preload(referenceBuffers[refIndex]!, edgePadSamples);
 		}
@@ -506,6 +509,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 						const _tadvance = _profStart();
 
 						await targetReader.advance(buffered, stepSamples);
+
 						for (let refIndex = 0; refIndex < refCount; refIndex++) {
 							await refReaders[refIndex]!.advance(referenceBuffers[refIndex]!, stepSamples);
 						}

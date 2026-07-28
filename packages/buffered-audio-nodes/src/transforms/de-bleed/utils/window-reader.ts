@@ -12,6 +12,7 @@ export class WindowReader {
 		this.channels = channels;
 		this.windowSamples = windowSamples;
 		this.scratch = [];
+
 		for (let channelIndex = 0; channelIndex < channels; channelIndex++)
 			this.scratch.push(new Float32Array(windowSamples));
 	}
@@ -43,6 +44,7 @@ export class WindowReader {
 			const view = this.scratch[channelIndex]!;
 
 			if (keep > 0) view.copyWithin(0, step, this.windowSamples);
+
 			view.fill(0, keep, this.windowSamples);
 		}
 

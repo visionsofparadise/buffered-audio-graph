@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
 	BufferedTransformStream,
 	BlockBuffer,
@@ -11,12 +10,13 @@ import {
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
 import { bandpass, MixedRadixFft } from "@buffered-audio/utils";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { createResampleComposition } from "../../utils/resample-composition";
-import type { FfmpegStream } from "../ffmpeg";
 import { buildTransitionWindow, createSegmentWorkspace, processSegment } from "./utils/segment";
+import type { FfmpegStream } from "../ffmpeg";
 
 const schema = z.object({
 	modelPath: z
@@ -171,6 +171,7 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 
 					if (got === undefined || got[0].length === 0) {
 						inputExhausted = true;
+
 						break;
 					}
 

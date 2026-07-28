@@ -163,6 +163,7 @@ function primitiveTypeLabel(unwrapped: Unwrapped): string {
 	}
 
 	if (def.type === "string") return "string";
+
 	if (def.type === "boolean") return "boolean";
 
 	if (def.type === "enum") {
@@ -257,8 +258,11 @@ function renderDescription(unwrapped: Unwrapped): string {
 
 function stringifyDefault(value: unknown): string {
 	if (typeof value === "string") return JSON.stringify(value);
+
 	if (typeof value === "object") return JSON.stringify(value);
+
 	if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+
 	if (value === undefined) return "undefined";
 
 	return JSON.stringify(value);

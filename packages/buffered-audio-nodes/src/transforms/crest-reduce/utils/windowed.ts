@@ -1,4 +1,3 @@
-import type { BlockBuffer } from "@buffered-audio/core";
 import { TruePeakUpsampler, linearToDb, stft, type FftBackend } from "@buffered-audio/utils";
 import { isBindingPeak } from "./binding";
 import { designDispersionAllpass, schroederTargetToDelay } from "./dispersion";
@@ -6,6 +5,7 @@ import { LATTICE_ORDER, peakPriorityAmount, stepDownToReflection } from "./latti
 import { measureFrameTruePeakDb } from "./objective";
 import { searchBindingPeak } from "./search";
 import type { ControlTrajectory } from "./trajectory";
+import type { BlockBuffer } from "@buffered-audio/core";
 
 const WALK_CHUNK_FRAMES = 1 << 16;
 
@@ -194,6 +194,7 @@ export async function streamLatticeTrajectory(
 				const value = chunk.samples[channel]?.[index] ?? 0;
 
 				sample = Math.fround(sample + value);
+
 				const channelRing = channelRings[channel];
 
 				if (channelRing) channelRing[ringPos] = value;
@@ -290,7 +291,9 @@ export async function streamLatticeTrajectory(
 		const wasReached = baseRows[frame] !== undefined;
 
 		baseRows[frame] ??= new Float32Array(order);
+
 		if (!wasReached) amountEnv[frame] = 0;
+
 		windowPeaks[frame] ??= { peakMagnitude: 0, headroom: 0 };
 
 		if (search && !wasReached) bindingMask[frame] = false;

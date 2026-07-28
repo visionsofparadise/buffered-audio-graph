@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
 	UnbufferedTransformStream,
 	TransformNode,
@@ -6,6 +5,7 @@ import {
 	type StreamSetupContext,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { readWavSamples } from "../../utils/read-to-buffer";
 import { applyInsert, computeInsertOverlap } from "./utils/insert";
@@ -76,6 +76,7 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 				const primaryCh = targetChannels[insertCh];
 
 				if (primaryCh === undefined) continue;
+
 				const channelSamples = samples[primaryCh];
 				const insertChannel = this.insertSamples[insertCh];
 

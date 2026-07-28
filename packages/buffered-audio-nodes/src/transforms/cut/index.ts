@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
 	UnbufferedTransformStream,
 	TransformNode,
@@ -6,6 +5,7 @@ import {
 	type StreamContext,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { computeKeepRanges } from "./utils/regions";
 
@@ -65,6 +65,7 @@ export class CutStream extends UnbufferedTransformStream<CutNode> {
 
 			if (!channel) {
 				output.push(new Float32Array(totalKept));
+
 				continue;
 			}
 

@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
 	BufferedTransformStream,
 	TransformNode,
@@ -8,6 +7,7 @@ import {
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { resolveLoudnessGain } from "./utils/gain";
 

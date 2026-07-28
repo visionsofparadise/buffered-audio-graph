@@ -11,6 +11,7 @@ export function updateMinMax(
 		const currentMax = max[channel];
 
 		if (currentMin !== undefined && sample < currentMin) min[channel] = sample;
+
 		if (currentMax !== undefined && sample > currentMax) max[channel] = sample;
 	}
 }

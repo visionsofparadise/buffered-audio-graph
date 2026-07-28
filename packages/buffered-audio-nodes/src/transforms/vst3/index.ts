@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
 	BufferedTransformStream,
 	createProgressGate,
@@ -10,6 +9,7 @@ import {
 	type StreamSetupContext,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { startProcessLivenessMonitor, type ProcessLivenessOptions } from "../../utils/process-liveness";
 import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
@@ -89,6 +89,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 
 	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
 		if (!this.streamContext) throw new Error("Vst3Stream._transform called before setup()");
+
 		if (!this.stagesJsonPath) throw new Error("Vst3Stream._transform called without a stages JSON file");
 
 		if (buffered.frames === 0) return;

@@ -18,6 +18,7 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 	const totalWork = totalFrames * 2;
 
 	if (totalFrames === 0) return;
+
 	if (chunkSize <= 0) {
 		throw new Error(`applyBackwardPassOverChunkBuffer: chunkSize must be > 0 (got ${chunkSize})`);
 	}

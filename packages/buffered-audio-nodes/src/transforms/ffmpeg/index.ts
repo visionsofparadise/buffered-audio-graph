@@ -1,5 +1,3 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { z } from "zod";
 import {
 	UnbufferedTransformStream,
 	TransformNode,
@@ -8,8 +6,10 @@ import {
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
 import { interleave } from "@buffered-audio/utils";
+import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { appendStderr, buildInputArgs, buildOutputArgs, parseStdoutFrames, spawnFfmpegChild } from "./utils/process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
 const schema = z.object({
 	ffmpegPath: z
