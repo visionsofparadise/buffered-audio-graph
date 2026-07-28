@@ -5,5 +5,5 @@
 **/out/**
 **/build/**
 **/coverage/**
-scratch/
+**/scratch/**
 tmp_*

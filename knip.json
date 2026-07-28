@@ -48,9 +48,5 @@
 			"ignoreDependencies": ["tsx"]
 		}
 	},
-	"ignoreDependencies": [
-		"check-dependency-version-consistency",
-		"textlint-filter-rule-comments",
-		"textlint-rule-no-dead-link"
-	]
+	"ignoreDependencies": ["textlint-filter-rule-comments", "textlint-rule-no-dead-link"]
 }
