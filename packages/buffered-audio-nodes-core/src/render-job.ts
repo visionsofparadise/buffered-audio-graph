@@ -1,12 +1,12 @@
 import { EventEmitter } from "node:events";
 import { BufferedSourceStream, type RenderTiming } from "./node/stream/source";
-import type { SourceNode } from "./node/source";
 import { BufferedTargetStream } from "./node/stream/target";
 import { BufferedTransformStream } from "./node/stream/transform/buffered-transform";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
 import { assertFirstBlockSampleRate } from "./utils/assert-first-block-sample-rate";
 import { teeReadable } from "./utils/tee-readable";
 import type { BufferedAudioNode } from "./node";
+import type { SourceNode } from "./node/source";
 import type { BufferedStream, ExecutionProvider, RenderEvents, StreamContext, StreamSetupContext } from "./node/stream";
 import type { Block } from "./node/stream/block";
 
