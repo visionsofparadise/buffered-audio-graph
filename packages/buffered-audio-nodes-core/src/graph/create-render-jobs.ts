@@ -7,7 +7,11 @@ export interface RenderGraphOptions extends RenderOptions {
 	parameters?: Record<string, string>;
 }
 
-export function createRenderJobs(definition: GraphDefinition, registry: NodeRegistry, options?: RenderGraphOptions): Array<RenderJob> {
+export function createRenderJobs(
+	definition: GraphDefinition,
+	registry: NodeRegistry,
+	options?: RenderGraphOptions,
+): Array<RenderJob> {
 	const substituted = substituteParameters(definition, options?.parameters ?? {});
 	const sources = unpack(substituted, registry);
 

@@ -28,7 +28,7 @@ export async function renderToastState(page: Page): Promise<RenderToastState> {
 export async function isRenderEnabled(page: Page): Promise<boolean> {
 	return page.evaluate((): boolean => {
 		const button = Array.from(document.querySelectorAll("button")).find((candidate) =>
-			(candidate.textContent).includes("Render"),
+			candidate.textContent.includes("Render"),
 		);
 
 		return button instanceof HTMLButtonElement ? !button.disabled : false;
@@ -44,7 +44,9 @@ export async function clickRender(page: Page): Promise<void> {
 }
 
 export async function dismissRenderToast(page: Page): Promise<void> {
-	const dismiss = (await rectOf(page, 'button[aria-label="Dismiss"]')) ?? (await rectOf(page, 'button[aria-label="Cancel render"]'));
+	const dismiss =
+		(await rectOf(page, 'button[aria-label="Dismiss"]')) ??
+		(await rectOf(page, 'button[aria-label="Cancel render"]'));
 
 	if (dismiss) await clickPoint(page, dismiss);
 

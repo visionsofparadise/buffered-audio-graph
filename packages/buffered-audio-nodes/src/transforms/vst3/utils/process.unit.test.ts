@@ -30,7 +30,9 @@ describe("observeVstHostStderr", () => {
 
 		await ended;
 
-		const expected = Buffer.from(diagnostic).subarray(Buffer.byteLength(diagnostic) - DIAGNOSTIC_TAIL_BYTES).toString("utf8");
+		const expected = Buffer.from(diagnostic)
+			.subarray(Buffer.byteLength(diagnostic) - DIAGNOSTIC_TAIL_BYTES)
+			.toString("utf8");
 
 		expect(Buffer.byteLength(getStderrTail())).toBe(DIAGNOSTIC_TAIL_BYTES);
 		expect(getStderrTail()).toBe(expected);

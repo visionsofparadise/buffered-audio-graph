@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type BlockBuffer,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { findPeak, resolveScale } from "./utils/peak";
 

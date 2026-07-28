@@ -33,7 +33,11 @@ function makeSineWithNoise(seed: number, frames: number, amplitude: number, freq
 async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Promise<BlockBuffer> {
 	const buffer = new BlockBuffer();
 
-	await buffer.write(channels.map((c) => new Float32Array(c)), SAMPLE_RATE, 32);
+	await buffer.write(
+		channels.map((c) => new Float32Array(c)),
+		SAMPLE_RATE,
+		32,
+	);
 	await buffer.flushWrites();
 
 	return buffer;
@@ -79,8 +83,8 @@ describe("buildBaseRateDetectionCache", () => {
 		// cache exists.
 		const frames = Math.floor(CHUNK_FRAMES * 2.5);
 		const channels = [
-			makeSineWithNoise(0xABCD_1234, frames, 0.2, 440),
-			makeSineWithNoise(0x1234_ABCD, frames, 0.25, 660),
+			makeSineWithNoise(0xabcd_1234, frames, 0.2, 440),
+			makeSineWithNoise(0x1234_abcd, frames, 0.25, 660),
 		];
 		const buffer = await makeBufferFromChannels(channels);
 		const halfWidth = 50; // base-rate halfWidth, small for fast test
@@ -109,8 +113,8 @@ describe("buildBaseRateDetectionCache", () => {
 	it("detection envelope matches reference: per-chunk 4× upsample → max-of-channels → max-of-4 → base-rate slider", async () => {
 		const frames = Math.floor(CHUNK_FRAMES * 1.3);
 		const channels = [
-			makeSineWithNoise(0xFEED_DEAD, frames, 0.4, 1000),
-			makeSineWithNoise(0x5A5A_A5A5, frames, 0.35, 1500),
+			makeSineWithNoise(0xfeed_dead, frames, 0.4, 1000),
+			makeSineWithNoise(0x5a5a_a5a5, frames, 0.35, 1500),
 		];
 		const buffer = await makeBufferFromChannels(channels);
 		const halfWidth = 50; // base-rate halfWidth
@@ -130,10 +134,7 @@ describe("buildBaseRateDetectionCache", () => {
 			// 4× upsample → max-of-channels at 4× rate → max-of-4
 			// collapse to base rate → push base-rate chunk through
 			// slider.
-			const refOversamplers = [
-				new TruePeakUpsampler(OVERSAMPLE_FACTOR),
-				new TruePeakUpsampler(OVERSAMPLE_FACTOR),
-			];
+			const refOversamplers = [new TruePeakUpsampler(OVERSAMPLE_FACTOR), new TruePeakUpsampler(OVERSAMPLE_FACTOR)];
 			const slidingWindow = new SlidingWindowMaxStream(halfWidth);
 			const refDetection = new Float32Array(frames);
 			let writeOffset = 0;
@@ -416,8 +417,8 @@ describe("buildBaseRateDetectionCache", () => {
 		const frames = 2 * CHUNK_FRAMES; // 88_200 — final push emits CHUNK_FRAMES + halfWidth > CHUNK_FRAMES
 		const halfWidth = 480; // > 0 so the drain overflows CHUNK_FRAMES; matches the anchor render's smoothing
 		const channels = [
-			makeSineWithNoise(0xDEAD_BEEF, frames, 0.42, 750),
-			makeSineWithNoise(0x0FF1_CE00, frames, 0.31, 1230),
+			makeSineWithNoise(0xdead_beef, frames, 0.42, 750),
+			makeSineWithNoise(0x0ff1_ce00, frames, 0.31, 1230),
 		];
 
 		const cacheBuffer = await makeBufferFromChannels(channels);

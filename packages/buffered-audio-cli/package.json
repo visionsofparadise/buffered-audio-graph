@@ -1,46 +1,46 @@
 {
-  "name": "@buffered-audio/cli",
-  "version": "0.2.2",
-  "type": "module",
-  "bin": {
-    "bag": "./dist/cli.js"
-  },
-  "files": [
-    "dist"
-  ],
-  "sideEffects": false,
-  "publishConfig": {
-    "access": "public"
-  },
-  "author": "Matt Cavender",
-  "license": "ISC",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/visionsofparadise/buffered-audio-graph",
-    "directory": "packages/buffered-audio-cli"
-  },
-  "scripts": {
-    "check": "concurrently \"eslint . --fix --cache --format ../../agent-eslint.js\" \"tsc --noEmit --pretty false 2>&1 | node ../../agent-tsc.js\"",
-    "check:verbose": "concurrently \"eslint .\" \"tsc --noEmit\"",
-    "lint": "eslint . --fix --cache --format ../../agent-eslint.js",
-    "lint:verbose": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "build": "tsup",
-    "unit": "vitest run --project unit",
-    "integration": "vitest run --project integration"
-  },
-  "devDependencies": {
-    "@buffered-audio/nodes": "0.24.3",
-    "@types/node": "^25.3.5",
-    "concurrently": "*",
-    "tsup": "^8.0.0",
-    "typescript": "*",
-    "vitest": "^3.0.0"
-  },
-  "dependencies": {
-    "@buffered-audio/core": "0.12.0",
-    "commander": "^14.0.3",
-    "pacote": "^21.5.0",
-    "tsx": "^4.21.0"
-  }
+	"name": "@buffered-audio/cli",
+	"version": "0.2.2",
+	"type": "module",
+	"bin": {
+		"bag": "./dist/cli.js"
+	},
+	"files": [
+		"dist"
+	],
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"author": "Matt Cavender",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/visionsofparadise/buffered-audio-graph",
+		"directory": "packages/buffered-audio-cli"
+	},
+	"scripts": {
+		"check": "concurrently \"eslint . --fix --cache --format ../../agent-eslint.js\" \"tsc --noEmit --pretty false 2>&1 | node ../../agent-tsc.js\"",
+		"check:verbose": "concurrently \"eslint .\" \"tsc --noEmit\"",
+		"lint": "eslint . --fix --cache --format ../../agent-eslint.js",
+		"lint:verbose": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"build": "tsup",
+		"unit": "vitest run --project unit",
+		"integration": "vitest run --project integration"
+	},
+	"devDependencies": {
+		"@buffered-audio/nodes": "0.24.3",
+		"@types/node": "^25.3.5",
+		"concurrently": "*",
+		"tsup": "^8.0.0",
+		"typescript": "*",
+		"vitest": "^3.0.0"
+	},
+	"dependencies": {
+		"@buffered-audio/core": "0.12.0",
+		"commander": "^14.0.3",
+		"pacote": "^21.5.0",
+		"tsx": "^4.21.0"
+	}
 }

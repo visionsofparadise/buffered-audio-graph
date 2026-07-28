@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { preFilterCoefficients, rlbFilterCoefficients } from "./biquad";
 import { KWeightedSquaredSum } from "./k-weighted-squared-sum";
 
-function applyBiquadFloat64(samples: ReadonlyArray<number>, fb: ReadonlyArray<number>, fa: ReadonlyArray<number>): Array<number> {
+function applyBiquadFloat64(
+	samples: ReadonlyArray<number>,
+	fb: ReadonlyArray<number>,
+	fa: ReadonlyArray<number>,
+): Array<number> {
 	const out = new Array<number>(samples.length);
 	let x1 = 0;
 	let x2 = 0;

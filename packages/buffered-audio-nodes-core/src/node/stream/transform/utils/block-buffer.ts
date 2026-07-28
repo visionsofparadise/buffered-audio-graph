@@ -94,7 +94,12 @@ export class BlockBuffer {
 	async openReverseReader(): Promise<ReverseBlockReader> {
 		await this.flushWrites();
 
-		const reader = new ReverseBlockReader(this.tempPath, { frames: this._frames, channels: this._channels, sampleRate: this._sampleRate, bitDepth: this._bitDepth }, undefined, this);
+		const reader = new ReverseBlockReader(
+			this.tempPath,
+			{ frames: this._frames, channels: this._channels, sampleRate: this._sampleRate, bitDepth: this._bitDepth },
+			undefined,
+			this,
+		);
 
 		this.reverseReaders.add(reader);
 
@@ -190,7 +195,9 @@ export class BlockBuffer {
 			if (this._sampleRate === undefined) {
 				this._sampleRate = sampleRate;
 			} else if (this._sampleRate !== sampleRate) {
-				throw new Error(`BlockBuffer: sample rate mismatch — expected ${String(this._sampleRate)}, got ${String(sampleRate)}`);
+				throw new Error(
+					`BlockBuffer: sample rate mismatch — expected ${String(this._sampleRate)}, got ${String(sampleRate)}`,
+				);
 			}
 		}
 
@@ -198,7 +205,9 @@ export class BlockBuffer {
 			if (this._bitDepth === undefined) {
 				this._bitDepth = bitDepth;
 			} else if (this._bitDepth !== bitDepth) {
-				throw new Error(`BlockBuffer: bit depth mismatch — expected ${String(this._bitDepth)}, got ${String(bitDepth)}`);
+				throw new Error(
+					`BlockBuffer: bit depth mismatch — expected ${String(this._bitDepth)}, got ${String(bitDepth)}`,
+				);
 			}
 		}
 	}
@@ -207,7 +216,9 @@ export class BlockBuffer {
 		if (this._channels === 0) {
 			this._channels = target;
 		} else if (this._channels !== target) {
-			throw new Error(`BlockBuffer: channel count mismatch — buffer has ${String(this._channels)}, write supplied ${String(target)}`);
+			throw new Error(
+				`BlockBuffer: channel count mismatch — buffer has ${String(this._channels)}, write supplied ${String(target)}`,
+			);
 		}
 	}
 

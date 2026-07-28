@@ -7,9 +7,18 @@ export function waitForDrain(proc: ChildProcess, stdin: NodeJS.WritableStream): 
 			proc.removeListener("error", onError);
 			proc.removeListener("close", onClose);
 		};
-		const onDrain = (): void => { cleanup(); resolve(); };
-		const onError = (error: Error): void => { cleanup(); reject(error); };
-		const onClose = (code: number | null): void => { cleanup(); reject(new Error(`ffmpeg exited with code ${code} while writing stdin`)); };
+		const onDrain = (): void => {
+			cleanup();
+			resolve();
+		};
+		const onError = (error: Error): void => {
+			cleanup();
+			reject(error);
+		};
+		const onClose = (code: number | null): void => {
+			cleanup();
+			reject(new Error(`ffmpeg exited with code ${code} while writing stdin`));
+		};
 
 		stdin.once("drain", onDrain);
 		proc.once("error", onError);

@@ -50,7 +50,9 @@ describe("buildParameters", () => {
 		});
 
 		it("shifts exclusiveMinimum/exclusiveMaximum inward by one step", () => {
-			const schema: NodeJsonSchema = { properties: { amount: { type: "number", exclusiveMinimum: 0, exclusiveMaximum: 1 } } };
+			const schema: NodeJsonSchema = {
+				properties: { amount: { type: "number", exclusiveMinimum: 0, exclusiveMaximum: 1 } },
+			};
 			const [param] = buildParameters(buildNode({}), schema, {});
 
 			expect(param?.kind).toBe("number");

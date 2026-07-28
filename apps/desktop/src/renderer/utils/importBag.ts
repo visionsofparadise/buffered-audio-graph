@@ -25,10 +25,7 @@ interface Bounds {
 
 function clonePositions(positions: NodePositions): NodePositions {
 	return Object.fromEntries(
-		Object.entries(positions).map(([nodeId, position]) => [
-			nodeId,
-			{ x: position.x, y: position.y },
-		]),
+		Object.entries(positions).map(([nodeId, position]) => [nodeId, { x: position.x, y: position.y }]),
 	);
 }
 
@@ -100,10 +97,7 @@ export function mergeImportedBag({
 		return from && to ? [{ from, to }] : [];
 	});
 
-	const importedPositions = offsetImportedPositions(
-		computeAutoLayout(importedNodes, importedEdges),
-		currentPositions,
-	);
+	const importedPositions = offsetImportedPositions(computeAutoLayout(importedNodes, importedEdges), currentPositions);
 
 	return {
 		definition: {

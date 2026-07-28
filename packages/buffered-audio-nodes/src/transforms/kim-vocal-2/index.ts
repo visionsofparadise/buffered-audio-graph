@@ -1,5 +1,15 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	BlockBuffer,
+	createProgressGate,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type StreamSetupContext,
+	type StreamContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { bandpass, MixedRadixFft } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { filterOnnxProviders } from "../../utils/onnx-providers";
@@ -12,13 +22,28 @@ export const schema = z.object({
 	modelPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", accept: ".onnx", binary: "Kim_Vocal_2", download: "https://huggingface.co/seanghay/uvr_models" })
+		.meta({
+			input: "file",
+			mode: "open",
+			accept: ".onnx",
+			binary: "Kim_Vocal_2",
+			download: "https://huggingface.co/seanghay/uvr_models",
+		})
 		.describe("MDX-Net vocal isolation model (.onnx)"),
-	ffmpegPath: z.string().default("").meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" }).describe("FFmpeg — audio/video processing tool"),
+	ffmpegPath: z
+		.string()
+		.default("")
+		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
+		.describe("FFmpeg — audio/video processing tool"),
 	onnxAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "onnx-addon", download: "https://github.com/visionsofparadise/onnx-runtime-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "onnx-addon",
+			download: "https://github.com/visionsofparadise/onnx-runtime-addon",
+		})
 		.describe("ONNX Runtime native addon"),
 	highPass: z.number().min(20).max(500).multipleOf(10).default(80).describe("High Pass"),
 	lowPass: z.number().min(1000).max(22050).multipleOf(100).default(20000).describe("Low Pass"),
@@ -54,9 +79,19 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 	}
 
 	override _setup(context: StreamSetupContext): void {
-		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: filterOnnxProviders(context.executionProviders) }, (message, data) => this.log(message, data));
+		this.session = createOnnxSession(
+			this.properties.onnxAddonPath,
+			this.properties.modelPath,
+			{ executionProviders: filterOnnxProviders(context.executionProviders) },
+			(message, data) => this.log(message, data),
+		);
 
-		const composition = createResampleComposition({ context, streamContext: this.renderContext, ffmpegPath: this.properties.ffmpegPath, modelRate: SAMPLE_RATE });
+		const composition = createResampleComposition({
+			context,
+			streamContext: this.renderContext,
+			ffmpegPath: this.properties.ffmpegPath,
+			modelRate: SAMPLE_RATE,
+		});
 
 		if (composition) {
 			this.upResample = composition.upResample;
@@ -155,7 +190,17 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 			if (segFilled === 0) break;
 
 			const chunkLength = segFilled;
-			const processed = processSegment(segLeft, segRight, 0, chunkLength, isMono, workspace, this.fftInstance, this.session, COMPENSATE);
+			const processed = processSegment(
+				segLeft,
+				segRight,
+				0,
+				chunkLength,
+				isMono,
+				workspace,
+				this.fftInstance,
+				this.session,
+				COMPENSATE,
+			);
 
 			const isFinalIter = inputExhausted;
 			const nStable = isFinalIter ? chunkLength : stride;
@@ -213,7 +258,17 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 		readonly originalFrames: number;
 		readonly writerState: { written: number };
 	}): Promise<void> {
-		const { nStable, outAccumLeft, outAccumRight, sumWeight, output, channels, bitDepth, originalFrames, writerState } = args;
+		const {
+			nStable,
+			outAccumLeft,
+			outAccumRight,
+			sumWeight,
+			output,
+			channels,
+			bitDepth,
+			originalFrames,
+			writerState,
+		} = args;
 
 		if (nStable <= 0) return;
 
@@ -249,7 +304,6 @@ export class KimVocal2Stream extends BufferedTransformStream<KimVocal2Node> {
 	}
 }
 
-
 async function pullNextChunkAt441(args: {
 	readonly buffer: BlockBuffer;
 	readonly channels: number;
@@ -280,7 +334,14 @@ function buildWriteChannels(left: Float32Array, right: Float32Array, channels: n
 	return out;
 }
 
-async function padTail(output: BlockBuffer, channels: number, originalFrames: number, written: number, sampleRate: number, bitDepth: number | undefined): Promise<void> {
+async function padTail(
+	output: BlockBuffer,
+	channels: number,
+	originalFrames: number,
+	written: number,
+	sampleRate: number,
+	bitDepth: number | undefined,
+): Promise<void> {
 	if (written >= originalFrames) return;
 
 	const missing = originalFrames - written;
@@ -301,6 +362,13 @@ export class KimVocal2Node extends TransformNode<KimVocal2Properties> {
 	static override readonly Stream = KimVocal2Stream;
 }
 
-export function kimVocal2(options: { modelPath: string; ffmpegPath: string; onnxAddonPath?: string; highPass?: number; lowPass?: number; id?: string }): KimVocal2Node {
+export function kimVocal2(options: {
+	modelPath: string;
+	ffmpegPath: string;
+	onnxAddonPath?: string;
+	highPass?: number;
+	lowPass?: number;
+	id?: string;
+}): KimVocal2Node {
 	return new KimVocal2Node(options);
 }

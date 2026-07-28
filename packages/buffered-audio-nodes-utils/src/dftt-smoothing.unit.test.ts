@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-	applyDfttSmoothing,
-	getDfttBatchBlockCount,
-	type DfttParams,
-	type DfttProfileMs,
-} from "./dftt-smoothing";
+import { applyDfttSmoothing, getDfttBatchBlockCount, type DfttParams, type DfttProfileMs } from "./dftt-smoothing";
 
 interface AddonCall {
 	readonly kind: "forward" | "inverse";
@@ -14,8 +9,19 @@ interface AddonCall {
 }
 
 interface FakeAddon {
-	batchFft2D(input: Float32Array, rows: number, columns: number, batchCount: number): { re: Float32Array; im: Float32Array };
-	batchIfft2D(real: Float32Array, imaginary: Float32Array, rows: number, columns: number, batchCount: number): Float32Array;
+	batchFft2D(
+		input: Float32Array,
+		rows: number,
+		columns: number,
+		batchCount: number,
+	): { re: Float32Array; im: Float32Array };
+	batchIfft2D(
+		real: Float32Array,
+		imaginary: Float32Array,
+		rows: number,
+		columns: number,
+		batchCount: number,
+	): Float32Array;
 }
 
 const backendState = vi.hoisted<{ addon?: FakeAddon }>(() => ({}));
@@ -35,7 +41,7 @@ const defaultParams: DfttParams = {
 function nonperiodicHann(size: number): Float64Array {
 	if (size === 1) return Float64Array.of(1);
 
-	return Float64Array.from({ length: size }, (_, index) => 0.5 * (1 - Math.cos(2 * Math.PI * index / (size - 1))));
+	return Float64Array.from({ length: size }, (_, index) => 0.5 * (1 - Math.cos((2 * Math.PI * index) / (size - 1))));
 }
 
 function directDft2D(input: ArrayLike<number>, rows: number, columns: number): { re: Float64Array; im: Float64Array } {
@@ -49,7 +55,7 @@ function directDft2D(input: ArrayLike<number>, rows: number, columns: number): {
 
 			for (let row = 0; row < rows; row++) {
 				for (let column = 0; column < columns; column++) {
-					const angle = -2 * Math.PI * (rowFrequency * row / rows + columnFrequency * column / columns);
+					const angle = -2 * Math.PI * ((rowFrequency * row) / rows + (columnFrequency * column) / columns);
 					const value = input[row * columns + column] ?? 0;
 
 					realSum += value * Math.cos(angle);
@@ -65,7 +71,12 @@ function directDft2D(input: ArrayLike<number>, rows: number, columns: number): {
 	return { re: real, im: imaginary };
 }
 
-function directIdft2D(real: ArrayLike<number>, imaginary: ArrayLike<number>, rows: number, columns: number): Float64Array {
+function directIdft2D(
+	real: ArrayLike<number>,
+	imaginary: ArrayLike<number>,
+	rows: number,
+	columns: number,
+): Float64Array {
 	const output = new Float64Array(rows * columns);
 
 	for (let row = 0; row < rows; row++) {
@@ -75,7 +86,7 @@ function directIdft2D(real: ArrayLike<number>, imaginary: ArrayLike<number>, row
 			for (let rowFrequency = 0; rowFrequency < rows; rowFrequency++) {
 				for (let columnFrequency = 0; columnFrequency < columns; columnFrequency++) {
 					const position = rowFrequency * columns + columnFrequency;
-					const angle = 2 * Math.PI * (rowFrequency * row / rows + columnFrequency * column / columns);
+					const angle = 2 * Math.PI * ((rowFrequency * row) / rows + (columnFrequency * column) / columns);
 
 					realSum += (real[position] ?? 0) * Math.cos(angle) - (imaginary[position] ?? 0) * Math.sin(angle);
 				}
@@ -127,7 +138,12 @@ function directDftt(
 
 			for (let index = 0; index < gainedReal.length; index++) {
 				const nlmMagnitudeSquared = (nlmTransform.re[index] ?? 0) ** 2 + (nlmTransform.im[index] ?? 0) ** 2;
-				const gain = thresholdSquared === 0 ? nlmMagnitudeSquared === 0 ? 0 : 1 : nlmMagnitudeSquared / (nlmMagnitudeSquared + thresholdSquared);
+				const gain =
+					thresholdSquared === 0
+						? nlmMagnitudeSquared === 0
+							? 0
+							: 1
+						: nlmMagnitudeSquared / (nlmMagnitudeSquared + thresholdSquared);
 
 				gainedReal[index] = (rawTransform.re[index] ?? 0) * gain;
 				gainedImaginary[index] = (rawTransform.im[index] ?? 0) * gain;
@@ -143,7 +159,7 @@ function directDftt(
 
 					for (let timeFrequency = 0; timeFrequency < params.blockTime; timeFrequency++) {
 						const transformPosition = timeFrequency * params.blockFreq + frequency;
-						const angle = 2 * Math.PI * timeFrequency * time / params.blockTime;
+						const angle = (2 * Math.PI * timeFrequency * time) / params.blockTime;
 						const transformReal = gainedReal[transformPosition] ?? 0;
 						const transformImaginary = gainedImaginary[transformPosition] ?? 0;
 
@@ -155,7 +171,10 @@ function directDftt(
 
 					inverseTimeReal[inversePosition] = realSum / params.blockTime;
 					inverseTimeImaginary[inversePosition] = imaginarySum / params.blockTime;
-					maxInverseTimeImaginary = Math.max(maxInverseTimeImaginary, Math.abs(inverseTimeImaginary[inversePosition] ?? 0));
+					maxInverseTimeImaginary = Math.max(
+						maxInverseTimeImaginary,
+						Math.abs(inverseTimeImaginary[inversePosition] ?? 0),
+					);
 				}
 			}
 
@@ -167,9 +186,11 @@ function directDftt(
 
 					for (let frequencyIndex = 0; frequencyIndex < params.blockFreq; frequencyIndex++) {
 						const inversePosition = time * params.blockFreq + frequencyIndex;
-						const angle = 2 * Math.PI * frequencyIndex * frequency / params.blockFreq;
+						const angle = (2 * Math.PI * frequencyIndex * frequency) / params.blockFreq;
 
-						realSum += (inverseTimeReal[inversePosition] ?? 0) * Math.cos(angle) - (inverseTimeImaginary[inversePosition] ?? 0) * Math.sin(angle);
+						realSum +=
+							(inverseTimeReal[inversePosition] ?? 0) * Math.cos(angle) -
+							(inverseTimeImaginary[inversePosition] ?? 0) * Math.sin(angle);
 					}
 
 					synthesized[time * params.blockFreq + frequency] = realSum / params.blockFreq;
@@ -182,7 +203,8 @@ function directDftt(
 					const blockPosition = time * params.blockFreq + frequency;
 					const windowValue = (timeWindow[time] ?? 0) * (frequencyWindow[frequency] ?? 0);
 
-					accumulator[destination] = (accumulator[destination] ?? 0) + (synthesized[blockPosition] ?? 0) * windowValue;
+					accumulator[destination] =
+						(accumulator[destination] ?? 0) + (synthesized[blockPosition] ?? 0) * windowValue;
 					windowSumSquared[destination] = (windowSumSquared[destination] ?? 0) + windowValue * windowValue;
 				}
 			}
@@ -193,7 +215,7 @@ function directDftt(
 
 	for (let index = 0; index < output.length; index++) {
 		const windowWeight = windowSumSquared[index] ?? 0;
-		const value = windowWeight > 1e-8 ? (accumulator[index] ?? 0) / windowWeight : rawMask[index] ?? 0;
+		const value = windowWeight > 1e-8 ? (accumulator[index] ?? 0) / windowWeight : (rawMask[index] ?? 0);
 
 		output[index] = Math.max(0, Math.min(value, 1));
 	}
@@ -232,7 +254,12 @@ function createFakeAddon(calls: Array<AddonCall>): FakeAddon {
 			const complexColumns = Math.floor(columns / 2) + 1;
 			const output = new Float32Array(batchCount * rows * columns);
 
-			calls.push({ kind: "inverse", batchCount, inputLength: real.length + imaginary.length, outputLength: output.length });
+			calls.push({
+				kind: "inverse",
+				batchCount,
+				inputLength: real.length + imaginary.length,
+				outputLength: output.length,
+			});
 
 			for (let block = 0; block < batchCount; block++) {
 				const fullReal = new Float64Array(rows * columns);
@@ -247,7 +274,7 @@ function createFakeAddon(calls: Array<AddonCall>): FakeAddon {
 						const source = block * rows * complexColumns + sourceRow * complexColumns + sourceColumn;
 
 						fullReal[destination] = real[source] ?? 0;
-						fullImaginary[destination] = mirrored ? -(imaginary[source] ?? 0) : imaginary[source] ?? 0;
+						fullImaginary[destination] = mirrored ? -(imaginary[source] ?? 0) : (imaginary[source] ?? 0);
 					}
 				}
 
@@ -297,7 +324,10 @@ describe("applyDfttSmoothing", () => {
 	it("matches an independent direct 2D DFT oracle with a complex inverse-time intermediate", () => {
 		const numFrames = 5;
 		const numBins = 6;
-		const raw = Float32Array.from({ length: numFrames * numBins }, (_, index) => ((index * 19 + index % 4 * 7) % 97) / 96);
+		const raw = Float32Array.from(
+			{ length: numFrames * numBins },
+			(_, index) => ((index * 19 + (index % 4) * 7) % 97) / 96,
+		);
 		const nlm = Float32Array.from({ length: raw.length }, (_, index) => ((index * 11 + 5) % 53) / 52);
 		const expected = directDftt(nlm, raw, numFrames, numBins, defaultParams);
 		const output = runDftt(nlm, raw, numFrames, numBins, defaultParams, undefined, undefined, 8);
@@ -326,9 +356,12 @@ describe("applyDfttSmoothing", () => {
 			const capacity = getDfttBatchBlockCount(blockSize, complexBlockSize, budget);
 
 			for (const call of calls) expect(call.batchCount).toBeLessThanOrEqual(capacity);
-			if (budget === bytesPerBlock) expect(calls.filter((call) => call.kind === "inverse").map((call) => call.batchCount)).toEqual([1, 1, 1]);
-			if (budget === 2 * bytesPerBlock) expect(calls.filter((call) => call.kind === "inverse").map((call) => call.batchCount)).toEqual([2, 1]);
-			if (budget === 32 * 1024 * 1024) expect(calls.filter((call) => call.kind === "inverse").map((call) => call.batchCount)).toEqual([3]);
+			if (budget === bytesPerBlock)
+				expect(calls.filter((call) => call.kind === "inverse").map((call) => call.batchCount)).toEqual([1, 1, 1]);
+			if (budget === 2 * bytesPerBlock)
+				expect(calls.filter((call) => call.kind === "inverse").map((call) => call.batchCount)).toEqual([2, 1]);
+			if (budget === 32 * 1024 * 1024)
+				expect(calls.filter((call) => call.kind === "inverse").map((call) => call.batchCount)).toEqual([3]);
 		}
 
 		expect(outputs[0]).toEqual(outputs[1]);
@@ -423,7 +456,9 @@ describe("applyDfttSmoothing", () => {
 		applyDfttSmoothing(new Float32Array(4), raw, 2, 2, { ...defaultParams, threshold: 0 }, output, "fftw", undefined);
 
 		expect(Array.from(new Uint32Array(output.buffer))).toEqual(Array.from(rawBits));
-		expect(() => applyDfttSmoothing(new Float32Array(4), raw, 2, 2, { ...defaultParams, threshold: 0 }, raw, "fftw", undefined)).not.toThrow();
+		expect(() =>
+			applyDfttSmoothing(new Float32Array(4), raw, 2, 2, { ...defaultParams, threshold: 0 }, raw, "fftw", undefined),
+		).not.toThrow();
 	});
 
 	it.each([undefined, "fftw" as const])("rejects overlapping output on the %s backend", (backend) => {
@@ -434,8 +469,30 @@ describe("applyDfttSmoothing", () => {
 
 		if (backend) backendState.addon = createFakeAddon([]);
 
-		expect(() => applyDfttSmoothing(nlm, raw, 2, 2, { ...defaultParams, blockFreq: 2, blockTime: 2 }, output, backend, undefined)).toThrow("must not overlap");
-		expect(() => applyDfttSmoothing(new Float32Array(4), raw, 2, 2, { ...defaultParams, blockFreq: 2, blockTime: 2 }, raw, backend, undefined)).toThrow("must not overlap");
+		expect(() =>
+			applyDfttSmoothing(
+				nlm,
+				raw,
+				2,
+				2,
+				{ ...defaultParams, blockFreq: 2, blockTime: 2 },
+				output,
+				backend,
+				undefined,
+			),
+		).toThrow("must not overlap");
+		expect(() =>
+			applyDfttSmoothing(
+				new Float32Array(4),
+				raw,
+				2,
+				2,
+				{ ...defaultParams, blockFreq: 2, blockTime: 2 },
+				raw,
+				backend,
+				undefined,
+			),
+		).toThrow("must not overlap");
 	});
 
 	it.each([
@@ -453,23 +510,47 @@ describe("applyDfttSmoothing", () => {
 	] as const)("rejects %s", (_name, numFrames, numBins, params, maxBatchBytes) => {
 		const length = Number.isSafeInteger(numFrames * numBins) && numFrames * numBins > 0 ? numFrames * numBins : 0;
 
-		expect(() => applyDfttSmoothing(
-			new Float32Array(length),
-			new Float32Array(length),
-			numFrames,
-			numBins,
-			params,
-			new Float32Array(length),
-			undefined,
-			undefined,
-			undefined,
-			{ maxBatchBytes },
-		)).toThrow();
+		expect(() =>
+			applyDfttSmoothing(
+				new Float32Array(length),
+				new Float32Array(length),
+				numFrames,
+				numBins,
+				params,
+				new Float32Array(length),
+				undefined,
+				undefined,
+				undefined,
+				{ maxBatchBytes },
+			),
+		).toThrow();
 	});
 
 	it("requires exact input and output lengths", () => {
-		expect(() => applyDfttSmoothing(new Float32Array(3), new Float32Array(4), 2, 2, { ...defaultParams, blockFreq: 2, blockTime: 2 }, new Float32Array(4), undefined, undefined)).toThrow("lengths must equal 4");
-		expect(() => applyDfttSmoothing(new Float32Array(4), new Float32Array(4), 2, 2, { ...defaultParams, blockFreq: 2, blockTime: 2 }, new Float32Array(5), undefined, undefined)).toThrow("lengths must equal 4");
+		expect(() =>
+			applyDfttSmoothing(
+				new Float32Array(3),
+				new Float32Array(4),
+				2,
+				2,
+				{ ...defaultParams, blockFreq: 2, blockTime: 2 },
+				new Float32Array(4),
+				undefined,
+				undefined,
+			),
+		).toThrow("lengths must equal 4");
+		expect(() =>
+			applyDfttSmoothing(
+				new Float32Array(4),
+				new Float32Array(4),
+				2,
+				2,
+				{ ...defaultParams, blockFreq: 2, blockTime: 2 },
+				new Float32Array(5),
+				undefined,
+				undefined,
+			),
+		).toThrow("lengths must equal 4");
 	});
 
 	it("derives the batch count from all seven temporary arrays and rejects an undersized budget", () => {
@@ -478,6 +559,8 @@ describe("applyDfttSmoothing", () => {
 		const bytesPerBlock = 4 * (3 * blockSize + 4 * complexBlockSize);
 
 		expect(getDfttBatchBlockCount(blockSize, complexBlockSize, bytesPerBlock * 3 + bytesPerBlock - 1)).toBe(3);
-		expect(() => getDfttBatchBlockCount(blockSize, complexBlockSize, bytesPerBlock - 1)).toThrow("One DFTT block requires");
+		expect(() => getDfttBatchBlockCount(blockSize, complexBlockSize, bytesPerBlock - 1)).toThrow(
+			"One DFTT block requires",
+		);
 	});
 });

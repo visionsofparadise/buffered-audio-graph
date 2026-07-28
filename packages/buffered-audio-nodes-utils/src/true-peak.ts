@@ -10,7 +10,11 @@ export class TruePeakAccumulator {
 	private rawMax = 0;
 	private finalizedResult?: number;
 
-	constructor(_sampleRate: number, channelCount: number, oversampleFactor: TruePeakUpsamplingFactor = DEFAULT_OVERSAMPLE_FACTOR) {
+	constructor(
+		_sampleRate: number,
+		channelCount: number,
+		oversampleFactor: TruePeakUpsamplingFactor = DEFAULT_OVERSAMPLE_FACTOR,
+	) {
 		if (channelCount <= 0) {
 			throw new Error(`TruePeakAccumulator: channelCount must be positive, got ${channelCount}`);
 		}
@@ -44,7 +48,9 @@ export class TruePeakAccumulator {
 			const channel = channels[channelIndex];
 
 			if (channel === undefined || channel.length < frames) {
-				throw new Error(`TruePeakAccumulator: channel ${channelIndex} has ${channel?.length ?? 0} samples, fewer than the requested ${frames}`);
+				throw new Error(
+					`TruePeakAccumulator: channel ${channelIndex} has ${channel?.length ?? 0} samples, fewer than the requested ${frames}`,
+				);
 			}
 
 			const upsampler = this.upsamplers[channelIndex];

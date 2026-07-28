@@ -1,13 +1,59 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- tight DSP loops with bounds-checked typed array access */
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
-import { applyDfttSmoothing, getFftAddon, initFftBackend, istft, stft, type FftBackend, type StftOutput, type StftResult } from "@buffered-audio/utils";
+import {
+	BufferedTransformStream,
+	BlockBuffer,
+	createProgressGate,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type StreamSetupContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
+import {
+	applyDfttSmoothing,
+	getFftAddon,
+	initFftBackend,
+	istft,
+	stft,
+	type FftBackend,
+	type StftOutput,
+	type StftResult,
+} from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { readToBuffer } from "../../utils/read-to-buffer";
-import { accumulateTransferChunk, createTransferAccumulator, finalizeTransferFunction, findMaxRefPower, type TransferFunction } from "./utils/cross-spectral";
-import { adaptationSpeedToMarkovForgetting, createKalmanState, kalmanUpdateFrame, type KalmanParams, type KalmanState } from "./utils/mef-kalman";
-import { computeMwfMask, createInterfererPsdState, reductionStrengthToOversubtraction, updateInterfererPsd, updatePrevOutputPsd, type InterfererPsdState, type MwfParams } from "./utils/mef-mwf";
-import { applyIspRestoration, computeMsadDecision, createIspState, createMsadChannelState, ISP_THRESHOLD_FRAMES, type IspState, type MsadChannelState } from "./utils/mef-msad";
+import {
+	accumulateTransferChunk,
+	createTransferAccumulator,
+	finalizeTransferFunction,
+	findMaxRefPower,
+	type TransferFunction,
+} from "./utils/cross-spectral";
+import {
+	adaptationSpeedToMarkovForgetting,
+	createKalmanState,
+	kalmanUpdateFrame,
+	type KalmanParams,
+	type KalmanState,
+} from "./utils/mef-kalman";
+import {
+	computeMwfMask,
+	createInterfererPsdState,
+	reductionStrengthToOversubtraction,
+	updateInterfererPsd,
+	updatePrevOutputPsd,
+	type InterfererPsdState,
+	type MwfParams,
+} from "./utils/mef-mwf";
+import {
+	applyIspRestoration,
+	computeMsadDecision,
+	createIspState,
+	createMsadChannelState,
+	ISP_THRESHOLD_FRAMES,
+	type IspState,
+	type MsadChannelState,
+} from "./utils/mef-msad";
 import { coldStartSeed, validateTransferSeed } from "./utils/warmup";
 import { WindowReader } from "./utils/window-reader";
 import { computeChunkWindow, computeProcessGeometry, computeWriteClip } from "./utils/geometry";
@@ -23,12 +69,22 @@ export const schema = z.object({
 	vkfftAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "vkfft-addon", download: "https://github.com/visionsofparadise/vkfft-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "vkfft-addon",
+			download: "https://github.com/visionsofparadise/vkfft-addon",
+		})
 		.describe("VkFFT native addon — GPU FFT acceleration"),
 	fftwAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "fftw-addon", download: "https://github.com/visionsofparadise/fftw-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "fftw-addon",
+			download: "https://github.com/visionsofparadise/fftw-addon",
+		})
 		.describe("FFTW native addon — CPU FFT acceleration"),
 	dfttBackend: z.enum(["", "js", "fftw", "vkfft"]).default("").describe("DFTT Backend Override"),
 });
@@ -209,8 +265,14 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 			return Array.from({ length: channels }, () => Array.from({ length: refCount }, () => coldStartSeed(numBins)));
 		}
 
-		const targetPaddeds = Array.from({ length: channels }, () => new Float32Array(warmupFrames * hopSize + (fftSize - hopSize)));
-		const refPaddeds = Array.from({ length: refCount }, () => new Float32Array(warmupFrames * hopSize + (fftSize - hopSize)));
+		const targetPaddeds = Array.from(
+			{ length: channels },
+			() => new Float32Array(warmupFrames * hopSize + (fftSize - hopSize)),
+		);
+		const refPaddeds = Array.from(
+			{ length: refCount },
+			() => new Float32Array(warmupFrames * hopSize + (fftSize - hopSize)),
+		);
 
 		await buffer.reset();
 		for (let channelIndex = 0; channelIndex < channels; channelIndex++) targetPaddeds[channelIndex]!.fill(0);
@@ -237,16 +299,30 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 		for (let refIndex = 0; refIndex < refCount; refIndex++) {
 			await referenceBuffers[refIndex]!.reset();
-			await readSequentialPadded(referenceBuffers[refIndex]!, 0, warmupFrames, refPaddeds[refIndex]!, hopSize, fftSize, 0);
+			await readSequentialPadded(
+				referenceBuffers[refIndex]!,
+				0,
+				warmupFrames,
+				refPaddeds[refIndex]!,
+				hopSize,
+				fftSize,
+				0,
+			);
 		}
 
 		const targetStftOutputs = Array.from({ length: channels }, () => allocateStftOutput(warmupFrames, numBins));
 		const refStftOutputs = Array.from({ length: refCount }, () => allocateStftOutput(warmupFrames, numBins));
 
-		const targetStfts = targetPaddeds.map((padded, channelIndex) => stft(padded, fftSize, hopSize, targetStftOutputs[channelIndex], this.fftBackend, this.fftAddonOptions));
-		const refStfts = refPaddeds.map((padded, refIndex) => stft(padded, fftSize, hopSize, refStftOutputs[refIndex], this.fftBackend, this.fftAddonOptions));
+		const targetStfts = targetPaddeds.map((padded, channelIndex) =>
+			stft(padded, fftSize, hopSize, targetStftOutputs[channelIndex], this.fftBackend, this.fftAddonOptions),
+		);
+		const refStfts = refPaddeds.map((padded, refIndex) =>
+			stft(padded, fftSize, hopSize, refStftOutputs[refIndex], this.fftBackend, this.fftAddonOptions),
+		);
 
-		const maxRefPows = refStfts.map((refStft) => findMaxRefPower(refStft.real, refStft.imag, refStft.frames, numBins));
+		const maxRefPows = refStfts.map((refStft) =>
+			findMaxRefPower(refStft.real, refStft.imag, refStft.frames, numBins),
+		);
 		const weightEpsilons = maxRefPows.map((maxPow) => 1e-10 * (maxPow + 1e-20));
 
 		const seedsByChannel: Array<Array<TransferFunction>> = [];
@@ -258,7 +334,16 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 			for (let refIndex = 0; refIndex < refCount; refIndex++) {
 				const refStft = refStfts[refIndex]!;
 
-				accumulateTransferChunk(targetStft.real, targetStft.imag, refStft.real, refStft.imag, targetStft.frames, numBins, weightEpsilons[refIndex]!, accumulators[refIndex]!);
+				accumulateTransferChunk(
+					targetStft.real,
+					targetStft.imag,
+					refStft.real,
+					refStft.imag,
+					targetStft.frames,
+					numBins,
+					weightEpsilons[refIndex]!,
+					accumulators[refIndex]!,
+				);
 			}
 
 			const seeds = accumulators.map((acc) => finalizeTransferFunction(acc));
@@ -266,8 +351,11 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				const validation = validateTransferSeed(seed);
 
 				if (validation.degenerate) {
-
-					this.log("warm-up seed degenerate; falling back to cold-start Ĥ(ℓ=0) = 0", { reason: validation.reason }, "warn");
+					this.log(
+						"warm-up seed degenerate; falling back to cold-start Ĥ(ℓ=0) = 0",
+						{ reason: validation.reason },
+						"warn",
+					);
 
 					return coldStartSeed(numBins);
 				}
@@ -292,9 +380,21 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		if (!nlmPool) throw new Error("de-bleed: NLM worker pool not initialized in _setup.");
 
 		const profileEnabled = process.env.DEBLEED_PROFILE === "1";
-		const profileMs = { warmup: 0, stftRead: 0, msad: 0, kalman: 0, mwf: 0, nlm: 0, dftt: 0, applyMaskIstft: 0, write: 0 };
-		const dfttProfileMs = profileEnabled ? { fill: 0, forward: 0, gain: 0, inverse: 0, ola: 0, normalize: 0 } : undefined;
-		const _profStart = (): number => profileEnabled ? performance.now() : 0;
+		const profileMs = {
+			warmup: 0,
+			stftRead: 0,
+			msad: 0,
+			kalman: 0,
+			mwf: 0,
+			nlm: 0,
+			dftt: 0,
+			applyMaskIstft: 0,
+			write: 0,
+		};
+		const dfttProfileMs = profileEnabled
+			? { fill: 0, forward: 0, gain: 0, inverse: 0, ola: 0, normalize: 0 }
+			: undefined;
+		const _profStart = (): number => (profileEnabled ? performance.now() : 0);
 		const _profAdd = (key: keyof typeof profileMs, t0: number): void => {
 			if (profileEnabled) profileMs[key] += performance.now() - t0;
 		};
@@ -317,7 +417,13 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 		const carry = MAX_CARRY_FRAMES;
 
-		const { edgePadSamples, processStftFrames, warmupFrames } = computeProcessGeometry({ totalFrames, fftSize, hopSize, sampleRate, warmupSeconds: WARMUP_SECONDS });
+		const { edgePadSamples, processStftFrames, warmupFrames } = computeProcessGeometry({
+			totalFrames,
+			fftSize,
+			hopSize,
+			sampleRate,
+			warmupSeconds: WARMUP_SECONDS,
+		});
 
 		const _twarm = _profStart();
 		const seedsByChannel = await this.warmupSeedsAllChannels(buffered, channels, warmupFrames, fftSize, hopSize);
@@ -329,18 +435,32 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		await buffered.reset();
 		for (const refBuffer of referenceBuffers) await refBuffer.reset();
 
-		const kalmanStatesByCh: Array<Array<KalmanState>> = seedsByChannel.map((seeds) => seeds.map((seed) => createKalmanState(numBins, seed)));
-		const interfererPsdByCh: Array<InterfererPsdState> = Array.from({ length: channels }, () => createInterfererPsdState(numBins));
-		const msadChannelStatesByCh: Array<Array<MsadChannelState>> = Array.from({ length: channels }, () => Array.from({ length: refCount + 1 }, () => createMsadChannelState(numBins)));
-		const ispStatesByCh: Array<Array<IspState>> = Array.from({ length: channels }, () => Array.from({ length: refCount }, () => createIspState(numBins)));
+		const kalmanStatesByCh: Array<Array<KalmanState>> = seedsByChannel.map((seeds) =>
+			seeds.map((seed) => createKalmanState(numBins, seed)),
+		);
+		const interfererPsdByCh: Array<InterfererPsdState> = Array.from({ length: channels }, () =>
+			createInterfererPsdState(numBins),
+		);
+		const msadChannelStatesByCh: Array<Array<MsadChannelState>> = Array.from({ length: channels }, () =>
+			Array.from({ length: refCount + 1 }, () => createMsadChannelState(numBins)),
+		);
+		const ispStatesByCh: Array<Array<IspState>> = Array.from({ length: channels }, () =>
+			Array.from({ length: refCount }, () => createIspState(numBins)),
+		);
 
-		const ispThresholdFrames = sampleRate ? Math.max(1, Math.round(0.5 * sampleRate / hopSize)) : ISP_THRESHOLD_FRAMES;
+		const ispThresholdFrames = sampleRate
+			? Math.max(1, Math.round((0.5 * sampleRate) / hopSize))
+			: ISP_THRESHOLD_FRAMES;
 
 		const windowFrames = chunkFrames + 2 * carry;
 		const windowSamples = windowFrames * hopSize + (fftSize - hopSize);
 
-		const targetStftOutputs: Array<StftOutput> = Array.from({ length: channels }, () => allocateStftOutput(windowFrames, numBins));
-		const refStftOutputs: Array<StftOutput> = Array.from({ length: refCount }, () => allocateStftOutput(windowFrames, numBins));
+		const targetStftOutputs: Array<StftOutput> = Array.from({ length: channels }, () =>
+			allocateStftOutput(windowFrames, numBins),
+		);
+		const refStftOutputs: Array<StftOutput> = Array.from({ length: refCount }, () =>
+			allocateStftOutput(windowFrames, numBins),
+		);
 		const rawMask = new Float32Array(new SharedArrayBuffer(windowFrames * numBins * 4));
 		const nlmMask = new Float32Array(new SharedArrayBuffer(windowFrames * numBins * 4));
 		const finalMask = new Float32Array(windowFrames * numBins);
@@ -369,7 +489,14 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 			let prevWinStart = 0;
 
 			for (let outStart = 0; outStart < processStftFrames; outStart += chunkFrames) {
-				const { outFramesThisChunk, winStart, winFrames, winSamples } = computeChunkWindow({ outStart, chunkFrames, processStftFrames, carry, fftSize, hopSize });
+				const { outFramesThisChunk, winStart, winFrames, winSamples } = computeChunkWindow({
+					outStart,
+					chunkFrames,
+					processStftFrames,
+					carry,
+					fftSize,
+					hopSize,
+				});
 
 				if (outStart !== 0) {
 					const stepFrames = winStart - prevWinStart;
@@ -394,7 +521,14 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				const targetStfts: Array<StftResult> = [];
 
 				for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
-					const stftOut = stft(targetScratch[channelIndex]!.subarray(0, winSamples), fftSize, hopSize, targetStftOutputs[channelIndex], this.fftBackend, this.fftAddonOptions);
+					const stftOut = stft(
+						targetScratch[channelIndex]!.subarray(0, winSamples),
+						fftSize,
+						hopSize,
+						targetStftOutputs[channelIndex],
+						this.fftBackend,
+						this.fftAddonOptions,
+					);
 
 					targetStfts.push(stftOut);
 				}
@@ -403,7 +537,14 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 				for (let refIndex = 0; refIndex < refCount; refIndex++) {
 					const refScratch = refReaders[refIndex]!.getScratch();
-					const refStft = stft(refScratch[0]!.subarray(0, winSamples), fftSize, hopSize, refStftOutputs[refIndex], this.fftBackend, this.fftAddonOptions);
+					const refStft = stft(
+						refScratch[0]!.subarray(0, winSamples),
+						fftSize,
+						hopSize,
+						refStftOutputs[refIndex],
+						this.fftBackend,
+						this.fftAddonOptions,
+					);
 
 					refStftsForChunk.push(refStft);
 				}
@@ -428,8 +569,14 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 						const frameImag = targetStft.imag.subarray(frameOffset, frameOffset + numBins);
 
 						for (let refIndex = 0; refIndex < refCount; refIndex++) {
-							refFrameReals[refIndex] = refStftsForChunk[refIndex]!.real.subarray(frameOffset, frameOffset + numBins);
-							refFrameImags[refIndex] = refStftsForChunk[refIndex]!.imag.subarray(frameOffset, frameOffset + numBins);
+							refFrameReals[refIndex] = refStftsForChunk[refIndex]!.real.subarray(
+								frameOffset,
+								frameOffset + numBins,
+							);
+							refFrameImags[refIndex] = refStftsForChunk[refIndex]!.imag.subarray(
+								frameOffset,
+								frameOffset + numBins,
+							);
 						}
 
 						msadFrameReals[0] = frameReal;
@@ -460,7 +607,12 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 						);
 
 						for (let refIndex = 0; refIndex < refCount; refIndex++) {
-							applyIspRestoration(kalmanStates[refIndex]!, ispStates[refIndex]!, msadDecision.referenceActive[refIndex]!, ispThresholdFrames);
+							applyIspRestoration(
+								kalmanStates[refIndex]!,
+								ispStates[refIndex]!,
+								msadDecision.referenceActive[refIndex]!,
+								ispThresholdFrames,
+							);
 						}
 
 						_profAdd("kalman", _tkal);
@@ -471,7 +623,16 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 						const maskFrame = rawMask.subarray(frameOffset, frameOffset + numBins);
 
-						computeMwfMask(frameReal, frameImag, bleedTotalReal, bleedTotalImag, interfererPsd, mwfParams, MWF_EPSILON, maskFrame);
+						computeMwfMask(
+							frameReal,
+							frameImag,
+							bleedTotalReal,
+							bleedTotalImag,
+							interfererPsd,
+							mwfParams,
+							MWF_EPSILON,
+							maskFrame,
+						);
 
 						for (let bin = 0; bin < numBins; bin++) {
 							const gain = maskFrame[bin]!;
@@ -543,7 +704,16 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				}
 
 				const cleanedLength = cleanedByChannel[0]!.length;
-				const clip = computeWriteClip({ outStart, winStart, outFramesThisChunk, processStftFrames, hopSize, edgePadSamples, totalFrames, cleanedLength });
+				const clip = computeWriteClip({
+					outStart,
+					winStart,
+					outFramesThisChunk,
+					processStftFrames,
+					hopSize,
+					edgePadSamples,
+					totalFrames,
+					cleanedLength,
+				});
 
 				if (!clip) continue;
 
@@ -551,14 +721,17 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				const writeSamplesByChannel: Array<Float32Array> = [];
 
 				for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
-					writeSamplesByChannel.push(cleanedByChannel[channelIndex]!.subarray(sliceFromOffset, sliceFromOffset + sliceLength));
+					writeSamplesByChannel.push(
+						cleanedByChannel[channelIndex]!.subarray(sliceFromOffset, sliceFromOffset + sliceLength),
+					);
 				}
 
 				if (clipStart > outputBuffer.frames) {
 					const padFrames = clipStart - outputBuffer.frames;
 					const zeroSamples: Array<Float32Array> = [];
 
-					for (let channelIndex = 0; channelIndex < channels; channelIndex++) zeroSamples.push(new Float32Array(padFrames));
+					for (let channelIndex = 0; channelIndex < channels; channelIndex++)
+						zeroSamples.push(new Float32Array(padFrames));
 
 					const _twritePad = _profStart();
 
@@ -580,7 +753,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 				const padFrames = totalFrames - outputBuffer.frames;
 				const zeroSamples: Array<Float32Array> = [];
 
-				for (let channelIndex = 0; channelIndex < channels; channelIndex++) zeroSamples.push(new Float32Array(padFrames));
+				for (let channelIndex = 0; channelIndex < channels; channelIndex++)
+					zeroSamples.push(new Float32Array(padFrames));
 
 				await outputBuffer.write(zeroSamples, sampleRate, bitDepth);
 			}
@@ -593,8 +767,18 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		}
 
 		if (profileEnabled) {
-			const total = profileMs.warmup + profileMs.stftRead + profileMs.msad + profileMs.kalman + profileMs.mwf + profileMs.nlm + profileMs.dftt + profileMs.applyMaskIstft + profileMs.write;
-			const pct = (key: keyof typeof profileMs): string => `${(profileMs[key] / 1000).toFixed(2)}s (${((profileMs[key] / total) * 100).toFixed(1)}%)`;
+			const total =
+				profileMs.warmup +
+				profileMs.stftRead +
+				profileMs.msad +
+				profileMs.kalman +
+				profileMs.mwf +
+				profileMs.nlm +
+				profileMs.dftt +
+				profileMs.applyMaskIstft +
+				profileMs.write;
+			const pct = (key: keyof typeof profileMs): string =>
+				`${(profileMs[key] / 1000).toFixed(2)}s (${((profileMs[key] / total) * 100).toFixed(1)}%)`;
 
 			this.log("profile", {
 				warmup: pct("warmup"),
@@ -628,7 +812,8 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 export class DeBleedNode extends TransformNode<DeBleedProperties> {
 	static override readonly nodeName = "De-Bleed Adaptive";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly description = "Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reduction. Stages 1+2 are MEF Meyer-Elshamy-Fingscheidt 2020; Stage 3 is Lukin-Todd 2D NLM+DFTT post-filter.";
+	static override readonly description =
+		"Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reduction. Stages 1+2 are MEF Meyer-Elshamy-Fingscheidt 2020; Stage 3 is Lukin-Todd 2D NLM+DFTT post-filter.";
 	static override readonly schema = schema;
 	static override readonly Stream = DeBleedStream;
 }

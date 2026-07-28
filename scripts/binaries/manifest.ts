@@ -54,23 +54,17 @@ export function parseTarget(value: string): Target {
 	const parts = value.split("-");
 
 	if (parts.length !== 2) {
-		throw new Error(
-			`Invalid --target value "${value}" — expected "<platform>-<arch>" (e.g. "win32-x64")`,
-		);
+		throw new Error(`Invalid --target value "${value}" — expected "<platform>-<arch>" (e.g. "win32-x64")`);
 	}
 
 	const [platform, arch] = parts;
 
 	if (platform === undefined || !VALID_PLATFORMS.includes(platform as Target["platform"])) {
-		throw new Error(
-			`Invalid --target platform "${platform ?? ""}" — expected one of ${VALID_PLATFORMS.join(", ")}`,
-		);
+		throw new Error(`Invalid --target platform "${platform ?? ""}" — expected one of ${VALID_PLATFORMS.join(", ")}`);
 	}
 
 	if (arch === undefined || !VALID_ARCHES.includes(arch as Target["arch"])) {
-		throw new Error(
-			`Invalid --target arch "${arch ?? ""}" — expected one of ${VALID_ARCHES.join(", ")}`,
-		);
+		throw new Error(`Invalid --target arch "${arch ?? ""}" — expected one of ${VALID_ARCHES.join(", ")}`);
 	}
 
 	return {
@@ -84,15 +78,11 @@ export function resolveHostTarget(): Target {
 	const arch = process.arch;
 
 	if (!VALID_PLATFORMS.includes(platform as Target["platform"])) {
-		throw new Error(
-			`Unsupported host platform "${platform}" — supported platforms: ${VALID_PLATFORMS.join(", ")}`,
-		);
+		throw new Error(`Unsupported host platform "${platform}" — supported platforms: ${VALID_PLATFORMS.join(", ")}`);
 	}
 
 	if (!VALID_ARCHES.includes(arch as Target["arch"])) {
-		throw new Error(
-			`Unsupported host arch "${arch}" — supported arches: ${VALID_ARCHES.join(", ")}`,
-		);
+		throw new Error(`Unsupported host arch "${arch}" — supported arches: ${VALID_ARCHES.join(", ")}`);
 	}
 
 	return {
@@ -130,10 +120,7 @@ export function parseTargetArgs(argv: ReadonlyArray<string>): Target {
 	return explicit === undefined ? resolveHostTarget() : parseTarget(explicit);
 }
 
-export function filterAssetsForTarget(
-	assets: ReadonlyArray<ManifestAsset>,
-	target: Target,
-): Array<ManifestAsset> {
+export function filterAssetsForTarget(assets: ReadonlyArray<ManifestAsset>, target: Target): Array<ManifestAsset> {
 	return assets.filter(
 		(asset) =>
 			(asset.platform === "all" || asset.platform === target.platform) &&

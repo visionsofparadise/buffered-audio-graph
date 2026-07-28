@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../UI/Button";
-import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "../../UI/Dialog";
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../../UI/Dialog";
 import { Input } from "../../UI/Input";
 import { humanizeFieldName } from "./Node/ParameterRow/utils/labels";
 import { seedValues } from "./utils/seedValues";
@@ -35,10 +28,7 @@ export function RenderParametersModal({
 		setValues(seedValues(names, initialValues));
 	}, [isOpen, names, initialValues]);
 
-	const allFilled = useMemo(
-		() => names.every((name) => (values[name] ?? "") !== ""),
-		[names, values],
-	);
+	const allFilled = useMemo(() => names.every((name) => (values[name] ?? "") !== ""), [names, values]);
 
 	const handleConfirm = (): void => {
 		if (!allFilled) return;

@@ -46,7 +46,7 @@ describe("applyBackwardPassOverChunkBuffer", () => {
 		const random = new Float32Array(length);
 
 		for (let i = 0; i < length; i++) {
-			random[i] = Math.sin(i * 0.01) * 0.5 + (i * 0.000_173) % 0.3;
+			random[i] = Math.sin(i * 0.01) * 0.5 + ((i * 0.000_173) % 0.3);
 		}
 
 		// Reference: in-memory backward IIR.
@@ -99,7 +99,7 @@ describe("applyBackwardPassOverChunkBuffer", () => {
 		const random = new Float32Array(length);
 
 		for (let i = 0; i < length; i++) {
-			random[i] = Math.cos(i * 0.013) * 0.4 + ((i * 0.000_29) % 0.2 - 0.1);
+			random[i] = Math.cos(i * 0.013) * 0.4 + (((i * 0.000_29) % 0.2) - 0.1);
 		}
 
 		// In-memory reference — whole-array.
@@ -280,7 +280,9 @@ describe("applyBackwardPassOverChunkBuffer", () => {
 
 		const referenceCopy = new Float32Array(random);
 
-		new BidirectionalIir({ smoothingMs: SMOOTHING_MS, sampleRate: SAMPLE_RATE }).applyBackwardPassInPlace(referenceCopy);
+		new BidirectionalIir({ smoothingMs: SMOOTHING_MS, sampleRate: SAMPLE_RATE }).applyBackwardPassInPlace(
+			referenceCopy,
+		);
 
 		const actual = await readAll(destBuffer);
 

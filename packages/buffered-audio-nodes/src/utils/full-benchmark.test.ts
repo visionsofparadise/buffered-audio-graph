@@ -42,7 +42,14 @@ function record(group: string, transform: string, backend: string, r: BenchmarkR
 describe("FFT backends", () => {
 	for (const { label, providers } of fftConfigs) {
 		it(`dtln [${label}]`, async () => {
-			const t = dtln({ modelPath1: binaries.model1, modelPath2: binaries.model2, ffmpegPath: binaries.ffmpeg, onnxAddonPath: binaries.onnxAddon, vkfftAddonPath: binaries.vkfftAddon, fftwAddonPath: binaries.fftwAddon });
+			const t = dtln({
+				modelPath1: binaries.model1,
+				modelPath2: binaries.model2,
+				ffmpegPath: binaries.ffmpeg,
+				onnxAddonPath: binaries.onnxAddon,
+				vkfftAddonPath: binaries.vkfftAddon,
+				fftwAddonPath: binaries.fftwAddon,
+			});
 			const r = await runBenchmark(`dtln`, t, testVoice, { executionProviders: providers });
 			record("fft", "dtln", label, r);
 		}, 240_000);
@@ -52,7 +59,14 @@ describe("FFT backends", () => {
 describe("ONNX models", () => {
 	for (const { label, providers } of onnxConfigs) {
 		it(`dtln [${label}]`, async () => {
-			const t = dtln({ modelPath1: binaries.model1, modelPath2: binaries.model2, ffmpegPath: binaries.ffmpeg, onnxAddonPath: binaries.onnxAddon, vkfftAddonPath: binaries.vkfftAddon, fftwAddonPath: binaries.fftwAddon });
+			const t = dtln({
+				modelPath1: binaries.model1,
+				modelPath2: binaries.model2,
+				ffmpegPath: binaries.ffmpeg,
+				onnxAddonPath: binaries.onnxAddon,
+				vkfftAddonPath: binaries.vkfftAddon,
+				fftwAddonPath: binaries.fftwAddon,
+			});
 			const r = await runBenchmark(`dtln`, t, testVoice, { executionProviders: providers });
 			record("onnx", "dtln", label, r);
 		}, 240_000);
@@ -60,7 +74,11 @@ describe("ONNX models", () => {
 
 	for (const { label, providers } of onnxConfigs) {
 		it(`kim-vocal-2 [${label}]`, async () => {
-			const t = kimVocal2({ modelPath: binaries.kimVocal2, ffmpegPath: binaries.ffmpeg, onnxAddonPath: binaries.onnxAddon });
+			const t = kimVocal2({
+				modelPath: binaries.kimVocal2,
+				ffmpegPath: binaries.ffmpeg,
+				onnxAddonPath: binaries.onnxAddon,
+			});
 			const r = await runBenchmark(`kim-vocal-2`, t, testVoice, { executionProviders: providers });
 			record("onnx", "kim-vocal-2", label, r);
 		}, 240_000);
@@ -68,7 +86,11 @@ describe("ONNX models", () => {
 
 	for (const { label, providers } of onnxConfigs) {
 		it(`htdemucs [${label}]`, async () => {
-			const t = htdemucs(binaries.htdemucs, { vocals: 1, drums: 0, bass: 0, other: 0 }, { onnxAddonPath: binaries.onnxAddon });
+			const t = htdemucs(
+				binaries.htdemucs,
+				{ vocals: 1, drums: 0, bass: 0, other: 0 },
+				{ onnxAddonPath: binaries.onnxAddon },
+			);
 			const r = await runBenchmark(`htdemucs`, t, testVoice, { executionProviders: providers });
 			record("onnx", "htdemucs", label, r);
 		}, 240_000);

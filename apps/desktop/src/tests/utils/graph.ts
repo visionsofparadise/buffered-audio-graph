@@ -16,7 +16,7 @@ export async function nodeIdByLabel(page: Page, label: string): Promise<string |
 		const nodes = Array.from(document.querySelectorAll(".react-flow__node"));
 
 		for (const node of nodes) {
-			if ((node.textContent).includes(lbl)) return node.getAttribute("data-id");
+			if (node.textContent.includes(lbl)) return node.getAttribute("data-id");
 		}
 
 		return null;
@@ -31,7 +31,7 @@ export interface RenderedNodeSummary {
 export async function renderedNodeSummary(page: Page): Promise<RenderedNodeSummary> {
 	return page.$$eval(".react-flow__node", (elements): RenderedNodeSummary => ({
 		count: elements.length,
-		texts: elements.slice(0, 8).map((element) => (element.textContent).replace(/\s+/g, " ").trim().slice(0, 120)),
+		texts: elements.slice(0, 8).map((element) => element.textContent.replace(/\s+/g, " ").trim().slice(0, 120)),
 	}));
 }
 
@@ -88,7 +88,7 @@ export async function waitForEdgeAgreement(page: Page, expected: number, timeout
 
 export async function paramInputValue(page: Page, nodeId: string): Promise<string | null> {
 	return page
-		.$eval(`.react-flow__node[data-id="${nodeId}"] input[type="text"]`, (element) => (element).value)
+		.$eval(`.react-flow__node[data-id="${nodeId}"] input[type="text"]`, (element) => element.value)
 		.catch(() => null);
 }
 

@@ -144,7 +144,13 @@ export function extractLatticeTrajectory(
 	};
 }
 
-export function processLatticeChannel(signal: Float32Array, smoothedTrajectory: ControlTrajectory, strength: number, order: number, hopSize: number): Float32Array {
+export function processLatticeChannel(
+	signal: Float32Array,
+	smoothedTrajectory: ControlTrajectory,
+	strength: number,
+	order: number,
+	hopSize: number,
+): Float32Array {
 	const length = signal.length;
 	const output = new Float32Array(length);
 	const rows = smoothedTrajectory.rows;

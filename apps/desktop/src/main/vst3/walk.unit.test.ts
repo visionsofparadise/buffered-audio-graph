@@ -6,13 +6,15 @@ import { isModuleDirent, moduleNameFromPath, walkRoot, type DirentLike, type Rea
 const file = (name: string): DirentLike => ({ name, isDirectory: () => false });
 const dir = (name: string): DirentLike => ({ name, isDirectory: () => true });
 
-const fakeReadDirectory = (tree: Record<string, ReadonlyArray<DirentLike>>): ReadDirectory => (directory) => {
-	const entries = tree[directory];
+const fakeReadDirectory =
+	(tree: Record<string, ReadonlyArray<DirentLike>>): ReadDirectory =>
+	(directory) => {
+		const entries = tree[directory];
 
-	if (!entries) throw new Error(`no fixture entries for ${directory}`);
+		if (!entries) throw new Error(`no fixture entries for ${directory}`);
 
-	return entries;
-};
+		return entries;
+	};
 
 describe("isModuleDirent", () => {
 	it("is true for .vst3 and .VST3 names, for a file or a directory dirent", () => {

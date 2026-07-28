@@ -5,7 +5,9 @@ import { audio, binaries, hasBinaryFixtures } from "../../utils/test-binaries";
 import { dtln } from ".";
 
 const testVoice = audio.testVoice;
-const describeIfFixtureSet = hasBinaryFixtures("model1", "model2", "ffmpeg", "onnxAddon", "vkfftAddon", "fftwAddon") ? describe : describe.skip;
+const describeIfFixtureSet = hasBinaryFixtures("model1", "model2", "ffmpeg", "onnxAddon", "vkfftAddon", "fftwAddon")
+	? describe
+	: describe.skip;
 
 describeIfFixtureSet("dtln", () => {
 	it("processes voice audio", async () => {

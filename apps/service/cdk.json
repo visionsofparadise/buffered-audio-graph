@@ -1,6 +1,6 @@
 {
-  "app": "npx tsx src/app.ts",
-  "context": {
-    "@aws-cdk/core:target-partitions": ["aws"]
-  }
+	"app": "npx tsx src/app.ts",
+	"context": {
+		"@aws-cdk/core:target-partitions": ["aws"]
+	}
 }

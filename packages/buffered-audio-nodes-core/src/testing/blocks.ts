@@ -1,6 +1,11 @@
 import type { Block } from "../node/stream/block";
 
-export function createBlock(value: number, offset: number, frames: number, options?: { channels?: number; sampleRate?: number; bitDepth?: number }): Block {
+export function createBlock(
+	value: number,
+	offset: number,
+	frames: number,
+	options?: { channels?: number; sampleRate?: number; bitDepth?: number },
+): Block {
 	const channels = options?.channels ?? 1;
 	const samples: Array<Float32Array> = [];
 
@@ -9,7 +14,11 @@ export function createBlock(value: number, offset: number, frames: number, optio
 	return { samples, offset, sampleRate: options?.sampleRate ?? 44100, bitDepth: options?.bitDepth ?? 32 };
 }
 
-export function blockFromSamples(samples: Array<Float32Array>, offset: number, options?: { sampleRate?: number; bitDepth?: number }): Block {
+export function blockFromSamples(
+	samples: Array<Float32Array>,
+	offset: number,
+	options?: { sampleRate?: number; bitDepth?: number },
+): Block {
 	return { samples, offset, sampleRate: options?.sampleRate ?? 44100, bitDepth: options?.bitDepth ?? 32 };
 }
 

@@ -1,6 +1,13 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- indexing test fixtures with known bounds */
 import { describe, it, expect } from "vitest";
-import { computeLogBandMappings, computeMelBandMappings, erbToFreq, freqToErb, freqToMel, melToFreq } from "./frequency";
+import {
+	computeLogBandMappings,
+	computeMelBandMappings,
+	erbToFreq,
+	freqToErb,
+	freqToMel,
+	melToFreq,
+} from "./frequency";
 
 describe("mel / erb conversions", () => {
 	it("round-trips mel", () => {
@@ -20,7 +27,10 @@ describe("band mappings", () => {
 	const numLinearBins = fftSize / 2 + 1;
 
 	// The .bin band layout must stay inside the linear-bin range with well-formed edge weights.
-	function assertWellFormed(mappings: ReadonlyArray<{ binStart: number; binEnd: number; weightStart: number; weightEnd: number }>, numBands: number): void {
+	function assertWellFormed(
+		mappings: ReadonlyArray<{ binStart: number; binEnd: number; weightStart: number; weightEnd: number }>,
+		numBands: number,
+	): void {
 		expect(mappings.length).toBe(numBands);
 
 		for (const mapping of mappings) {

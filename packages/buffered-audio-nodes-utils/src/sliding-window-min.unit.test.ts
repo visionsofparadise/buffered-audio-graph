@@ -78,7 +78,7 @@ function runStreaming(input: Float32Array, halfWidth: number, chunkSize: number)
 
 describe("slidingWindowMin (whole-array)", () => {
 	it("matches the naive reference on a small fixture", () => {
-		const input = makeFixture(257, 0xDEAD_BEEF);
+		const input = makeFixture(257, 0xdead_beef);
 		const halfWidth = 12;
 		const expected = slidingWindowMinNaive(input, halfWidth);
 		const actual = slidingWindowMin(input, halfWidth);
@@ -96,7 +96,7 @@ describe("slidingWindowMin (whole-array)", () => {
 	});
 
 	it("halfWidth = 0 returns the input bit-for-bit (window = single sample)", () => {
-		const input = makeFixture(50, 0xC0FFEE);
+		const input = makeFixture(50, 0xc0ffee);
 		const result = slidingWindowMin(input, 0);
 
 		for (let frameIdx = 0; frameIdx < input.length; frameIdx++) {
@@ -126,7 +126,7 @@ describe("slidingWindowMin (whole-array)", () => {
 
 describe("SlidingWindowMinStream (chunked)", () => {
 	it("byte-equivalent to whole-array reference at chunk size 100", () => {
-		const input = makeFixture(5000, 0xFACE_F00D);
+		const input = makeFixture(5000, 0xface_f00d);
 		const halfWidth = 50;
 		const reference = slidingWindowMin(input, halfWidth);
 		const streamed = runStreaming(input, halfWidth, 100);
@@ -150,7 +150,7 @@ describe("SlidingWindowMinStream (chunked)", () => {
 	});
 
 	it("byte-equivalent to whole-array reference at chunk size 1000", () => {
-		const input = makeFixture(5000, 0xABCD_1234);
+		const input = makeFixture(5000, 0xabcd_1234);
 		const halfWidth = 50;
 		const reference = slidingWindowMin(input, halfWidth);
 		const streamed = runStreaming(input, halfWidth, 1000);
@@ -162,7 +162,7 @@ describe("SlidingWindowMinStream (chunked)", () => {
 	});
 
 	it("byte-equivalent at chunk size 1 (every input → single-sample push)", () => {
-		const input = makeFixture(500, 0x5A5A_F00D);
+		const input = makeFixture(500, 0x5a5a_f00d);
 		const halfWidth = 17;
 		const reference = slidingWindowMin(input, halfWidth);
 		const streamed = runStreaming(input, halfWidth, 1);
@@ -173,7 +173,7 @@ describe("SlidingWindowMinStream (chunked)", () => {
 	});
 
 	it("halfWidth = 0 streaming output equals input bit-for-bit", () => {
-		const input = makeFixture(200, 0xBADC_AFE);
+		const input = makeFixture(200, 0xbadc_afe);
 		const streamed = runStreaming(input, 0, 33);
 
 		for (let frameIdx = 0; frameIdx < input.length; frameIdx++) {
@@ -182,7 +182,7 @@ describe("SlidingWindowMinStream (chunked)", () => {
 	});
 
 	it("source shorter than halfWidth still emits all outputs once isFinal is signalled", () => {
-		const input = makeFixture(10, 0xCAFE_BABE);
+		const input = makeFixture(10, 0xcafe_babe);
 		const halfWidth = 50;
 		const reference = slidingWindowMin(input, halfWidth);
 		const streamed = runStreaming(input, halfWidth, 4);

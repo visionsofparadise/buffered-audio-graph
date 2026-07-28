@@ -10,7 +10,10 @@ import {
 export class ShowSaveDialogMainIpc extends AsyncMainIpc<ShowSaveDialogIpcParameters, ShowSaveDialogIpcReturn> {
 	action = SHOW_SAVE_DIALOG_ACTION;
 
-	async handler(options: ShowSaveDialogOptions, dependencies: IpcHandlerDependencies): Promise<ShowSaveDialogIpcReturn> {
+	async handler(
+		options: ShowSaveDialogOptions,
+		dependencies: IpcHandlerDependencies,
+	): Promise<ShowSaveDialogIpcReturn> {
 		const result = await dialog.showSaveDialog(dependencies.browserWindow, {
 			title: options.title,
 			defaultPath: options.defaultPath,

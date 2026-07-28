@@ -1,23 +1,23 @@
 {
-  "name": "service",
-  "version": "0.1.0",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "check": "concurrently \"eslint . --fix --cache --format ../../agent-eslint.js\" \"tsc --noEmit --pretty false 2>&1 | node ../../agent-tsc.js\"",
-    "check:verbose": "concurrently \"eslint .\" \"tsc --noEmit\"",
-    "synth": "cdk synth",
-    "diff": "cdk diff",
-    "deploy": "cdk deploy --require-approval never"
-  },
-  "dependencies": {
-    "aws-cdk-lib": "^2.250.0",
-    "constructs": "^10.6.0"
-  },
-  "devDependencies": {
-    "aws-cdk": "^2.1118.2",
-    "concurrently": "*",
-    "tsx": "^4.21.0",
-    "typescript": "*"
-  }
+	"name": "service",
+	"version": "0.1.0",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"check": "concurrently \"eslint . --fix --cache --format ../../agent-eslint.js\" \"tsc --noEmit --pretty false 2>&1 | node ../../agent-tsc.js\"",
+		"check:verbose": "concurrently \"eslint .\" \"tsc --noEmit\"",
+		"synth": "cdk synth",
+		"diff": "cdk diff",
+		"deploy": "cdk deploy --require-approval never"
+	},
+	"dependencies": {
+		"aws-cdk-lib": "^2.250.0",
+		"constructs": "^10.6.0"
+	},
+	"devDependencies": {
+		"aws-cdk": "^2.1118.2",
+		"concurrently": "*",
+		"tsx": "^4.21.0",
+		"typescript": "*"
+	}
 }

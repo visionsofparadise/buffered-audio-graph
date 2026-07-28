@@ -9,7 +9,11 @@ describe("ReadFfmpegNode", () => {
 	});
 
 	it("creates a ReadFfmpegNode with channel selection", () => {
-		const node = readFfmpeg("test.mp3", { channels: [0], ffmpegPath: "/usr/bin/ffmpeg", ffprobePath: "/usr/bin/ffprobe" });
+		const node = readFfmpeg("test.mp3", {
+			channels: [0],
+			ffmpegPath: "/usr/bin/ffmpeg",
+			ffprobePath: "/usr/bin/ffprobe",
+		});
 
 		expect(node).toBeInstanceOf(ReadFfmpegNode);
 	});

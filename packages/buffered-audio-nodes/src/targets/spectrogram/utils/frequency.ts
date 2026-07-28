@@ -66,15 +66,33 @@ export function computeScaledBandMappings(
 	return mappings;
 }
 
-export function computeMelBandMappings(numBands: number, minFreq: number, maxFreq: number, sampleRate: number, fftSize: number): ReadonlyArray<BandMapping> {
+export function computeMelBandMappings(
+	numBands: number,
+	minFreq: number,
+	maxFreq: number,
+	sampleRate: number,
+	fftSize: number,
+): ReadonlyArray<BandMapping> {
 	return computeScaledBandMappings(numBands, minFreq, maxFreq, sampleRate, fftSize, freqToMel, melToFreq);
 }
 
-export function computeErbBandMappings(numBands: number, minFreq: number, maxFreq: number, sampleRate: number, fftSize: number): ReadonlyArray<BandMapping> {
+export function computeErbBandMappings(
+	numBands: number,
+	minFreq: number,
+	maxFreq: number,
+	sampleRate: number,
+	fftSize: number,
+): ReadonlyArray<BandMapping> {
 	return computeScaledBandMappings(numBands, minFreq, maxFreq, sampleRate, fftSize, freqToErb, erbToFreq);
 }
 
-export function computeLogBandMappings(numBands: number, minFreq: number, maxFreq: number, sampleRate: number, fftSize: number): ReadonlyArray<BandMapping> {
+export function computeLogBandMappings(
+	numBands: number,
+	minFreq: number,
+	maxFreq: number,
+	sampleRate: number,
+	fftSize: number,
+): ReadonlyArray<BandMapping> {
 	const logMin = Math.log(minFreq);
 	const logMax = Math.log(maxFreq);
 	const logStep = (logMax - logMin) / numBands;

@@ -29,23 +29,10 @@ export function ParameterField({
 }) {
 	switch (param.kind) {
 		case "object":
-			return (
-				<ObjectRow
-					param={param}
-					basePath={basePath}
-					dimmed={dimmed}
-					callbacks={callbacks}
-				/>
-			);
+			return <ObjectRow param={param} basePath={basePath} dimmed={dimmed} callbacks={callbacks} />;
 
 		case "array":
-			return (
-				<ArrayRow
-					param={param}
-					dimmed={dimmed}
-					callbacks={callbacks}
-				/>
-			);
+			return <ArrayRow param={param} dimmed={dimmed} callbacks={callbacks} />;
 
 		default: {
 			const leafPath = [...basePath, param.name];

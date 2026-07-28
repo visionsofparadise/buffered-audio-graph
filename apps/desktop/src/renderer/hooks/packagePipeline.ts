@@ -113,7 +113,9 @@ export async function ensureGraphPackagesInstalled(
 	for (const { packageName, packageVersion } of pairs) {
 		const satisfied = app.op
 			.unwrap()
-			.packages.some((entry) => entry.status === "ready" && entry.name === packageName && entry.version === packageVersion);
+			.packages.some(
+				(entry) => entry.status === "ready" && entry.name === packageName && entry.version === packageVersion,
+			);
 
 		if (satisfied) {
 			continue;

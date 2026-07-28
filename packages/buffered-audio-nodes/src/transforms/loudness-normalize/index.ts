@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type BlockBuffer,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { resolveLoudnessGain } from "./utils/gain";
@@ -58,7 +65,8 @@ export class LoudnessNormalizeStream extends BufferedTransformStream<LoudnessNor
 export class LoudnessNormalizeNode extends TransformNode<LoudnessNormalizeProperties> {
 	static override readonly nodeName = "Loudness Normalize";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly description = "Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics";
+	static override readonly description =
+		"Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics";
 	static override readonly schema = schema;
 	static override readonly Stream = LoudnessNormalizeStream;
 }

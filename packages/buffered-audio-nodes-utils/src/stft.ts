@@ -40,7 +40,14 @@ export const STFT_BATCH_SCRATCH_BYTES = 8 * 1024 * 1024;
 const HANN_WINDOW_CACHE_BYTES = 1024 * 1024;
 const TWIDDLE_CACHE_BYTES = 8 * 1024 * 1024;
 
-export function stft(signal: Float32Array, fftSize: number, hopSize: number, output?: StftOutput, backend?: FftBackend, fftAddonOptions?: { vkfftPath?: string; fftwPath?: string }): StftResult {
+export function stft(
+	signal: Float32Array,
+	fftSize: number,
+	hopSize: number,
+	output?: StftOutput,
+	backend?: FftBackend,
+	fftAddonOptions?: { vkfftPath?: string; fftwPath?: string },
+): StftResult {
 	assertRadix2Size(fftSize);
 	assertPositiveInteger(hopSize, "STFT hopSize");
 
@@ -129,7 +136,13 @@ export function stft(signal: Float32Array, fftSize: number, hopSize: number, out
 	return { real, imag, frames: numFrames, fftSize };
 }
 
-export function istft(result: StftResult, hopSize: number, outputLength: number, backend?: FftBackend, fftAddonOptions?: { vkfftPath?: string; fftwPath?: string }): Float32Array {
+export function istft(
+	result: StftResult,
+	hopSize: number,
+	outputLength: number,
+	backend?: FftBackend,
+	fftAddonOptions?: { vkfftPath?: string; fftwPath?: string },
+): Float32Array {
 	const { real, imag, frames, fftSize } = result;
 
 	assertRadix2Size(fftSize);
@@ -184,7 +197,9 @@ export function istft(result: StftResult, hopSize: number, outputLength: number,
 					const position = offset + index;
 
 					if (position < outputLength) {
-						output[position] = (output[position] ?? 0) + (timeDomainSlab[slabFrame * fftSize + index] ?? 0) * (window[index] ?? 0);
+						output[position] =
+							(output[position] ?? 0) +
+							(timeDomainSlab[slabFrame * fftSize + index] ?? 0) * (window[index] ?? 0);
 						windowSum[position] = (windowSum[position] ?? 0) + (window[index] ?? 0) * (window[index] ?? 0);
 					}
 				}

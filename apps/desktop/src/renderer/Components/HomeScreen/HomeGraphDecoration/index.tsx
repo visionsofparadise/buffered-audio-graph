@@ -193,7 +193,10 @@ export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorat
 							style={{ overflow: "visible" }}
 						>
 							<div
-								className={cn("flex h-full items-center justify-start gap-3", isEndAligned ? "flex-row-reverse" : "flex-row")}
+								className={cn(
+									"flex h-full items-center justify-start gap-3",
+									isEndAligned ? "flex-row-reverse" : "flex-row",
+								)}
 								style={{ cursor: "pointer" }}
 								onMouseEnter={handleEnter}
 								onMouseLeave={handleLeave}
@@ -206,7 +209,10 @@ export function HomeGraphDecoration({ anchors, onAnchorClick }: HomeGraphDecorat
 								)}
 								<div className={cn("flex flex-col gap-0.5", isEndAligned ? "items-end" : "items-start")}>
 									<span
-										className={cn("text-[14px] whitespace-nowrap leading-tight", isHovered ? "text-text-primary" : "text-text-secondary")}
+										className={cn(
+											"text-[14px] whitespace-nowrap leading-tight",
+											isHovered ? "text-text-primary" : "text-text-secondary",
+										)}
 									>
 										{anchor.label}
 									</span>

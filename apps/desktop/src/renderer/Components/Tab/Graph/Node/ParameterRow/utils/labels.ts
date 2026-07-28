@@ -5,8 +5,5 @@ export function humanizeFieldName(name: string): string {
 }
 
 export function paramLabelClass(complete: boolean): string {
-	return cn(
-		"type-label text-xs",
-		complete ? "text-text-secondary" : "text-error",
-	);
+	return cn("type-label text-xs", complete ? "text-text-secondary" : "text-error");
 }

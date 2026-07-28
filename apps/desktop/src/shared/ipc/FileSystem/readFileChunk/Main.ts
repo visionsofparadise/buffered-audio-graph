@@ -5,7 +5,12 @@ import { READ_FILE_CHUNK_ACTION, type ReadFileChunkIpcParameters, type ReadFileC
 export class ReadFileChunkMainIpc extends AsyncMainIpc<ReadFileChunkIpcParameters, ReadFileChunkIpcReturn> {
 	action = READ_FILE_CHUNK_ACTION;
 
-	async handler(path: string, offset: number, length: number, _dependencies: IpcHandlerDependencies): Promise<ReadFileChunkIpcReturn> {
+	async handler(
+		path: string,
+		offset: number,
+		length: number,
+		_dependencies: IpcHandlerDependencies,
+	): Promise<ReadFileChunkIpcReturn> {
 		const handle = await fs.open(path, "r");
 
 		try {

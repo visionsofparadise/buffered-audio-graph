@@ -6,7 +6,12 @@ export function computeTotalSamples(buckets: Uint32Array): number {
 	return totalSamples;
 }
 
-export function amplitudePercentile(buckets: Uint32Array, bucketMax: number, totalSamples: number, percent: number): number {
+export function amplitudePercentile(
+	buckets: Uint32Array,
+	bucketMax: number,
+	totalSamples: number,
+	percent: number,
+): number {
 	if (totalSamples === 0 || bucketMax === 0) return 0;
 
 	const target = (percent / 100) * totalSamples;

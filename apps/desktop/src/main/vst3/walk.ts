@@ -20,7 +20,11 @@ export const moduleNameFromPath = (modulePath: string): string => path.basename(
 
 export type ReadDirectory = (directory: string) => ReadonlyArray<DirentLike>;
 
-export const walkRoot = (root: string, readDirectory: ReadDirectory, onWarn?: (directory: string, error: unknown) => void): ReadonlyArray<WalkModule> => {
+export const walkRoot = (
+	root: string,
+	readDirectory: ReadDirectory,
+	onWarn?: (directory: string, error: unknown) => void,
+): ReadonlyArray<WalkModule> => {
 	const modules: Array<WalkModule> = [];
 
 	const recurse = (directory: string, vendorFolder: string): void => {
@@ -40,7 +44,12 @@ export const walkRoot = (root: string, readDirectory: ReadDirectory, onWarn?: (d
 			if (isModuleDirent(entry)) {
 				const resolvedVendor = vendorFolder === "" ? entry.name : vendorFolder;
 
-				modules.push({ modulePath: entryPath, rootPath: root, vendorFolder: resolvedVendor, name: moduleNameFromPath(entryPath) });
+				modules.push({
+					modulePath: entryPath,
+					rootPath: root,
+					vendorFolder: resolvedVendor,
+					name: moduleNameFromPath(entryPath),
+				});
 
 				continue;
 			}

@@ -10,7 +10,10 @@ export const derivePendingEntry = (module: WalkModule): Vst3ScanEntry => ({
 	status: "pending",
 });
 
-export const deriveReadyEntries = (module: WalkModule, classNames: ReadonlyArray<string>): ReadonlyArray<Vst3ScanEntry> => {
+export const deriveReadyEntries = (
+	module: WalkModule,
+	classNames: ReadonlyArray<string>,
+): ReadonlyArray<Vst3ScanEntry> => {
 	if (classNames.length <= 1) {
 		return [
 			{

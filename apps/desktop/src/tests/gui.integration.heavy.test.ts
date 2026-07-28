@@ -16,7 +16,13 @@ import { addNode } from "./actions/addNode";
 import { clearGraph } from "./actions/clearGraph";
 import { deleteNodeViaMenu, openNodeMenuAndDump } from "./actions/deleteNodeViaMenu";
 import { dragNodeBy } from "./actions/dragNodeBy";
-import { clickRender, dismissRenderToast, isRenderEnabled, waitForRenderError, waitForRenderOutput } from "./actions/render";
+import {
+	clickRender,
+	dismissRenderToast,
+	isRenderEnabled,
+	waitForRenderError,
+	waitForRenderOutput,
+} from "./actions/render";
 import {
 	cancelRenderParameters,
 	confirmRenderParameters,
@@ -153,7 +159,9 @@ describe("boot and package lifecycle", () => {
 		const refreshedPackage = await waitForRefreshedBuiltInPackage(10000);
 
 		expect(
-			refreshedPackage?.status === "ready" && refreshedPackage.version !== null && refreshedPackage.version !== STALE_BUILTIN_VERSION,
+			refreshedPackage?.status === "ready" &&
+				refreshedPackage.version !== null &&
+				refreshedPackage.version !== STALE_BUILTIN_VERSION,
 			`stale package lifecycle resets and reloads (${STALE_BUILTIN_VERSION} → ${String(refreshedPackage?.version)})`,
 		).toBe(true);
 	});
@@ -162,7 +170,8 @@ describe("boot and package lifecycle", () => {
 		const restoredDependency = await waitForRestoredDependency(10000);
 
 		expect(
-			restoredDependency?.status === "ready" && restoredDependency.requestedSpec === `${BUILTIN_PACKAGE}@${STALE_BUILTIN_VERSION}`,
+			restoredDependency?.status === "ready" &&
+				restoredDependency.requestedSpec === `${BUILTIN_PACKAGE}@${STALE_BUILTIN_VERSION}`,
 			`restored tab registers exact dependency ${BUILTIN_PACKAGE}@${STALE_BUILTIN_VERSION}`,
 		).toBe(true);
 	});
@@ -184,16 +193,19 @@ describe("boot and package lifecycle", () => {
 
 	it("auto-proceeds past loading with no Continue button", async () => {
 		const sawContinueButton = await page.evaluate(() =>
-			Array.from(document.querySelectorAll("button")).some((button) => (button.textContent).includes("Continue")),
+			Array.from(document.querySelectorAll("button")).some((button) => button.textContent.includes("Continue")),
 		);
 
-		expect(!sawContinueButton, "loading auto-proceeds to the graph with no Continue button (success path)").toBe(true);
+		expect(!sawContinueButton, "loading auto-proceeds to the graph with no Continue button (success path)").toBe(
+			true,
+		);
 
 		// The reduced-to-Quit menu during loading (Phase 2.2) is verified attended:
 		// the warm smoke profile resolves packages too fast to catch the chromeOnly
 		// menu over CDP, and the plan forbids a forced chromeOnly render.
 		await page.waitForFunction(
-			() => Array.from(document.querySelectorAll("button")).some((button) => (button.textContent).includes("Add node")),
+			() =>
+				Array.from(document.querySelectorAll("button")).some((button) => button.textContent.includes("Add node")),
 			{ timeout: 30000, polling: 300 },
 		);
 		await sleep(500);
@@ -271,7 +283,10 @@ describe("full-graph render", () => {
 
 		// Render gate happy path: both nodes were added at the installed catalog version,
 		// so every pinned pair is ready and the Render button is enabled before click.
-		expect(await isRenderEnabled(page), "render gate — Render button enabled once both pinned packages are ready").toBe(true);
+		expect(
+			await isRenderEnabled(page),
+			"render gate — Render button enabled once both pinned packages are ready",
+		).toBe(true);
 	});
 
 	it("renders the graph to a non-empty output file without a parameters modal", async () => {
@@ -283,8 +298,12 @@ describe("full-graph render", () => {
 
 		const outcome = await waitForRenderOutput(page, OUTPUT_WAV_PATH, 60000);
 
-		expect(outcome.ok, `render to completion — output written and toast settled (${outcome.error ?? "ok"})`).toBe(true);
-		expect(statSync(OUTPUT_WAV_PATH).size > 0, "render to completion — output file exists and is non-empty").toBe(true);
+		expect(outcome.ok, `render to completion — output written and toast settled (${outcome.error ?? "ok"})`).toBe(
+			true,
+		);
+		expect(statSync(OUTPUT_WAV_PATH).size > 0, "render to completion — output file exists and is non-empty").toBe(
+			true,
+		);
 
 		await dismissRenderToast(page);
 	});
@@ -327,7 +346,9 @@ describe("full-graph render", () => {
 
 		await clickRender(page);
 
-		expect(await waitForRenderParametersOpen(page), "second render — modal reopens with remembered values").toBe(true);
+		expect(await waitForRenderParametersOpen(page), "second render — modal reopens with remembered values").toBe(
+			true,
+		);
 		expect(await readRenderParameter(page, "outDir"), "second render — outDir pre-filled").toBe(PROFILE_DIR);
 
 		await cancelRenderParameters(page);
@@ -349,7 +370,9 @@ describe("graph editing and persistence", () => {
 	it("adds a node from the catalog by keyboard", async () => {
 		transformId = await addNode(page, TRANSFORM_NODE, 2, { search: "gain", method: "keyboard" });
 
-		expect(transformId.length > 0, "catalog keyboard nav — type-to-filter then Enter adds the first match").toBe(true);
+		expect(transformId.length > 0, "catalog keyboard nav — type-to-filter then Enter adds the first match").toBe(
+			true,
+		);
 	});
 
 	it("connects two nodes and the edge survives autosave reconciliation", async () => {
@@ -414,7 +437,7 @@ describe("graph editing and persistence", () => {
 			.catch(() => false);
 
 		expect(catalogOpened, "edge chip — clicking the + chip opens the insert catalog").toBe(true);
-		expect(await edgeCount(page) === 1, "edge chip — the edge survives the chip click (still 1)").toBe(true);
+		expect((await edgeCount(page)) === 1, "edge chip — the edge survives the chip click (still 1)").toBe(true);
 
 		await page.keyboard.press("Escape");
 		await sleep(200);
@@ -485,7 +508,10 @@ describe("graph editing and persistence", () => {
 
 		const persistedPath = persisted.nodes[0]?.parameters?.path;
 
-		expect(persistedPath === PATH_SENTINEL, `persisted param path equals typed value ("${String(persistedPath)}")`).toBe(true);
+		expect(
+			persistedPath === PATH_SENTINEL,
+			`persisted param path equals typed value ("${String(persistedPath)}")`,
+		).toBe(true);
 	});
 
 	it("persists an integer parameter as a number", async () => {
@@ -520,7 +546,10 @@ describe("graph editing and persistence", () => {
 
 		const deletedDuplicateChannels = await deleteNodeViaMenu(page, duplicateChannelsId);
 
-		expect(deletedDuplicateChannels, "integer parameter — Duplicate Channels removed after persistence assertion").toBe(true);
+		expect(
+			deletedDuplicateChannels,
+			"integer parameter — Duplicate Channels removed after persistence assertion",
+		).toBe(true);
 		expect(await waitForNodeCount(page, 1, 5000), "integer parameter — mutation graph returns to 1 node").toBe(true);
 	});
 });
@@ -540,8 +569,14 @@ describe("undo/redo wiring — insert-on-edge", () => {
 		await zoomOut(page, 4);
 		await dragNodeBy(page, gainNodeId, 320, 140);
 
-		const valueSourceHandle = await rectOf(page, `.react-flow__node[data-id="${readNodeId}"] .react-flow__handle-right`);
-		const valueTargetHandle = await rectOf(page, `.react-flow__node[data-id="${gainNodeId}"] .react-flow__handle-left`);
+		const valueSourceHandle = await rectOf(
+			page,
+			`.react-flow__node[data-id="${readNodeId}"] .react-flow__handle-right`,
+		);
+		const valueTargetHandle = await rectOf(
+			page,
+			`.react-flow__node[data-id="${gainNodeId}"] .react-flow__handle-left`,
+		);
 
 		if (!valueSourceHandle || !valueTargetHandle) throw new Error("Could not locate value-level connection handles");
 
@@ -550,8 +585,14 @@ describe("undo/redo wiring — insert-on-edge", () => {
 	});
 
 	it("splits the edge by inserting a node as one history entry", async () => {
-		const insertSourceHandle = await rectOf(page, `.react-flow__node[data-id="${readNodeId}"] .react-flow__handle-right`);
-		const insertTargetHandle = await rectOf(page, `.react-flow__node[data-id="${gainNodeId}"] .react-flow__handle-left`);
+		const insertSourceHandle = await rectOf(
+			page,
+			`.react-flow__node[data-id="${readNodeId}"] .react-flow__handle-right`,
+		);
+		const insertTargetHandle = await rectOf(
+			page,
+			`.react-flow__node[data-id="${gainNodeId}"] .react-flow__handle-left`,
+		);
 
 		if (!insertSourceHandle || !insertTargetHandle) throw new Error("Could not locate insert-on-edge handles");
 
@@ -593,7 +634,10 @@ describe("undo/redo wiring — insert-on-edge", () => {
 
 		// The inserted node is the persisted node that is neither pre-existing endpoint.
 		insertBagId = readPersistedBag().id;
-		insertedNodeId = readPersistedBag().nodes.map((node) => node.id).find((id) => id !== undefined && id !== readNodeId && id !== gainNodeId) ?? null;
+		insertedNodeId =
+			readPersistedBag()
+				.nodes.map((node) => node.id)
+				.find((id) => id !== undefined && id !== readNodeId && id !== gainNodeId) ?? null;
 
 		expect(insertedNodeId !== null, "insert-on-edge — inserted node id identified in the persisted bag").toBe(true);
 	});
@@ -667,7 +711,9 @@ describe("vst3 stage editor", () => {
 
 		if (entryCount === 0) {
 			await page.keyboard.press("Escape");
-			log("  SKIP  VST3 scan returned zero entries — no installed plugins in the scan roots; skipping the picker/open assertions.");
+			log(
+				"  SKIP  VST3 scan returned zero entries — no installed plugins in the scan roots; skipping the picker/open assertions.",
+			);
 			context.skip();
 
 			return;
@@ -713,7 +759,10 @@ describe("vst3 stage editor", () => {
 		// The saved event fires on close; the preset path then commits and persists.
 		const presetPath = await waitForPresetCommit(20000);
 
-		expect(presetPath !== null, `VST3 — presetPath follows the saved event and commits ("${String(presetPath)}")`).toBe(true);
+		expect(
+			presetPath !== null,
+			`VST3 — presetPath follows the saved event and commits ("${String(presetPath)}")`,
+		).toBe(true);
 
 		if (presetPath === null) return;
 
@@ -734,7 +783,10 @@ describe("settings — vst3 scan roots", () => {
 
 	it("renders the seeded scan roots", async () => {
 		const localAppData = process.env.LOCALAPPDATA;
-		const expectedRoots = ["C:\\Program Files\\Common Files\\VST3", ...(localAppData ? [join(localAppData, "Programs", "Common", "VST3")] : [])];
+		const expectedRoots = [
+			"C:\\Program Files\\Common Files\\VST3",
+			...(localAppData ? [join(localAppData, "Programs", "Common", "VST3")] : []),
+		];
 
 		const appMenuTrigger = await rectOf(page, 'button[aria-label="App menu"]');
 
@@ -800,17 +852,23 @@ describe("settings — vst3 scan roots", () => {
 
 		const remainingRoots = await scanRootLabels(page);
 
-		expect(remainingRoots.length === seededRoots.length - 1, `remove root — list shrinks to ${seededRoots.length - 1}`).toBe(true);
+		expect(
+			remainingRoots.length === seededRoots.length - 1,
+			`remove root — list shrinks to ${seededRoots.length - 1}`,
+		).toBe(true);
 		expect(!remainingRoots.includes(removedRoot), "remove root — removed path no longer rendered").toBe(true);
 
 		// state.json follows the removal after the autosave debounce.
 		await sleep(DEBOUNCE_WAIT_MS);
 
-		const persistedState = JSON.parse(readFileSync(join(PROFILE_DIR, "state.json"), "utf8")) as { vst3ScanRoots?: Array<string> };
+		const persistedState = JSON.parse(readFileSync(join(PROFILE_DIR, "state.json"), "utf8")) as {
+			vst3ScanRoots?: Array<string>;
+		};
 
 		expect(Array.isArray(persistedState.vst3ScanRoots), "state.json gained a vst3ScanRoots array").toBe(true);
 		expect(
-			persistedState.vst3ScanRoots?.length === remainingRoots.length && !(persistedState.vst3ScanRoots ?? []).includes(removedRoot),
+			persistedState.vst3ScanRoots?.length === remainingRoots.length &&
+				!(persistedState.vst3ScanRoots ?? []).includes(removedRoot),
 			`state.json vst3ScanRoots follows the removal (${(persistedState.vst3ScanRoots ?? []).join(" | ")})`,
 		).toBe(true);
 

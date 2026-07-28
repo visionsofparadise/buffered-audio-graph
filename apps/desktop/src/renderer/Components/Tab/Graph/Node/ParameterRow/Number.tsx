@@ -43,9 +43,10 @@ export function NumberRow({
 
 	const normalized = normalize(localValue);
 	const controlDisabled = (disabled ?? false) || (param.optional && !param.defined);
-	const setDefinedHandler = onParameterChange || onParameterUnset
-		? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-		: undefined;
+	const setDefinedHandler =
+		onParameterChange || onParameterUnset
+			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
+			: undefined;
 
 	const beginEdit = (): void => {
 		if (controlDisabled) return;
@@ -82,7 +83,10 @@ export function NumberRow({
 				onSetDefined={setDefinedHandler}
 			/>
 			<div
-				className={cn("flex shrink-0 flex-col items-center gap-1", controlDisabled && "pointer-events-none opacity-40")}
+				className={cn(
+					"flex shrink-0 flex-col items-center gap-1",
+					controlDisabled && "pointer-events-none opacity-40",
+				)}
 				onDoubleClick={beginEdit}
 			>
 				{editText !== null ? (

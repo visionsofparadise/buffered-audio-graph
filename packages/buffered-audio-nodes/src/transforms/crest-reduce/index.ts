@@ -1,5 +1,14 @@
 import { z } from "zod";
-import { BufferedTransformStream, type BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	type BlockBuffer,
+	createProgressGate,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type StreamSetupContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { initFftBackend, linearToDb, type FftBackend } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { LATTICE_ORDER } from "./utils/lattice";
@@ -21,16 +30,28 @@ export const schema = z.object({
 		.int()
 		.refine(isPowerOfTwo, { message: "frameSize must be a power of two" })
 		.default(2048)
-		.describe("Analysis frame length in samples (default 2048 @ 48 kHz ≈ 43 ms; 75% overlap, Hann analysis window). Whole-file processing — output is produced after the full input is accumulated"),
+		.describe(
+			"Analysis frame length in samples (default 2048 @ 48 kHz ≈ 43 ms; 75% overlap, Hann analysis window). Whole-file processing — output is produced after the full input is accumulated",
+		),
 	vkfftAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "vkfft-addon", download: "https://github.com/visionsofparadise/vkfft-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "vkfft-addon",
+			download: "https://github.com/visionsofparadise/vkfft-addon",
+		})
 		.describe("VkFFT native addon — GPU FFT acceleration"),
 	fftwAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "fftw-addon", download: "https://github.com/visionsofparadise/fftw-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "fftw-addon",
+			download: "https://github.com/visionsofparadise/fftw-addon",
+		})
 		.describe("FFTW native addon — CPU FFT acceleration"),
 });
 
@@ -76,18 +97,29 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceNode> 
 		const order = LATTICE_ORDER;
 		const hopSize = this.hopSize;
 
-		const { db: inputTpDb, peakInputSample } = this.truePeakAccumulator?.finalize() ?? { db: linearToDb(0), peakInputSample: 0 };
+		const { db: inputTpDb, peakInputSample } = this.truePeakAccumulator?.finalize() ?? {
+			db: linearToDb(0),
+			peakInputSample: 0,
+		};
 
 		const lambda = groupDelayLambda(sampleRate, order);
 		const trajectoryGate = createProgressGate();
-		const { trajectory, frameCount } = await streamLatticeTrajectory(buffered, frameSize, hopSize, this.fftBackend, this.fftAddonOptions, {
-			globalTruePeakDb: inputTpDb,
-			peakInputSample,
-			sampleRate,
-			lambda,
-		}, (done, total) => {
-			if (trajectoryGate(done, Date.now())) this.emitProgress("process", done, total);
-		});
+		const { trajectory, frameCount } = await streamLatticeTrajectory(
+			buffered,
+			frameSize,
+			hopSize,
+			this.fftBackend,
+			this.fftAddonOptions,
+			{
+				globalTruePeakDb: inputTpDb,
+				peakInputSample,
+				sampleRate,
+				lambda,
+			},
+			(done, total) => {
+				if (trajectoryGate(done, Date.now())) this.emitProgress("process", done, total);
+			},
+		);
 
 		if (frameCount === 0) {
 			yield* buffered.iterate(44100);
@@ -97,7 +129,13 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceNode> 
 
 		this.log("trajectory analysed", { frameCount });
 
-		const smoothedTrajectory = smoothControlTrajectory(trajectory, smoothing, trajectoryFrameRate(sampleRate, hopSize), exactHoldHalfWidthFrames(sampleRate, hopSize), hopSize);
+		const smoothedTrajectory = smoothControlTrajectory(
+			trajectory,
+			smoothing,
+			trajectoryFrameRate(sampleRate, hopSize),
+			exactHoldHalfWidthFrames(sampleRate, hopSize),
+			hopSize,
+		);
 
 		await buffered.reset();
 
@@ -134,11 +172,18 @@ export class CrestReduceStream extends BufferedTransformStream<CrestReduceNode> 
 export class CrestReduceNode extends TransformNode<CrestReduceProperties> {
 	static override readonly nodeName = "Crest Reduce";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly description = "Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor";
+	static override readonly description =
+		"Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor";
 	static override readonly schema = schema;
 	static override readonly Stream = CrestReduceStream;
 }
 
-export function crestReduce(options?: { smoothing?: number; frameSize?: number; vkfftAddonPath?: string; fftwAddonPath?: string; id?: string }): CrestReduceNode {
+export function crestReduce(options?: {
+	smoothing?: number;
+	frameSize?: number;
+	vkfftAddonPath?: string;
+	fftwAddonPath?: string;
+	id?: string;
+}): CrestReduceNode {
 	return new CrestReduceNode(options ?? {});
 }

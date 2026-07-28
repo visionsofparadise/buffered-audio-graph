@@ -115,7 +115,10 @@ export function createHistory(group: Group<GraphMeta, GraphMeta>): History {
 			}
 
 			mutable.stack.splice(mutable.index + 1);
-			mutable.stack.push({ transactionKey: meta.transactionKey ?? crypto.randomUUID(), batches: [{ state, ops: [...ops] }] });
+			mutable.stack.push({
+				transactionKey: meta.transactionKey ?? crypto.randomUUID(),
+				batches: [{ state, ops: [...ops] }],
+			});
 			mutable.stackLength = mutable.stack.length;
 			mutable.index = mutable.stack.length - 1;
 		});

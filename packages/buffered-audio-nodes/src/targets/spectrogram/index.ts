@@ -1,17 +1,38 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
-import { createFftWorkspace, detectFftBackend, getFftAddon, hanningWindow, type FftWorkspace } from "@buffered-audio/utils";
+import {
+	BufferedTargetStream,
+	TargetNode,
+	type Block,
+	type StreamSetupContext,
+	type TargetNodeProperties,
+} from "@buffered-audio/core";
+import {
+	createFftWorkspace,
+	detectFftBackend,
+	getFftAddon,
+	hanningWindow,
+	type FftWorkspace,
+} from "@buffered-audio/utils";
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { computeSpectrogramFrames } from "./utils/frames";
-import { FREQUENCY_SCALE_BYTE, computeErbBandMappings, computeLogBandMappings, computeMelBandMappings } from "./utils/frequency";
+import {
+	FREQUENCY_SCALE_BYTE,
+	computeErbBandMappings,
+	computeLogBandMappings,
+	computeMelBandMappings,
+} from "./utils/frequency";
 
 export const schema = z.object({
 	outputPath: z.string().default("").meta({ input: "file", mode: "save", accept: ".bin" }).describe("Output Path"),
 	fftSize: z.number().min(256).max(8192).multipleOf(256).default(2048).describe("FFT Size"),
 	hopSize: z.number().min(64).max(8192).multipleOf(64).default(512).describe("Hop Size"),
-	fftwAddonPath: z.string().default("").meta({ input: "file", mode: "open", binary: "fftw-addon" }).describe("FFTW Addon"),
+	fftwAddonPath: z
+		.string()
+		.default("")
+		.meta({ input: "file", mode: "open", binary: "fftw-addon" })
+		.describe("FFTW Addon"),
 });
 
 export type FrequencyScale = "linear" | "log" | "mel" | "erb";
@@ -92,7 +113,12 @@ export class SpectrogramStream extends BufferedTargetStream<SpectrogramNode> {
 			this.bandMappings = undefined;
 			this.outputBins = this.linearBins;
 		} else {
-			const computeFn = scale === "mel" ? computeMelBandMappings : scale === "erb" ? computeErbBandMappings : computeLogBandMappings;
+			const computeFn =
+				scale === "mel"
+					? computeMelBandMappings
+					: scale === "erb"
+						? computeErbBandMappings
+						: computeLogBandMappings;
 
 			this.bandMappings = computeFn(numBands, minFreq, maxFreq, chunk.sampleRate, this.properties.fftSize);
 			this.outputBins = numBands;

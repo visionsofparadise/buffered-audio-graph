@@ -2,7 +2,10 @@ import { extname } from "node:path";
 import { ReadFfmpegNode } from "./ffmpeg";
 import { ReadWavNode } from "./wav";
 
-export function read(path: string, options?: { channels?: ReadonlyArray<number>; ffmpegPath?: string; ffprobePath?: string }): ReadWavNode | ReadFfmpegNode {
+export function read(
+	path: string,
+	options?: { channels?: ReadonlyArray<number>; ffmpegPath?: string; ffprobePath?: string },
+): ReadWavNode | ReadFfmpegNode {
 	const ext = extname(path).toLowerCase();
 
 	if (ext === ".wav") {
@@ -13,5 +16,10 @@ export function read(path: string, options?: { channels?: ReadonlyArray<number>;
 		throw new Error(`Non-WAV file requires ffmpegPath and ffprobePath: "${path}"`);
 	}
 
-	return new ReadFfmpegNode({ path, channels: options.channels, ffmpegPath: options.ffmpegPath, ffprobePath: options.ffprobePath });
+	return new ReadFfmpegNode({
+		path,
+		channels: options.channels,
+		ffmpegPath: options.ffmpegPath,
+		ffprobePath: options.ffprobePath,
+	});
 }

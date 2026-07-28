@@ -80,59 +80,37 @@ export const PackagesSection = retrack<Props>(({ context }: Props) => {
 									</button>
 								)}
 
-								<span className="text-body text-text-primary flex-1">
-									{entry.name}
-								</span>
+								<span className="text-body text-text-primary flex-1">{entry.name}</span>
 
 								{entry.version && (
-									<span className="type-value text-xs text-text-secondary">
-										{entry.version}
-									</span>
+									<span className="type-value text-xs text-text-secondary">{entry.version}</span>
 								)}
 
 								{entry.status === "ready" && (
-									<span className="type-label text-xs text-text-secondary">
-										Ready
-									</span>
+									<span className="type-label text-xs text-text-secondary">Ready</span>
 								)}
 								{entry.status === "error" && (
-									<span className="type-label text-xs text-accent-primary">
-										Error
-									</span>
+									<span className="type-label text-xs text-accent-primary">Error</span>
 								)}
 								{entry.status !== "ready" && entry.status !== "error" && (
-									<span className="type-label text-xs text-text-secondary">
-										{entry.status}
-									</span>
+									<span className="type-label text-xs text-text-secondary">{entry.status}</span>
 								)}
 
-								<span className="type-value text-xs text-dimmed">
-									{entry.nodes.length} nodes
-								</span>
+								<span className="type-value text-xs text-dimmed">{entry.nodes.length} nodes</span>
 
 								<div className="flex items-center gap-1">
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => void updatePackage(entry.requestedSpec)}
-									>
+									<Button variant="outline" size="sm" onClick={() => void updatePackage(entry.requestedSpec)}>
 										Update
 									</Button>
 									{!entry.isBuiltIn && (
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => void removePackage(entry.requestedSpec)}
-										>
+										<Button variant="ghost" size="sm" onClick={() => void removePackage(entry.requestedSpec)}>
 											Remove
 										</Button>
 									)}
 								</div>
 							</div>
 
-							<div className="mt-1 type-label text-xs text-dimmed">
-								{entry.requestedSpec}
-							</div>
+							<div className="mt-1 type-label text-xs text-dimmed">{entry.requestedSpec}</div>
 
 							{entry.status === "error" && entry.error && (
 								<div className="text-xs text-accent-primary mt-1">{entry.error}</div>
@@ -142,13 +120,9 @@ export const PackagesSection = retrack<Props>(({ context }: Props) => {
 								<ul className="mt-2 ml-4 flex flex-col gap-1">
 									{entry.nodes.map((node) => (
 										<li key={node.nodeName} className="flex flex-col">
-											<span className="type-label text-xs text-text-primary">
-												{node.nodeName}
-											</span>
+											<span className="type-label text-xs text-text-primary">{node.nodeName}</span>
 											{node.description && (
-												<span className="text-xs text-text-secondary">
-													{node.description}
-												</span>
+												<span className="text-xs text-text-secondary">{node.description}</span>
 											)}
 										</li>
 									))}
@@ -182,9 +156,7 @@ export const PackagesSection = retrack<Props>(({ context }: Props) => {
 				</Button>
 			</div>
 
-			<p className="text-dimmed text-xs mt-2">
-				Packages run with full system access.
-			</p>
+			<p className="text-dimmed text-xs mt-2">Packages run with full system access.</p>
 		</div>
 	);
 });

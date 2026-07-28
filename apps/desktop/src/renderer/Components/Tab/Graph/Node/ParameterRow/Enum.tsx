@@ -25,9 +25,10 @@ export function EnumRow({
 }) {
 	const useButtons = param.options.every((opt) => opt.length <= 10);
 	const controlDisabled = param.optional && !param.defined;
-	const setDefinedHandler = onParameterChange || onParameterUnset
-		? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-		: undefined;
+	const setDefinedHandler =
+		onParameterChange || onParameterUnset
+			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
+			: undefined;
 
 	return (
 		<div className={cn("flex flex-col", dimmed && "opacity-40")}>

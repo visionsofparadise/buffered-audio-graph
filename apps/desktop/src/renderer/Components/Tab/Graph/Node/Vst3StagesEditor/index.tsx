@@ -1,11 +1,4 @@
-import {
-	DndContext,
-	PointerSensor,
-	closestCenter,
-	useSensor,
-	useSensors,
-	type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -169,15 +162,8 @@ export function Vst3StagesEditor({
 			<span className={paramLabelClass(true)}>Stages</span>
 
 			<div className="flex flex-col gap-3">
-				<DndContext
-					sensors={sensors}
-					collisionDetection={closestCenter}
-					onDragEnd={handleDragEnd}
-				>
-					<SortableContext
-						items={rows.map((row) => row.rowId)}
-						strategy={verticalListSortingStrategy}
-					>
+				<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+					<SortableContext items={rows.map((row) => row.rowId)} strategy={verticalListSortingStrategy}>
 						<div className="flex flex-col gap-3">
 							{rows.map(({ rowId, stage }, rowIndex) => (
 								<SortableStageRow

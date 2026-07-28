@@ -1,4 +1,3 @@
-
 export interface ProcessGeometry {
 	readonly edgePadSamples: number;
 	readonly processStftFrames: number;
@@ -17,7 +16,8 @@ export function computeProcessGeometry(args: {
 	const edgePadSamples = fftSize - hopSize;
 	const virtualTotal = totalFrames + 2 * edgePadSamples;
 	const virtualLogicalLength = Math.max(virtualTotal, fftSize);
-	const virtualPaddedLength = virtualLogicalLength + ((hopSize - ((virtualLogicalLength - fftSize) % hopSize)) % hopSize);
+	const virtualPaddedLength =
+		virtualLogicalLength + ((hopSize - ((virtualLogicalLength - fftSize) % hopSize)) % hopSize);
 	const processStftFrames = Math.floor((virtualPaddedLength - fftSize) / hopSize) + 1;
 
 	const effectiveSampleRate = sampleRate ?? 48000;
@@ -70,7 +70,16 @@ export function computeWriteClip(args: {
 	readonly totalFrames: number;
 	readonly cleanedLength: number;
 }): WriteClip | undefined {
-	const { outStart, winStart, outFramesThisChunk, processStftFrames, hopSize, edgePadSamples, totalFrames, cleanedLength } = args;
+	const {
+		outStart,
+		winStart,
+		outFramesThisChunk,
+		processStftFrames,
+		hopSize,
+		edgePadSamples,
+		totalFrames,
+		cleanedLength,
+	} = args;
 
 	const centerStartFrame = outStart - winStart;
 	const centerStartSample = centerStartFrame * hopSize;

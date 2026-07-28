@@ -44,9 +44,10 @@ export function FileRow({
 	const complete = param.value !== "";
 	const controlDisabled = param.optional && !param.defined;
 	const isSaveMode = param.mode === "save";
-	const setDefinedHandler = onParameterChange || onParameterUnset
-		? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-		: undefined;
+	const setDefinedHandler =
+		onParameterChange || onParameterUnset
+			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
+			: undefined;
 
 	const [openEnabled, setOpenEnabled] = useState(false);
 

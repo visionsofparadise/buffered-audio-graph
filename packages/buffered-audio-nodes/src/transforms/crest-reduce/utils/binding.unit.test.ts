@@ -1,7 +1,13 @@
 import { BlockBuffer } from "@buffered-audio/core";
 import { TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
-import { BINDING_DELTA_DB, BINDING_HEADROOM_MIN, classifyWindow, isBindingPeak, measureWholeSignalTruePeakDb } from "./binding";
+import {
+	BINDING_DELTA_DB,
+	BINDING_HEADROOM_MIN,
+	classifyWindow,
+	isBindingPeak,
+	measureWholeSignalTruePeakDb,
+} from "./binding";
 
 // ─────────────────────────────────────────────────────────────────────
 // crest-reduce binding-gate suite — RE-SPEC'd to the 2026-05-17 KEYSTONE
@@ -60,7 +66,8 @@ function makeHeadroomBearing(frames: number, sampleRate: number, f0 = 100, harmo
 	for (let index = 0; index < frames; index++) {
 		let value = 0;
 
-		for (let harmonic = 1; harmonic <= harmonics; harmonic++) value += Math.cos((2 * Math.PI * harmonic * f0 * index) / sampleRate);
+		for (let harmonic = 1; harmonic <= harmonics; harmonic++)
+			value += Math.cos((2 * Math.PI * harmonic * f0 * index) / sampleRate);
 
 		out[index] = value;
 		peak = Math.max(peak, Math.abs(value));
@@ -97,7 +104,8 @@ function makeDense(frames: number, sampleRate: number): Float32Array {
 	for (let index = 0; index < frames; index++) {
 		let value = 0;
 
-		for (const frequency of [110, 220, 330, 440, 550, 660, 1500, 3000]) value += Math.sin((2 * Math.PI * frequency * index) / sampleRate);
+		for (const frequency of [110, 220, 330, 440, 550, 660, 1500, 3000])
+			value += Math.sin((2 * Math.PI * frequency * index) / sampleRate);
 
 		out[index] = (value / 8) * 0.6;
 	}
@@ -131,7 +139,13 @@ function classifySignal(signal: Float32Array, globalTruePeakDb: number): Array<R
 	const out: Array<ReturnType<typeof classifyWindow>> = [];
 
 	for (let frame = 0; frame < count; frame++) {
-		out.push(classifyWindow([signal.subarray(frame * HOP_SIZE, frame * HOP_SIZE + FRAME_SIZE)], globalTruePeakDb, SAMPLE_RATE));
+		out.push(
+			classifyWindow(
+				[signal.subarray(frame * HOP_SIZE, frame * HOP_SIZE + FRAME_SIZE)],
+				globalTruePeakDb,
+				SAMPLE_RATE,
+			),
+		);
 	}
 
 	return out;
@@ -149,7 +163,8 @@ describe("classifyWindow — TP-domain per-window gate (4×-true-peak proximity 
 	it("flags a high-crest window whose own 4× true peak is AT the global true peak as binding, with correct peak metadata", () => {
 		const window = new Float32Array(FRAME_SIZE);
 
-		for (let index = 0; index < FRAME_SIZE; index++) window[index] = Math.sin((2 * Math.PI * 200 * index) / SAMPLE_RATE) * 0.1;
+		for (let index = 0; index < FRAME_SIZE; index++)
+			window[index] = Math.sin((2 * Math.PI * 200 * index) / SAMPLE_RATE) * 0.1;
 
 		window[1234] = -0.8; // the in-window peak (signed)
 
@@ -200,7 +215,8 @@ describe("classifyWindow — TP-domain per-window gate (4×-true-peak proximity 
 	it("a zero-headroom window is NON-binding even when force-flagged the global-TP frame (the headroom term is conjunctive)", () => {
 		const clipped = new Float32Array(FRAME_SIZE);
 
-		for (let index = 0; index < FRAME_SIZE; index++) clipped[index] = Math.max(-1, Math.min(1, Math.sin((2 * Math.PI * 200 * index) / SAMPLE_RATE) * 2));
+		for (let index = 0; index < FRAME_SIZE; index++)
+			clipped[index] = Math.max(-1, Math.min(1, Math.sin((2 * Math.PI * 200 * index) / SAMPLE_RATE) * 2));
 
 		// Even the force-bind cannot override zero crest headroom (a
 		// phase-only all-pass cannot flatten an already-limited window).
@@ -242,7 +258,8 @@ describe("classifyWindow — the HEADROOM term (binding = ( TP-proximity OR forc
 	it("a genuinely ZERO-crest-headroom window AT the global true peak is NON-binding (exact identity) — the load-bearing case", () => {
 		const clipped = new Float32Array(FRAME_SIZE);
 
-		for (let index = 0; index < FRAME_SIZE; index++) clipped[index] = Math.max(-1, Math.min(1, Math.sin((2 * Math.PI * 200 * index) / SAMPLE_RATE) * 2));
+		for (let index = 0; index < FRAME_SIZE; index++)
+			clipped[index] = Math.max(-1, Math.min(1, Math.sin((2 * Math.PI * 200 * index) / SAMPLE_RATE) * 2));
 
 		const result = classifyWindow([clipped], windowTruePeakDb([clipped]), SAMPLE_RATE);
 

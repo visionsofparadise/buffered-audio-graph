@@ -2,7 +2,12 @@ import type { NodeRegistry, ProgressPayload, StreamIdentity } from "@buffered-au
 import { createRenderJobs } from "@buffered-audio/core";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { emitToRenderer, type AudioProgressPayload } from "../../../utilities/emitToRenderer";
-import { RENDER_GRAPH_ACTION, type RenderGraphInput, type RenderGraphIpcParameters, type RenderGraphIpcReturn } from "./Renderer";
+import {
+	RENDER_GRAPH_ACTION,
+	type RenderGraphInput,
+	type RenderGraphIpcParameters,
+	type RenderGraphIpcReturn,
+} from "./Renderer";
 
 export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, RenderGraphIpcReturn> {
 	action = RENDER_GRAPH_ACTION;

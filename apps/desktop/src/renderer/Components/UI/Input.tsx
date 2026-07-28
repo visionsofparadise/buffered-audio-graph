@@ -28,11 +28,7 @@ export function Input({
 }: InputProps) {
 	return (
 		<div className={cn("flex flex-col gap-1", className)}>
-			{label && (
-				<label className="type-label text-text-secondary">
-					{label}
-				</label>
-			)}
+			{label && <label className="type-label text-text-secondary">{label}</label>}
 			<input
 				type={type}
 				value={value}

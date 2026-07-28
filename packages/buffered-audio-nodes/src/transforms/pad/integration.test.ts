@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { Block } from "@buffered-audio/core";
-import { channelSamples, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom, runTransformStream } from "@buffered-audio/core/testing";
+import {
+	channelSamples,
+	createTestSetupContext,
+	createTestStreamContext,
+	drainBlocks,
+	readableFrom,
+	runTransformStream,
+} from "@buffered-audio/core/testing";
 import { pad, PadStream } from ".";
 
 const SAMPLE_RATE = 44100;

@@ -18,10 +18,7 @@ const queryClient = new QueryClient({
 export function App() {
 	return (
 		<QueryClientProvider client={queryClient}>
-			<AppLoader
-				queryClient={queryClient}
-				logger={logger}
-			/>
+			<AppLoader queryClient={queryClient} logger={logger} />
 		</QueryClientProvider>
 	);
 }

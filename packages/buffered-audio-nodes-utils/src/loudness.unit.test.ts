@@ -12,7 +12,11 @@ function generateSine(frequency: number, amplitude: number, sampleRate: number, 
 	return buffer;
 }
 
-function measure(channels: ReadonlyArray<Float32Array>, sampleRate: number, channelWeights?: ReadonlyArray<number>): number {
+function measure(
+	channels: ReadonlyArray<Float32Array>,
+	sampleRate: number,
+	channelWeights?: ReadonlyArray<number>,
+): number {
 	const accumulator = new IntegratedLufsAccumulator(sampleRate, channels.length, channelWeights);
 
 	accumulator.push(channels, channels[0]?.length ?? 0);

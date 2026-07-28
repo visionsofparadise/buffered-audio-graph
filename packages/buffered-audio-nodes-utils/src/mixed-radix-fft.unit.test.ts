@@ -32,7 +32,7 @@ function directTransform(real: ArrayLike<number>, imag: ArrayLike<number>, inver
 		let sumImag = 0;
 
 		for (let index = 0; index < size; index++) {
-			const angle = direction * 2 * Math.PI * bin * index / size;
+			const angle = (direction * 2 * Math.PI * bin * index) / size;
 			const cosine = Math.cos(angle);
 			const sine = Math.sin(angle);
 			const inputReal = real[index] ?? 0;
@@ -49,7 +49,12 @@ function directTransform(real: ArrayLike<number>, imag: ArrayLike<number>, inver
 	return { real: outputReal, imag: outputImag };
 }
 
-function expectComplexClose(actualReal: ArrayLike<number>, actualImag: ArrayLike<number>, expected: ComplexResult, tolerance: number): void {
+function expectComplexClose(
+	actualReal: ArrayLike<number>,
+	actualImag: ArrayLike<number>,
+	expected: ComplexResult,
+	tolerance: number,
+): void {
 	let maxError = 0;
 
 	for (let index = 0; index < expected.real.length; index++) {
@@ -168,7 +173,7 @@ describe("MixedRadixFft wide permutation", () => {
 		fft.fft(inputReal, inputImag, spectrumReal, spectrumImag);
 
 		for (const bin of [0, 1, 2, 123, 32767, 65535, 74999]) {
-			const angle = -2 * Math.PI * bin / size;
+			const angle = (-2 * Math.PI * bin) / size;
 
 			expect(Math.abs((spectrumReal[bin] ?? 0) - Math.cos(angle))).toBeLessThan(1e-4);
 			expect(Math.abs((spectrumImag[bin] ?? 0) - Math.sin(angle))).toBeLessThan(1e-4);

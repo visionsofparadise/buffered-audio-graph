@@ -25,7 +25,12 @@ export function groupDelayLambda(sampleRate: number, order: number = LATTICE_ORD
 	return (ratio - 1) / (ratio + 1);
 }
 
-export function applyWindowAtScale(window: Float32Array, reflectionRow: Float32Array, scale: number, order: number): Float32Array {
+export function applyWindowAtScale(
+	window: Float32Array,
+	reflectionRow: Float32Array,
+	scale: number,
+	order: number,
+): Float32Array {
 	const length = window.length;
 	const output = new Float32Array(length);
 	const state = new Float32Array(order);
@@ -57,8 +62,12 @@ export function applyWindowAtScale(window: Float32Array, reflectionRow: Float32A
 	return output;
 }
 
-
-export function truePeakPower4x(channelWindows: ReadonlyArray<Float32Array>, reflectionRow: Float32Array, scale: number, order: number): number {
+export function truePeakPower4x(
+	channelWindows: ReadonlyArray<Float32Array>,
+	reflectionRow: Float32Array,
+	scale: number,
+	order: number,
+): number {
 	let maxAbs = 0;
 
 	for (const channelWindow of channelWindows) {

@@ -117,7 +117,9 @@ describe("BlockBuffer", () => {
 
 		await buffer.write([new Float32Array([1, 2])], 44100, 32);
 
-		await expect(buffer.write([new Float32Array([3, 4]), new Float32Array([10, 20])], 44100, 32)).rejects.toThrow(/channel count mismatch/);
+		await expect(buffer.write([new Float32Array([3, 4]), new Float32Array([10, 20])], 44100, 32)).rejects.toThrow(
+			/channel count mismatch/,
+		);
 
 		await buffer.close();
 	});

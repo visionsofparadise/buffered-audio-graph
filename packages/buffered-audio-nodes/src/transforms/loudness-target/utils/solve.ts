@@ -6,11 +6,7 @@ export { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND };
 
 const LINEAR_AMPLITUDE_EPSILON = 1e-12;
 
-export function predictOutputLufs(
-	sourceLufs: number,
-	anchors: Anchors,
-	histogram: DetectionHistogram,
-): number {
+export function predictOutputLufs(sourceLufs: number, anchors: Anchors, histogram: DetectionHistogram): number {
 	const { buckets, bucketMax, totalSamples } = histogram;
 	const bucketCount = buckets.length;
 

@@ -56,10 +56,7 @@ function setNestedValue(
 	container[leaf] = value;
 }
 
-function deleteNestedValue(
-	root: Record<string | number, unknown>,
-	path: ReadonlyArray<string | number>,
-): void {
+function deleteNestedValue(root: Record<string | number, unknown>, path: ReadonlyArray<string | number>): void {
 	let container: Record<string | number, unknown> = root;
 
 	for (let depth = 0; depth < path.length - 1; depth++) {
@@ -97,7 +94,11 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			const { app } = contextRef.current;
 
 			const ready = app.packages.filter(
-				(entry) => entry.name === packageName && entry.origin === "catalog" && entry.status === "ready" && entry.version !== null,
+				(entry) =>
+					entry.name === packageName &&
+					entry.origin === "catalog" &&
+					entry.status === "ready" &&
+					entry.version !== null,
 			);
 
 			if (ready.length === 0) return null;
@@ -115,7 +116,9 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			const version = resolveAddVersion(packageName);
 
 			if (version === null) {
-				logger.error(`Cannot add node "${nodeName}": no installed version of ${packageName}`, undefined, { namespace: "graph" });
+				logger.error(`Cannot add node "${nodeName}": no installed version of ${packageName}`, undefined, {
+					namespace: "graph",
+				});
 
 				return;
 			}
@@ -196,7 +199,9 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			const version = resolveAddVersion(packageName);
 
 			if (version === null) {
-				logger.error(`Cannot insert node "${nodeName}": no installed version of ${packageName}`, undefined, { namespace: "graph" });
+				logger.error(`Cannot insert node "${nodeName}": no installed version of ${packageName}`, undefined, {
+					namespace: "graph",
+				});
 
 				return;
 			}
@@ -213,9 +218,10 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 
 			const fromPosition = positions.positions[edge.from];
 			const toPosition = positions.positions[edge.to];
-			const position: Position = fromPosition && toPosition
-				? { x: (fromPosition.x + toPosition.x) / 2, y: (fromPosition.y + toPosition.y) / 2 }
-				: { x: 0, y: 0 };
+			const position: Position =
+				fromPosition && toPosition
+					? { x: (fromPosition.x + toPosition.x) / 2, y: (fromPosition.y + toPosition.y) / 2 }
+					: { x: 0, y: 0 };
 
 			const transactionKey = crypto.randomUUID();
 
@@ -254,7 +260,12 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 
 			if (!graphNode) return;
 
-			const { schema } = lookupNode(graphNode.packageName, graphNode.packageVersion, graphNode.nodeName, contextRef.current);
+			const { schema } = lookupNode(
+				graphNode.packageName,
+				graphNode.packageVersion,
+				graphNode.nodeName,
+				contextRef.current,
+			);
 			const defaults = buildDefaultParameters(schema);
 
 			mutate((mutable) => {

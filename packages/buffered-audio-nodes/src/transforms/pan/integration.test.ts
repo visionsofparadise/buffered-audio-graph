@@ -8,7 +8,12 @@ function makeMonoChunk(value: number, frames = 256): Block {
 }
 
 function makeStereoChunk(leftValue: number, rightValue: number, frames = 256): Block {
-	return { samples: [new Float32Array(frames).fill(leftValue), new Float32Array(frames).fill(rightValue)], offset: 0, sampleRate: 48000, bitDepth: 32 };
+	return {
+		samples: [new Float32Array(frames).fill(leftValue), new Float32Array(frames).fill(rightValue)],
+		offset: 0,
+		sampleRate: 48000,
+		bitDepth: 32,
+	};
 }
 
 function applyPan(node: PanNode, chunk: Block): Block {

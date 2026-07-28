@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { TruePeakAccumulator } from "@buffered-audio/utils";
 import type { Block } from "@buffered-audio/core";
-import { channelSamples, createTestSetupContext, createTestStreamContext, readableFrom, runTransformStream } from "@buffered-audio/core/testing";
+import {
+	channelSamples,
+	createTestSetupContext,
+	createTestStreamContext,
+	readableFrom,
+	runTransformStream,
+} from "@buffered-audio/core/testing";
 import { truePeakNormalize, TruePeakNormalizeStream } from ".";
 
 const TEST_SAMPLE_RATE = 48_000;
@@ -48,9 +54,16 @@ interface StreamRunOptions {
 	chunkFrames?: number;
 }
 
-async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: number, options: StreamRunOptions): Promise<Array<Float32Array>> {
+async function runStream(
+	channels: ReadonlyArray<Float32Array>,
+	sampleRate: number,
+	options: StreamRunOptions,
+): Promise<Array<Float32Array>> {
 	const channelCount = channels.length;
-	const stream = new TruePeakNormalizeStream(truePeakNormalize({ target: options.target }), createTestStreamContext().context);
+	const stream = new TruePeakNormalizeStream(
+		truePeakNormalize({ target: options.target }),
+		createTestStreamContext().context,
+	);
 
 	const totalFrames = channels[0]?.length ?? 0;
 	const chunkFrames = options.chunkFrames ?? totalFrames;
@@ -65,7 +78,12 @@ async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: numb
 		while (offset < totalFrames) {
 			const take = Math.min(chunkFrames, totalFrames - offset);
 
-			inputChunks.push({ samples: channels.map((channel) => channel.slice(offset, offset + take)), offset, sampleRate, bitDepth: 32 });
+			inputChunks.push({
+				samples: channels.map((channel) => channel.slice(offset, offset + take)),
+				offset,
+				sampleRate,
+				bitDepth: 32,
+			});
 			offset += take;
 		}
 	}
@@ -234,7 +252,9 @@ describe("truePeakNormalize - apply", () => {
 	it("normalises to the target true peak through the harness", async () => {
 		const target = -1;
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.5);
-		const { blocks } = await runTransformStream(truePeakNormalize({ target }), [{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]);
+		const { blocks } = await runTransformStream(truePeakNormalize({ target }), [
+			{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 },
+		]);
 		const out = channelSamples(blocks, 0);
 		const measuredDb = 20 * Math.log10(measureTruePeak([out], TEST_SAMPLE_RATE));
 

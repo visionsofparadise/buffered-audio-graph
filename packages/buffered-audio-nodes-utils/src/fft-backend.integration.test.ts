@@ -51,7 +51,7 @@ describe("FFTW addon", () => {
 		const fftSize = 1024;
 		const signal = new Float32Array(fftSize);
 		for (let i = 0; i < fftSize; i++) {
-			signal[i] = Math.sin(2 * Math.PI * 10 * i / fftSize);
+			signal[i] = Math.sin((2 * Math.PI * 10 * i) / fftSize);
 		}
 
 		const { re, im } = addon.batchFft(signal, fftSize, 1);
@@ -84,7 +84,7 @@ describe("FFTW addon", () => {
 		const fftSize = 1024;
 		const signal = new Float32Array(fftSize);
 		for (let i = 0; i < fftSize; i++) {
-			signal[i] = Math.sin(2 * Math.PI * 10 * i / fftSize) + 0.5 * Math.cos(2 * Math.PI * 30 * i / fftSize);
+			signal[i] = Math.sin((2 * Math.PI * 10 * i) / fftSize) + 0.5 * Math.cos((2 * Math.PI * 30 * i) / fftSize);
 		}
 
 		const { re, im } = addon.batchFft(signal, fftSize, 1);
@@ -113,7 +113,7 @@ describe("VkFFT addon", () => {
 		const fftSize = 1024;
 		const signal = new Float32Array(fftSize);
 		for (let i = 0; i < fftSize; i++) {
-			signal[i] = Math.sin(2 * Math.PI * 10 * i / fftSize);
+			signal[i] = Math.sin((2 * Math.PI * 10 * i) / fftSize);
 		}
 
 		const { re, im } = addon.batchFft(signal, fftSize, 1);
@@ -146,7 +146,7 @@ describe("VkFFT addon", () => {
 		const fftSize = 1024;
 		const signal = new Float32Array(fftSize);
 		for (let i = 0; i < fftSize; i++) {
-			signal[i] = Math.sin(2 * Math.PI * 10 * i / fftSize) + 0.5 * Math.cos(2 * Math.PI * 30 * i / fftSize);
+			signal[i] = Math.sin((2 * Math.PI * 10 * i) / fftSize) + 0.5 * Math.cos((2 * Math.PI * 30 * i) / fftSize);
 		}
 
 		const { re, im } = addon.batchFft(signal, fftSize, 1);
@@ -189,7 +189,9 @@ describe("detectFftBackend", () => {
 		const fftw = loadFftw();
 
 		if (vkfft) {
-			const vkfftAddon = getFftAddon("vkfft", { vkfftPath: fixtures.vkfftAddon }) as { detectDevice(): string | null } | null;
+			const vkfftAddon = getFftAddon("vkfft", { vkfftPath: fixtures.vkfftAddon }) as {
+				detectDevice(): string | null;
+			} | null;
 			if (vkfftAddon?.detectDevice()) {
 				expect(backend).toBe("vkfft");
 			} else if (fftw) {

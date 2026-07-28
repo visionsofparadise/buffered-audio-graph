@@ -51,7 +51,13 @@ export interface StdoutFrames {
 	readonly frameCount: number;
 }
 
-export function parseStdoutFrames(stash: Buffer, bytes: Buffer, channels: number, offset: number, sampleRate: number): StdoutFrames {
+export function parseStdoutFrames(
+	stash: Buffer,
+	bytes: Buffer,
+	channels: number,
+	offset: number,
+	sampleRate: number,
+): StdoutFrames {
 	const merged = stash.length > 0 ? Buffer.concat([stash, bytes]) : bytes;
 	const frameBytes = channels * 4;
 
@@ -70,7 +76,7 @@ export function parseStdoutFrames(stash: Buffer, bytes: Buffer, channels: number
 
 	let floatView: Float32Array;
 
-	if ((merged.byteOffset % 4) === 0) {
+	if (merged.byteOffset % 4 === 0) {
 		floatView = new Float32Array(merged.buffer, merged.byteOffset, totalFloats);
 	} else {
 		const aligned = Buffer.allocUnsafe(completeBytes);

@@ -23,7 +23,12 @@ describe("substituteParameters", () => {
 			},
 		]);
 
-		const result = substituteParameters(definition, { episode: "e260", inputFile: "raw", preset: "warm", tail: "end" });
+		const result = substituteParameters(definition, {
+			episode: "e260",
+			inputFile: "raw",
+			preset: "warm",
+			tail: "end",
+		});
 		const parameters = result.nodes[0]?.parameters;
 
 		expect(parameters?.path).toBe("e260/raw.wav");
@@ -32,7 +37,15 @@ describe("substituteParameters", () => {
 	});
 
 	it("does not mutate the input definition", () => {
-		const definition = templatedDefinition([{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{episode}}/in.wav" } }]);
+		const definition = templatedDefinition([
+			{
+				id: "a",
+				packageName: "test",
+				packageVersion: "1.0.0",
+				nodeName: "read",
+				parameters: { path: "{{episode}}/in.wav" },
+			},
+		]);
 		const snapshot = structuredClone(definition);
 
 		substituteParameters(definition, { episode: "e260" });
@@ -41,13 +54,29 @@ describe("substituteParameters", () => {
 	});
 
 	it("throws naming every unbound placeholder at once", () => {
-		const definition = templatedDefinition([{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{one}}/{{two}}/{{three}}.wav" } }]);
+		const definition = templatedDefinition([
+			{
+				id: "a",
+				packageName: "test",
+				packageVersion: "1.0.0",
+				nodeName: "read",
+				parameters: { path: "{{one}}/{{two}}/{{three}}.wav" },
+			},
+		]);
 
 		expect(() => substituteParameters(definition, { two: "x" })).toThrow(/unbound placeholders: one, three/);
 	});
 
 	it("throws naming an unknown provided parameter", () => {
-		const definition = templatedDefinition([{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{used}}.wav" } }]);
+		const definition = templatedDefinition([
+			{
+				id: "a",
+				packageName: "test",
+				packageVersion: "1.0.0",
+				nodeName: "read",
+				parameters: { path: "{{used}}.wav" },
+			},
+		]);
 
 		expect(() => substituteParameters(definition, { used: "x", extra: "y" })).toThrow(/unknown parameters: extra/);
 	});
@@ -57,8 +86,18 @@ describe("substituteParameters", () => {
 
 		Object.assign(parameters, { extra: "unused" });
 
-		const definition = templatedDefinition([{ id: "a", packageName: "test", packageVersion: "1.0.0", nodeName: "read", parameters: { path: "{{inherited}}" } }]);
+		const definition = templatedDefinition([
+			{
+				id: "a",
+				packageName: "test",
+				packageVersion: "1.0.0",
+				nodeName: "read",
+				parameters: { path: "{{inherited}}" },
+			},
+		]);
 
-		expect(() => substituteParameters(definition, parameters)).toThrow("Parameter substitution failed — unbound placeholders: inherited; unknown parameters: extra");
+		expect(() => substituteParameters(definition, parameters)).toThrow(
+			"Parameter substitution failed — unbound placeholders: inherited; unknown parameters: extra",
+		);
 	});
 });

@@ -17,7 +17,12 @@ export function createDfnState(): DfnState {
 	};
 }
 
-export function processDfnBlock(dfnState: DfnState, signal: Float32Array, session: OnnxSession, attenLimDb: number): Float32Array {
+export function processDfnBlock(
+	dfnState: DfnState,
+	signal: Float32Array,
+	session: OnnxSession,
+	attenLimDb: number,
+): Float32Array {
 	const originalLength = signal.length;
 	const hopRemainder = originalLength % DFN3_HOP_SIZE;
 	const paddedLength = hopRemainder === 0 ? originalLength : originalLength + (DFN3_HOP_SIZE - hopRemainder);
@@ -64,4 +69,3 @@ export function processDfnBlock(dfnState: DfnState, signal: Float32Array, sessio
 
 	return output;
 }
-

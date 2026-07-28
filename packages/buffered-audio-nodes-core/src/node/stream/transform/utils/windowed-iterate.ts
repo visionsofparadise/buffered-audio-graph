@@ -6,14 +6,19 @@ export interface WindowedIterateOptions {
 	readonly hopSize: number;
 }
 
-export async function windowedIterate(buffer: BlockBuffer, options: WindowedIterateOptions, onWindow: (window: Array<Float32Array>, windowIndex: number) => void | Promise<void>): Promise<void> {
+export async function windowedIterate(
+	buffer: BlockBuffer,
+	options: WindowedIterateOptions,
+	onWindow: (window: Array<Float32Array>, windowIndex: number) => void | Promise<void>,
+): Promise<void> {
 	const { windowSize, hopSize } = options;
 
 	if (windowSize <= 0) throw new Error(`windowedIterate: windowSize must be > 0, got ${String(windowSize)}`);
 
 	if (hopSize <= 0) throw new Error(`windowedIterate: hopSize must be > 0, got ${String(hopSize)}`);
 
-	if (hopSize > windowSize) throw new Error(`windowedIterate: hopSize (${String(hopSize)}) must be <= windowSize (${String(windowSize)})`);
+	if (hopSize > windowSize)
+		throw new Error(`windowedIterate: hopSize (${String(hopSize)}) must be <= windowSize (${String(windowSize)})`);
 
 	const channels = buffer.channels;
 

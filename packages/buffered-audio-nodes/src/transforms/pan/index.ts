@@ -1,10 +1,21 @@
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	UnbufferedTransformStream,
+	TransformNode,
+	type Block,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { balanceScales, panGains } from "./utils/pan-law";
 
 export const schema = z.object({
-	pan: z.number().min(-1).max(1).multipleOf(0.01).default(0).describe("Pan (-1 = full left, 0 = center, 1 = full right)"),
+	pan: z
+		.number()
+		.min(-1)
+		.max(1)
+		.multipleOf(0.01)
+		.default(0)
+		.describe("Pan (-1 = full left, 0 = center, 1 = full right)"),
 });
 
 export interface PanProperties extends z.infer<typeof schema>, TransformNodeProperties {}
@@ -51,14 +62,20 @@ export class PanStream extends UnbufferedTransformStream<PanNode> {
 			outputRight[index] = (inputRight[index] ?? 0) * rightScale;
 		}
 
-		yield { samples: [outputLeft, outputRight], offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		yield {
+			samples: [outputLeft, outputRight],
+			offset: chunk.offset,
+			sampleRate: chunk.sampleRate,
+			bitDepth: chunk.bitDepth,
+		};
 	}
 }
 
 export class PanNode extends TransformNode<PanProperties> {
 	static override readonly nodeName = "Pan";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly description = "Position mono signal in stereo field or adjust stereo balance; throws for inputs with more than 2 channels";
+	static override readonly description =
+		"Position mono signal in stereo field or adjust stereo balance; throws for inputs with more than 2 channels";
 	static override readonly schema = schema;
 	static override readonly Stream = PanStream;
 }

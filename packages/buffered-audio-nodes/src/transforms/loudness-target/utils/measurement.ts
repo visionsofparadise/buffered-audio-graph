@@ -203,7 +203,12 @@ export class SourceMeasurementAccumulator {
 		const histogramResult = this.detectionHistogram.finalize();
 		const stats = getLraConsideredStats(loudnessResult.shortTerm);
 
-		const limitAutoDb = computeLimitAutoDb(histogramResult.buckets, histogramResult.bucketMax, stats.median, this.limitPercentile);
+		const limitAutoDb = computeLimitAutoDb(
+			histogramResult.buckets,
+			histogramResult.bucketMax,
+			stats.median,
+			this.limitPercentile,
+		);
 
 		let totalSamples = 0;
 
@@ -228,7 +233,12 @@ export class SourceMeasurementAccumulator {
 	}
 }
 
-export async function measureSource(buffer: BlockBuffer, sampleRate: number, limitPercentile: number, halfWidth: number): Promise<SourceMeasurement> {
+export async function measureSource(
+	buffer: BlockBuffer,
+	sampleRate: number,
+	limitPercentile: number,
+	halfWidth: number,
+): Promise<SourceMeasurement> {
 	const frames = buffer.frames;
 	const channelCount = buffer.channels;
 
@@ -252,7 +262,12 @@ export async function measureSource(buffer: BlockBuffer, sampleRate: number, lim
 	return await accumulator.finalize();
 }
 
-function computeLimitAutoDb(buckets: Uint32Array, bucketMax: number, pivotAutoDb: number, limitPercentile: number): number {
+function computeLimitAutoDb(
+	buckets: Uint32Array,
+	bucketMax: number,
+	pivotAutoDb: number,
+	limitPercentile: number,
+): number {
 	if (bucketMax === 0) return Number.POSITIVE_INFINITY;
 
 	let totalSamples = 0;

@@ -14,7 +14,6 @@ describeIfFixtureSet("kim-vocal-2", () => {
 			modelPath: binaries.kimVocal2,
 			ffmpegPath: binaries.ffmpeg,
 			onnxAddonPath: binaries.onnxAddon,
-
 		});
 		const { input, output, context } = await runTransform(testVoice, transform);
 
@@ -24,17 +23,21 @@ describeIfFixtureSet("kim-vocal-2", () => {
 		expect(notAnomalous(output).pass).toBe(true);
 	}, 240_000);
 
-	(hasAudioFixtures("testVoice48k") ? it : it.skip)("processes voice audio at 48 kHz (resample path)", async () => {
-		const transform = kimVocal2({
-			modelPath: binaries.kimVocal2,
-			ffmpegPath: binaries.ffmpeg,
-			onnxAddonPath: binaries.onnxAddon,
-		});
-		const { input, output, context } = await runTransform(testVoice48k, transform);
+	(hasAudioFixtures("testVoice48k") ? it : it.skip)(
+		"processes voice audio at 48 kHz (resample path)",
+		async () => {
+			const transform = kimVocal2({
+				modelPath: binaries.kimVocal2,
+				ffmpegPath: binaries.ffmpeg,
+				onnxAddonPath: binaries.onnxAddon,
+			});
+			const { input, output, context } = await runTransform(testVoice48k, transform);
 
-		expect(notSilent(output).pass).toBe(true);
-		expect(expectedDuration(output, context.durationFrames ?? 0).pass).toBe(true);
-		expect(somethingChanged(input, output).pass).toBe(true);
-		expect(notAnomalous(output).pass).toBe(true);
-	}, 240_000);
+			expect(notSilent(output).pass).toBe(true);
+			expect(expectedDuration(output, context.durationFrames ?? 0).pass).toBe(true);
+			expect(somethingChanged(input, output).pass).toBe(true);
+			expect(notAnomalous(output).pass).toBe(true);
+		},
+		240_000,
+	);
 });

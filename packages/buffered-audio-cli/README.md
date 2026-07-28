@@ -19,13 +19,13 @@ Rendering a bag executes the code the packages it names contain. Resolved packag
 
 ### `render <file>`
 
-| Flag | Description |
-| --- | --- |
-| `--param <name=value>` | Bind a `{{name}}` template placeholder in the bag. Repeatable. |
-| `--chunk-size <samples>` | Chunk size in samples. |
-| `--high-water-mark <count>` | Stream backpressure high water mark. |
-| `--no-install` | Disable on-demand fetch; fail if a pin cannot be satisfied locally. |
-| `--resolve <name=path>` | Override a package pin with a local directory. Repeatable. |
+| Flag                        | Description                                                         |
+| --------------------------- | ------------------------------------------------------------------- |
+| `--param <name=value>`      | Bind a `{{name}}` template placeholder in the bag. Repeatable.      |
+| `--chunk-size <samples>`    | Chunk size in samples.                                              |
+| `--high-water-mark <count>` | Stream backpressure high water mark.                                |
+| `--no-install`              | Disable on-demand fetch; fail if a pin cannot be satisfied locally. |
+| `--resolve <name=path>`     | Override a package pin with a local directory. Repeatable.          |
 
 ## Package resolution
 

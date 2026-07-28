@@ -15,6 +15,10 @@ export type Vst3LaunchEditorIpcParameters = [input: Vst3LaunchEditorInput];
 export type Vst3LaunchEditorIpcReturn = Vst3LaunchEditorResult;
 export const VST3_LAUNCH_EDITOR_ACTION = "vst3LaunchEditor" as const;
 
-export class Vst3LaunchEditorRendererIpc extends AsyncRendererIpc<typeof VST3_LAUNCH_EDITOR_ACTION, Vst3LaunchEditorIpcParameters, Vst3LaunchEditorIpcReturn> {
+export class Vst3LaunchEditorRendererIpc extends AsyncRendererIpc<
+	typeof VST3_LAUNCH_EDITOR_ACTION,
+	Vst3LaunchEditorIpcParameters,
+	Vst3LaunchEditorIpcReturn
+> {
 	action = VST3_LAUNCH_EDITOR_ACTION;
 }

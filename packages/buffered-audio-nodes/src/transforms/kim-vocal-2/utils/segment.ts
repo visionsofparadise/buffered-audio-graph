@@ -85,14 +85,32 @@ export function processSegment(
 
 	segOutLeft.fill(0);
 	istftWindowSum.fill(0);
-	istft7680FromTensor(fft, modelOutput.data, 0 * CHANNEL_STRIDE, 2 * CHANNEL_STRIDE, DIM_T, compensate, segOutLeft, istftWindowSum);
+	istft7680FromTensor(
+		fft,
+		modelOutput.data,
+		0 * CHANNEL_STRIDE,
+		2 * CHANNEL_STRIDE,
+		DIM_T,
+		compensate,
+		segOutLeft,
+		istftWindowSum,
+	);
 
 	if (isMono) {
 		segOutRight.set(segOutLeft);
 	} else {
 		segOutRight.fill(0);
 		istftWindowSum.fill(0);
-		istft7680FromTensor(fft, modelOutput.data, 1 * CHANNEL_STRIDE, 3 * CHANNEL_STRIDE, DIM_T, compensate, segOutRight, istftWindowSum);
+		istft7680FromTensor(
+			fft,
+			modelOutput.data,
+			1 * CHANNEL_STRIDE,
+			3 * CHANNEL_STRIDE,
+			DIM_T,
+			compensate,
+			segOutRight,
+			istftWindowSum,
+		);
 	}
 
 	return { left: segOutLeft, right: segOutRight };

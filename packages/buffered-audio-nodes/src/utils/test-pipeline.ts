@@ -13,7 +13,11 @@ export interface TransformTestResult {
 	readonly context: SourceMetadata;
 }
 
-export async function runTransform(inputPath: string, transform: TransformNode, options?: { outputBitDepth?: WavBitDepth }): Promise<TransformTestResult> {
+export async function runTransform(
+	inputPath: string,
+	transform: TransformNode,
+	options?: { outputBitDepth?: WavBitDepth },
+): Promise<TransformTestResult> {
 	const inputResult = await readToBuffer(inputPath);
 	const inputChunk = await inputResult.buffer.read(inputResult.buffer.frames);
 	const inputSamples = inputChunk.samples;

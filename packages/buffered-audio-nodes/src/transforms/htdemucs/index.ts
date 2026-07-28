@@ -1,5 +1,15 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type StreamContext, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	BlockBuffer,
+	createProgressGate,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type StreamContext,
+	type StreamSetupContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { bandpass } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
@@ -19,13 +29,28 @@ export const schema = z.object({
 	modelPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", accept: ".onnx", binary: "htdemucs", download: "https://github.com/facebookresearch/demucs" })
+		.meta({
+			input: "file",
+			mode: "open",
+			accept: ".onnx",
+			binary: "htdemucs",
+			download: "https://github.com/facebookresearch/demucs",
+		})
 		.describe("HTDemucs source separation model (.onnx) — requires .onnx.data file alongside"),
-	ffmpegPath: z.string().default("").meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" }).describe("FFmpeg — audio/video processing tool"),
+	ffmpegPath: z
+		.string()
+		.default("")
+		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
+		.describe("FFmpeg — audio/video processing tool"),
 	onnxAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "onnx-addon", download: "https://github.com/visionsofparadise/onnx-runtime-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "onnx-addon",
+			download: "https://github.com/visionsofparadise/onnx-runtime-addon",
+		})
 		.describe("ONNX Runtime native addon"),
 	highPass: z.number().min(0).max(500).multipleOf(10).default(0).describe("High Pass"),
 	lowPass: z.number().min(0).max(22050).multipleOf(100).default(0).describe("Low Pass"),
@@ -59,9 +84,19 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 	}
 
 	override _setup(context: StreamSetupContext): void {
-		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
+		this.session = createOnnxSession(
+			this.properties.onnxAddonPath,
+			this.properties.modelPath,
+			{ executionProviders: ["cpu"] },
+			(message, data) => this.log(message, data),
+		);
 
-		const composition = createResampleComposition({ context, streamContext: this.renderContext, ffmpegPath: this.properties.ffmpegPath, modelRate: HTDEMUCS_SAMPLE_RATE });
+		const composition = createResampleComposition({
+			context,
+			streamContext: this.renderContext,
+			ffmpegPath: this.properties.ffmpegPath,
+			modelRate: HTDEMUCS_SAMPLE_RATE,
+		});
 
 		if (composition) {
 			this.upResample = composition.upResample;
@@ -206,7 +241,15 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 			const stftLeft = computeStftScaled(stftInputLeft);
 			const stftRight = computeStftScaled(stftInputRight);
 
-			const { inputData, xData } = buildModelInput(segLeft, segRight, stftLeft, stftRight, SEGMENT_SAMPLES, xBinsConst, xFramesConst);
+			const { inputData, xData } = buildModelInput(
+				segLeft,
+				segRight,
+				stftLeft,
+				stftRight,
+				SEGMENT_SAMPLES,
+				xBinsConst,
+				xFramesConst,
+			);
 
 			const result = this.session.run({
 				input: { data: inputData, dims: [1, 2, SEGMENT_SAMPLES] },
@@ -269,7 +312,18 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 		readonly originalFrames: number;
 		readonly writerState: { written: number };
 	}): Promise<void> {
-		const { nStable, stemAccum, sumWeight, stats, stemGains, output, channels, bitDepth, originalFrames, writerState } = args;
+		const {
+			nStable,
+			stemAccum,
+			sumWeight,
+			stats,
+			stemGains,
+			output,
+			channels,
+			bitDepth,
+			originalFrames,
+			writerState,
+		} = args;
 
 		if (nStable <= 0) return;
 
@@ -301,8 +355,10 @@ export class HtdemucsStream extends BufferedTransformStream<HtdemucsNode> {
 	}
 }
 
-
-async function computeStreamingStats(buffer: BlockBuffer, channels: number): Promise<{ readonly mean: number; readonly std: number }> {
+async function computeStreamingStats(
+	buffer: BlockBuffer,
+	channels: number,
+): Promise<{ readonly mean: number; readonly std: number }> {
 	await buffer.reset();
 
 	let sum = 0;
@@ -404,7 +460,14 @@ function buildWriteChannels(left: Float32Array, right: Float32Array, channels: n
 	return out;
 }
 
-async function padTail(output: BlockBuffer, channels: number, originalFrames: number, written: number, sampleRate: number, bitDepth: number | undefined): Promise<void> {
+async function padTail(
+	output: BlockBuffer,
+	channels: number,
+	originalFrames: number,
+	written: number,
+	sampleRate: number,
+	bitDepth: number | undefined,
+): Promise<void> {
 	if (written >= originalFrames) return;
 
 	const missing = originalFrames - written;

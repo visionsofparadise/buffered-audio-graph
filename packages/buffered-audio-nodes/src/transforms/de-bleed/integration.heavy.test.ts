@@ -182,39 +182,42 @@ async function writeFixtures(mix: SyntheticMix, sampleRate: number): Promise<Wri
 
 describe("deBleed integration", () => {
 	// 44.1 kHz mirrors testVoice; warmupSeconds=30 covers the first half; single reference scaled 0.4, delay 11.
-	it.sequential("processes a 60-s synthetic fixture without NaN, denormals, DC offset, or clipping", async () => {
-		const sampleRate = 44100;
-		const durationSeconds = 60;
-		const mix = synthesiseMix({
-			sampleRate,
-			durationSeconds,
-			targetFrequencyHz: 220,
-			bleedSpec: [{ frequencyHz: 660, bleedScale: 0.4, bleedDelaySamples: 11 }],
-		});
-		const fixtures = await writeFixtures(mix, sampleRate);
+	it.sequential(
+		"processes a 60-s synthetic fixture without NaN, denormals, DC offset, or clipping",
+		async () => {
+			const sampleRate = 44100;
+			const durationSeconds = 60;
+			const mix = synthesiseMix({
+				sampleRate,
+				durationSeconds,
+				targetFrequencyHz: 220,
+				bleedSpec: [{ frequencyHz: 660, bleedScale: 0.4, bleedDelaySamples: 11 }],
+			});
+			const fixtures = await writeFixtures(mix, sampleRate);
 
-		try {
-			const transform = deBleed(fixtures.referencePaths);
-			const { output } = await runTransform(fixtures.targetPath, transform);
+			try {
+				const transform = deBleed(fixtures.referencePaths);
+				const { output } = await runTransform(fixtures.targetPath, transform);
 
-			const channel = output[0]!;
-			const report = inspectQuality(channel);
+				const channel = output[0]!;
+				const report = inspectQuality(channel);
 
-			expect(report.finite).toBe(true);
-			expect(report.nonNan).toBe(true);
-			expect(report.noDenormals).toBe(true);
-			// DC offset = |signed mean|; 1e-3 is the threshold for float32 audio.
-			let signedSum = 0;
-			for (let index = 0; index < channel.length; index++) signedSum += channel[index] ?? 0;
-			const dcOffset = Math.abs(signedSum / channel.length);
-			expect(dcOffset).toBeLessThan(1e-3);
-			expect(report.clippedSamples).toBe(0);
-			expect(channel.length).toBeGreaterThan(0);
-		} finally {
-			await fixtures.cleanup();
-		}
-	}, 1_800_000);
-
+				expect(report.finite).toBe(true);
+				expect(report.nonNan).toBe(true);
+				expect(report.noDenormals).toBe(true);
+				// DC offset = |signed mean|; 1e-3 is the threshold for float32 audio.
+				let signedSum = 0;
+				for (let index = 0; index < channel.length; index++) signedSum += channel[index] ?? 0;
+				const dcOffset = Math.abs(signedSum / channel.length);
+				expect(dcOffset).toBeLessThan(1e-3);
+				expect(report.clippedSamples).toBe(0);
+				expect(channel.length).toBeGreaterThan(0);
+			} finally {
+				await fixtures.cleanup();
+			}
+		},
+		1_800_000,
+	);
 });
 
 // ----- Phase 4.2 ------------------------------------------------------------
@@ -297,54 +300,58 @@ describe("deBleed multi-reference scaling (Phase 4.2)", () => {
 	});
 
 	// Invariant: wall-clock(refCount=4) < 3 × wall-clock(refCount=2) (50% slack on linear). 8-s fixture keeps warmup (30-s cap) unaffected; sequential to avoid contention skewing timings.
-	it.sequential("compute cost scales roughly linearly with reference count", async () => {
-		const sampleRate = 44100;
-		const durationSeconds = 8;
-		const mix = synthesiseMix({
-			sampleRate,
-			durationSeconds,
-			targetFrequencyHz: 220,
-			bleedSpec: [
-				{ frequencyHz: 330, bleedScale: 0.3, bleedDelaySamples: 7 },
-				{ frequencyHz: 440, bleedScale: 0.2, bleedDelaySamples: 13 },
-				{ frequencyHz: 550, bleedScale: 0.15, bleedDelaySamples: 19 },
-				{ frequencyHz: 660, bleedScale: 0.1, bleedDelaySamples: 23 },
-			],
-		});
-		const fixtures = await writeFixtures(mix, sampleRate);
+	it.sequential(
+		"compute cost scales roughly linearly with reference count",
+		async () => {
+			const sampleRate = 44100;
+			const durationSeconds = 8;
+			const mix = synthesiseMix({
+				sampleRate,
+				durationSeconds,
+				targetFrequencyHz: 220,
+				bleedSpec: [
+					{ frequencyHz: 330, bleedScale: 0.3, bleedDelaySamples: 7 },
+					{ frequencyHz: 440, bleedScale: 0.2, bleedDelaySamples: 13 },
+					{ frequencyHz: 550, bleedScale: 0.15, bleedDelaySamples: 19 },
+					{ frequencyHz: 660, bleedScale: 0.1, bleedDelaySamples: 23 },
+				],
+			});
+			const fixtures = await writeFixtures(mix, sampleRate);
 
-		const wallTimes: Record<number, number> = {};
+			const wallTimes: Record<number, number> = {};
 
-		try {
-			for (const refCount of [2, 3, 4]) {
-				const refs = fixtures.referencePaths.slice(0, refCount);
-				const start = performance.now();
-				const transform = deBleed(refs);
-				const { output } = await runTransform(fixtures.targetPath, transform);
-				const elapsed = performance.now() - start;
+			try {
+				for (const refCount of [2, 3, 4]) {
+					const refs = fixtures.referencePaths.slice(0, refCount);
+					const start = performance.now();
+					const transform = deBleed(refs);
+					const { output } = await runTransform(fixtures.targetPath, transform);
+					const elapsed = performance.now() - start;
 
-				wallTimes[refCount] = elapsed;
+					wallTimes[refCount] = elapsed;
 
-				const report = inspectQuality(output[0]!);
+					const report = inspectQuality(output[0]!);
 
-				expect(report.finite).toBe(true);
-				expect(report.nonNan).toBe(true);
+					expect(report.finite).toBe(true);
+					expect(report.nonNan).toBe(true);
+				}
+
+				const t2 = wallTimes[2]!;
+				const t3 = wallTimes[3]!;
+				const t4 = wallTimes[4]!;
+
+				console.warn(
+					`[Phase 4.2 profile] refCount=2 → ${t2.toFixed(0)} ms, refCount=3 → ${t3.toFixed(0)} ms, refCount=4 → ${t4.toFixed(0)} ms ` +
+						`(t4/t2 = ${(t4 / t2).toFixed(2)}, target < 3.0)`,
+				);
+
+				expect(t4).toBeLessThan(3 * t2);
+			} finally {
+				await fixtures.cleanup();
 			}
-
-			const t2 = wallTimes[2]!;
-			const t3 = wallTimes[3]!;
-			const t4 = wallTimes[4]!;
-
-			console.warn(
-				`[Phase 4.2 profile] refCount=2 → ${t2.toFixed(0)} ms, refCount=3 → ${t3.toFixed(0)} ms, refCount=4 → ${t4.toFixed(0)} ms ` +
-					`(t4/t2 = ${(t4 / t2).toFixed(2)}, target < 3.0)`,
-			);
-
-			expect(t4).toBeLessThan(3 * t2);
-		} finally {
-			await fixtures.cleanup();
-		}
-	}, 1_800_000);
+		},
+		1_800_000,
+	);
 });
 
 // ----- Real-fixture voice render (relocated from de-bleed/unit.test.ts by plan-test-restructure Phase 3.3) -----
@@ -358,4 +365,3 @@ describe("DeBleed voice fixture", () => {
 		expect(somethingChanged(input, output).pass).toBe(true);
 	}, 1_800_000);
 });
-

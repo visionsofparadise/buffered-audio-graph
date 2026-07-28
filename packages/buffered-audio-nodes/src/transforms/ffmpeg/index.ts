@@ -1,14 +1,29 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	UnbufferedTransformStream,
+	TransformNode,
+	type Block,
+	type StreamSetupContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { interleave } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { appendStderr, buildInputArgs, buildOutputArgs, parseStdoutFrames, spawnFfmpegChild } from "./utils/process";
 
 export const schema = z.object({
-	ffmpegPath: z.string().default("").meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" }).describe("FFmpeg — audio/video processing tool"),
+	ffmpegPath: z
+		.string()
+		.default("")
+		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
+		.describe("FFmpeg — audio/video processing tool"),
 	args: z.array(z.string()).default([]),
-	outputSampleRate: z.number().int().positive().optional().describe("Sample rate of emitted chunks. Required when args change the rate (e.g. -af aresample=24000)."),
+	outputSampleRate: z
+		.number()
+		.int()
+		.positive()
+		.optional()
+		.describe("Sample rate of emitted chunks. Required when args change the rate (e.g. -af aresample=24000)."),
 });
 
 export interface FfmpegProperties extends TransformNodeProperties {
@@ -19,7 +34,9 @@ export interface FfmpegProperties extends TransformNodeProperties {
 
 const TEARDOWN_KILL_GRACE_MS = 2000;
 
-export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends UnbufferedTransformStream<FfmpegNode<P>> {
+export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends UnbufferedTransformStream<
+	FfmpegNode<P>
+> {
 	private streamContext?: StreamSetupContext;
 
 	private child?: ChildProcessWithoutNullStreams;
@@ -56,7 +73,11 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		this.inputChannels = channels;
 
 		const outRate = this.properties.outputSampleRate ?? sampleRate;
-		const args = [...buildInputArgs(sampleRate, channels), ...this._buildArgs(this.streamContext), ...buildOutputArgs(outRate, channels)];
+		const args = [
+			...buildInputArgs(sampleRate, channels),
+			...this._buildArgs(this.streamContext),
+			...buildOutputArgs(outRate, channels),
+		];
 
 		const { child, exitPromise } = spawnFfmpegChild({
 			ffmpegPath: this.properties.ffmpegPath,
@@ -101,7 +122,13 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 			if (!bytes) return;
 
-			const { block, stash, frameCount } = parseStdoutFrames(this.stdoutStash, bytes, this.inputChannels, this.outputOffset, outRate);
+			const { block, stash, frameCount } = parseStdoutFrames(
+				this.stdoutStash,
+				bytes,
+				this.inputChannels,
+				this.outputOffset,
+				outRate,
+			);
 
 			this.stdoutStash = stash;
 
@@ -210,7 +237,13 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		if (this.stdoutStash.length >= this.inputChannels * 4) {
 			const outRate = this.properties.outputSampleRate ?? this.inputSampleRate;
-			const { block } = parseStdoutFrames(this.stdoutStash, Buffer.alloc(0), this.inputChannels, this.outputOffset, outRate);
+			const { block } = parseStdoutFrames(
+				this.stdoutStash,
+				Buffer.alloc(0),
+				this.inputChannels,
+				this.outputOffset,
+				outRate,
+			);
 
 			this.stdoutStash = Buffer.alloc(0);
 
@@ -265,7 +298,12 @@ export class FfmpegNode<P extends FfmpegProperties = FfmpegProperties> extends T
 	static override readonly Stream = FfmpegStream;
 }
 
-export function ffmpeg(options: { ffmpegPath: string; args: Array<string> | ((context: StreamSetupContext) => Array<string>); outputSampleRate?: number; id?: string }): FfmpegNode {
+export function ffmpeg(options: {
+	ffmpegPath: string;
+	args: Array<string> | ((context: StreamSetupContext) => Array<string>);
+	outputSampleRate?: number;
+	id?: string;
+}): FfmpegNode {
 	return new FfmpegNode({
 		ffmpegPath: options.ffmpegPath,
 		args: options.args,

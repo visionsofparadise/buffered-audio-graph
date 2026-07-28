@@ -2,7 +2,12 @@ import { EventEmitter } from "node:events";
 import { PassThrough, Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Block } from "@buffered-audio/core";
-import { createBlock, createTestSetupContext, createTestStreamContext, readableFrom } from "@buffered-audio/core/testing";
+import {
+	createBlock,
+	createTestSetupContext,
+	createTestStreamContext,
+	readableFrom,
+} from "@buffered-audio/core/testing";
 import { ffmpeg, FfmpegStream } from ".";
 
 const childProcessMocks = vi.hoisted(() => ({
@@ -82,7 +87,11 @@ function createBridge(input: ReadableStream<Block>): { readable: ReadableStream<
 	return { readable: stream._pipe(input) };
 }
 
-function manualInput(): { readonly readable: ReadableStream<Block>; readonly push: (block: Block) => void; readonly close: () => void } {
+function manualInput(): {
+	readonly readable: ReadableStream<Block>;
+	readonly push: (block: Block) => void;
+	readonly close: () => void;
+} {
 	let controller: ReadableStreamDefaultController<Block> | undefined;
 	const readable = new ReadableStream<Block>({
 		start: (streamController) => {
@@ -115,7 +124,9 @@ function served(result: ReadableStreamReadResult<Block> | typeof PARKED): Readab
 	return result;
 }
 
-function raceParked(read: Promise<ReadableStreamReadResult<Block>>): Promise<ReadableStreamReadResult<Block> | typeof PARKED> {
+function raceParked(
+	read: Promise<ReadableStreamReadResult<Block>>,
+): Promise<ReadableStreamReadResult<Block> | typeof PARKED> {
 	return Promise.race([read, ticks(50)]);
 }
 

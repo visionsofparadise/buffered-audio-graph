@@ -30,13 +30,19 @@ export function expectedDuration(samples: Array<Float32Array>, expected: number,
 	const relDiff = diff / Math.max(expected, 1);
 
 	if (relDiff > tolerance) {
-		return { pass: false, reason: `Duration mismatch: expected ${expected} frames, got ${actual} (${(relDiff * 100).toFixed(1)}% off)` };
+		return {
+			pass: false,
+			reason: `Duration mismatch: expected ${expected} frames, got ${actual} (${(relDiff * 100).toFixed(1)}% off)`,
+		};
 	}
 
 	return { pass: true };
 }
 
-export function somethingChanged(inputSamples: Array<Float32Array>, outputSamples: Array<Float32Array>): ValidationResult {
+export function somethingChanged(
+	inputSamples: Array<Float32Array>,
+	outputSamples: Array<Float32Array>,
+): ValidationResult {
 	let inputSum = 0;
 	let outputSum = 0;
 

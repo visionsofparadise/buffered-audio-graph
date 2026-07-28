@@ -35,7 +35,10 @@ export class ReverseBlockReader {
 		this.sampleRate = metadata.sampleRate;
 		this.bitDepth = metadata.bitDepth;
 		this.bytesPerFrame = metadata.channels * 4;
-		this.windowBytes = metadata.channels === 0 ? stripeBytes : Math.max(this.bytesPerFrame, Math.floor(stripeBytes / this.bytesPerFrame) * this.bytesPerFrame);
+		this.windowBytes =
+			metadata.channels === 0
+				? stripeBytes
+				: Math.max(this.bytesPerFrame, Math.floor(stripeBytes / this.bytesPerFrame) * this.bytesPerFrame);
 		this.parent = parent;
 	}
 
@@ -51,10 +54,15 @@ export class ReverseBlockReader {
 
 		const count = Math.min(frames, remaining);
 		const stream = this.ensureStream();
-		const buffer = await pullBytes(stream, () => stream.destroyed || stream.readableEnded, count * this.bytesPerFrame);
+		const buffer = await pullBytes(
+			stream,
+			() => stream.destroyed || stream.readableEnded,
+			count * this.bytesPerFrame,
+		);
 		const actualFrames = Math.floor(buffer.length / this.bytesPerFrame);
 
-		if (actualFrames < count) throw this.streamError ?? new Error("ReverseBlockReader: unexpected end of reverse stream");
+		if (actualFrames < count)
+			throw this.streamError ?? new Error("ReverseBlockReader: unexpected end of reverse stream");
 
 		this.framesReturned += actualFrames;
 
@@ -195,7 +203,8 @@ class ReverseReadable extends Readable {
 			.then((handle) => handle.close())
 			.then(
 				() => callback(error),
-				(closeError: unknown) => callback(error ?? (closeError instanceof Error ? closeError : new Error(String(closeError)))),
+				(closeError: unknown) =>
+					callback(error ?? (closeError instanceof Error ? closeError : new Error(String(closeError)))),
 			);
 	}
 }

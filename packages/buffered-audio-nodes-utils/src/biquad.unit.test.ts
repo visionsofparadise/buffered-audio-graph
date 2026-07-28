@@ -76,7 +76,7 @@ describe("biquadFilter", () => {
 		const signal = new Float32Array(length);
 
 		for (let i = 0; i < length; i++) {
-			signal[i] = 1.0 + Math.sin(2 * Math.PI * 10000 * i / sampleRate);
+			signal[i] = 1.0 + Math.sin((2 * Math.PI * 10000 * i) / sampleRate);
 		}
 
 		const output = biquadFilter(signal, fb, fa);

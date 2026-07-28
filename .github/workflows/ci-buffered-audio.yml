@@ -1,116 +1,116 @@
 name: Buffered Audio CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/ci-buffered-audio.yml"
-      - "package.json"
-      - "package-lock.json"
-      - "turbo.json"
-      - "tsconfig.json"
-      - "packages/buffered-audio-nodes-core/**"
-      - "packages/buffered-audio-nodes-utils/**"
-      - "packages/buffered-audio-nodes/**"
-      - "packages/buffered-audio-cli/**"
-  pull_request:
-    paths:
-      - ".github/workflows/ci-buffered-audio.yml"
-      - "package.json"
-      - "package-lock.json"
-      - "turbo.json"
-      - "tsconfig.json"
-      - "packages/buffered-audio-nodes-core/**"
-      - "packages/buffered-audio-nodes-utils/**"
-      - "packages/buffered-audio-nodes/**"
-      - "packages/buffered-audio-cli/**"
-  workflow_dispatch:
+   push:
+      branches: [main]
+      paths:
+         - ".github/workflows/ci-buffered-audio.yml"
+         - "package.json"
+         - "package-lock.json"
+         - "turbo.json"
+         - "tsconfig.json"
+         - "packages/buffered-audio-nodes-core/**"
+         - "packages/buffered-audio-nodes-utils/**"
+         - "packages/buffered-audio-nodes/**"
+         - "packages/buffered-audio-cli/**"
+   pull_request:
+      paths:
+         - ".github/workflows/ci-buffered-audio.yml"
+         - "package.json"
+         - "package-lock.json"
+         - "turbo.json"
+         - "tsconfig.json"
+         - "packages/buffered-audio-nodes-core/**"
+         - "packages/buffered-audio-nodes-utils/**"
+         - "packages/buffered-audio-nodes/**"
+         - "packages/buffered-audio-cli/**"
+   workflow_dispatch:
 
 jobs:
-  checks:
-    # check -> unit -> build -> docs drift. The unit set is pure, so no
-    # fixture fetch. Runs on push/PR/dispatch.
-    runs-on: ubuntu-latest
+   checks:
+      # check -> unit -> build -> docs drift. The unit set is pure, so no
+      # fixture fetch. Runs on push/PR/dispatch.
+      runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+      steps:
+         - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24.18"
+         - uses: actions/setup-node@v4
+           with:
+              node-version: "24.18"
 
-      - name: Install dependencies
-        run: npm ci
+         - name: Install dependencies
+           run: npm ci
 
-      - name: Check (topo-ordered across all three packages)
-        run: npx turbo check --filter=@buffered-audio/nodes
+         - name: Check (topo-ordered across all three packages)
+           run: npx turbo check --filter=@buffered-audio/nodes
 
-      - name: Unit (topo-ordered)
-        run: npx turbo unit --filter=@buffered-audio/nodes
+         - name: Unit (topo-ordered)
+           run: npx turbo unit --filter=@buffered-audio/nodes
 
-      - name: Build (topo-ordered)
-        run: npx turbo build --filter=@buffered-audio/nodes
+         - name: Build (topo-ordered)
+           run: npx turbo build --filter=@buffered-audio/nodes
 
-      - name: Docs (drift check)
-        run: |
-          npx turbo run docs --filter=@buffered-audio/nodes
-          git diff --exit-code packages/buffered-audio-nodes/README.md
+         - name: Docs (drift check)
+           run: |
+              npx turbo run docs --filter=@buffered-audio/nodes
+              git diff --exit-code packages/buffered-audio-nodes/README.md
 
-  integration:
-    # The integration set is self-contained (synthetic blocks + self-generated
-    # WAVs), so it fetches nothing. Runs on push/PR/dispatch.
-    runs-on: ubuntu-latest
+   integration:
+      # The integration set is self-contained (synthetic blocks + self-generated
+      # WAVs), so it fetches nothing. Runs on push/PR/dispatch.
+      runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+      steps:
+         - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24.18"
+         - uses: actions/setup-node@v4
+           with:
+              node-version: "24.18"
 
-      - name: Install dependencies
-        run: npm ci
+         - name: Install dependencies
+           run: npm ci
 
-      - name: Build (topo-ordered)
-        run: npx turbo build --filter=@buffered-audio/nodes
+         - name: Build (topo-ordered)
+           run: npx turbo build --filter=@buffered-audio/nodes
 
-      - name: Integration (topo-ordered)
-        run: npx turbo run integration --filter=@buffered-audio/nodes
+         - name: Integration (topo-ordered)
+           run: npx turbo run integration --filter=@buffered-audio/nodes
 
-  heavy:
-    # Real binaries/models + minutes-long DSP. The automatic pre-publish gate
-    # lives in the publish workflows; this job is a manual-dispatch debug button
-    # only (no scheduled/PR runs). Both S3 buckets are public unauthenticated GETs.
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+   heavy:
+      # Real binaries/models + minutes-long DSP. The automatic pre-publish gate
+      # lives in the publish workflows; this job is a manual-dispatch debug button
+      # only (no scheduled/PR runs). Both S3 buckets are public unauthenticated GETs.
+      if: github.event_name == 'workflow_dispatch'
+      runs-on: ubuntu-latest
+      timeout-minutes: 120
 
-    steps:
-      - uses: actions/checkout@v4
+      steps:
+         - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24.18"
+         - uses: actions/setup-node@v4
+           with:
+              node-version: "24.18"
 
-      - name: Install dependencies
-        run: npm ci
+         - name: Install dependencies
+           run: npm ci
 
-      - name: Cache binaries (content-addressed sha256 cache)
-        uses: actions/cache@v4
-        with:
-          path: .binaries-cache
-          key: binaries-linux-x64-${{ hashFiles('binaries.manifest.json') }}
-          restore-keys: |
-            binaries-linux-x64-
+         - name: Cache binaries (content-addressed sha256 cache)
+           uses: actions/cache@v4
+           with:
+              path: .binaries-cache
+              key: binaries-linux-x64-${{ hashFiles('binaries.manifest.json') }}
+              restore-keys: |
+                 binaries-linux-x64-
 
-      - name: Fetch audio test fixtures
-        run: npm run fixtures:audio
+         - name: Fetch audio test fixtures
+           run: npm run fixtures:audio
 
-      - name: Fetch binary + model test fixtures
-        run: npm run fixtures:binaries -- --target linux-x64
+         - name: Fetch binary + model test fixtures
+           run: npm run fixtures:binaries -- --target linux-x64
 
-      - name: Build (topo-ordered)
-        run: npx turbo build --filter=@buffered-audio/nodes
+         - name: Build (topo-ordered)
+           run: npx turbo build --filter=@buffered-audio/nodes
 
-      - name: Integration + heavy (topo-ordered)
-        run: npx turbo run integration integration:heavy --filter=@buffered-audio/nodes
+         - name: Integration + heavy (topo-ordered)
+           run: npx turbo run integration integration:heavy --filter=@buffered-audio/nodes

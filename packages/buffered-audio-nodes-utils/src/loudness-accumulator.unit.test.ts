@@ -33,7 +33,7 @@ function pushSineLevels(
 			const frames = Math.min(chunkFrames, framesPerLevel - levelOffset);
 
 			for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
-				const sample = amplitude * Math.sin(2 * Math.PI * 1000 * absoluteFrame / sampleRate);
+				const sample = amplitude * Math.sin((2 * Math.PI * 1000 * absoluteFrame) / sampleRate);
 
 				for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
 					const channel = channels[channelIndex];
@@ -51,7 +51,12 @@ function pushSineLevels(
 	return levelsDbfs.length * framesPerLevel;
 }
 
-function pushSilence(accumulator: LoudnessAccumulator, frames: number, channelCount: number, chunkFrames: number): void {
+function pushSilence(
+	accumulator: LoudnessAccumulator,
+	frames: number,
+	channelCount: number,
+	chunkFrames: number,
+): void {
 	const channels = Array.from({ length: channelCount }, () => new Float32Array(chunkFrames));
 
 	for (let offset = 0; offset < frames; offset += chunkFrames) {

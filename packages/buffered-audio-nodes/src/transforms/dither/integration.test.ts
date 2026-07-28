@@ -8,7 +8,8 @@ function applyDither(bitDepth: 16 | 24, input: Float32Array): Block {
 	const stream = new DitherStream(node, createTestStreamContext().context);
 	let result: Block | undefined;
 
-	for (const block of stream._transform({ samples: [input], offset: 0, sampleRate: 44100, bitDepth: 32 })) result = block;
+	for (const block of stream._transform({ samples: [input], offset: 0, sampleRate: 44100, bitDepth: 32 }))
+		result = block;
 
 	if (!result) throw new Error("transform yielded nothing");
 
@@ -48,7 +49,12 @@ describe("DitherStream", () => {
 
 	it("quantizes a stream to the 16-bit grid through the harness", async () => {
 		const levels = Math.pow(2, 15);
-		const input: Block = { samples: [new Float32Array([0.12345678, -0.98765432, 0, 0.5])], offset: 0, sampleRate: 44100, bitDepth: 32 };
+		const input: Block = {
+			samples: [new Float32Array([0.12345678, -0.98765432, 0, 0.5])],
+			offset: 0,
+			sampleRate: 44100,
+			bitDepth: 32,
+		};
 		const { blocks } = await runTransformStream(dither(16), [input]);
 		const out = channelSamples(blocks, 0);
 

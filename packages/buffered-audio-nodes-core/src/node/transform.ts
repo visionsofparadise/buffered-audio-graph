@@ -2,7 +2,9 @@ import { BufferedAudioNode, type BufferedAudioNodeProperties, type Composition }
 
 export interface TransformNodeProperties extends BufferedAudioNodeProperties {}
 
-export abstract class TransformNode<P extends TransformNodeProperties = TransformNodeProperties> extends BufferedAudioNode<P> {
+export abstract class TransformNode<
+	P extends TransformNodeProperties = TransformNodeProperties,
+> extends BufferedAudioNode<P> {
 	to(child: BufferedAudioNode | Composition): void {
 		const head = "head" in child ? child.head : child;
 

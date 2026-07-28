@@ -10,7 +10,11 @@ const testVoice = audio.testVoice;
 
 describe("ffmpeg benchmark", () => {
 	it("benchmarks ffmpeg", async () => {
-		const result = await runBenchmark("ffmpeg", ffmpeg({ ffmpegPath: binaries.ffmpeg, args: ["-af", "volume=1.0"] }), testVoice);
+		const result = await runBenchmark(
+			"ffmpeg",
+			ffmpeg({ ffmpegPath: binaries.ffmpeg, args: ["-af", "volume=1.0"] }),
+			testVoice,
+		);
 		await appendBenchmarkLog(here, result);
 	}, 240_000);
 });

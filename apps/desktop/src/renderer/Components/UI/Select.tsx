@@ -11,19 +11,10 @@ export interface SelectProps {
 	readonly placeholder?: string;
 }
 
-export function Select({
-	value,
-	options,
-	onChange,
-	label,
-	className,
-	placeholder,
-}: SelectProps) {
+export function Select({ value, options, onChange, label, className, placeholder }: SelectProps) {
 	return (
 		<div className={cn("flex flex-col gap-1", className)}>
-			{label && (
-				<span className="type-label text-text-secondary">{label}</span>
-			)}
+			{label && <span className="type-label text-text-secondary">{label}</span>}
 			<SelectPrimitive.Root value={value} onValueChange={onChange}>
 				<SelectPrimitive.Trigger
 					className={cn(

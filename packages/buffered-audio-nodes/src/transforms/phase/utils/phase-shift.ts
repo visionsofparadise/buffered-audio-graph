@@ -16,7 +16,11 @@ export function phaseCoefficient(angle: number): number {
 	return Math.tan((radians - Math.PI) / 4);
 }
 
-export function applyAllpass(channel: Float32Array, coefficient: number, state: number): { output: Float32Array; state: number } {
+export function applyAllpass(
+	channel: Float32Array,
+	coefficient: number,
+	state: number,
+): { output: Float32Array; state: number } {
 	const output = new Float32Array(channel.length);
 
 	for (let index = 0; index < channel.length; index++) {

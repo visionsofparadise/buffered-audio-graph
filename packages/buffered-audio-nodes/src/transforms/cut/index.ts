@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type StreamContext, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	UnbufferedTransformStream,
+	TransformNode,
+	type Block,
+	type StreamContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { computeKeepRanges } from "./utils/regions";
 
@@ -41,7 +47,12 @@ export class CutStream extends UnbufferedTransformStream<CutNode> {
 		this.removedFrames += removedFrames;
 
 		if (totalKept === chunkFrames) {
-			yield { samples: chunk.samples, offset: adjustedOffset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+			yield {
+				samples: chunk.samples,
+				offset: adjustedOffset,
+				sampleRate: chunk.sampleRate,
+				bitDepth: chunk.bitDepth,
+			};
 
 			return;
 		}

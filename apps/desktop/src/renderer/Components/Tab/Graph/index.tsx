@@ -39,16 +39,16 @@ export function Graph({ tab, context }: Props) {
 
 				if (currentContext.app.installBagPackagesAutomatically) {
 					try {
-						await ensureGraphPackagesInstalled(
-							definition,
-							currentContext.app,
-							currentContext.main,
-						);
+						await ensureGraphPackagesInstalled(definition, currentContext.app, currentContext.main);
 					} catch (error) {
-						currentContext.logger.error("Failed to install exact package versions required by bag", error as Error, {
-							namespace: "packages",
-							bagPath: tab.bagPath,
-						});
+						currentContext.logger.error(
+							"Failed to install exact package versions required by bag",
+							error as Error,
+							{
+								namespace: "packages",
+								bagPath: tab.bagPath,
+							},
+						);
 					}
 				}
 
@@ -68,11 +68,19 @@ export function Graph({ tab, context }: Props) {
 	}, [context.main, context.userDataPath, tab.bagPath, tab.id]);
 
 	if (loadError) {
-		return <div className="flex flex-1 items-center justify-center bg-surface text-accent-primary type-label">Failed to load graph: {loadError}</div>;
+		return (
+			<div className="flex flex-1 items-center justify-center bg-surface text-accent-primary type-label">
+				Failed to load graph: {loadError}
+			</div>
+		);
 	}
 
 	if (!initial) {
-		return <div className="flex flex-1 items-center justify-center bg-surface text-text-secondary type-label">Loading graph...</div>;
+		return (
+			<div className="flex flex-1 items-center justify-center bg-surface text-text-secondary type-label">
+				Loading graph...
+			</div>
+		);
 	}
 
 	return (

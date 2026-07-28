@@ -1,304 +1,304 @@
 {
-  "version": 4,
-  "bucket": "buffered-audio-binaries-345340320424",
-  "region": "us-east-1",
-  "assets": [
-    {
-      "key": null,
-      "platform": "all",
-      "arch": "all",
-      "filename": "htdemucs.onnx.data",
-      "sha256": "e523708037d55151ac03feae48c9dbeab9908c086ed8e655e40b70dfaa66a3b8",
-      "size": 177995776,
-      "source": "https://github.com/facebookresearch/demucs"
-    },
-    {
-      "key": null,
-      "platform": "darwin",
-      "arch": "arm64",
-      "filename": "libonnxruntime-darwin-arm64.dylib",
-      "sha256": "2b885992d3d6fa4130d39ec84a80d7504ff52750027c547bb22c86165f19406a",
-      "size": 33481272,
-      "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
-    },
-    {
-      "key": null,
-      "platform": "darwin",
-      "arch": "arm64",
-      "filename": "vst-demon-cli-darwin-arm64",
-      "sha256": "6948c68cf276541760732ebffa7bea338cab0667ef15628b122b37dca8334d44",
-      "size": 367408,
-      "source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-darwin-arm64.tar.gz"
-    },
-    {
-      "key": null,
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "libonnxruntime_providers_cuda.so",
-      "sha256": "937e28f8d3fca43c77be9afa6795b6b600fe5bc6c97ba4e513fe05f0ee22a546",
-      "size": 345463416,
-      "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
-    },
-    {
-      "key": null,
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "libonnxruntime_providers_shared.so",
-      "sha256": "ebbfc73b7da61d56eba58cb3eb76caa6dcba8b3026f1d75626bb580ffe3cb69b",
-      "size": 14632,
-      "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
-    },
-    {
-      "key": null,
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "onnxruntime-linux-x64.so.1.22.0",
-      "sha256": "5ede9537894434c221de73323aa1f644967afeed6569fd570ea356a366e98ecd",
-      "size": 22571728,
-      "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
-    },
-    {
-      "key": null,
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "vst-demon-cli-linux-x64",
-      "sha256": "e771c17eb7b23c70e543dca335d64430313b2016a5ffcb1a2d9eefcba52d0aee",
-      "size": 478104,
-      "source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-linux-x64.tar.gz"
-    },
-    {
-      "key": null,
-      "platform": "win32",
-      "arch": "x64",
-      "filename": "DirectML.dll",
-      "sha256": "9c9e6d822561c6c41b90e6994b3e8857cf1d66dbfb1e0c4c799c7c89b4e92da1",
-      "size": 18527776,
-      "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
-    },
-    {
-      "key": null,
-      "platform": "win32",
-      "arch": "x64",
-      "filename": "onnxruntime-win32-x64.dll",
-      "sha256": "95366724919f4e95ecc60010912ed538ad9804b6683fbd0aad389749102834b9",
-      "size": 16471584,
-      "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
-    },
-    {
-      "key": null,
-      "platform": "win32",
-      "arch": "x64",
-      "filename": "vst-demon-cli-win32-x64.exe",
-      "sha256": "4f1c9bd770748ed4836567f68872cb811a732dc66f0f97b99caa58f1aa533ebd",
-      "size": 566272,
-      "source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-win32-x64.zip"
-    },
-    {
-      "key": "Kim_Vocal_2",
-      "platform": "all",
-      "arch": "all",
-      "filename": "Kim_Vocal_2.onnx",
-      "sha256": "ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b",
-      "size": 66759214,
-      "source": "https://huggingface.co/seanghay/uvr_models"
-    },
-    {
-      "key": "dfn3",
-      "platform": "all",
-      "arch": "all",
-      "filename": "dfn3.onnx",
-      "sha256": "fe5eb64fa2e4154c83f8e4935e82871c850c154387ee892e0ab65fe179e7d8c9",
-      "size": 16104687,
-      "source": "https://github.com/yuyun2000/SpeechDenoiser"
-    },
-    {
-      "key": "dtln-model_1",
-      "platform": "all",
-      "arch": "all",
-      "filename": "dtln-model_1.onnx",
-      "sha256": "22b91cae3855e5a0620e66a917ca6c82c58db0e842c770f58d86751c5e8d4ae3",
-      "size": 1458237,
-      "source": "https://github.com/breizhn/DTLN"
-    },
-    {
-      "key": "dtln-model_2",
-      "platform": "all",
-      "arch": "all",
-      "filename": "dtln-model_2.onnx",
-      "sha256": "e20c92f9233fccf29cddf86970d0d0161a03aebccc26d6f4d5639c4d5ec2e639",
-      "size": 2510010,
-      "source": "https://github.com/breizhn/DTLN"
-    },
-    {
-      "key": "ffmpeg",
-      "platform": "darwin",
-      "arch": "arm64",
-      "filename": "ffmpeg-darwin-arm64",
-      "sha256": "1dda5d1bdde134222dd02a00be649a8e7d0190922e4104b017d995c60f261926",
-      "size": 62582864,
-      "source": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1774549676_8.1/ffmpeg.zip"
-    },
-    {
-      "key": "ffmpeg",
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "ffmpeg-linux-x64",
-      "sha256": "16b2424fe5b616617f142d19c0d5f3281d77f951c3f31722dd8012913d99f96e",
-      "size": 109947080,
-      "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-04-18-13-04"
-    },
-    {
-      "key": "ffmpeg",
-      "platform": "win32",
-      "arch": "x64",
-      "filename": "ffmpeg-win32-x64.exe",
-      "sha256": "59d847f4cc6067e86a66b03333022d6726c29663daea1cd80778d18bff5b8b79",
-      "size": 107993600,
-      "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-04-18-13-04"
-    },
-    {
-      "key": "ffprobe",
-      "platform": "darwin",
-      "arch": "arm64",
-      "filename": "ffprobe-darwin-arm64",
-      "sha256": "780d3e7fae1fd524a40b915eba0b3e23ed4b9372a21ba32394776494c45f293b",
-      "size": 62407968,
-      "source": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1774549676_8.1/ffprobe.zip"
-    },
-    {
-      "key": "ffprobe",
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "ffprobe-linux-x64",
-      "sha256": "968bbaac01b0bfd30d17f81822c7fda248ea6706265aa68dccf0b617ecdbcaf8",
-      "size": 109811272,
-      "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-04-18-13-04"
-    },
-    {
-      "key": "ffprobe",
-      "platform": "win32",
-      "arch": "x64",
-      "filename": "ffprobe-win32-x64.exe",
-      "sha256": "97f4cfc0d9970970ba284bbe732812028d90fb07d6eed4dd03d025ebe12158ff",
-      "size": 107856896,
-      "source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-04-18-13-04"
-    },
-    {
-      "key": "fftw-addon",
-      "platform": "darwin",
-      "arch": "arm64",
-      "filename": "fftw-darwin-arm64.node",
-      "sha256": "7b25488e0e6bddcc357346191c444a11ae2638d1a55b121e9fe902626728d455",
-      "size": 695728,
-      "source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.2.0"
-    },
-    {
-      "key": "fftw-addon",
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "fftw-linux-x64.node",
-      "sha256": "b525aaa3551ec04e549fded6417d6aae53f669da2fb026d0c94929d1ae20e74a",
-      "size": 1289472,
-      "source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.2.0"
-    },
-    {
-      "key": "fftw-addon",
-      "platform": "win32",
-      "arch": "x64",
-      "filename": "fftw-win32-x64.node",
-      "sha256": "6fcfaacbe568cd5ad7019a7baeaac45c475ea0e61de6886484d27d09adffbbbc",
-      "size": 1103872,
-      "source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.2.0"
-    },
-    {
-      "key": "htdemucs",
-      "platform": "all",
-      "arch": "all",
-      "filename": "htdemucs.onnx",
-      "sha256": "be6fa125c457bc4fcdba43b0506270b5ed2113872748e8163de817f418db17bb",
-      "size": 2399845,
-      "source": "https://github.com/facebookresearch/demucs"
-    },
-    {
-      "key": "onnx-addon",
-      "platform": "darwin",
-      "arch": "arm64",
-      "filename": "onnx-runtime-addon-darwin-arm64.node",
-      "sha256": "12b3e970fc141bdcd8aadf32692cf2bcd6acd52d06ee235af583e4fcc5492183",
-      "size": 106952,
-      "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
-    },
-    {
-      "key": "onnx-addon",
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "onnx-runtime-addon-linux-x64.node",
-      "sha256": "d33cc716ee6c573f64d20103cd7e38df176c6dad8f330b47cb5659344a7e5c26",
-      "size": 99984,
-      "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
-    },
-    {
-      "key": "onnx-addon",
-      "platform": "win32",
-      "arch": "x64",
-      "filename": "onnx-runtime-addon-win32-x64.node",
-      "sha256": "a0bbc5a86764be4d7e3998403b87f5c820c1d8ef29c529b68b482a089b63a6f1",
-      "size": 473088,
-      "source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
-    },
-    {
-      "key": "vkfft-addon",
-      "platform": "darwin",
-      "arch": "arm64",
-      "filename": "vkfft-darwin-arm64.node",
-      "sha256": "cb4a0954dc16159b60fdec55f5f3652219c33aedd7d95b990977ab3259a93b9b",
-      "size": 557168,
-      "source": "https://github.com/visionsofparadise/vkfft-addon/releases/tag/v1.0.0"
-    },
-    {
-      "key": "vkfft-addon",
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "vkfft-linux-x64.node",
-      "sha256": "220f3aec87ab8c3c1422c66b0f20d7dd1011ea1774babb67e8d50a5a29f0948b",
-      "size": 10756056,
-      "source": "https://github.com/visionsofparadise/vkfft-addon/releases/tag/v1.0.0"
-    },
-    {
-      "key": "vkfft-addon",
-      "platform": "win32",
-      "arch": "x64",
-      "filename": "vkfft-win32-x64.node",
-      "sha256": "d33b21bda67f2699774b2b354bdb8a73d4b2b9ef7166e812685bc066e2be5a28",
-      "size": 4899328,
-      "source": "https://github.com/visionsofparadise/vkfft-addon/releases/tag/v1.0.0"
-    },
-    {
-      "key": "vst-host",
-      "platform": "darwin",
-      "arch": "arm64",
-      "filename": "vst-host-darwin-arm64",
-      "sha256": "3aef52ea1a4bc6e9928a2ea15530ea05145fa0150a3897226b7fc88a60bb67dc",
-      "size": 21118480,
-      "source": "https://github.com/visionsofparadise/vst-host/releases/tag/v0.2.0"
-    },
-    {
-      "key": "vst-host",
-      "platform": "linux",
-      "arch": "x64",
-      "filename": "vst-host-linux-x64",
-      "sha256": "fd6f8b17f0f79de815eb1bd9840e196309d3c7f4cffe89726299c0cdaec7064f",
-      "size": 49716872,
-      "source": "https://github.com/visionsofparadise/vst-host/releases/tag/v0.2.0"
-    },
-    {
-      "key": "vst-host",
-      "platform": "win32",
-      "arch": "x64",
-      "filename": "vst-host-win32-x64.exe",
-      "sha256": "c5da511e63249bb305cf26eab486a9574dc00af7d5d2c8fdc4061e76da0e3c40",
-      "size": 30454351,
-      "source": "https://github.com/visionsofparadise/vst-host/releases/tag/v0.2.0"
-    }
-  ]
+	"version": 4,
+	"bucket": "buffered-audio-binaries-345340320424",
+	"region": "us-east-1",
+	"assets": [
+		{
+			"key": null,
+			"platform": "all",
+			"arch": "all",
+			"filename": "htdemucs.onnx.data",
+			"sha256": "e523708037d55151ac03feae48c9dbeab9908c086ed8e655e40b70dfaa66a3b8",
+			"size": 177995776,
+			"source": "https://github.com/facebookresearch/demucs"
+		},
+		{
+			"key": null,
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "libonnxruntime-darwin-arm64.dylib",
+			"sha256": "2b885992d3d6fa4130d39ec84a80d7504ff52750027c547bb22c86165f19406a",
+			"size": 33481272,
+			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": null,
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "vst-demon-cli-darwin-arm64",
+			"sha256": "6948c68cf276541760732ebffa7bea338cab0667ef15628b122b37dca8334d44",
+			"size": 367408,
+			"source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-darwin-arm64.tar.gz"
+		},
+		{
+			"key": null,
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "libonnxruntime_providers_cuda.so",
+			"sha256": "937e28f8d3fca43c77be9afa6795b6b600fe5bc6c97ba4e513fe05f0ee22a546",
+			"size": 345463416,
+			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": null,
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "libonnxruntime_providers_shared.so",
+			"sha256": "ebbfc73b7da61d56eba58cb3eb76caa6dcba8b3026f1d75626bb580ffe3cb69b",
+			"size": 14632,
+			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": null,
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "onnxruntime-linux-x64.so.1.22.0",
+			"sha256": "5ede9537894434c221de73323aa1f644967afeed6569fd570ea356a366e98ecd",
+			"size": 22571728,
+			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": null,
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "vst-demon-cli-linux-x64",
+			"sha256": "e771c17eb7b23c70e543dca335d64430313b2016a5ffcb1a2d9eefcba52d0aee",
+			"size": 478104,
+			"source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-linux-x64.tar.gz"
+		},
+		{
+			"key": null,
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "DirectML.dll",
+			"sha256": "9c9e6d822561c6c41b90e6994b3e8857cf1d66dbfb1e0c4c799c7c89b4e92da1",
+			"size": 18527776,
+			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": null,
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "onnxruntime-win32-x64.dll",
+			"sha256": "95366724919f4e95ecc60010912ed538ad9804b6683fbd0aad389749102834b9",
+			"size": 16471584,
+			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": null,
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "vst-demon-cli-win32-x64.exe",
+			"sha256": "4f1c9bd770748ed4836567f68872cb811a732dc66f0f97b99caa58f1aa533ebd",
+			"size": 566272,
+			"source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-win32-x64.zip"
+		},
+		{
+			"key": "Kim_Vocal_2",
+			"platform": "all",
+			"arch": "all",
+			"filename": "Kim_Vocal_2.onnx",
+			"sha256": "ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b",
+			"size": 66759214,
+			"source": "https://huggingface.co/seanghay/uvr_models"
+		},
+		{
+			"key": "dfn3",
+			"platform": "all",
+			"arch": "all",
+			"filename": "dfn3.onnx",
+			"sha256": "fe5eb64fa2e4154c83f8e4935e82871c850c154387ee892e0ab65fe179e7d8c9",
+			"size": 16104687,
+			"source": "https://github.com/yuyun2000/SpeechDenoiser"
+		},
+		{
+			"key": "dtln-model_1",
+			"platform": "all",
+			"arch": "all",
+			"filename": "dtln-model_1.onnx",
+			"sha256": "22b91cae3855e5a0620e66a917ca6c82c58db0e842c770f58d86751c5e8d4ae3",
+			"size": 1458237,
+			"source": "https://github.com/breizhn/DTLN"
+		},
+		{
+			"key": "dtln-model_2",
+			"platform": "all",
+			"arch": "all",
+			"filename": "dtln-model_2.onnx",
+			"sha256": "e20c92f9233fccf29cddf86970d0d0161a03aebccc26d6f4d5639c4d5ec2e639",
+			"size": 2510010,
+			"source": "https://github.com/breizhn/DTLN"
+		},
+		{
+			"key": "ffmpeg",
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "ffmpeg-darwin-arm64",
+			"sha256": "1dda5d1bdde134222dd02a00be649a8e7d0190922e4104b017d995c60f261926",
+			"size": 62582864,
+			"source": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1774549676_8.1/ffmpeg.zip"
+		},
+		{
+			"key": "ffmpeg",
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "ffmpeg-linux-x64",
+			"sha256": "16b2424fe5b616617f142d19c0d5f3281d77f951c3f31722dd8012913d99f96e",
+			"size": 109947080,
+			"source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-04-18-13-04"
+		},
+		{
+			"key": "ffmpeg",
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "ffmpeg-win32-x64.exe",
+			"sha256": "59d847f4cc6067e86a66b03333022d6726c29663daea1cd80778d18bff5b8b79",
+			"size": 107993600,
+			"source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-04-18-13-04"
+		},
+		{
+			"key": "ffprobe",
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "ffprobe-darwin-arm64",
+			"sha256": "780d3e7fae1fd524a40b915eba0b3e23ed4b9372a21ba32394776494c45f293b",
+			"size": 62407968,
+			"source": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1774549676_8.1/ffprobe.zip"
+		},
+		{
+			"key": "ffprobe",
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "ffprobe-linux-x64",
+			"sha256": "968bbaac01b0bfd30d17f81822c7fda248ea6706265aa68dccf0b617ecdbcaf8",
+			"size": 109811272,
+			"source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-04-18-13-04"
+		},
+		{
+			"key": "ffprobe",
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "ffprobe-win32-x64.exe",
+			"sha256": "97f4cfc0d9970970ba284bbe732812028d90fb07d6eed4dd03d025ebe12158ff",
+			"size": 107856896,
+			"source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-04-18-13-04"
+		},
+		{
+			"key": "fftw-addon",
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "fftw-darwin-arm64.node",
+			"sha256": "7b25488e0e6bddcc357346191c444a11ae2638d1a55b121e9fe902626728d455",
+			"size": 695728,
+			"source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.2.0"
+		},
+		{
+			"key": "fftw-addon",
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "fftw-linux-x64.node",
+			"sha256": "b525aaa3551ec04e549fded6417d6aae53f669da2fb026d0c94929d1ae20e74a",
+			"size": 1289472,
+			"source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.2.0"
+		},
+		{
+			"key": "fftw-addon",
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "fftw-win32-x64.node",
+			"sha256": "6fcfaacbe568cd5ad7019a7baeaac45c475ea0e61de6886484d27d09adffbbbc",
+			"size": 1103872,
+			"source": "https://github.com/visionsofparadise/fftw-addon/releases/tag/v1.2.0"
+		},
+		{
+			"key": "htdemucs",
+			"platform": "all",
+			"arch": "all",
+			"filename": "htdemucs.onnx",
+			"sha256": "be6fa125c457bc4fcdba43b0506270b5ed2113872748e8163de817f418db17bb",
+			"size": 2399845,
+			"source": "https://github.com/facebookresearch/demucs"
+		},
+		{
+			"key": "onnx-addon",
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "onnx-runtime-addon-darwin-arm64.node",
+			"sha256": "12b3e970fc141bdcd8aadf32692cf2bcd6acd52d06ee235af583e4fcc5492183",
+			"size": 106952,
+			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": "onnx-addon",
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "onnx-runtime-addon-linux-x64.node",
+			"sha256": "d33cc716ee6c573f64d20103cd7e38df176c6dad8f330b47cb5659344a7e5c26",
+			"size": 99984,
+			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": "onnx-addon",
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "onnx-runtime-addon-win32-x64.node",
+			"sha256": "a0bbc5a86764be4d7e3998403b87f5c820c1d8ef29c529b68b482a089b63a6f1",
+			"size": 473088,
+			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": "vkfft-addon",
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "vkfft-darwin-arm64.node",
+			"sha256": "cb4a0954dc16159b60fdec55f5f3652219c33aedd7d95b990977ab3259a93b9b",
+			"size": 557168,
+			"source": "https://github.com/visionsofparadise/vkfft-addon/releases/tag/v1.0.0"
+		},
+		{
+			"key": "vkfft-addon",
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "vkfft-linux-x64.node",
+			"sha256": "220f3aec87ab8c3c1422c66b0f20d7dd1011ea1774babb67e8d50a5a29f0948b",
+			"size": 10756056,
+			"source": "https://github.com/visionsofparadise/vkfft-addon/releases/tag/v1.0.0"
+		},
+		{
+			"key": "vkfft-addon",
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "vkfft-win32-x64.node",
+			"sha256": "d33b21bda67f2699774b2b354bdb8a73d4b2b9ef7166e812685bc066e2be5a28",
+			"size": 4899328,
+			"source": "https://github.com/visionsofparadise/vkfft-addon/releases/tag/v1.0.0"
+		},
+		{
+			"key": "vst-host",
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "vst-host-darwin-arm64",
+			"sha256": "3aef52ea1a4bc6e9928a2ea15530ea05145fa0150a3897226b7fc88a60bb67dc",
+			"size": 21118480,
+			"source": "https://github.com/visionsofparadise/vst-host/releases/tag/v0.2.0"
+		},
+		{
+			"key": "vst-host",
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "vst-host-linux-x64",
+			"sha256": "fd6f8b17f0f79de815eb1bd9840e196309d3c7f4cffe89726299c0cdaec7064f",
+			"size": 49716872,
+			"source": "https://github.com/visionsofparadise/vst-host/releases/tag/v0.2.0"
+		},
+		{
+			"key": "vst-host",
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "vst-host-win32-x64.exe",
+			"sha256": "c5da511e63249bb305cf26eab486a9574dc00af7d5d2c8fdc4061e76da0e3c40",
+			"size": 30454351,
+			"source": "https://github.com/visionsofparadise/vst-host/releases/tag/v0.2.0"
+		}
+	]
 }

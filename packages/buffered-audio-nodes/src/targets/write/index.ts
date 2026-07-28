@@ -1,7 +1,13 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
-import { BufferedTargetStream, TargetNode, type Block, type StreamSetupContext, type TargetNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTargetStream,
+	TargetNode,
+	type Block,
+	type StreamSetupContext,
+	type TargetNodeProperties,
+} from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { waitForDrain } from "../../utils/ffmpeg";
 import { getBytesPerSample, writeSample, buildWavHeader, buildRf64Header } from "./utils/wav";
@@ -30,14 +36,29 @@ export interface EncodingOptions {
 
 export const encodingSchema = z.object({
 	format: z.enum(["wav", "flac", "mp3", "aac"]),
-	bitrate: z.number().int().min(8).max(1024).optional().describe("Constant bitrate in kbps for MP3 and AAC. Defaults to 192 kbps."),
+	bitrate: z
+		.number()
+		.int()
+		.min(8)
+		.max(1024)
+		.optional()
+		.describe("Constant bitrate in kbps for MP3 and AAC. Defaults to 192 kbps."),
 	vbr: z.number().min(0).max(9).optional(),
-	sampleRate: z.number().int().positive().optional().describe("Output sample rate (Hz). When set, ffmpeg resamples on encode."),
+	sampleRate: z
+		.number()
+		.int()
+		.positive()
+		.optional()
+		.describe("Output sample rate (Hz). When set, ffmpeg resamples on encode."),
 });
 
 export const schema = z.object({
 	path: z.string().default("").meta({ input: "file", mode: "save", accept: ".wav,.flac,.mp3,.aac" }),
-	ffmpegPath: z.string().default("").meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" }).describe("FFmpeg — audio/video processing tool"),
+	ffmpegPath: z
+		.string()
+		.default("")
+		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
+		.describe("FFmpeg — audio/video processing tool"),
 	bitDepth: z.enum(["16", "24", "32", "32f"]).default("16"),
 	encoding: encodingSchema.optional().describe("Encode through ffmpeg to a non-WAV format. Requires `ffmpegPath`."),
 });
@@ -257,6 +278,9 @@ export class WriteNode extends TargetNode<WriteProperties> {
 	static override readonly Stream = WriteStream;
 }
 
-export function write(path: string, options?: { bitDepth?: WavBitDepth; ffmpegPath?: string; encoding?: EncodingOptions }): WriteNode {
+export function write(
+	path: string,
+	options?: { bitDepth?: WavBitDepth; ffmpegPath?: string; encoding?: EncodingOptions },
+): WriteNode {
 	return new WriteNode({ path, ...options });
 }

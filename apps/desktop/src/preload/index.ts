@@ -8,8 +8,14 @@ const mainApi = {
 	...(Object.fromEntries(ipcHandlers) as Record<string, unknown>),
 
 	events: {
-		on: <K extends keyof MainEventMap>(eventName: K, listener: (_event: IpcRendererEvent, ...args: MainEventMap[K]) => void) => ipcRenderer.addListener(eventName, listener),
-		removeListener: <K extends keyof MainEventMap>(eventName: K, listener: (_event: IpcRendererEvent, ...args: MainEventMap[K]) => void) => ipcRenderer.removeListener(eventName, listener),
+		on: <K extends keyof MainEventMap>(
+			eventName: K,
+			listener: (_event: IpcRendererEvent, ...args: MainEventMap[K]) => void,
+		) => ipcRenderer.addListener(eventName, listener),
+		removeListener: <K extends keyof MainEventMap>(
+			eventName: K,
+			listener: (_event: IpcRendererEvent, ...args: MainEventMap[K]) => void,
+		) => ipcRenderer.removeListener(eventName, listener),
 	},
 
 	send: (eventName: string, ...args: Array<unknown>) => {

@@ -5,7 +5,11 @@ import { createHistory, graphMeta } from "./History";
 
 const createFixture = () => {
 	const group = createGroup(graphMeta);
-	const definition = group.createState({ name: "g", nodes: new Array<{ id: string; parameters: Record<string, unknown> }>(), edges: new Array<{ from: string; to: string }>() });
+	const definition = group.createState({
+		name: "g",
+		nodes: new Array<{ id: string; parameters: Record<string, unknown> }>(),
+		edges: new Array<{ from: string; to: string }>(),
+	});
 	const positions = group.createState({ positions: {} as Record<string, { x: number; y: number }> });
 	const history = createHistory(group);
 
@@ -58,7 +62,9 @@ describe("History", () => {
 
 		history.op.unwrap().undo();
 
-		expect(JSON.stringify(definition.op.unwrap().nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: { amount: 0.5 } }]));
+		expect(JSON.stringify(definition.op.unwrap().nodes)).toBe(
+			JSON.stringify([{ id: "gain-1", parameters: { amount: 0.5 } }]),
+		);
 
 		history.op.unwrap().undo();
 
@@ -74,7 +80,9 @@ describe("History", () => {
 
 		history.op.unwrap().redo();
 
-		expect(JSON.stringify(definition.op.unwrap().nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: { amount: 0.5 } }]));
+		expect(JSON.stringify(definition.op.unwrap().nodes)).toBe(
+			JSON.stringify([{ id: "gain-1", parameters: { amount: 0.5 } }]),
+		);
 
 		history.op.unwrap().redo();
 

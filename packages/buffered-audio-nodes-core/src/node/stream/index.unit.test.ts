@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { BufferedStream, type FinishedPayload, type LogPayload, type ProgressPayload, type RenderEvents, type StartedPayload, type StreamPhase } from ".";
+import {
+	BufferedStream,
+	type FinishedPayload,
+	type LogPayload,
+	type ProgressPayload,
+	type RenderEvents,
+	type StartedPayload,
+	type StreamPhase,
+} from ".";
 import type { BufferedAudioNode } from "..";
 import { createTestStreamContext } from "../../testing/contexts";
 
@@ -76,7 +84,12 @@ describe("BufferedStream.emitProgress", () => {
 
 		stream.emitProgressPublic("emit", 5);
 
-		expect(collected[0]).toEqual({ phase: "emit", framesDone: 5, framesTotal: undefined, createdAt: expect.any(Number) });
+		expect(collected[0]).toEqual({
+			phase: "emit",
+			framesDone: 5,
+			framesTotal: undefined,
+			createdAt: expect.any(Number),
+		});
 	});
 });
 

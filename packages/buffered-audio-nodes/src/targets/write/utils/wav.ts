@@ -53,7 +53,14 @@ export function writeSample(buffer: Buffer, offset: number, sample: number, bitD
 	}
 }
 
-export function writeFmtAndDataChunks(header: Buffer, offset: number, sampleRate: number, channels: number, bitDepth: WavBitDepth, dataSize: number): void {
+export function writeFmtAndDataChunks(
+	header: Buffer,
+	offset: number,
+	sampleRate: number,
+	channels: number,
+	bitDepth: WavBitDepth,
+	dataSize: number,
+): void {
 	const bytesPerSample = getBytesPerSample(bitDepth);
 	const blockAlign = channels * bytesPerSample;
 	const byteRate = sampleRate * blockAlign;

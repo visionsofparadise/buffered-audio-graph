@@ -45,7 +45,9 @@ describe("UnbufferedTransformStream._transform", () => {
 
 		const { context } = createTestStreamContext();
 		const stream = new DropOddStream(nodeWith({}), context);
-		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10), createBlock(2, 10, 10)]), createTestSetupContext()));
+		const output = await drainBlocks(
+			await stream.setup(readableFrom([createBlock(1, 0, 10), createBlock(2, 10, 10)]), createTestSetupContext()),
+		);
 
 		expect(output).toHaveLength(1);
 		expect(output[0]?.samples[0]?.[0]).toBe(2);
@@ -72,7 +74,9 @@ describe("UnbufferedTransformStream._flush", () => {
 
 		const { context } = createTestStreamContext();
 		const stream = new TrailingStream(nodeWith({}), context);
-		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()));
+		const output = await drainBlocks(
+			await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()),
+		);
 
 		expect(stream.flushCalls).toBe(1);
 		expect(output.at(-1)?.samples[0]?.[0]).toBe(MARKER);
@@ -192,7 +196,12 @@ describe("UnbufferedTransformStream progress shape", () => {
 		const stream = new GainStream(nodeWith({}), context);
 		const progress = collectProgress(events);
 
-		await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 100), createBlock(2, 100, 100)]), createTestSetupContext({ sourceTotalFrames: 200 })));
+		await drainBlocks(
+			await stream.setup(
+				readableFrom([createBlock(1, 0, 100), createBlock(2, 100, 100)]),
+				createTestSetupContext({ sourceTotalFrames: 200 }),
+			),
+		);
 
 		const buffers = progress.filter((p) => p.phase === "buffer");
 		const emits = progress.filter((p) => p.phase === "emit");

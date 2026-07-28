@@ -41,7 +41,12 @@ Concrete nodes are pure static declaration — no methods. Each names four stati
 
 ```ts
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	UnbufferedTransformStream,
+	TransformNode,
+	type Block,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 
 export const schema = z.object({
 	gain: z.number().min(-60).max(24).default(0).describe("Gain (dB)"),
@@ -84,8 +89,8 @@ export function gain(options?: { gain?: number; id?: string }): GainNode {
 
 ```ts
 interface Block {
-	readonly samples: Array<Float32Array>;  // one Float32Array per channel
-	readonly offset: number;                // frame position in the stream
+	readonly samples: Array<Float32Array>; // one Float32Array per channel
+	readonly offset: number; // frame position in the stream
 	readonly sampleRate: number;
 	readonly bitDepth: number;
 }
@@ -117,9 +122,9 @@ A render runs in two phases. `source.createRenderJob(options?)` synchronously bu
 class RenderJob {
 	readonly events: RenderEvents;
 	readonly streams: ReadonlyMap<BufferedAudioNode, ReadonlyArray<BufferedStream>>;
-	get timing(): RenderTiming | undefined;  // set after render() resolves
+	get timing(): RenderTiming | undefined; // set after render() resolves
 	abort(): void;
-	render(): Promise<void>;                 // single-use; a second call throws
+	render(): Promise<void>; // single-use; a second call throws
 }
 ```
 
@@ -210,7 +215,7 @@ class NormalizeStream extends BufferedTransformStream<NormalizeNode> {
 			for (const sample of channel) this.peak = Math.max(this.peak, Math.abs(sample));
 		}
 
-		return block;  // length-preserving; the framework writes this to the buffer
+		return block; // length-preserving; the framework writes this to the buffer
 	}
 
 	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
@@ -251,17 +256,17 @@ for (const framesDone of frameCounts) {
 
 `BlockBuffer` is the sequential, disk-spilling accumulator used by `BufferedTransformStream` and constructible by transforms needing scratch space. Data stays in memory until it exceeds ~10 MB, then spills to a temp file (unlinked on `close()`), so memory stays bounded regardless of source length. Access is strictly sequential — there is no offset-based random read, which makes the whole-source-`Float32Array` antipattern structurally impossible.
 
-| Method | Behavior |
-|---|---|
-| `read(frames): Promise<Block>` | Pull the next N frames from the read cursor. Returns a short (possibly empty) block at end of buffer. |
-| `iterate(frames): AsyncIterableIterator<Block>` | Yield successive `read(frames)` results including the trailing short block, then complete. An empty buffer yields nothing. |
-| `write(samples, sampleRate?, bitDepth?): Promise<void>` | Append samples at the tail. Captures format on the first call and validates it thereafter. |
-| `flushWrites(): Promise<void>` | Force pending writes to disk so subsequent reads see them. |
-| `reset(): Promise<void>` | Rewind the read cursor; preserve data. |
-| `clear(): Promise<void>` | Drop all data and reset cursors. |
-| `setSampleRate(rate)` / `setBitDepth(depth)` | Override the captured format (resample, dither). |
-| `openReverseReader(): Promise<ReverseBlockReader>` | Open a read-only reverse view over the buffer. |
-| `close(): Promise<void>` | Release the temp file and reset state. |
+| Method                                                  | Behavior                                                                                                                   |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `read(frames): Promise<Block>`                          | Pull the next N frames from the read cursor. Returns a short (possibly empty) block at end of buffer.                      |
+| `iterate(frames): AsyncIterableIterator<Block>`         | Yield successive `read(frames)` results including the trailing short block, then complete. An empty buffer yields nothing. |
+| `write(samples, sampleRate?, bitDepth?): Promise<void>` | Append samples at the tail. Captures format on the first call and validates it thereafter.                                 |
+| `flushWrites(): Promise<void>`                          | Force pending writes to disk so subsequent reads see them.                                                                 |
+| `reset(): Promise<void>`                                | Rewind the read cursor; preserve data.                                                                                     |
+| `clear(): Promise<void>`                                | Drop all data and reset cursors.                                                                                           |
+| `setSampleRate(rate)` / `setBitDepth(depth)`            | Override the captured format (resample, dither).                                                                           |
+| `openReverseReader(): Promise<ReverseBlockReader>`      | Open a read-only reverse view over the buffer.                                                                             |
+| `close(): Promise<void>`                                | Release the temp file and reset state.                                                                                     |
 
 Walk a buffer with `iterate` (or `read` in a loop until a short block). Transforms whose output differs in length, position, or rate from the input allocate a separate scratch `BlockBuffer`, stream output into it, `clear()` the source, then stream the scratch back.
 
@@ -288,11 +293,14 @@ A two-level `Map<packageName, Map<nodeName, Constructor>>` mapping serialized re
 
 ```ts
 const registry: NodeRegistry = new Map([
-	["@buffered-audio/nodes", new Map([
-		["read", ReadNode],
-		["gain", GainNode],
-		["write", WriteNode],
-	])],
+	[
+		"@buffered-audio/nodes",
+		new Map([
+			["read", ReadNode],
+			["gain", GainNode],
+			["write", WriteNode],
+		]),
+	],
 ]);
 ```
 

@@ -1,50 +1,50 @@
 {
-  "name": "@buffered-audio/core",
-  "version": "0.12.0",
-  "type": "module",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./testing": {
-      "import": "./dist/testing.js",
-      "types": "./dist/testing.d.ts"
-    }
-  },
-  "files": [
-    "dist"
-  ],
-  "sideEffects": false,
-  "publishConfig": {
-    "access": "public"
-  },
-  "author": "Matt Cavender",
-  "license": "ISC",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/visionsofparadise/buffered-audio-graph",
-    "directory": "packages/buffered-audio-nodes-core"
-  },
-  "scripts": {
-    "check": "concurrently \"eslint . --fix --cache --format ../../agent-eslint.js\" \"tsc --noEmit --pretty false 2>&1 | node ../../agent-tsc.js\"",
-    "check:verbose": "concurrently \"eslint .\" \"tsc --noEmit\"",
-    "lint": "eslint . --fix --cache --format ../../agent-eslint.js",
-    "lint:verbose": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "build": "tsup",
-    "unit": "vitest run --project unit",
-    "integration": "vitest run --project integration"
-  },
-  "devDependencies": {
-    "@types/node": "^25.3.5",
-    "concurrently": "*",
-    "tsup": "^8.0.0",
-    "typescript": "*",
-    "vitest": "^3.0.0"
-  },
-  "dependencies": {
-    "radashi": "^12.9.1",
-    "zod": "^4.3.6"
-  }
+	"name": "@buffered-audio/core",
+	"version": "0.12.0",
+	"type": "module",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		},
+		"./testing": {
+			"import": "./dist/testing.js",
+			"types": "./dist/testing.d.ts"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"author": "Matt Cavender",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/visionsofparadise/buffered-audio-graph",
+		"directory": "packages/buffered-audio-nodes-core"
+	},
+	"scripts": {
+		"check": "concurrently \"eslint . --fix --cache --format ../../agent-eslint.js\" \"tsc --noEmit --pretty false 2>&1 | node ../../agent-tsc.js\"",
+		"check:verbose": "concurrently \"eslint .\" \"tsc --noEmit\"",
+		"lint": "eslint . --fix --cache --format ../../agent-eslint.js",
+		"lint:verbose": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"build": "tsup",
+		"unit": "vitest run --project unit",
+		"integration": "vitest run --project integration"
+	},
+	"devDependencies": {
+		"@types/node": "^25.3.5",
+		"concurrently": "*",
+		"tsup": "^8.0.0",
+		"typescript": "*",
+		"vitest": "^3.0.0"
+	},
+	"dependencies": {
+		"radashi": "^12.9.1",
+		"zod": "^4.3.6"
+	}
 }

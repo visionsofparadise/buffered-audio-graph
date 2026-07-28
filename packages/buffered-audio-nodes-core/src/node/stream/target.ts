@@ -5,7 +5,9 @@ import { createProgressGate } from "./utils/progress-gate";
 
 export interface TargetNodeProperties extends BufferedAudioNodeProperties {}
 
-export abstract class BufferedTargetStream<N extends BufferedAudioNode<TargetNodeProperties> = BufferedAudioNode<TargetNodeProperties>> extends BufferedStream<N> {
+export abstract class BufferedTargetStream<
+	N extends BufferedAudioNode<TargetNodeProperties> = BufferedAudioNode<TargetNodeProperties>,
+> extends BufferedStream<N> {
 	private hasStarted = false;
 	private framesWritten = 0;
 	private sourceTotalFrames?: number;
@@ -44,7 +46,8 @@ export abstract class BufferedTargetStream<N extends BufferedAudioNode<TargetNod
 				this.processingMs += performance.now() - start;
 				this.framesWritten += chunk.samples[0]?.length ?? 0;
 
-				if (writeGate(this.framesWritten, Date.now())) this.emitProgress("write", this.framesWritten, this.sourceTotalFrames);
+				if (writeGate(this.framesWritten, Date.now()))
+					this.emitProgress("write", this.framesWritten, this.sourceTotalFrames);
 			},
 			close: async () => {
 				const start = performance.now();

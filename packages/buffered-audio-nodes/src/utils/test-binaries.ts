@@ -30,9 +30,9 @@ export const audio = {
 } as const;
 
 export function hasAudioFixtures(...names: Array<keyof typeof audio>): boolean {
-	return names.every(name => existsSync(audio[name]));
+	return names.every((name) => existsSync(audio[name]));
 }
 
 export function hasBinaryFixtures(...names: Array<keyof typeof binaries>): boolean {
-	return names.every(name => existsSync(binaries[name]));
+	return names.every((name) => existsSync(binaries[name]));
 }

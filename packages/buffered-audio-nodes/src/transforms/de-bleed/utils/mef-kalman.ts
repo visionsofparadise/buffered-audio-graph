@@ -111,11 +111,12 @@ export function kalmanUpdateFrame(
 			const pPrior = state.stateVariance[bin]!;
 
 			const eMagSq = eRe * eRe + eIm * eIm;
-			const psiNew = temporalSmoothing * state.measurementVariance[bin]! + oneMinusBeta * (eMagSq + rOverK * yMagSq * pPrior);
+			const psiNew =
+				temporalSmoothing * state.measurementVariance[bin]! + oneMinusBeta * (eMagSq + rOverK * yMagSq * pPrior);
 
 			const psiSafe = psiNew + 1e-30;
-			const kRe = pPrior * yReBin / psiSafe;
-			const kIm = pPrior * (-yImBin) / psiSafe;
+			const kRe = (pPrior * yReBin) / psiSafe;
+			const kIm = (pPrior * -yImBin) / psiSafe;
 
 			const correctionRe = kRe * eRe - kIm * eIm;
 			const correctionIm = kRe * eIm + kIm * eRe;

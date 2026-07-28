@@ -10,7 +10,11 @@ const describeIfFixtureSet = hasBinaryFixtures("htdemucs", "htdemucsData", "onnx
 
 describeIfFixtureSet("htdemucs", () => {
 	it("processes voice audio", async () => {
-		const transform = htdemucs(binaries.htdemucs, { vocals: 1, drums: 0, bass: 0, other: 0 }, { onnxAddonPath: binaries.onnxAddon});
+		const transform = htdemucs(
+			binaries.htdemucs,
+			{ vocals: 1, drums: 0, bass: 0, other: 0 },
+			{ onnxAddonPath: binaries.onnxAddon },
+		);
 		const { input, output, context } = await runTransform(testVoice, transform);
 
 		expect(notSilent(output).pass).toBe(true);
@@ -19,13 +23,21 @@ describeIfFixtureSet("htdemucs", () => {
 		expect(notAnomalous(output).pass).toBe(true);
 	}, 480_000);
 
-	(hasBinaryFixtures("ffmpeg") && hasAudioFixtures("testVoice48k") ? it : it.skip)("processes voice audio at 48 kHz (resample path)", async () => {
-		const transform = htdemucs(binaries.htdemucs, { vocals: 1, drums: 0, bass: 0, other: 0 }, { onnxAddonPath: binaries.onnxAddon, ffmpegPath: binaries.ffmpeg });
-		const { input, output, context } = await runTransform(testVoice48k, transform);
+	(hasBinaryFixtures("ffmpeg") && hasAudioFixtures("testVoice48k") ? it : it.skip)(
+		"processes voice audio at 48 kHz (resample path)",
+		async () => {
+			const transform = htdemucs(
+				binaries.htdemucs,
+				{ vocals: 1, drums: 0, bass: 0, other: 0 },
+				{ onnxAddonPath: binaries.onnxAddon, ffmpegPath: binaries.ffmpeg },
+			);
+			const { input, output, context } = await runTransform(testVoice48k, transform);
 
-		expect(notSilent(output).pass).toBe(true);
-		expect(expectedDuration(output, context.durationFrames ?? 0).pass).toBe(true);
-		expect(somethingChanged(input, output).pass).toBe(true);
-		expect(notAnomalous(output).pass).toBe(true);
-	}, 480_000);
+			expect(notSilent(output).pass).toBe(true);
+			expect(expectedDuration(output, context.durationFrames ?? 0).pass).toBe(true);
+			expect(somethingChanged(input, output).pass).toBe(true);
+			expect(notAnomalous(output).pass).toBe(true);
+		},
+		480_000,
+	);
 });

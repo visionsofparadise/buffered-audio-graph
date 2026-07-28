@@ -48,11 +48,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 	}
 }
 
-async function downloadAndVerify(
-	url: string,
-	destination: string,
-	expectedSha256: string,
-): Promise<void> {
+async function downloadAndVerify(url: string, destination: string, expectedSha256: string): Promise<void> {
 	const tempPath = `${destination}.tmp`;
 
 	await fs.mkdir(path.dirname(destination), { recursive: true });
@@ -60,9 +56,7 @@ async function downloadAndVerify(
 	const response = await fetch(url);
 
 	if (!response.ok || response.body === null) {
-		throw new Error(
-			`Download failed for ${url}: HTTP ${response.status} ${response.statusText}`,
-		);
+		throw new Error(`Download failed for ${url}: HTTP ${response.status} ${response.statusText}`);
 	}
 
 	const hash = createHash("sha256");
@@ -91,19 +85,13 @@ async function downloadAndVerify(
 
 	if (actualSha256 !== expectedSha256) {
 		await fs.rm(tempPath, { force: true });
-		throw new Error(
-			`sha256 mismatch for ${url} — expected ${expectedSha256}, got ${actualSha256}`,
-		);
+		throw new Error(`sha256 mismatch for ${url} — expected ${expectedSha256}, got ${actualSha256}`);
 	}
 
 	await fs.rename(tempPath, destination);
 }
 
-export async function ensureCached(
-	manifest: Manifest,
-	asset: ManifestAsset,
-	cacheDir: string,
-): Promise<string> {
+export async function ensureCached(manifest: Manifest, asset: ManifestAsset, cacheDir: string): Promise<string> {
 	const assetDir = path.join(cacheDir, asset.sha256);
 	const cachePath = path.join(assetDir, asset.filename);
 

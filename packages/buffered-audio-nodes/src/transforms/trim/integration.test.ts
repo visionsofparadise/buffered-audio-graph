@@ -1,11 +1,22 @@
 import { describe, it, expect } from "vitest";
 import type { Block } from "@buffered-audio/core";
-import { channelSamples, createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom, runTransformStream } from "@buffered-audio/core/testing";
+import {
+	channelSamples,
+	createTestSetupContext,
+	createTestStreamContext,
+	drainBlocks,
+	readableFrom,
+	runTransformStream,
+} from "@buffered-audio/core/testing";
 import { trim, TrimStream } from ".";
 
 const SAMPLE_RATE = 44100;
 
-async function runTrim(properties: Parameters<typeof trim>[0], input: Array<Block>, channel = 0): Promise<Float32Array> {
+async function runTrim(
+	properties: Parameters<typeof trim>[0],
+	input: Array<Block>,
+	channel = 0,
+): Promise<Float32Array> {
 	const node = trim(properties);
 	const stream = new TrimStream(node, createTestStreamContext().context);
 	const output = await stream.setup(readableFrom(input), createTestSetupContext());
@@ -13,7 +24,13 @@ async function runTrim(properties: Parameters<typeof trim>[0], input: Array<Bloc
 	return channelSamples(await drainBlocks(output), channel);
 }
 
-function makeChunk(leadingSilence: number, signalFrames: number, trailingSilence: number, amplitude: number, offset = 0): Block {
+function makeChunk(
+	leadingSilence: number,
+	signalFrames: number,
+	trailingSilence: number,
+	amplitude: number,
+	offset = 0,
+): Block {
 	const frames = leadingSilence + signalFrames + trailingSilence;
 	const channel = new Float32Array(frames);
 

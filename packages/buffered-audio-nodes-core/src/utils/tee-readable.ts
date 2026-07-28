@@ -6,7 +6,10 @@ interface TeeBranch {
 	cancelled: boolean;
 }
 
-export function teeReadable<T>(readable: ReadableStream<Block>, items: ReadonlyArray<T>): Array<[ReadableStream<Block>, T]> {
+export function teeReadable<T>(
+	readable: ReadableStream<Block>,
+	items: ReadonlyArray<T>,
+): Array<[ReadableStream<Block>, T]> {
 	if (items.length === 0) return [];
 
 	const first = items[0] as T;

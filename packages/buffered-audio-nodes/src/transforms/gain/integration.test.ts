@@ -62,7 +62,10 @@ describe("GainNode", () => {
 
 	it("applies gain across a multi-block stream through the harness", async () => {
 		const factor = Math.pow(10, 6 / 20);
-		const { blocks, events } = await runTransformStream(gain({ gain: 6 }), [makeStereoChunk(0.25, 0.25, 256), makeStereoChunk(0.1, 0.1, 256)]);
+		const { blocks, events } = await runTransformStream(gain({ gain: 6 }), [
+			makeStereoChunk(0.25, 0.25, 256),
+			makeStereoChunk(0.1, 0.1, 256),
+		]);
 		const out = channelSamples(blocks, 0);
 
 		expect(out.length).toBe(512);

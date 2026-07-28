@@ -92,7 +92,11 @@ export function EdgeContainer({
 									<Plus size={14} strokeWidth={1.5} />
 								</button>
 							</DropdownMenuTrigger>
-							<DropdownMenuContent align="center" side="bottom" className="max-h-[calc(100vh-160px)] w-80 overflow-y-auto">
+							<DropdownMenuContent
+								align="center"
+								side="bottom"
+								className="max-h-[calc(100vh-160px)] w-80 overflow-y-auto"
+							>
 								<DropdownMenuLabel className="text-dimmed">Insert node here</DropdownMenuLabel>
 								<PackageNodeList
 									app={edgeData.app}

@@ -110,5 +110,4 @@ describe("BlockSumAccumulator", () => {
 	it("constructor: non-positive blockStep throws", () => {
 		expect(() => new BlockSumAccumulator(400, 0)).toThrow(/blockStep/);
 	});
-
 });

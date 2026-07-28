@@ -25,7 +25,8 @@ export interface ModuleStat {
 	readonly mtimeMs: number;
 }
 
-export const isCacheHit = (record: CacheRecord | undefined, stat: ModuleStat): record is CacheRecord => record?.size === stat.size && record.mtimeMs === stat.mtimeMs;
+export const isCacheHit = (record: CacheRecord | undefined, stat: ModuleStat): record is CacheRecord =>
+	record?.size === stat.size && record.mtimeMs === stat.mtimeMs;
 
 export const parseCache = (raw: string): ScanCache => {
 	const result = cacheSchema.safeParse(JSON.parse(raw));

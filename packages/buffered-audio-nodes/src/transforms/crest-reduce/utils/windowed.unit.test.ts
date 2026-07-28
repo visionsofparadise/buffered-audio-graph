@@ -13,11 +13,7 @@ function peakAbs(signal: Float32Array): number {
 
 describe("TruePeakArgmaxAccumulator", () => {
 	it("includes a flushed FIR-tail maximum and maps it to the last real input sample", () => {
-		const input = new Float32Array([
-			-0.08388812094926834,
-			0.6030386090278625,
-			-0.7042242288589478,
-		]);
+		const input = new Float32Array([-0.08388812094926834, 0.6030386090278625, -0.7042242288589478]);
 		const sourceAlignedPeak = peakAbs(new TruePeakUpsampler(4).upsample(input));
 		const accumulator = new TruePeakArgmaxAccumulator(1, 48_000);
 
@@ -36,11 +32,7 @@ describe("TruePeakArgmaxAccumulator", () => {
 		const hopSize = 32;
 		const signal = new Float32Array(96);
 
-		signal.set([
-			-0.08388812094926834,
-			0.6030386090278625,
-			-0.7042242288589478,
-		], signal.length - 3);
+		signal.set([-0.08388812094926834, 0.6030386090278625, -0.7042242288589478], signal.length - 3);
 
 		const accumulator = new TruePeakArgmaxAccumulator(1, sampleRate);
 

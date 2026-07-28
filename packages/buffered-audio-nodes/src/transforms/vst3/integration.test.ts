@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { createTestSetupContext, createTestStreamContext, drainBlocks, readableFrom } from "@buffered-audio/core/testing";
+import {
+	createTestSetupContext,
+	createTestStreamContext,
+	drainBlocks,
+	readableFrom,
+} from "@buffered-audio/core/testing";
 import { schema, vst3, Vst3Node, Vst3PassthroughStream, Vst3Stream } from ".";
 
 describe("Vst3Node schema", () => {
@@ -77,7 +82,11 @@ describe("Vst3PassthroughStream", () => {
 		// bypass is now resolved by the executor (the node is skipped); the passthrough stream is the
 		// unbuffered identity used where a passthrough is wired directly. The missing paths would make
 		// any spawn fail loudly, proving no subprocess is spawned.
-		const node = vst3({ vstHostPath: "/missing/binary", stages: [{ pluginPath: "/missing/plugin.vst3" }], bypass: true });
+		const node = vst3({
+			vstHostPath: "/missing/binary",
+			stages: [{ pluginPath: "/missing/plugin.vst3" }],
+			bypass: true,
+		});
 		const stream = new Vst3PassthroughStream(node, createTestStreamContext().context);
 
 		const samples = [Float32Array.from([0.1, -0.2, 0.3, -0.4, 0.5]), Float32Array.from([-0.1, 0.2, -0.3, 0.4, -0.5])];
@@ -85,7 +94,10 @@ describe("Vst3PassthroughStream", () => {
 
 		const input = readableFrom([{ samples, offset: 0, sampleRate: 44100, bitDepth: 32 }]);
 
-		const output = await stream.setup(input, createTestSetupContext({ memoryLimit: 64 * 1024 * 1024, highWaterMark: 1 }));
+		const output = await stream.setup(
+			input,
+			createTestSetupContext({ memoryLimit: 64 * 1024 * 1024, highWaterMark: 1 }),
+		);
 		const blocks = await drainBlocks(output);
 
 		expect(blocks).toHaveLength(1);

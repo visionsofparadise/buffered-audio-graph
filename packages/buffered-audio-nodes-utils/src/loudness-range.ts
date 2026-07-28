@@ -63,7 +63,10 @@ export function getLraConsideredStats(shortTerm: ReadonlyArray<number>): LraCons
 
 	const min = considered[0] ?? Number.POSITIVE_INFINITY;
 	const middleIndex = considered.length >> 1;
-	const median = considered.length % 2 === 1 ? (considered[middleIndex] ?? Number.POSITIVE_INFINITY) : ((considered[middleIndex - 1] ?? 0) + (considered[middleIndex] ?? 0)) / 2;
+	const median =
+		considered.length % 2 === 1
+			? (considered[middleIndex] ?? Number.POSITIVE_INFINITY)
+			: ((considered[middleIndex - 1] ?? 0) + (considered[middleIndex] ?? 0)) / 2;
 
 	return { min, median };
 }

@@ -69,8 +69,18 @@ describe("pack carried package versions", () => {
 			[
 				"test",
 				new Map([
-					["0.20.0", new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([["pack-source", PackSource as never]])],
-					["0.22.0", new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([["pack-target", PackTarget as never]])],
+					[
+						"0.20.0",
+						new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
+							["pack-source", PackSource as never],
+						]),
+					],
+					[
+						"0.22.0",
+						new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
+							["pack-target", PackTarget as never],
+						]),
+					],
 				]),
 			],
 		]);

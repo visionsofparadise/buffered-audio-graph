@@ -27,13 +27,18 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 	const seededPositions = useMemo(() => {
 		const needsLayout = Object.keys(initialGraphState.positions).length === 0 && initialDefinition.nodes.length > 0;
 
-		return needsLayout ? computeAutoLayout(initialDefinition.nodes, initialDefinition.edges) : initialGraphState.positions;
+		return needsLayout
+			? computeAutoLayout(initialDefinition.nodes, initialDefinition.edges)
+			: initialGraphState.positions;
 	}, [initialGraphState, initialDefinition]);
 
 	const group = useGroup(graphMeta);
 	const graphDefinition = useTrackedState(initialDefinition, group);
 	const positions = useTrackedState({ positions: seededPositions }, group);
-	const graphView = useTrackedState<GraphViewState>({ inspectedNodeId: initialGraphState.inspectedNodeId, viewport: initialGraphState.viewport });
+	const graphView = useTrackedState<GraphViewState>({
+		inspectedNodeId: initialGraphState.inspectedNodeId,
+		viewport: initialGraphState.viewport,
+	});
 	const [history] = useState(() => createHistory(group));
 
 	const { flushDefinition } = useGraphDefinition(graphDefinition, initialContent, tab.bagPath, context);
@@ -74,7 +79,10 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 					edges: currentDefinition.edges,
 				}),
 			) as GraphDefinition;
-			const previousPositions = JSON.parse(JSON.stringify(positions.op.unwrap().positions)) as Record<string, { x: number; y: number }>;
+			const previousPositions = JSON.parse(JSON.stringify(positions.op.unwrap().positions)) as Record<
+				string,
+				{ x: number; y: number }
+			>;
 
 			let merged;
 

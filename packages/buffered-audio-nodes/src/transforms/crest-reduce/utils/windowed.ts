@@ -23,7 +23,10 @@ export class TruePeakArgmaxAccumulator {
 	private peakInputSample = 0;
 	private inputBase = 0;
 
-	constructor(private readonly channelCount: number, _sampleRate: number) {
+	constructor(
+		private readonly channelCount: number,
+		_sampleRate: number,
+	) {
 		this.upsamplers = [];
 
 		for (let channel = 0; channel < channelCount; channel++) this.upsamplers.push(new TruePeakUpsampler(4));
@@ -124,7 +127,13 @@ export async function streamLatticeTrajectory(
 	addonOptions?: { vkfftPath?: string; fftwPath?: string },
 	search?: ItemSevenSearchParams,
 	progress?: (done: number, total: number) => void,
-): Promise<{ trajectory: ControlTrajectory; frameCount: number; signalLength: number; windowPeaks: Array<WindowPeak>; bindingMask: Array<boolean> }> {
+): Promise<{
+	trajectory: ControlTrajectory;
+	frameCount: number;
+	signalLength: number;
+	windowPeaks: Array<WindowPeak>;
+	bindingMask: Array<boolean>;
+}> {
 	const channelCount = buffer.channels;
 	const signalLength = buffer.frames;
 	const order = LATTICE_ORDER;
@@ -148,11 +157,13 @@ export async function streamLatticeTrajectory(
 	const windowPeaks = new Array<WindowPeak>(frameCount);
 	const bindingMask = new Array<boolean>(frameCount).fill(true);
 
-	if (frameCount === 0 || channelCount === 0) return { trajectory, frameCount, signalLength, windowPeaks, bindingMask };
+	if (frameCount === 0 || channelCount === 0)
+		return { trajectory, frameCount, signalLength, windowPeaks, bindingMask };
 
-	const globalTruePeakFrame = search === undefined
-		? undefined
-		: Math.min(frameCount - 1, Math.max(0, Math.round(search.peakInputSample / hopSize)));
+	const globalTruePeakFrame =
+		search === undefined
+			? undefined
+			: Math.min(frameCount - 1, Math.max(0, Math.round(search.peakInputSample / hopSize)));
 
 	await buffer.reset();
 
@@ -202,7 +213,8 @@ export async function streamLatticeTrajectory(
 
 					if (!channelRing || !channelWindow) continue;
 
-					for (let pos = 0; pos < frameSize; pos++) channelWindow[pos] = channelRing[(start + pos) % frameSize] ?? 0;
+					for (let pos = 0; pos < frameSize; pos++)
+						channelWindow[pos] = channelRing[(start + pos) % frameSize] ?? 0;
 				}
 
 				const frameStft = stft(window, frameSize, frameSize, undefined, backend, addonOptions);

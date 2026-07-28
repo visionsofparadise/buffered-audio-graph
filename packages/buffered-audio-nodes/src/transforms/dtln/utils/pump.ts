@@ -60,7 +60,9 @@ export function appendToStepBatch(args: {
 
 	while (offset < length) {
 		if (batchLen >= batchSize) {
-			throw new Error(`appendToStepBatch: batch overflow (offset=${String(offset)}, length=${String(length)}, batchLen=${String(batchLen)}, batchSize=${String(batchSize)}). Caller must flush before appending more.`);
+			throw new Error(
+				`appendToStepBatch: batch overflow (offset=${String(offset)}, length=${String(length)}, batchLen=${String(batchLen)}, batchSize=${String(batchSize)}). Caller must flush before appending more.`,
+			);
 		}
 
 		const space = batchSize - batchLen;
@@ -135,7 +137,14 @@ export async function pullNextChunkAt16k(args: {
 	return out;
 }
 
-export async function padTail(output: BlockBuffer, channels: number, originalFrames: number, written: number, sampleRate: number, bitDepth: number | undefined): Promise<void> {
+export async function padTail(
+	output: BlockBuffer,
+	channels: number,
+	originalFrames: number,
+	written: number,
+	sampleRate: number,
+	bitDepth: number | undefined,
+): Promise<void> {
 	if (written >= originalFrames) return;
 
 	const missing = originalFrames - written;

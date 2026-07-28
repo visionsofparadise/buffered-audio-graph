@@ -1,12 +1,22 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { z } from "zod";
-import { BufferedSourceStream, SourceNode, type Block, type SourceMetadata, type SourceNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedSourceStream,
+	SourceNode,
+	type Block,
+	type SourceMetadata,
+	type SourceNodeProperties,
+} from "@buffered-audio/core";
 import { deinterleaveBuffer } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../../package-metadata";
 
 export const ffmpegSchema = z.object({
 	path: z.string().default("").meta({ input: "file", mode: "open" }),
-	ffmpegPath: z.string().default("").meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" }).describe("FFmpeg — audio/video processing tool"),
+	ffmpegPath: z
+		.string()
+		.default("")
+		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
+		.describe("FFmpeg — audio/video processing tool"),
 	ffprobePath: z
 		.string()
 		.default("")
@@ -159,9 +169,13 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 	}
 
 	private async probe(ffprobePath: string, filePath: string): Promise<ProbeResult> {
-		const proc = spawn(ffprobePath, ["-v", "quiet", "-print_format", "json", "-show_streams", "-select_streams", "a:0", filePath], {
-			stdio: ["ignore", "pipe", "pipe"],
-		});
+		const proc = spawn(
+			ffprobePath,
+			["-v", "quiet", "-print_format", "json", "-show_streams", "-select_streams", "a:0", filePath],
+			{
+				stdio: ["ignore", "pipe", "pipe"],
+			},
+		);
 
 		const chunks: Array<Buffer> = [];
 
@@ -264,6 +278,14 @@ export class ReadFfmpegNode extends SourceNode<ReadFfmpegProperties> {
 	static override readonly Stream = ReadFfmpegStream;
 }
 
-export function readFfmpeg(path: string, options: { channels?: ReadonlyArray<number>; ffmpegPath: string; ffprobePath: string }): ReadFfmpegNode {
-	return new ReadFfmpegNode({ path, channels: options.channels, ffmpegPath: options.ffmpegPath, ffprobePath: options.ffprobePath });
+export function readFfmpeg(
+	path: string,
+	options: { channels?: ReadonlyArray<number>; ffmpegPath: string; ffprobePath: string },
+): ReadFfmpegNode {
+	return new ReadFfmpegNode({
+		path,
+		channels: options.channels,
+		ffmpegPath: options.ffmpegPath,
+		ffprobePath: options.ffprobePath,
+	});
 }

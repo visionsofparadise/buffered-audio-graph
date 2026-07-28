@@ -17,15 +17,23 @@ import { crestReduce } from ".";
 const here = dirname(fileURLToPath(import.meta.url));
 
 describe("crestReduce benchmark", () => {
-	it.skipIf(!hasAudioFixtures("testVoice"))("benchmarks crestReduce on voice", async () => {
-		const result = await runBenchmark("crestReduce (voice)", crestReduce(), audio.testVoice);
+	it.skipIf(!hasAudioFixtures("testVoice"))(
+		"benchmarks crestReduce on voice",
+		async () => {
+			const result = await runBenchmark("crestReduce (voice)", crestReduce(), audio.testVoice);
 
-		await appendBenchmarkLog(here, result);
-	}, 900_000);
+			await appendBenchmarkLog(here, result);
+		},
+		900_000,
+	);
 
-	it.skipIf(!hasAudioFixtures("testMusic"))("benchmarks crestReduce on music", async () => {
-		const result = await runBenchmark("crestReduce (music)", crestReduce(), audio.testMusic);
+	it.skipIf(!hasAudioFixtures("testMusic"))(
+		"benchmarks crestReduce on music",
+		async () => {
+			const result = await runBenchmark("crestReduce (music)", crestReduce(), audio.testMusic);
 
-		await appendBenchmarkLog(here, result);
-	}, 900_000);
+			await appendBenchmarkLog(here, result);
+		},
+		900_000,
+	);
 });

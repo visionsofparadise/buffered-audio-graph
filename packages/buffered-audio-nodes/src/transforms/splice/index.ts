@@ -1,11 +1,21 @@
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	UnbufferedTransformStream,
+	TransformNode,
+	type Block,
+	type StreamSetupContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { readWavSamples } from "../../utils/read-to-buffer";
 import { applyInsert, computeInsertOverlap } from "./utils/insert";
 
 export const schema = z.object({
-	insertPath: z.string().default("").meta({ input: "file", mode: "open", accept: ".wav" }).describe("Insert File Path"),
+	insertPath: z
+		.string()
+		.default("")
+		.meta({ input: "file", mode: "open", accept: ".wav" })
+		.describe("Insert File Path"),
 	insertAt: z.number().min(0).max(1_000_000_000).default(0).describe("Insert At (frames)"),
 });
 
@@ -42,7 +52,9 @@ export class SpliceStream extends UnbufferedTransformStream<SpliceNode> {
 			this.sampleRateChecked = true;
 
 			if (this.insertSampleRate !== chunk.sampleRate) {
-				throw new Error(`Splice: insert file sample rate ${this.insertSampleRate} does not match stream sample rate ${chunk.sampleRate}`);
+				throw new Error(
+					`Splice: insert file sample rate ${this.insertSampleRate} does not match stream sample rate ${chunk.sampleRate}`,
+				);
 			}
 		}
 
@@ -94,6 +106,10 @@ export class SpliceNode extends TransformNode<SpliceProperties> {
 	static override readonly Stream = SpliceStream;
 }
 
-export function splice(insertPath: string, insertAt: number, options?: { channels?: ReadonlyArray<number> }): SpliceNode {
+export function splice(
+	insertPath: string,
+	insertAt: number,
+	options?: { channels?: ReadonlyArray<number> },
+): SpliceNode {
 	return new SpliceNode({ insertPath, insertAt, channels: options?.channels });
 }

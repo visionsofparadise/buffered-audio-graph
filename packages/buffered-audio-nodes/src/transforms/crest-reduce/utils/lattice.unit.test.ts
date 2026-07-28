@@ -20,7 +20,8 @@ function makeDense(frames: number): Float32Array {
 	for (let index = 0; index < frames; index++) {
 		let value = 0;
 
-		for (const frequency of [110, 220, 330, 440, 550, 660, 1500, 3000]) value += Math.sin((2 * Math.PI * frequency * index) / SAMPLE_RATE);
+		for (const frequency of [110, 220, 330, 440, 550, 660, 1500, 3000])
+			value += Math.sin((2 * Math.PI * frequency * index) / SAMPLE_RATE);
 
 		out[index] = (value / 8) * 0.6;
 	}

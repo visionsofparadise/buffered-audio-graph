@@ -1,4 +1,9 @@
-export function replaceChannel(chunk: { readonly samples: Array<Float32Array> }, channelIndex: number, newData: Float32Array, channels: number): Array<Float32Array> {
+export function replaceChannel(
+	chunk: { readonly samples: Array<Float32Array> },
+	channelIndex: number,
+	newData: Float32Array,
+	channels: number,
+): Array<Float32Array> {
 	const frames = newData.length;
 	const result: Array<Float32Array> = [];
 

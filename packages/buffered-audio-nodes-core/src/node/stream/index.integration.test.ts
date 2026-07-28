@@ -80,11 +80,25 @@ describe("Lifecycle events end-to-end", () => {
 
 		source.to(target);
 
-		const events: Array<{ identity: StreamIdentity; kind: string; framesDone?: number; processingMs?: number; createdAt?: number }> = [];
+		const events: Array<{
+			identity: StreamIdentity;
+			kind: string;
+			framesDone?: number;
+			processingMs?: number;
+			createdAt?: number;
+		}> = [];
 		const job = source.createRenderJob();
 
 		job.events.on("started", (identity) => events.push({ identity, kind: "started" }));
-		job.events.on("finished", (identity, payload) => events.push({ identity, kind: "finished", framesDone: payload.framesDone, processingMs: payload.processingMs, createdAt: payload.createdAt }));
+		job.events.on("finished", (identity, payload) =>
+			events.push({
+				identity,
+				kind: "finished",
+				framesDone: payload.framesDone,
+				processingMs: payload.processingMs,
+				createdAt: payload.createdAt,
+			}),
+		);
 
 		await job.render();
 

@@ -59,7 +59,14 @@ export function GraphContextMenu({
 		>
 			<DropdownMenuTrigger asChild>
 				<div
-					style={{ position: "fixed", left: position.x, top: position.y, width: 0, height: 0, pointerEvents: "none" }}
+					style={{
+						position: "fixed",
+						left: position.x,
+						top: position.y,
+						width: 0,
+						height: 0,
+						pointerEvents: "none",
+					}}
 					aria-hidden
 				/>
 			</DropdownMenuTrigger>

@@ -1,33 +1,33 @@
 {
-  "$schema": "https://turbo.build/schema.json",
-  "tasks": {
-    "check": {
-      "dependsOn": ["^build"],
-      "inputs": ["src/**", "./tsconfig.json"],
-      "outputs": []
-    },
-    "build": {
-      "dependsOn": ["^build", "check"],
-      "inputs": ["src/**", "./tsconfig.json", "./package.json"],
-      "outputs": ["dist/**"]
-    },
-    "unit": {
-      "dependsOn": ["check"]
-    },
-    "integration": {
-      "dependsOn": ["build", "^integration"]
-    },
-    "integration:heavy": {
-      "dependsOn": ["build", "^integration:heavy"]
-    },
-    "start": {},
-    "lint": {
-      "dependsOn": []
-    },
-    "docs": {
-      "dependsOn": ["^build"],
-      "inputs": ["src/**", "scripts/**", "README.md"],
-      "outputs": ["README.md"]
-    }
-  }
+	"$schema": "https://turbo.build/schema.json",
+	"tasks": {
+		"check": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**", "./tsconfig.json"],
+			"outputs": []
+		},
+		"build": {
+			"dependsOn": ["^build", "check"],
+			"inputs": ["src/**", "./tsconfig.json", "./package.json"],
+			"outputs": ["dist/**"]
+		},
+		"unit": {
+			"dependsOn": ["check"]
+		},
+		"integration": {
+			"dependsOn": ["build", "^integration"]
+		},
+		"integration:heavy": {
+			"dependsOn": ["build", "^integration:heavy"]
+		},
+		"start": {},
+		"lint": {
+			"dependsOn": []
+		},
+		"docs": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**", "scripts/**", "README.md"],
+			"outputs": ["README.md"]
+		}
+	}
 }

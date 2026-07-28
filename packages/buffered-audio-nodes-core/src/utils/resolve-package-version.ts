@@ -26,7 +26,9 @@ function locatePackageJson(require: ReturnType<typeof createRequire>, packageNam
 		if (existsSync(candidate)) return candidate;
 	}
 
-	throw new Error(`Could not resolve package "${packageName}" from anchor "${anchor}". Is "${packageName}" installed in this project? ${REMEDY}.`);
+	throw new Error(
+		`Could not resolve package "${packageName}" from anchor "${anchor}". Is "${packageName}" installed in this project? ${REMEDY}.`,
+	);
 }
 
 export function resolvePackageVersion(packageName: string, anchor: string): string {
@@ -40,18 +42,24 @@ export function resolvePackageVersion(packageName: string, anchor: string): stri
 		if ((error as NodeJS.ErrnoException).code === "ERR_PACKAGE_PATH_NOT_EXPORTED") {
 			packageJsonPath = locatePackageJson(require, packageName, anchor);
 		} else {
-			throw new Error(`Could not resolve package "${packageName}" from anchor "${anchor}". Is "${packageName}" installed in this project? ${REMEDY}.`);
+			throw new Error(
+				`Could not resolve package "${packageName}" from anchor "${anchor}". Is "${packageName}" installed in this project? ${REMEDY}.`,
+			);
 		}
 	}
 
 	const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { name?: string; version?: string };
 
 	if (parsed.name !== packageName) {
-		throw new Error(`Resolved "${packageJsonPath}" for package "${packageName}" but its name is "${parsed.name}" (anchor "${anchor}"). ${REMEDY}.`);
+		throw new Error(
+			`Resolved "${packageJsonPath}" for package "${packageName}" but its name is "${parsed.name}" (anchor "${anchor}"). ${REMEDY}.`,
+		);
 	}
 
 	if (parsed.version === undefined) {
-		throw new Error(`Resolved "${packageJsonPath}" for package "${packageName}" but it has no version (anchor "${anchor}"). ${REMEDY}.`);
+		throw new Error(
+			`Resolved "${packageJsonPath}" for package "${packageName}" but it has no version (anchor "${anchor}"). ${REMEDY}.`,
+		);
 	}
 
 	return parsed.version;

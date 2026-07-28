@@ -6,7 +6,13 @@ const DIM_F = 3072;
 const DIM_T = 256;
 const NB_BINS = N_FFT / 2 + 1;
 
-export function stft7680IntoTensor(fft: MixedRadixFft, signal: Float32Array, tensor: Float32Array, realOffset: number, imagOffset: number): void {
+export function stft7680IntoTensor(
+	fft: MixedRadixFft,
+	signal: Float32Array,
+	tensor: Float32Array,
+	realOffset: number,
+	imagOffset: number,
+): void {
 	const win = hanningWindow(N_FFT);
 	const windowed = fft.frameRe;
 	const zeros = fft.frameIm;
@@ -31,7 +37,16 @@ export function stft7680IntoTensor(fft: MixedRadixFft, signal: Float32Array, ten
 	}
 }
 
-export function istft7680FromTensor(fft: MixedRadixFft, tensor: Float32Array, realOffset: number, imagOffset: number, numFrames: number, scale: number, output: Float32Array, windowSum: Float32Array): void {
+export function istft7680FromTensor(
+	fft: MixedRadixFft,
+	tensor: Float32Array,
+	realOffset: number,
+	imagOffset: number,
+	numFrames: number,
+	scale: number,
+	output: Float32Array,
+	windowSum: Float32Array,
+): void {
 	const win = hanningWindow(N_FFT);
 	const fullRe = fft.frameRe;
 	const fullIm = fft.frameIm;

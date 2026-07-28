@@ -21,11 +21,7 @@ async function clearTopLevelRegularFiles(directory: string): Promise<number> {
 	try {
 		entries = await fs.readdir(directory, { withFileTypes: true });
 	} catch (error: unknown) {
-		if (
-			error !== null &&
-			typeof error === "object" &&
-			(error as { code?: unknown }).code === "ENOENT"
-		) {
+		if (error !== null && typeof error === "object" && (error as { code?: unknown }).code === "ENOENT") {
 			await fs.mkdir(directory, { recursive: true });
 
 			return 0;
@@ -47,12 +43,7 @@ async function clearTopLevelRegularFiles(directory: string): Promise<number> {
 	return removed;
 }
 
-async function installAsset(
-	source: string,
-	destination: string,
-	asset: ManifestAsset,
-	target: Target,
-): Promise<void> {
+async function installAsset(source: string, destination: string, asset: ManifestAsset, target: Target): Promise<void> {
 	await fs.copyFile(source, destination);
 
 	if (target.platform !== "win32" && (asset.key === "ffmpeg" || asset.key === "ffprobe")) {
@@ -89,9 +80,7 @@ export async function installForTarget(target: Target): Promise<{
 		const cachePath = cachePaths.get(asset.filename);
 
 		if (cachePath === undefined) {
-			throw new Error(
-				`Internal error: cache path missing for ${asset.filename} after fetch`,
-			);
+			throw new Error(`Internal error: cache path missing for ${asset.filename} after fetch`);
 		}
 
 		const destination = path.join(destinationDir, asset.filename);

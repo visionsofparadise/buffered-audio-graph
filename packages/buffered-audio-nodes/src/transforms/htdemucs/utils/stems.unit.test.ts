@@ -16,7 +16,13 @@ describe("mixStemsToStereo", () => {
 	// Happy path: one stem at unit gain, unit OLA weight, identity stats → passthrough of that stem.
 	it("passes a single unit-gain stem through with identity stats", () => {
 		const accum = makeStemAccum(2, { 0: [0.5, 0.6], 1: [0.3, 0.4] });
-		const { outLeft, outRight } = mixStemsToStereo(accum, Float32Array.from([1, 1]), [1, 0, 0, 0], { mean: 0, std: 1 }, 2);
+		const { outLeft, outRight } = mixStemsToStereo(
+			accum,
+			Float32Array.from([1, 1]),
+			[1, 0, 0, 0],
+			{ mean: 0, std: 1 },
+			2,
+		);
 
 		expect(outLeft[0]).toBeCloseTo(0.5, 6);
 		expect(outLeft[1]).toBeCloseTo(0.6, 6);

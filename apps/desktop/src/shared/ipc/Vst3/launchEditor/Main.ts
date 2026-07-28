@@ -7,7 +7,12 @@ import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/Async
 import type { Logger } from "../../../Models/Logger";
 import { emitToRenderer } from "../../../utilities/emitToRenderer";
 import { parseVst3EditorLine, type Vst3EditorEvent } from "../Vst3EditorEvent";
-import { VST3_LAUNCH_EDITOR_ACTION, type Vst3LaunchEditorInput, type Vst3LaunchEditorIpcParameters, type Vst3LaunchEditorIpcReturn } from "./Renderer";
+import {
+	VST3_LAUNCH_EDITOR_ACTION,
+	type Vst3LaunchEditorInput,
+	type Vst3LaunchEditorIpcParameters,
+	type Vst3LaunchEditorIpcReturn,
+} from "./Renderer";
 
 const STDERR_TAIL_LINE_LIMIT = 20;
 const STDERR_TAIL_BYTE_LIMIT = 4096;
@@ -27,7 +32,12 @@ const buildArgs = (input: Vst3LaunchEditorInput, presetPath: string): ReadonlyAr
 	];
 };
 
-const consumeChildStreams = (child: ChildProcess, launchId: string, logger: Logger, emit: (event: Vst3EditorEvent) => void): (() => string) => {
+const consumeChildStreams = (
+	child: ChildProcess,
+	launchId: string,
+	logger: Logger,
+	emit: (event: Vst3EditorEvent) => void,
+): (() => string) => {
 	const stderrChunks: Array<string> = [];
 	let stderrBytes = 0;
 

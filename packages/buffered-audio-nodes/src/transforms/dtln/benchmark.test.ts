@@ -10,7 +10,18 @@ const testVoice = audio.testVoice;
 
 describe("dtln benchmark", () => {
 	it("benchmarks dtln", async () => {
-		const result = await runBenchmark("dtln", dtln({ modelPath1: binaries.model1, modelPath2: binaries.model2, ffmpegPath: binaries.ffmpeg, onnxAddonPath: binaries.onnxAddon, vkfftAddonPath: binaries.vkfftAddon, fftwAddonPath: binaries.fftwAddon }), testVoice);
+		const result = await runBenchmark(
+			"dtln",
+			dtln({
+				modelPath1: binaries.model1,
+				modelPath2: binaries.model2,
+				ffmpegPath: binaries.ffmpeg,
+				onnxAddonPath: binaries.onnxAddon,
+				vkfftAddonPath: binaries.vkfftAddon,
+				fftwAddonPath: binaries.fftwAddon,
+			}),
+			testVoice,
+		);
 		await appendBenchmarkLog(here, result);
 	}, 240_000);
 });

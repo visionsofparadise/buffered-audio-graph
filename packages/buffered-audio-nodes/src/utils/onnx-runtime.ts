@@ -40,7 +40,9 @@ export function createOnnxSession(
 	try {
 		addon = require(addonPath) as OnnxAddon;
 	} catch (error) {
-		throw new Error(`Failed to load ONNX Runtime addon from "${addonPath}": ${error instanceof Error ? error.message : String(error)}`);
+		throw new Error(
+			`Failed to load ONNX Runtime addon from "${addonPath}": ${error instanceof Error ? error.message : String(error)}`,
+		);
 	}
 
 	let session: OnnxAddonSession;
@@ -50,14 +52,17 @@ export function createOnnxSession(
 			executionProviders: options?.executionProviders ? [...options.executionProviders] : ["cpu"],
 		});
 	} catch (error) {
-		throw new Error(`Failed to create ONNX session for model "${modelPath}": ${error instanceof Error ? error.message : String(error)}`);
+		throw new Error(
+			`Failed to create ONNX session for model "${modelPath}": ${error instanceof Error ? error.message : String(error)}`,
+		);
 	}
 
 	const modelName = path.basename(modelPath);
 	let provider: string;
 
 	try {
-		provider = typeof session.getProvider === "function" ? session.getProvider() : "<unknown> (addon predates getProvider())";
+		provider =
+			typeof session.getProvider === "function" ? session.getProvider() : "<unknown> (addon predates getProvider())";
 	} catch (error) {
 		provider = `<unknown> (getProvider() threw: ${error instanceof Error ? error.message : String(error)})`;
 	}

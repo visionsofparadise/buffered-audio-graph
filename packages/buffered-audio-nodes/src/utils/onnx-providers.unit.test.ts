@@ -8,8 +8,7 @@ function setPlatform(value: NodeJS.Platform): void {
 describe("filterOnnxProviders", () => {
 	const originalPlatform = process.platform;
 
-	beforeEach(() => {
-	});
+	beforeEach(() => {});
 
 	afterEach(() => {
 		setPlatform(originalPlatform);

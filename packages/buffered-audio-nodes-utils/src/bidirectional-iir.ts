@@ -3,7 +3,10 @@ export interface BidirectionalIirOptions {
 	sampleRate: number;
 }
 
-export function getBidirectionalIirAlphas(sampleRate: number, smoothingMs: number): { readonly causal: number; readonly bidirectional: number } {
+export function getBidirectionalIirAlphas(
+	sampleRate: number,
+	smoothingMs: number,
+): { readonly causal: number; readonly bidirectional: number } {
 	if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
 		throw new Error(`BidirectionalIir: sampleRate must be positive and finite, got ${sampleRate}`);
 	}

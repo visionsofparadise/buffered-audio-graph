@@ -35,7 +35,12 @@ export interface DfttExecutionOptions {
 const MAX_DFTT_BATCH_BYTES = 32 * 1024 * 1024;
 
 export function getDfttBatchBlockCount(blockSize: number, complexBlockSize: number, maxBatchBytes: number): number {
-	if (!Number.isSafeInteger(blockSize) || blockSize <= 0 || !Number.isSafeInteger(complexBlockSize) || complexBlockSize <= 0) {
+	if (
+		!Number.isSafeInteger(blockSize) ||
+		blockSize <= 0 ||
+		!Number.isSafeInteger(complexBlockSize) ||
+		complexBlockSize <= 0
+	) {
 		throw new Error("DFTT block sizes must be positive integers");
 	}
 
@@ -52,7 +57,9 @@ export function getDfttBatchBlockCount(blockSize: number, complexBlockSize: numb
 	const blockCount = Math.floor(maxBatchBytes / bytesPerBlock);
 
 	if (blockCount < 1) {
-		throw new Error(`One DFTT block requires ${bytesPerBlock} bytes, exceeding the ${maxBatchBytes}-byte batch budget`);
+		throw new Error(
+			`One DFTT block requires ${bytesPerBlock} bytes, exceeding the ${maxBatchBytes}-byte batch budget`,
+		);
 	}
 
 	return blockCount;

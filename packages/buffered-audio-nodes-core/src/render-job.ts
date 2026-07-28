@@ -106,7 +106,10 @@ export class RenderJob {
 		return { node, stream, children };
 	}
 
-	private effectiveChildren(children: ReadonlyArray<BufferedAudioNode>, path: Set<BufferedAudioNode>): Array<BufferedAudioNode> {
+	private effectiveChildren(
+		children: ReadonlyArray<BufferedAudioNode>,
+		path: Set<BufferedAudioNode>,
+	): Array<BufferedAudioNode> {
 		const resolved: Array<BufferedAudioNode> = [];
 
 		for (const child of children) {
@@ -155,7 +158,11 @@ export class RenderJob {
 			try {
 				const readable = await this.sourceStream.setup(context);
 				const sourceName = (this.root.node.constructor as typeof BufferedAudioNode).nodeName;
-				const promises = await this.setupChildren(this.root.children, assertFirstBlockSampleRate(readable, context.sampleRate, sourceName), context);
+				const promises = await this.setupChildren(
+					this.root.children,
+					assertFirstBlockSampleRate(readable, context.sampleRate, sourceName),
+					context,
+				);
 
 				await Promise.all(promises);
 			} finally {
@@ -166,7 +173,8 @@ export class RenderJob {
 				}
 
 				const totalMs = performance.now() - start;
-				const audioDurationMs = meta.durationFrames !== undefined ? (meta.durationFrames / meta.sampleRate) * 1000 : 0;
+				const audioDurationMs =
+					meta.durationFrames !== undefined ? (meta.durationFrames / meta.sampleRate) * 1000 : 0;
 
 				this.timingData = {
 					totalMs,
@@ -179,7 +187,11 @@ export class RenderJob {
 		}
 	}
 
-	private async setupChildren(children: Array<PlanNode>, readable: ReadableStream<Block>, context: StreamSetupContext): Promise<Array<Promise<void>>> {
+	private async setupChildren(
+		children: Array<PlanNode>,
+		readable: ReadableStream<Block>,
+		context: StreamSetupContext,
+	): Promise<Array<Promise<void>>> {
 		const pairs = teeReadable(readable, children);
 
 		const nested = await Promise.all(pairs.map(([branch, child]) => this.setup(child, branch, { ...context })));
@@ -187,7 +199,11 @@ export class RenderJob {
 		return nested.flat();
 	}
 
-	private async setup(plan: PlanNode, input: ReadableStream<Block>, context: StreamSetupContext): Promise<Array<Promise<void>>> {
+	private async setup(
+		plan: PlanNode,
+		input: ReadableStream<Block>,
+		context: StreamSetupContext,
+	): Promise<Array<Promise<void>>> {
 		const { stream } = plan;
 
 		if (stream instanceof BufferedTargetStream) {
@@ -198,10 +214,16 @@ export class RenderJob {
 			const nodeName = (plan.node.constructor as typeof BufferedAudioNode).nodeName;
 			const output = await stream.setup(input, context);
 
-			return this.setupChildren(plan.children, assertFirstBlockSampleRate(output, context.sampleRate, nodeName), context);
+			return this.setupChildren(
+				plan.children,
+				assertFirstBlockSampleRate(output, context.sampleRate, nodeName),
+				context,
+			);
 		}
 
-		throw new Error(`Unexpected stream type for node "${(plan.node.constructor as typeof BufferedAudioNode).nodeName}"`);
+		throw new Error(
+			`Unexpected stream type for node "${(plan.node.constructor as typeof BufferedAudioNode).nodeName}"`,
+		);
 	}
 
 	private countStreams(): number {

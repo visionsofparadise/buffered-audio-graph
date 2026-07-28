@@ -84,23 +84,26 @@ describe("BidirectionalIir", () => {
 		it.each([
 			{ sampleRate: 48000, smoothingMs: 10 },
 			{ sampleRate: 1000, smoothingMs: 1 },
-		])("matches the causal one-pole magnitude at $sampleRate Hz and $smoothingMs ms", ({ sampleRate, smoothingMs }) => {
-			const ratio = 1000 / sampleRate / smoothingMs;
-			const omega = Math.min(ratio, Math.PI);
-			const periodSamples = 2 * Math.PI / omega;
-			const length = Math.max(16384, Math.ceil(periodSamples * 64));
-			const input = new Float32Array(length);
+		])(
+			"matches the causal one-pole magnitude at $sampleRate Hz and $smoothingMs ms",
+			({ sampleRate, smoothingMs }) => {
+				const ratio = 1000 / sampleRate / smoothingMs;
+				const omega = Math.min(ratio, Math.PI);
+				const periodSamples = (2 * Math.PI) / omega;
+				const length = Math.max(16384, Math.ceil(periodSamples * 64));
+				const input = new Float32Array(length);
 
-			for (let index = 0; index < length; index++) {
-				input[index] = Math.sin(omega * index);
-			}
+				for (let index = 0; index < length; index++) {
+					input[index] = Math.sin(omega * index);
+				}
 
-			const output = new BidirectionalIir({ sampleRate, smoothingMs }).applyBidirectional(input);
-			const actual = projectSineAmplitude(output, omega, Math.floor(length / 4), Math.floor(length * 3 / 4));
-			const expected = getCausalMagnitude(sampleRate, smoothingMs);
+				const output = new BidirectionalIir({ sampleRate, smoothingMs }).applyBidirectional(input);
+				const actual = projectSineAmplitude(output, omega, Math.floor(length / 4), Math.floor((length * 3) / 4));
+				const expected = getCausalMagnitude(sampleRate, smoothingMs);
 
-			expect(Math.abs(actual - expected)).toBeLessThanOrEqual(1e-3);
-		});
+				expect(Math.abs(actual - expected)).toBeLessThanOrEqual(1e-3);
+			},
+		);
 
 		it("keeps extremely long smoothing finite and matches one-pass and two-pass magnitudes", () => {
 			const sampleRate = 48000;
@@ -120,13 +123,23 @@ describe("BidirectionalIir", () => {
 	});
 
 	describe("validation", () => {
-		it.each([0, -1, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN])("rejects sample rate %s", (sampleRate) => {
-			expect(() => new BidirectionalIir({ smoothingMs: 10, sampleRate })).toThrow("sampleRate must be positive and finite");
-		});
+		it.each([0, -1, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN])(
+			"rejects sample rate %s",
+			(sampleRate) => {
+				expect(() => new BidirectionalIir({ smoothingMs: 10, sampleRate })).toThrow(
+					"sampleRate must be positive and finite",
+				);
+			},
+		);
 
-		it.each([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN])("rejects smoothing %s", (smoothingMs) => {
-			expect(() => new BidirectionalIir({ smoothingMs, sampleRate: 48000 })).toThrow("smoothingMs must be finite");
-		});
+		it.each([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN])(
+			"rejects smoothing %s",
+			(smoothingMs) => {
+				expect(() => new BidirectionalIir({ smoothingMs, sampleRate: 48000 })).toThrow(
+					"smoothingMs must be finite",
+				);
+			},
+		);
 	});
 
 	describe("zero phase response on a sine", () => {

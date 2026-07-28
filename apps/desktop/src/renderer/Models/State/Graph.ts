@@ -40,9 +40,12 @@ export async function loadGraphState(main: Main, userDataPath: string, bagId: st
 	}
 
 	return GraphStateSchema.parse({});
-
 }
 
 export function serializeGraphState(positions: Snapshot<PositionsState>, view: Snapshot<GraphViewState>): string {
-	return JSON.stringify({ positions: positions.positions, inspectedNodeId: view.inspectedNodeId, viewport: view.viewport });
+	return JSON.stringify({
+		positions: positions.positions,
+		inspectedNodeId: view.inspectedNodeId,
+		viewport: view.viewport,
+	});
 }

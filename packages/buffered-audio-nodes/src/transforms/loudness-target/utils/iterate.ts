@@ -1,5 +1,11 @@
 import { BlockBuffer } from "@buffered-audio/core";
-import { BidirectionalIir, LoudnessAccumulator, SlidingWindowMinStream, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
+import {
+	BidirectionalIir,
+	LoudnessAccumulator,
+	SlidingWindowMinStream,
+	TruePeakAccumulator,
+	linearToDb,
+} from "@buffered-audio/utils";
 import { applyBaseRateChunk } from "./apply";
 import { type Anchors, gainDbAt } from "./curve";
 import { applyBackwardPassOverChunkBuffer, windowSamplesFromMs } from "./envelope";
@@ -157,13 +163,15 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 	const iir = new BidirectionalIir({ smoothingMs, sampleRate });
 
 	const tCacheBuild0 = Date.now();
-	const detectionEnvelope = args.detectionEnvelope ?? await buildBaseRateDetectionCache({
-		buffer,
-		sampleRate,
-		channelCount,
-		frames,
-		halfWidth,
-	});
+	const detectionEnvelope =
+		args.detectionEnvelope ??
+		(await buildBaseRateDetectionCache({
+			buffer,
+			sampleRate,
+			channelCount,
+			frames,
+			halfWidth,
+		}));
 	const detectionCacheBuildMs = args.detectionEnvelope !== undefined ? 0 : Date.now() - tCacheBuild0;
 
 	const forwardEnvelopeBuffer = new BlockBuffer();
@@ -178,9 +186,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 	try {
 		const skipPeak = targetTp === undefined;
 
-		let currentBoost = clampBoost(
-			seedB !== undefined && Number.isFinite(seedB) ? seedB : targetLufs - sourceLufs,
-		);
+		let currentBoost = clampBoost(seedB !== undefined && Number.isFinite(seedB) ? seedB : targetLufs - sourceLufs);
 
 		const attempts: Array<IterationAttempt> = [];
 		let bestBoost = currentBoost;
@@ -279,8 +285,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			await minHeldEnvelopeBuffer.clear();
 
 			const matchesToTwoDp =
-				Math.round(Math.abs(lufsErr) * 100) === 0
-				&& (skipPeak || Math.round(Math.abs(peakErr) * 100) === 0);
+				Math.round(Math.abs(lufsErr) * 100) === 0 && (skipPeak || Math.round(Math.abs(peakErr) * 100) === 0);
 			const lufsConverged = Math.abs(lufsErr) < tolerance;
 			const peakConverged = skipPeak || Math.abs(peakErr) < peakTolerance;
 
@@ -294,18 +299,15 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			previousStepMagnitude = next.stepMagnitude;
 
 			if (!skipPeak && Math.abs(peakErr) > peakTolerance) {
-				currentPeakGainDb = Math.max(
-					PEAK_GAIN_DB_FLOOR,
-					currentPeakGainDb - peakErr * PEAK_DAMPING,
-				);
+				currentPeakGainDb = Math.max(PEAK_GAIN_DB_FLOOR, currentPeakGainDb - peakErr * PEAK_DAMPING);
 			}
 		}
 
-		const converged = winningPopulated
-			&& (
-				(Math.round(Math.abs(winnerLufsErr) * 100) === 0 && (skipPeak || Math.round(Math.abs(winnerPeakErr) * 100) === 0))
-				|| (Math.abs(winnerLufsErr) < tolerance && (skipPeak || Math.abs(winnerPeakErr) < peakTolerance))
-			);
+		const converged =
+			winningPopulated &&
+			((Math.round(Math.abs(winnerLufsErr) * 100) === 0 &&
+				(skipPeak || Math.round(Math.abs(winnerPeakErr) * 100) === 0)) ||
+				(Math.abs(winnerLufsErr) < tolerance && (skipPeak || Math.abs(winnerPeakErr) < peakTolerance)));
 
 		return {
 			bestSmoothedEnvelopeBuffer: winningRef,
@@ -345,9 +347,7 @@ export interface StreamCurveAndForwardIirArgs {
 	progress?: (done: number, total: number) => void;
 }
 
-export async function streamCurveAndForwardIir(
-	args: StreamCurveAndForwardIirArgs,
-): Promise<void> {
+export async function streamCurveAndForwardIir(args: StreamCurveAndForwardIirArgs): Promise<void> {
 	const { detectionEnvelope, anchors, iir, halfWidth, forwardEnvelopeBuffer, minHeldEnvelopeBuffer, progress } = args;
 	const totalFrames = detectionEnvelope.frames;
 
@@ -454,9 +454,7 @@ export async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<Me
 			);
 		}
 
-		const applyOutputView: Array<Float32Array> = applyOutputScratch.map(
-			(slot) => slot.subarray(0, chunkFrames),
-		);
+		const applyOutputView: Array<Float32Array> = applyOutputScratch.map((slot) => slot.subarray(0, chunkFrames));
 
 		const transformed = applyBaseRateChunk({
 			chunkSamples: sourceChunk.samples,
@@ -510,11 +508,9 @@ function computeBoostStep(attempts: ReadonlyArray<IterationAttempt>, previousSte
 	}
 
 	const stepBoostRaw = -last.lufsErr / slope;
-	const signFlipped = last.lufsErr !== 0 && previous.lufsErr !== 0
-		&& Math.sign(last.lufsErr) !== Math.sign(previous.lufsErr);
-	const magnitudeCap = signFlipped && Number.isFinite(previousStepMagnitude)
-		? previousStepMagnitude
-		: Infinity;
+	const signFlipped =
+		last.lufsErr !== 0 && previous.lufsErr !== 0 && Math.sign(last.lufsErr) !== Math.sign(previous.lufsErr);
+	const magnitudeCap = signFlipped && Number.isFinite(previousStepMagnitude) ? previousStepMagnitude : Infinity;
 	const absStep = Math.abs(stepBoostRaw);
 	const scale = absStep > magnitudeCap && absStep > 0 ? magnitudeCap / absStep : 1;
 	const stepBoost = stepBoostRaw * scale;

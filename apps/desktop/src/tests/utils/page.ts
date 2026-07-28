@@ -13,7 +13,7 @@ export async function rectByText(page: Page, selector: string, text: string): Pr
 	return page.evaluate(
 		(sel: string, txt: string): Point | null => {
 			const elements = Array.from(document.querySelectorAll(sel));
-			const match = elements.find((element) => (element.textContent).includes(txt));
+			const match = elements.find((element) => element.textContent.includes(txt));
 
 			if (!match) return null;
 
@@ -147,7 +147,7 @@ export async function clickMenuItemByText(page: Page, text: string): Promise<boo
 
 export async function dumpMenuItems(page: Page): Promise<Array<string>> {
 	return page.$$eval('[role="menuitem"]', (elements) =>
-		elements.map((element) => (element.textContent).replace(/\s+/g, " ").trim().slice(0, 40)),
+		elements.map((element) => element.textContent.replace(/\s+/g, " ").trim().slice(0, 40)),
 	);
 }
 
@@ -155,7 +155,7 @@ export async function openMenuText(page: Page): Promise<string> {
 	return page.evaluate((): string => {
 		const menu = document.querySelector('[role="menu"]');
 
-		return menu ? (menu.textContent).replace(/\s+/g, " ").trim() : "";
+		return menu ? menu.textContent.replace(/\s+/g, " ").trim() : "";
 	});
 }
 
@@ -175,7 +175,7 @@ export async function waitForMenuItems(page: Page, timeoutMs: number): Promise<n
 
 export async function dumpCmdkItems(page: Page): Promise<Array<string>> {
 	return page.$$eval("[data-catalog-item]", (elements) =>
-		elements.map((element) => (element.textContent).replace(/\s+/g, " ").trim().slice(0, 40)),
+		elements.map((element) => element.textContent.replace(/\s+/g, " ").trim().slice(0, 40)),
 	);
 }
 

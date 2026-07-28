@@ -51,7 +51,10 @@ describe("resolveBinary", () => {
 
 	it("resolves from PATH lookup", async () => {
 		mockAccess.mockRejectedValue(new Error("ENOENT"));
-		(mockExecFile as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ stdout: "/usr/local/bin/ffmpeg\n", stderr: "" });
+		(mockExecFile as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+			stdout: "/usr/local/bin/ffmpeg\n",
+			stderr: "",
+		});
 
 		const result = await resolveBinary("ffmpeg");
 

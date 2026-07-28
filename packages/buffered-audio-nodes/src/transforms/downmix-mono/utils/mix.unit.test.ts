@@ -10,7 +10,12 @@ describe("downmixToMono", () => {
 	});
 
 	it("averages four channels", () => {
-		const mono = downmixToMono([new Float32Array([0.4]), new Float32Array([0.8]), new Float32Array([0.2]), new Float32Array([0.6])]);
+		const mono = downmixToMono([
+			new Float32Array([0.4]),
+			new Float32Array([0.8]),
+			new Float32Array([0.2]),
+			new Float32Array([0.6]),
+		]);
 
 		expect(mono[0]).toBeCloseTo(0.5, 6);
 	});

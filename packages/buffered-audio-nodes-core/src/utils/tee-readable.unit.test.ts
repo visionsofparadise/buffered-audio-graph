@@ -106,7 +106,10 @@ describe("teeReadable", () => {
 		const { readable } = createSource(createBlocks(1));
 		const branches = teeBranches(readable, 2);
 
-		const [readA, readB] = await Promise.all([branchAt(branches, 0).getReader().read(), branchAt(branches, 1).getReader().read()]);
+		const [readA, readB] = await Promise.all([
+			branchAt(branches, 0).getReader().read(),
+			branchAt(branches, 1).getReader().read(),
+		]);
 
 		expect(readA.value).toBe(readB.value);
 	});

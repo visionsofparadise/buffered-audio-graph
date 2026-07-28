@@ -1,0 +1,6 @@
+**/archive/**
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+apps/service/cdk.out/**
+apps/desktop/.smoke-profile/**

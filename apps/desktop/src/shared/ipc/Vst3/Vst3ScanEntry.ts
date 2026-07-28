@@ -11,4 +11,5 @@ export interface Vst3ScanEntry {
 	readonly error?: string;
 }
 
-export const buildEntryKey = (modulePath: string, className?: string): string => (className === undefined ? modulePath : `${modulePath}::${className}`);
+export const buildEntryKey = (modulePath: string, className?: string): string =>
+	className === undefined ? modulePath : `${modulePath}::${className}`;

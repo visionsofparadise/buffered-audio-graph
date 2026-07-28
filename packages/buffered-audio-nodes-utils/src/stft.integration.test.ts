@@ -15,9 +15,10 @@ function generateSignal(): Float32Array {
 
 	for (let i = 0; i < length; i++) {
 		const t = i / sampleRate;
-		signal[i] = Math.sin(2 * Math.PI * 440 * t)
-			+ 0.7 * Math.sin(2 * Math.PI * 1000 * t)
-			+ 0.5 * Math.sin(2 * Math.PI * 2500 * t);
+		signal[i] =
+			Math.sin(2 * Math.PI * 440 * t) +
+			0.7 * Math.sin(2 * Math.PI * 1000 * t) +
+			0.5 * Math.sin(2 * Math.PI * 2500 * t);
 	}
 
 	return signal;
@@ -53,7 +54,12 @@ function getAddonOptions(backend: FftBackend): { vkfftPath?: string; fftwPath?: 
 
 function maxFrameError(jsResult: StftResult, nativeResult: StftResult): number {
 	let maxError = 0;
-	const bins = Math.min(jsResult.real.length, nativeResult.real.length, jsResult.imag.length, nativeResult.imag.length);
+	const bins = Math.min(
+		jsResult.real.length,
+		nativeResult.real.length,
+		jsResult.imag.length,
+		nativeResult.imag.length,
+	);
 
 	for (let index = 0; index < bins; index++) {
 		const realError = Math.abs(jsResult.real[index]! - nativeResult.real[index]!);

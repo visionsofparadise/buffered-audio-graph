@@ -19,20 +19,42 @@ export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) =>
 	const hasActiveGraphTab = app.activeTabId !== null;
 
 	const appMenuItems: ReadonlyArray<MenuItem> = [
-		{ kind: "action", label: "New graph", icon: FilePlus, disabled: chromeOnly, onClick: () => void context.newBagTab() },
-		{ kind: "action", label: "Open graph", icon: FolderOpen, disabled: chromeOnly, onClick: () => void context.openBagTab() },
-		{ kind: "action", label: "Save", icon: Save, disabled: chromeOnly ? true : save === null, onClick: () => save?.() },
+		{
+			kind: "action",
+			label: "New graph",
+			icon: FilePlus,
+			disabled: chromeOnly,
+			onClick: () => void context.newBagTab(),
+		},
+		{
+			kind: "action",
+			label: "Open graph",
+			icon: FolderOpen,
+			disabled: chromeOnly,
+			onClick: () => void context.openBagTab(),
+		},
+		{
+			kind: "action",
+			label: "Save",
+			icon: Save,
+			disabled: chromeOnly ? true : save === null,
+			onClick: () => save?.(),
+		},
 		{ kind: "action", label: "Save As", icon: SaveAll, disabled: true },
 		{ kind: "separator" },
-		{ kind: "action", label: "Settings", icon: Settings, disabled: chromeOnly, onClick: () => context.setSettingsOpen(true) },
+		{
+			kind: "action",
+			label: "Settings",
+			icon: Settings,
+			disabled: chromeOnly,
+			onClick: () => context.setSettingsOpen(true),
+		},
 		{ kind: "action", label: "Quit", icon: X, onClick: () => void context.main.quitApp() },
 	];
 
 	const tabs = app.tabs.map((tab) => ({
 		id: tab.id,
-		label:
-			context.tabNames.names[tab.id] ??
-			(basename(tab.bagPath).replace(/\.bag$/i, "") || tab.bagPath),
+		label: context.tabNames.names[tab.id] ?? (basename(tab.bagPath).replace(/\.bag$/i, "") || tab.bagPath),
 	}));
 
 	const visibleTabs = chromeOnly ? [] : tabs;
@@ -95,23 +117,11 @@ export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) =>
 							isActive ? "bg-text-primary text-surface" : "text-text-secondary hover:text-text-primary",
 						)}
 					>
-						<ProjectIcon
-							name={tab.label}
-							size={16}
-							className="mr-1"
-						/>
+						<ProjectIcon name={tab.label} size={16} className="mr-1" />
 						{isActive ? (
-							<TabNameInput
-								key={tab.label}
-								tabId={tab.id}
-								label={tab.label}
-								onRename={context.renameTab}
-							/>
+							<TabNameInput key={tab.label} tabId={tab.id} label={tab.label} onRename={context.renameTab} />
 						) : (
-							<span
-								className="max-w-[180px] truncate whitespace-nowrap"
-								title={tab.label}
-							>
+							<span className="max-w-[180px] truncate whitespace-nowrap" title={tab.label}>
 								{tab.label}
 							</span>
 						)}
@@ -128,10 +138,7 @@ export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) =>
 								isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100",
 							)}
 						>
-							<X
-								size={12}
-								strokeWidth={1.5}
-							/>
+							<X size={12} strokeWidth={1.5} />
 						</button>
 					</div>
 				);
@@ -144,7 +151,10 @@ export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) =>
 					variant="ghost"
 					size="md"
 					onClick={goHome}
-					className={cn("app-no-drag h-full", !hasActiveGraphTab && "bg-text-primary text-surface hover:text-surface")}
+					className={cn(
+						"app-no-drag h-full",
+						!hasActiveGraphTab && "bg-text-primary text-surface hover:text-surface",
+					)}
 				/>
 			)}
 

@@ -31,7 +31,10 @@ describe("normalize", () => {
 
 	it("produces identical output regardless of input chunking", async () => {
 		const values = Array.from({ length: 600 }, (_, i) => Math.sin(i / 7) * 0.4);
-		const single = channelSamples((await runTransformStream(normalize({ ceiling: 1 }), [makeBlock(values)])).blocks, 0);
+		const single = channelSamples(
+			(await runTransformStream(normalize({ ceiling: 1 }), [makeBlock(values)])).blocks,
+			0,
+		);
 		const chunked = channelSamples(
 			(
 				await runTransformStream(normalize({ ceiling: 1 }), [

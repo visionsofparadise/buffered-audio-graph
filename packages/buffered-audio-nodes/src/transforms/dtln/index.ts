@@ -17,34 +17,75 @@ import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
 import { createResampleComposition } from "../../utils/resample-composition";
 import type { FfmpegStream } from "../ffmpeg";
 import { BLOCK_LEN, BLOCK_SHIFT, DtlnBlockStream } from "./utils/dtln";
-import { appendToStepBatch, CHUNK_FRAMES, commitStepBatch, DTLN_SAMPLE_RATE, padTail, pullNextChunkAt16k, STEP_BATCH_SIZE, stepAllChannels, WARMUP_SAMPLES } from "./utils/pump";
+import {
+	appendToStepBatch,
+	CHUNK_FRAMES,
+	commitStepBatch,
+	DTLN_SAMPLE_RATE,
+	padTail,
+	pullNextChunkAt16k,
+	STEP_BATCH_SIZE,
+	stepAllChannels,
+	WARMUP_SAMPLES,
+} from "./utils/pump";
 
 export const schema = z.object({
 	modelPath1: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", accept: ".onnx", binary: "dtln-model_1", download: "https://github.com/breizhn/DTLN" })
+		.meta({
+			input: "file",
+			mode: "open",
+			accept: ".onnx",
+			binary: "dtln-model_1",
+			download: "https://github.com/breizhn/DTLN",
+		})
 		.describe("DTLN magnitude mask model (.onnx)"),
 	modelPath2: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", accept: ".onnx", binary: "dtln-model_2", download: "https://github.com/breizhn/DTLN" })
+		.meta({
+			input: "file",
+			mode: "open",
+			accept: ".onnx",
+			binary: "dtln-model_2",
+			download: "https://github.com/breizhn/DTLN",
+		})
 		.describe("DTLN time-domain model (.onnx)"),
-	ffmpegPath: z.string().default("").meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" }).describe("FFmpeg — audio/video processing tool"),
+	ffmpegPath: z
+		.string()
+		.default("")
+		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
+		.describe("FFmpeg — audio/video processing tool"),
 	onnxAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "onnx-addon", download: "https://github.com/visionsofparadise/onnx-runtime-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "onnx-addon",
+			download: "https://github.com/visionsofparadise/onnx-runtime-addon",
+		})
 		.describe("ONNX Runtime native addon"),
 	vkfftAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "vkfft-addon", download: "https://github.com/visionsofparadise/vkfft-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "vkfft-addon",
+			download: "https://github.com/visionsofparadise/vkfft-addon",
+		})
 		.describe("VkFFT native addon — GPU FFT acceleration"),
 	fftwAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "fftw-addon", download: "https://github.com/visionsofparadise/fftw-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "fftw-addon",
+			download: "https://github.com/visionsofparadise/fftw-addon",
+		})
 		.describe("FFTW native addon — CPU FFT acceleration"),
 });
 
@@ -70,8 +111,18 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 	override _setup(context: StreamSetupContext): void {
 		const onnxProviders = filterOnnxProviders(context.executionProviders);
 
-		this.session1 = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath1, { executionProviders: onnxProviders }, (message, data) => this.log(message, data));
-		this.session2 = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath2, { executionProviders: onnxProviders }, (message, data) => this.log(message, data));
+		this.session1 = createOnnxSession(
+			this.properties.onnxAddonPath,
+			this.properties.modelPath1,
+			{ executionProviders: onnxProviders },
+			(message, data) => this.log(message, data),
+		);
+		this.session2 = createOnnxSession(
+			this.properties.onnxAddonPath,
+			this.properties.modelPath2,
+			{ executionProviders: onnxProviders },
+			(message, data) => this.log(message, data),
+		);
 
 		const cpuProviders = context.executionProviders.filter((ep) => ep !== "gpu");
 		const fft = initFftBackend(cpuProviders.length > 0 ? cpuProviders : ["cpu"], this.properties);
@@ -79,7 +130,12 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 		this.fftBackend = fft.backend;
 		this.fftAddonOptions = fft.addonOptions;
 
-		const composition = createResampleComposition({ context, streamContext: this.renderContext, ffmpegPath: this.properties.ffmpegPath, modelRate: DTLN_SAMPLE_RATE });
+		const composition = createResampleComposition({
+			context,
+			streamContext: this.renderContext,
+			ffmpegPath: this.properties.ffmpegPath,
+			modelRate: DTLN_SAMPLE_RATE,
+		});
 
 		if (composition) {
 			this.upResample = composition.upResample;
@@ -134,7 +190,14 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 		const streams: Array<DtlnBlockStream> = [];
 
 		for (let channel = 0; channel < channels; channel++) {
-			streams.push(new DtlnBlockStream({ session1: this.session1, session2: this.session2, fftBackend: this.fftBackend, fftAddonOptions: this.fftAddonOptions }));
+			streams.push(
+				new DtlnBlockStream({
+					session1: this.session1,
+					session2: this.session2,
+					fftBackend: this.fftBackend,
+					fftAddonOptions: this.fftAddonOptions,
+				}),
+			);
 		}
 
 		const stepAccum: Array<Float32Array> = [];
@@ -183,7 +246,15 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 				consumed += take;
 
 				if (stepAccumLen === BLOCK_SHIFT) {
-					const result = stepAllChannels({ channels, streams, inputs: stepAccum, stepBatch, stepBatchLen, batchSize: STEP_BATCH_SIZE, warmupRemaining });
+					const result = stepAllChannels({
+						channels,
+						streams,
+						inputs: stepAccum,
+						stepBatch,
+						stepBatchLen,
+						batchSize: STEP_BATCH_SIZE,
+						warmupRemaining,
+					});
 
 					stepBatchLen = result.stepBatchLen;
 					warmupRemaining = result.warmupRemaining;
@@ -191,7 +262,16 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 					stepAccumLen = 0;
 
 					if (stepBatchLen >= STEP_BATCH_SIZE) {
-						await commitStepBatch({ stepBatch, length: stepBatchLen, channels, output, sampleRate: DTLN_SAMPLE_RATE, bitDepth, originalFrames, writerState });
+						await commitStepBatch({
+							stepBatch,
+							length: stepBatchLen,
+							channels,
+							output,
+							sampleRate: DTLN_SAMPLE_RATE,
+							bitDepth,
+							originalFrames,
+							writerState,
+						});
 						stepBatchLen = 0;
 					}
 				}
@@ -208,14 +288,31 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 			for (let channel = 0; channel < channels; channel++) zeroInputs.push(new Float32Array(BLOCK_SHIFT));
 
 			while (samplesFed < BLOCK_LEN) {
-				const result = stepAllChannels({ channels, streams, inputs: zeroInputs, stepBatch, stepBatchLen, batchSize: STEP_BATCH_SIZE, warmupRemaining });
+				const result = stepAllChannels({
+					channels,
+					streams,
+					inputs: zeroInputs,
+					stepBatch,
+					stepBatchLen,
+					batchSize: STEP_BATCH_SIZE,
+					warmupRemaining,
+				});
 
 				stepBatchLen = result.stepBatchLen;
 				warmupRemaining = result.warmupRemaining;
 				samplesFed += BLOCK_SHIFT;
 
 				if (stepBatchLen >= STEP_BATCH_SIZE) {
-					await commitStepBatch({ stepBatch, length: stepBatchLen, channels, output, sampleRate: DTLN_SAMPLE_RATE, bitDepth, originalFrames, writerState });
+					await commitStepBatch({
+						stepBatch,
+						length: stepBatchLen,
+						channels,
+						output,
+						sampleRate: DTLN_SAMPLE_RATE,
+						bitDepth,
+						originalFrames,
+						writerState,
+					});
 					stepBatchLen = 0;
 				}
 			}
@@ -223,24 +320,50 @@ export class DtlnStream extends BufferedTransformStream<DtlnNode> {
 
 		const flushOutputs: Array<Float32Array> = [];
 
-		for (let channel = 0; channel < channels; channel++) flushOutputs.push(streams[channel]?.flush() ?? new Float32Array(0));
+		for (let channel = 0; channel < channels; channel++)
+			flushOutputs.push(streams[channel]?.flush() ?? new Float32Array(0));
 
 		const flushLen = flushOutputs[0]?.length ?? 0;
 
 		if (flushLen > 0) {
-			const result = appendToStepBatch({ samples: flushOutputs, channels, stepBatch, stepBatchLen, batchSize: STEP_BATCH_SIZE, warmupRemaining });
+			const result = appendToStepBatch({
+				samples: flushOutputs,
+				channels,
+				stepBatch,
+				stepBatchLen,
+				batchSize: STEP_BATCH_SIZE,
+				warmupRemaining,
+			});
 
 			stepBatchLen = result.stepBatchLen;
 			warmupRemaining = result.warmupRemaining;
 
 			if (stepBatchLen >= STEP_BATCH_SIZE) {
-				await commitStepBatch({ stepBatch, length: stepBatchLen, channels, output, sampleRate: DTLN_SAMPLE_RATE, bitDepth, originalFrames, writerState });
+				await commitStepBatch({
+					stepBatch,
+					length: stepBatchLen,
+					channels,
+					output,
+					sampleRate: DTLN_SAMPLE_RATE,
+					bitDepth,
+					originalFrames,
+					writerState,
+				});
 				stepBatchLen = 0;
 			}
 		}
 
 		if (stepBatchLen > 0) {
-			await commitStepBatch({ stepBatch, length: stepBatchLen, channels, output, sampleRate: DTLN_SAMPLE_RATE, bitDepth, originalFrames, writerState });
+			await commitStepBatch({
+				stepBatch,
+				length: stepBatchLen,
+				channels,
+				output,
+				sampleRate: DTLN_SAMPLE_RATE,
+				bitDepth,
+				originalFrames,
+				writerState,
+			});
 			stepBatchLen = 0;
 		}
 
@@ -256,6 +379,14 @@ export class DtlnNode extends TransformNode<DtlnProperties> {
 	static override readonly Stream = DtlnStream;
 }
 
-export function dtln(options: { modelPath1: string; modelPath2: string; ffmpegPath: string; onnxAddonPath?: string; vkfftAddonPath?: string; fftwAddonPath?: string; id?: string }): DtlnNode {
+export function dtln(options: {
+	modelPath1: string;
+	modelPath2: string;
+	ffmpegPath: string;
+	onnxAddonPath?: string;
+	vkfftAddonPath?: string;
+	fftwAddonPath?: string;
+	id?: string;
+}): DtlnNode {
 	return new DtlnNode(options);
 }

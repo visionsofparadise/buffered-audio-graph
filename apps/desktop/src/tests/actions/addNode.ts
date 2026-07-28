@@ -19,7 +19,12 @@ export interface AddNodeOptions {
 	readonly method?: "click" | "keyboard";
 }
 
-export async function addNode(page: Page, nodeLabel: string, expectedCount: number, options: AddNodeOptions = {}): Promise<string> {
+export async function addNode(
+	page: Page,
+	nodeLabel: string,
+	expectedCount: number,
+	options: AddNodeOptions = {},
+): Promise<string> {
 	const search = options.search ?? nodeLabel;
 	const method = options.method ?? "click";
 

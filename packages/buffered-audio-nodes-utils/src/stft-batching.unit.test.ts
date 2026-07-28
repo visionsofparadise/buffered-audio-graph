@@ -17,8 +17,20 @@ interface InverseCall {
 interface FakeAddon {
 	batchFft(input: Float32Array, fftSize: number, batchCount: number): { re: Float32Array; im: Float32Array };
 	batchIfft(real: Float32Array, imag: Float32Array, fftSize: number, batchCount: number): Float32Array;
-	batchFftInto?(input: Float32Array, real: Float32Array, imag: Float32Array, fftSize: number, batchCount: number): void;
-	batchIfftInto?(real: Float32Array, imag: Float32Array, output: Float32Array, fftSize: number, batchCount: number): void;
+	batchFftInto?(
+		input: Float32Array,
+		real: Float32Array,
+		imag: Float32Array,
+		fftSize: number,
+		batchCount: number,
+	): void;
+	batchIfftInto?(
+		real: Float32Array,
+		imag: Float32Array,
+		output: Float32Array,
+		fftSize: number,
+		batchCount: number,
+	): void;
 }
 
 const backendState = vi.hoisted<{ addon?: FakeAddon }>(() => ({}));
@@ -29,7 +41,13 @@ vi.mock("./fft-backend", () => ({
 
 import { hanningWindow, istft, STFT_BATCH_SCRATCH_BYTES, stft } from "./stft";
 
-function fillForward(input: Float32Array, real: Float32Array, imag: Float32Array, fftSize: number, batchCount: number): void {
+function fillForward(
+	input: Float32Array,
+	real: Float32Array,
+	imag: Float32Array,
+	fftSize: number,
+	batchCount: number,
+): void {
 	const halfSize = Math.floor(fftSize / 2) + 1;
 
 	for (let frame = 0; frame < batchCount; frame++) {
@@ -52,7 +70,11 @@ function fillInverse(real: Float32Array, output: Float32Array, fftSize: number, 
 	}
 }
 
-function createFakeAddon(useInto: boolean, forwardCalls: Array<ForwardCall>, inverseCalls: Array<InverseCall>): FakeAddon {
+function createFakeAddon(
+	useInto: boolean,
+	forwardCalls: Array<ForwardCall>,
+	inverseCalls: Array<InverseCall>,
+): FakeAddon {
 	const addon: FakeAddon = {
 		batchFft(input, fftSize, batchCount) {
 			const halfSize = Math.floor(fftSize / 2) + 1;
@@ -67,7 +89,12 @@ function createFakeAddon(useInto: boolean, forwardCalls: Array<ForwardCall>, inv
 		batchIfft(real, imag, fftSize, batchCount) {
 			const output = new Float32Array(fftSize * batchCount);
 
-			inverseCalls.push({ batchCount, realLength: real.length, imagLength: imag.length, outputLength: output.length });
+			inverseCalls.push({
+				batchCount,
+				realLength: real.length,
+				imagLength: imag.length,
+				outputLength: output.length,
+			});
 			fillInverse(real, output, fftSize, batchCount);
 
 			return output;
@@ -80,7 +107,12 @@ function createFakeAddon(useInto: boolean, forwardCalls: Array<ForwardCall>, inv
 			fillForward(input, real, imag, fftSize, batchCount);
 		};
 		addon.batchIfftInto = (real, imag, output, fftSize, batchCount) => {
-			inverseCalls.push({ batchCount, realLength: real.length, imagLength: imag.length, outputLength: output.length });
+			inverseCalls.push({
+				batchCount,
+				realLength: real.length,
+				imagLength: imag.length,
+				outputLength: output.length,
+			});
 			fillInverse(real, output, fftSize, batchCount);
 		};
 	}
@@ -120,7 +152,7 @@ describe("native STFT slabs", () => {
 		const signal = new Float32Array(frames + fftSize - 1);
 		const forwardCalls: Array<ForwardCall> = [];
 
-		for (let index = 0; index < signal.length; index++) signal[index] = index % 997 / 997;
+		for (let index = 0; index < signal.length; index++) signal[index] = (index % 997) / 997;
 
 		backendState.addon = createFakeAddon(useInto, forwardCalls, []);
 
@@ -175,7 +207,9 @@ describe("native STFT slabs", () => {
 		const boundary = slabFrames * hopSize;
 
 		for (const position of [boundary - 1, boundary, boundary + 1, outputLength - 2]) {
-			expect(Math.abs((output[position] ?? 0) - expectedOverlapValue(position, frames, fftSize, hopSize))).toBeLessThan(0.1);
+			expect(
+				Math.abs((output[position] ?? 0) - expectedOverlapValue(position, frames, fftSize, hopSize)),
+			).toBeLessThan(0.1);
 		}
 	});
 
@@ -185,7 +219,9 @@ describe("native STFT slabs", () => {
 
 		backendState.addon = createFakeAddon(true, forwardCalls, []);
 
-		expect(() => stft(new Float32Array(fftSize), fftSize, fftSize, undefined, "fftw")).toThrow("native scratch budget");
+		expect(() => stft(new Float32Array(fftSize), fftSize, fftSize, undefined, "fftw")).toThrow(
+			"native scratch budget",
+		);
 		expect(forwardCalls).toHaveLength(0);
 	});
 });

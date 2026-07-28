@@ -1,7 +1,19 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- typed-array indexing in tight loops */
 import { describe, it, expect } from "vitest";
-import { adaptationSpeedToMarkovForgetting, createKalmanState, kalmanUpdateFrame, type KalmanParams, type KalmanState } from "./utils/mef-kalman";
-import { computeMwfMask, createInterfererPsdState, reductionStrengthToOversubtraction, updateInterfererPsd, updatePrevOutputPsd } from "./utils/mef-mwf";
+import {
+	adaptationSpeedToMarkovForgetting,
+	createKalmanState,
+	kalmanUpdateFrame,
+	type KalmanParams,
+	type KalmanState,
+} from "./utils/mef-kalman";
+import {
+	computeMwfMask,
+	createInterfererPsdState,
+	reductionStrengthToOversubtraction,
+	updateInterfererPsd,
+	updatePrevOutputPsd,
+} from "./utils/mef-mwf";
 import { applyIspRestoration, computeMsadDecision, createIspState, createMsadChannelState } from "./utils/mef-msad";
 import { coldStartSeed, validateTransferSeed } from "./utils/warmup";
 
@@ -141,7 +153,17 @@ describe("DeBleed", () => {
 					targetImag[bin] = trueHRe * refImag[bin]! + trueHIm * refReal[bin]!;
 				}
 
-				kalmanUpdateFrame(targetReal, targetImag, [refReal], [refImag], states, kalmanParams, bleedTotalReal, bleedTotalImag, false);
+				kalmanUpdateFrame(
+					targetReal,
+					targetImag,
+					[refReal],
+					[refImag],
+					states,
+					kalmanParams,
+					bleedTotalReal,
+					bleedTotalImag,
+					false,
+				);
 			}
 
 			let sumHRe = 0;
@@ -209,7 +231,17 @@ describe("DeBleed", () => {
 					targetImag[bin] = trueRe * refImag[bin]! + trueIm * refReal[bin]!;
 				}
 
-				kalmanUpdateFrame(targetReal, targetImag, [refReal], [refImag], states, kalmanParams, bleedTotalReal, bleedTotalImag, false);
+				kalmanUpdateFrame(
+					targetReal,
+					targetImag,
+					[refReal],
+					[refImag],
+					states,
+					kalmanParams,
+					bleedTotalReal,
+					bleedTotalImag,
+					false,
+				);
 			}
 
 			let sumHRe = 0;
@@ -252,7 +284,16 @@ describe("DeBleed", () => {
 
 			const outMask = new Float32Array(numBins);
 
-			computeMwfMask(targetReal, targetImag, bleedReal, bleedImag, psdState, { temporalSmoothing: 0.5, oversubtraction }, 1e-10, outMask);
+			computeMwfMask(
+				targetReal,
+				targetImag,
+				bleedReal,
+				bleedImag,
+				psdState,
+				{ temporalSmoothing: 0.5, oversubtraction },
+				1e-10,
+				outMask,
+			);
 
 			return outMask;
 		}

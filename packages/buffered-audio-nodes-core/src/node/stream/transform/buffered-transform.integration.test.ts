@@ -77,7 +77,9 @@ describe("BufferedTransformStream._prepare", () => {
 
 		const { context } = createTestStreamContext();
 		const stream = new DoublingStream(nodeWith({ blockSize: WHOLE_FILE }), context);
-		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()));
+		const output = await drainBlocks(
+			await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()),
+		);
 
 		expect(output[0]?.samples[0]?.[0]).toBe(2);
 	});
@@ -99,7 +101,9 @@ describe("BufferedTransformStream._flush", () => {
 
 		const { context } = createTestStreamContext();
 		const stream = new FlushingStream(nodeWith({ blockSize: WHOLE_FILE }), context);
-		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()));
+		const output = await drainBlocks(
+			await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext()),
+		);
 
 		expect(stream.flushCalls).toBe(1);
 		expect(output.at(-1)?.samples[0]?.[0]).toBe(MARKER);
@@ -133,7 +137,9 @@ describe("BufferedTransformStream oversized-yield re-slicing", () => {
 
 		const { context } = createTestStreamContext();
 		const stream = new BigYieldStream(nodeWith({ blockSize: 64, streamChunkSize: 100 }), context);
-		const output = await drainBlocks(await stream.setup(readableFrom([createBlock(1, 0, 64)]), createTestSetupContext()));
+		const output = await drainBlocks(
+			await stream.setup(readableFrom([createBlock(1, 0, 64)]), createTestSetupContext()),
+		);
 
 		const pieces = output.filter((b) => b.samples[0]?.[0] === 3);
 
@@ -232,7 +238,12 @@ describe("BufferedTransformStream progress shape", () => {
 		const stream = new IdentityTransformStream(nodeWith({ blockSize: WHOLE_FILE, streamChunkSize: 10 }), context);
 		const progress = collectProgress(events);
 
-		await drainBlocks(await stream.setup(readableFrom([createBlock(0.5, 0, 100)]), createTestSetupContext({ sourceTotalFrames: 100 })));
+		await drainBlocks(
+			await stream.setup(
+				readableFrom([createBlock(0.5, 0, 100)]),
+				createTestSetupContext({ sourceTotalFrames: 100 }),
+			),
+		);
 
 		const buffers = progress.filter((p) => p.phase === "buffer");
 		const emits = progress.filter((p) => p.phase === "emit");

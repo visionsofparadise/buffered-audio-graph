@@ -52,7 +52,9 @@ export class DtlnBlockStream {
 
 	step(inputBlock: Float32Array): Float32Array {
 		if (inputBlock.length !== BLOCK_SHIFT) {
-			throw new Error(`DtlnBlockStream.step: expected ${String(BLOCK_SHIFT)} samples, got ${String(inputBlock.length)}`);
+			throw new Error(
+				`DtlnBlockStream.step: expected ${String(BLOCK_SHIFT)} samples, got ${String(inputBlock.length)}`,
+			);
 		}
 
 		this.inputBuffer.copyWithin(0, BLOCK_SHIFT, BLOCK_LEN);
@@ -89,7 +91,14 @@ export class DtlnBlockStream {
 	}
 
 	private runBlock(): void {
-		const stftResult = stft(this.inputBuffer, BLOCK_LEN, BLOCK_LEN, this.stftOutput, this.fftBackend, this.fftAddonOptions);
+		const stftResult = stft(
+			this.inputBuffer,
+			BLOCK_LEN,
+			BLOCK_LEN,
+			this.stftOutput,
+			this.fftBackend,
+			this.fftAddonOptions,
+		);
 
 		if (stftResult.frames < 1) return;
 

@@ -81,10 +81,7 @@ export function accumulateTransferChunk(
 	}
 }
 
-export function finalizeTransferFunction(
-	accumulator: TransferAccumulator,
-	epsilon?: number,
-): TransferFunction {
+export function finalizeTransferFunction(accumulator: TransferAccumulator, epsilon?: number): TransferFunction {
 	const { crossReal, crossImag, weightedAutoPower } = accumulator;
 	const numBins = weightedAutoPower.length;
 

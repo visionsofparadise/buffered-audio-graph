@@ -12,7 +12,10 @@ import {
 
 export type EventWriter = (text: string) => void;
 
-const labelOf = (identity: StreamIdentity): string => (identity.nodeId !== undefined ? `${identity.nodeName}#${identity.nodeId}` : `${identity.nodeName}#${identity.streamId}`);
+const labelOf = (identity: StreamIdentity): string =>
+	identity.nodeId !== undefined
+		? `${identity.nodeName}#${identity.nodeId}`
+		: `${identity.nodeName}#${identity.streamId}`;
 
 function sourceLabel(job: RenderJob): string | undefined {
 	for (const streams of job.streams.values()) {
@@ -67,13 +70,20 @@ export function subscribeRenderEvents(events: RenderEvents, getSourceLabel: () =
 	});
 }
 
-export function createEventSink(write: EventWriter = (text) => process.stdout.write(text)): { subscribe(job: RenderJob): void; printSummary(jobs: ReadonlyArray<RenderJob>): void } {
+export function createEventSink(write: EventWriter = (text) => process.stdout.write(text)): {
+	subscribe(job: RenderJob): void;
+	printSummary(jobs: ReadonlyArray<RenderJob>): void;
+} {
 	const totals = new Map<number, { label: string; framesDone: number; processingMs?: number }>();
 
 	const subscribe = (job: RenderJob): void => {
 		subscribeRenderEvents(job.events, () => sourceLabel(job) ?? "source", write);
 		job.events.on("finished", (node, payload) => {
-			totals.set(node.streamId, { label: labelOf(node), framesDone: payload.framesDone, processingMs: payload.processingMs });
+			totals.set(node.streamId, {
+				label: labelOf(node),
+				framesDone: payload.framesDone,
+				processingMs: payload.processingMs,
+			});
 		});
 	};
 
@@ -93,7 +103,9 @@ export function createEventSink(write: EventWriter = (text) => process.stdout.wr
 
 			const label = sourceLabel(job) ?? "source";
 
-			write(`${stamp(Date.now())} [${label}] total ${(timing.totalMs / 1000).toFixed(1)}s, ${timing.realTimeMultiplier.toFixed(1)}x RT\n`);
+			write(
+				`${stamp(Date.now())} [${label}] total ${(timing.totalMs / 1000).toFixed(1)}s, ${timing.realTimeMultiplier.toFixed(1)}x RT\n`,
+			);
 		}
 	};
 

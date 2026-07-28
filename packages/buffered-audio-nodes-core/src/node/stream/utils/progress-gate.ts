@@ -8,7 +8,8 @@ export function createProgressGate(framesTotal?: number): ProgressGate {
 	let lastEmitAt: number | undefined;
 
 	return (framesDone, now) => {
-		const bucket = framesTotal !== undefined ? Math.floor(framesDone / framesTotal / PROGRESS_PERCENT_QUANTUM) : undefined;
+		const bucket =
+			framesTotal !== undefined ? Math.floor(framesDone / framesTotal / PROGRESS_PERCENT_QUANTUM) : undefined;
 		const bucketAdvanced = bucket === undefined || bucket > lastBucket;
 		const intervalPassed = lastEmitAt === undefined || now - lastEmitAt >= PROGRESS_MIN_INTERVAL_MS;
 

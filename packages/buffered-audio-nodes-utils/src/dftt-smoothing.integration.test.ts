@@ -11,10 +11,13 @@ const params: DfttParams = {
 	threshold: 0.35,
 };
 
-function getAvailableBackend(backend: FftBackend, fixture: "fftwAddon" | "vkfftAddon"): { readonly path: string; readonly options: { vkfftPath?: string; fftwPath?: string } } | null {
+function getAvailableBackend(
+	backend: FftBackend,
+	fixture: "fftwAddon" | "vkfftAddon",
+): { readonly path: string; readonly options: { vkfftPath?: string; fftwPath?: string } } | null {
 	const path = requireFixture(fixture);
 
-	if (!path || backend === "vkfft" && !vkfftDeviceAvailable(path)) return null;
+	if (!path || (backend === "vkfft" && !vkfftDeviceAvailable(path))) return null;
 
 	const options = backend === "vkfft" ? { vkfftPath: path } : { fftwPath: path };
 
@@ -51,7 +54,10 @@ for (const { backend, fixture } of [
 
 			const numFrames = 7;
 			const numBins = 9;
-			const raw = Float32Array.from({ length: numFrames * numBins }, (_, index) => ((index * 23 + index % 7 * 5) % 101) / 100);
+			const raw = Float32Array.from(
+				{ length: numFrames * numBins },
+				(_, index) => ((index * 23 + (index % 7) * 5) % 101) / 100,
+			);
 			const nlm = Float32Array.from({ length: raw.length }, (_, index) => ((index * 17 + 3) % 79) / 78);
 			const jsOutput = new Float32Array(raw.length);
 			const addonOutput = new Float32Array(raw.length);

@@ -12,16 +12,23 @@ export interface BarcodeProps extends Omit<ComponentPropsWithRef<"div">, "color"
 	readonly accentColor?: string;
 }
 
-export function Barcode({ text, height = 48, narrow = 1, wide = 3, gap = 0, color = "var(--color-text-primary)", accentColor, className, style, ref, ...rest }: BarcodeProps) {
+export function Barcode({
+	text,
+	height = 48,
+	narrow = 1,
+	wide = 3,
+	gap = 0,
+	color = "var(--color-text-primary)",
+	accentColor,
+	className,
+	style,
+	ref,
+	...rest
+}: BarcodeProps) {
 	const elements = encodeToElements(text);
 
 	return (
-		<div
-			ref={ref}
-			className={cn("flex items-end", className)}
-			style={{ height, gap, ...style }}
-			{...rest}
-		>
+		<div ref={ref} className={cn("flex items-end", className)} style={{ height, gap, ...style }} {...rest}>
 			{elements.map((element, ix) => {
 				const isWide = element === "w";
 				const isVisible = ix % 2 === 0;

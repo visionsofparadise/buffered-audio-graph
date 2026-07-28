@@ -53,12 +53,12 @@ Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pr
 
 [Source](./src/transforms/crest-reduce/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `smoothing` | number (min 0) | `100` | Bidirectional (zero-phase) smoothing time constant in ms applied to the per-frame decorrelation envelope before it drives the lattice (default 100 ms). The envelope is 0 in segments with no active-band peak and the per-binding-peak optimal value at active-band peaks; smoothing eases it toward 0 across gaps so the bidirectional pass is predictable. Applied to the CONTROL trajectory only — never the audio path |
-| `frameSize` | number | `2048` | Analysis frame length in samples (default 2048 @ 48 kHz ≈ 43 ms; 75% overlap, Hann analysis window). Whole-file processing — output is produced after the full input is accumulated |
-| `vkfftAddonPath` | string | `""` | VkFFT native addon — GPU FFT acceleration Download: [vkfft-addon](https://github.com/visionsofparadise/vkfft-addon) |
-| `fftwAddonPath` | string | `""` | FFTW native addon — CPU FFT acceleration Download: [fftw-addon](https://github.com/visionsofparadise/fftw-addon) |
+| Parameter        | Type           | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------- | -------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `smoothing`      | number (min 0) | `100`   | Bidirectional (zero-phase) smoothing time constant in ms applied to the per-frame decorrelation envelope before it drives the lattice (default 100 ms). The envelope is 0 in segments with no active-band peak and the per-binding-peak optimal value at active-band peaks; smoothing eases it toward 0 across gaps so the bidirectional pass is predictable. Applied to the CONTROL trajectory only — never the audio path |
+| `frameSize`      | number         | `2048`  | Analysis frame length in samples (default 2048 @ 48 kHz ≈ 43 ms; 75% overlap, Hann analysis window). Whole-file processing — output is produced after the full input is accumulated                                                                                                                                                                                                                                         |
+| `vkfftAddonPath` | string         | `""`    | VkFFT native addon — GPU FFT acceleration Download: [vkfft-addon](https://github.com/visionsofparadise/vkfft-addon)                                                                                                                                                                                                                                                                                                         |
+| `fftwAddonPath`  | string         | `""`    | FFTW native addon — CPU FFT acceleration Download: [fftw-addon](https://github.com/visionsofparadise/fftw-addon)                                                                                                                                                                                                                                                                                                            |
 
 ### Cut
 
@@ -66,11 +66,11 @@ Remove a region of audio
 
 [Source](./src/transforms/cut/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `regions` | Object[] | `[]` | Regions |
-| `regions[].start` | number (0 to 86400) | — | Start (seconds) |
-| `regions[].end` | number (0 to 86400) | — | End (seconds) |
+| Parameter         | Type                | Default | Description     |
+| ----------------- | ------------------- | ------- | --------------- |
+| `regions`         | Object[]            | `[]`    | Regions         |
+| `regions[].start` | number (0 to 86400) | —       | Start (seconds) |
+| `regions[].end`   | number (0 to 86400) | —       | End (seconds)   |
 
 ### De-Bleed Adaptive
 
@@ -78,17 +78,17 @@ Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reducti
 
 [Source](./src/transforms/de-bleed/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `references` | string[] | `[]` | References |
-| `reductionStrength` | number (0 to 10, step 0.1) | `5` | Reduction Strength |
-| `artifactSmoothing` | number (0 to 10, step 0.1) | `5` | Artifact Smoothing |
-| `adaptationSpeed` | number (0 to 10, step 0.1) | `3` | Adaptation Speed |
-| `fftSize` | number (512 to 16384, step 256) | `4096` | FFT Size |
-| `hopSize` | number (128 to 4096, step 64) | `1024` | Hop Size |
-| `vkfftAddonPath` | string | `""` | VkFFT native addon — GPU FFT acceleration Download: [vkfft-addon](https://github.com/visionsofparadise/vkfft-addon) |
-| `fftwAddonPath` | string | `""` | FFTW native addon — CPU FFT acceleration Download: [fftw-addon](https://github.com/visionsofparadise/fftw-addon) |
-| `dfttBackend` | "" \| "js" \| "fftw" \| "vkfft" | `""` | DFTT Backend Override |
+| Parameter           | Type                            | Default | Description                                                                                                         |
+| ------------------- | ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `references`        | string[]                        | `[]`    | References                                                                                                          |
+| `reductionStrength` | number (0 to 10, step 0.1)      | `5`     | Reduction Strength                                                                                                  |
+| `artifactSmoothing` | number (0 to 10, step 0.1)      | `5`     | Artifact Smoothing                                                                                                  |
+| `adaptationSpeed`   | number (0 to 10, step 0.1)      | `3`     | Adaptation Speed                                                                                                    |
+| `fftSize`           | number (512 to 16384, step 256) | `4096`  | FFT Size                                                                                                            |
+| `hopSize`           | number (128 to 4096, step 64)   | `1024`  | Hop Size                                                                                                            |
+| `vkfftAddonPath`    | string                          | `""`    | VkFFT native addon — GPU FFT acceleration Download: [vkfft-addon](https://github.com/visionsofparadise/vkfft-addon) |
+| `fftwAddonPath`     | string                          | `""`    | FFTW native addon — CPU FFT acceleration Download: [fftw-addon](https://github.com/visionsofparadise/fftw-addon)    |
+| `dfttBackend`       | "" \| "js" \| "fftw" \| "vkfft" | `""`    | DFTT Backend Override                                                                                               |
 
 ### DeepFilterNet3 (Denoiser)
 
@@ -96,12 +96,12 @@ Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN).
 
 [Source](./src/transforms/deep-filter-net-3/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `modelPath` | string | `""` | DeepFilterNet3 48 kHz denoiser model (.onnx) Download: [dfn3](https://github.com/yuyun2000/SpeechDenoiser) |
-| `ffmpegPath` | string | `""` | FFmpeg — used when the input audio is not 48 kHz to chain up/down resamplers around the inference stream; can be left blank for 48 kHz input. Download: [ffmpeg](https://ffmpeg.org/download.html) |
-| `onnxAddonPath` | string | `""` | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
-| `attenuation` | number (0 to 100) | `30` | Attenuation cap in dB. Maps to the ONNX `atten_lim_db` input; 0 = no cap |
+| Parameter       | Type              | Default | Description                                                                                                                                                                                        |
+| --------------- | ----------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modelPath`     | string            | `""`    | DeepFilterNet3 48 kHz denoiser model (.onnx) Download: [dfn3](https://github.com/yuyun2000/SpeechDenoiser)                                                                                         |
+| `ffmpegPath`    | string            | `""`    | FFmpeg — used when the input audio is not 48 kHz to chain up/down resamplers around the inference stream; can be left blank for 48 kHz input. Download: [ffmpeg](https://ffmpeg.org/download.html) |
+| `onnxAddonPath` | string            | `""`    | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon)                                                                                          |
+| `attenuation`   | number (0 to 100) | `30`    | Attenuation cap in dB. Maps to the ONNX `atten_lim_db` input; 0 = no cap                                                                                                                           |
 
 ### Dither
 
@@ -109,10 +109,10 @@ Add shaped noise to reduce quantization distortion
 
 [Source](./src/transforms/dither/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `bitDepth` | 16 \| 24 | `16` | Bit Depth |
-| `noiseShaping` | boolean | `false` | Noise Shaping |
+| Parameter      | Type     | Default | Description   |
+| -------------- | -------- | ------- | ------------- |
+| `bitDepth`     | 16 \| 24 | `16`    | Bit Depth     |
+| `noiseShaping` | boolean  | `false` | Noise Shaping |
 
 ### Downmix Mono
 
@@ -126,14 +126,14 @@ Remove background noise from speech using DTLN neural network
 
 [Source](./src/transforms/dtln/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `modelPath1` | string | `""` | DTLN magnitude mask model (.onnx) Download: [dtln-model_1](https://github.com/breizhn/DTLN) |
-| `modelPath2` | string | `""` | DTLN time-domain model (.onnx) Download: [dtln-model_2](https://github.com/breizhn/DTLN) |
-| `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
-| `onnxAddonPath` | string | `""` | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
-| `vkfftAddonPath` | string | `""` | VkFFT native addon — GPU FFT acceleration Download: [vkfft-addon](https://github.com/visionsofparadise/vkfft-addon) |
-| `fftwAddonPath` | string | `""` | FFTW native addon — CPU FFT acceleration Download: [fftw-addon](https://github.com/visionsofparadise/fftw-addon) |
+| Parameter        | Type   | Default | Description                                                                                                         |
+| ---------------- | ------ | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `modelPath1`     | string | `""`    | DTLN magnitude mask model (.onnx) Download: [dtln-model_1](https://github.com/breizhn/DTLN)                         |
+| `modelPath2`     | string | `""`    | DTLN time-domain model (.onnx) Download: [dtln-model_2](https://github.com/breizhn/DTLN)                            |
+| `ffmpegPath`     | string | `""`    | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html)                           |
+| `onnxAddonPath`  | string | `""`    | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon)           |
+| `vkfftAddonPath` | string | `""`    | VkFFT native addon — GPU FFT acceleration Download: [vkfft-addon](https://github.com/visionsofparadise/vkfft-addon) |
+| `fftwAddonPath`  | string | `""`    | FFTW native addon — CPU FFT acceleration Download: [fftw-addon](https://github.com/visionsofparadise/fftw-addon)    |
 
 ### Duplicate Channels
 
@@ -141,9 +141,9 @@ Duplicate a mono signal into multiple identical output channels; requires exactl
 
 [Source](./src/transforms/duplicate-channels/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `channels` | number (2 to 8) | `2` | Output channel count |
+| Parameter  | Type            | Default | Description          |
+| ---------- | --------------- | ------- | -------------------- |
+| `channels` | number (2 to 8) | `2`     | Output channel count |
 
 ### FFmpeg
 
@@ -151,11 +151,11 @@ Process audio through FFmpeg filters
 
 [Source](./src/transforms/ffmpeg/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
-| `args` | string[] | `[]` |  |
-| `outputSampleRate` | number (min 0), optional | — | Sample rate of emitted chunks. Required when args change the rate (e.g. -af aresample=24000). |
+| Parameter          | Type                     | Default | Description                                                                                   |
+| ------------------ | ------------------------ | ------- | --------------------------------------------------------------------------------------------- |
+| `ffmpegPath`       | string                   | `""`    | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html)     |
+| `args`             | string[]                 | `[]`    |                                                                                               |
+| `outputSampleRate` | number (min 0), optional | —       | Sample rate of emitted chunks. Required when args change the rate (e.g. -af aresample=24000). |
 
 ### Gain
 
@@ -163,9 +163,9 @@ Adjust signal level by a fixed amount in dB
 
 [Source](./src/transforms/gain/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `gain` | number (-60 to 24, step 0.1) | `0` | Gain (dB) |
+| Parameter | Type                         | Default | Description |
+| --------- | ---------------------------- | ------- | ----------- |
+| `gain`    | number (-60 to 24, step 0.1) | `0`     | Gain (dB)   |
 
 ### HTDemucs (Stem Separator)
 
@@ -173,13 +173,13 @@ Rebalance stem volumes using HTDemucs source separation
 
 [Source](./src/transforms/htdemucs/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `modelPath` | string | `""` | HTDemucs source separation model (.onnx) — requires .onnx.data file alongside Download: [htdemucs](https://github.com/facebookresearch/demucs) |
-| `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
-| `onnxAddonPath` | string | `""` | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
-| `highPass` | number (0 to 500, step 10) | `0` | High Pass |
-| `lowPass` | number (0 to 22050, step 100) | `0` | Low Pass |
+| Parameter       | Type                          | Default | Description                                                                                                                                    |
+| --------------- | ----------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modelPath`     | string                        | `""`    | HTDemucs source separation model (.onnx) — requires .onnx.data file alongside Download: [htdemucs](https://github.com/facebookresearch/demucs) |
+| `ffmpegPath`    | string                        | `""`    | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html)                                                      |
+| `onnxAddonPath` | string                        | `""`    | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon)                                      |
+| `highPass`      | number (0 to 500, step 10)    | `0`     | High Pass                                                                                                                                      |
+| `lowPass`       | number (0 to 22050, step 100) | `0`     | Low Pass                                                                                                                                       |
 
 ### Kim Vocal 2 (Stem Separator)
 
@@ -187,13 +187,13 @@ Isolate dialogue from background using MDX-Net vocal separation
 
 [Source](./src/transforms/kim-vocal-2/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `modelPath` | string | `""` | MDX-Net vocal isolation model (.onnx) Download: [Kim_Vocal_2](https://huggingface.co/seanghay/uvr_models) |
-| `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
-| `onnxAddonPath` | string | `""` | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
-| `highPass` | number (20 to 500, step 10) | `80` | High Pass |
-| `lowPass` | number (1000 to 22050, step 100) | `20000` | Low Pass |
+| Parameter       | Type                             | Default | Description                                                                                               |
+| --------------- | -------------------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `modelPath`     | string                           | `""`    | MDX-Net vocal isolation model (.onnx) Download: [Kim_Vocal_2](https://huggingface.co/seanghay/uvr_models) |
+| `ffmpegPath`    | string                           | `""`    | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html)                 |
+| `onnxAddonPath` | string                           | `""`    | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
+| `highPass`      | number (20 to 500, step 10)      | `80`    | High Pass                                                                                                 |
+| `lowPass`       | number (1000 to 22050, step 100) | `20000` | Low Pass                                                                                                  |
 
 ### Loudness Normalize
 
@@ -201,9 +201,9 @@ Measure integrated loudness (BS.1770) and apply a single linear gain to hit a ta
 
 [Source](./src/transforms/loudness-normalize/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `target` | number (-50 to 0, step 0.1) | `-16` | Target integrated loudness (LUFS) |
+| Parameter | Type                        | Default | Description                       |
+| --------- | --------------------------- | ------- | --------------------------------- |
+| `target`  | number (-50 to 0, step 0.1) | `-16`   | Target integrated loudness (LUFS) |
 
 ### Loudness Stats
 
@@ -211,10 +211,10 @@ Measure integrated loudness, true peak, and loudness range per EBU R128, plus an
 
 [Source](./src/targets/loudness-stats/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `bucketCount` | number (min 0) | `1024` | Amplitude histogram bucket count |
-| `outputPath` | string | `""` | Output Path (JSON sidecar). Empty string disables file output. |
+| Parameter     | Type           | Default | Description                                                    |
+| ------------- | -------------- | ------- | -------------------------------------------------------------- |
+| `bucketCount` | number (min 0) | `1024`  | Amplitude histogram bucket count                               |
+| `outputPath`  | string         | `""`    | Output Path (JSON sidecar). Empty string disables file output. |
 
 ### Loudness Target
 
@@ -222,18 +222,18 @@ Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single co
 
 [Source](./src/transforms/loudness-target/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `targetLufs` | number (-50 to 0, step 0.1) | `-16` | Target integrated loudness (LUFS) |
-| `pivot` | number (-80 to 0), optional | — | Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1. |
-| `floor` | number (-100 to 0), optional | — | Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating. |
-| `limitPercentile` | number (0.5 to 1) | `0.995` | Top-1−p fraction of detection samples to brick-wall. Default 0.995 brick-walls the top 0.5%. |
-| `limitDb` | number (-60 to 0), optional | — | Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor. |
-| `maxAttempts` | number (min 1) | `10` | Hard cap on iteration attempts. |
-| `targetTp` | number (-24 to 0), optional | — | True-peak target (dBTP). Default: source true peak (peaks unchanged). |
-| `smoothing` | number (0.01 to 200) | `1` | Peak-respecting envelope time constant (ms). |
-| `tolerance` | number (0 to 6) | `0.5` | Iteration exit threshold (LUFS dB). |
-| `peakTolerance` | number (0 to 6) | `0.1` | One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored). |
+| Parameter         | Type                         | Default | Description                                                                                                                                    |
+| ----------------- | ---------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `targetLufs`      | number (-50 to 0, step 0.1)  | `-16`   | Target integrated loudness (LUFS)                                                                                                              |
+| `pivot`           | number (-80 to 0), optional  | —       | Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1.                                                    |
+| `floor`           | number (-100 to 0), optional | —       | Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating.                                           |
+| `limitPercentile` | number (0.5 to 1)            | `0.995` | Top-1−p fraction of detection samples to brick-wall. Default 0.995 brick-walls the top 0.5%.                                                   |
+| `limitDb`         | number (-60 to 0), optional  | —       | Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor. |
+| `maxAttempts`     | number (min 1)               | `10`    | Hard cap on iteration attempts.                                                                                                                |
+| `targetTp`        | number (-24 to 0), optional  | —       | True-peak target (dBTP). Default: source true peak (peaks unchanged).                                                                          |
+| `smoothing`       | number (0.01 to 200)         | `1`     | Peak-respecting envelope time constant (ms).                                                                                                   |
+| `tolerance`       | number (0 to 6)              | `0.5`   | Iteration exit threshold (LUFS dB).                                                                                                            |
+| `peakTolerance`   | number (0 to 6)              | `0.1`   | One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored).                                        |
 
 ### Normalize
 
@@ -241,9 +241,9 @@ Adjust peak or loudness level to a target ceiling
 
 [Source](./src/transforms/normalize/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `ceiling` | number (0 to 1, step 0.01) | `1` | Ceiling |
+| Parameter | Type                       | Default | Description |
+| --------- | -------------------------- | ------- | ----------- |
+| `ceiling` | number (0 to 1, step 0.01) | `1`     | Ceiling     |
 
 ### Pad
 
@@ -251,10 +251,10 @@ Add silence to start or end of audio
 
 [Source](./src/transforms/pad/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `before` | number (0 to 300, step 0.001) | `0` | Before |
-| `after` | number (0 to 300, step 0.001) | `0` | After |
+| Parameter | Type                          | Default | Description |
+| --------- | ----------------------------- | ------- | ----------- |
+| `before`  | number (0 to 300, step 0.001) | `0`     | Before      |
+| `after`   | number (0 to 300, step 0.001) | `0`     | After       |
 
 ### Pan
 
@@ -262,9 +262,9 @@ Position mono signal in stereo field or adjust stereo balance; throws for inputs
 
 [Source](./src/transforms/pan/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `pan` | number (-1 to 1, step 0.01) | `0` | Pan (-1 = full left, 0 = center, 1 = full right) |
+| Parameter | Type                        | Default | Description                                      |
+| --------- | --------------------------- | ------- | ------------------------------------------------ |
+| `pan`     | number (-1 to 1, step 0.01) | `0`     | Pan (-1 = full left, 0 = center, 1 = full right) |
 
 ### Phase
 
@@ -272,10 +272,10 @@ Invert or rotate signal phase
 
 [Source](./src/transforms/phase/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `invert` | boolean | `true` | Invert |
-| `angle` | number (-180 to 180, step 1), optional | — | Angle |
+| Parameter | Type                                   | Default | Description |
+| --------- | -------------------------------------- | ------- | ----------- |
+| `invert`  | boolean                                | `true`  | Invert      |
+| `angle`   | number (-180 to 180, step 1), optional | —       | Angle       |
 
 ### Read FFmpeg
 
@@ -283,11 +283,11 @@ Read audio from a file using FFmpeg
 
 [Source](./src/sources/read/ffmpeg/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `path` | string | `""` |  |
-| `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
-| `ffprobePath` | string | `""` | FFprobe — media file analyzer (included with FFmpeg) Download: [ffprobe](https://ffmpeg.org/download.html) |
+| Parameter     | Type   | Default | Description                                                                                                |
+| ------------- | ------ | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `path`        | string | `""`    |                                                                                                            |
+| `ffmpegPath`  | string | `""`    | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html)                  |
+| `ffprobePath` | string | `""`    | FFprobe — media file analyzer (included with FFmpeg) Download: [ffprobe](https://ffmpeg.org/download.html) |
 
 ### Read WAV
 
@@ -295,9 +295,9 @@ Read audio from a WAV file
 
 [Source](./src/sources/read/wav/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `path` | string | `""` |  |
+| Parameter | Type   | Default | Description |
+| --------- | ------ | ------- | ----------- |
+| `path`    | string | `""`    |             |
 
 ### Reverse
 
@@ -311,12 +311,12 @@ Generate spectrogram visualization data
 
 [Source](./src/targets/spectrogram/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `outputPath` | string | `""` | Output Path |
-| `fftSize` | number (256 to 8192, step 256) | `2048` | FFT Size |
-| `hopSize` | number (64 to 8192, step 64) | `512` | Hop Size |
-| `fftwAddonPath` | string | `""` | FFTW Addon |
+| Parameter       | Type                           | Default | Description |
+| --------------- | ------------------------------ | ------- | ----------- |
+| `outputPath`    | string                         | `""`    | Output Path |
+| `fftSize`       | number (256 to 8192, step 256) | `2048`  | FFT Size    |
+| `hopSize`       | number (64 to 8192, step 64)   | `512`   | Hop Size    |
+| `fftwAddonPath` | string                         | `""`    | FFTW Addon  |
 
 ### Splice
 
@@ -324,10 +324,10 @@ Replace a region of audio with processed content
 
 [Source](./src/transforms/splice/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `insertPath` | string | `""` | Insert File Path |
-| `insertAt` | number (0 to 1000000000) | `0` | Insert At (frames) |
+| Parameter    | Type                     | Default | Description        |
+| ------------ | ------------------------ | ------- | ------------------ |
+| `insertPath` | string                   | `""`    | Insert File Path   |
+| `insertAt`   | number (0 to 1000000000) | `0`     | Insert At (frames) |
 
 ### Trim
 
@@ -335,12 +335,12 @@ Remove silence from start and end
 
 [Source](./src/transforms/trim/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `threshold` | number (0 to 1, step 0.001) | `0.001` | Threshold |
-| `margin` | number (0 to 1, step 0.001) | `0.01` | Margin |
-| `start` | boolean | `true` | Start |
-| `end` | boolean | `true` | End |
+| Parameter   | Type                        | Default | Description |
+| ----------- | --------------------------- | ------- | ----------- |
+| `threshold` | number (0 to 1, step 0.001) | `0.001` | Threshold   |
+| `margin`    | number (0 to 1, step 0.001) | `0.01`  | Margin      |
+| `start`     | boolean                     | `true`  | Start       |
+| `end`       | boolean                     | `true`  | End         |
 
 ### True Peak Normalize
 
@@ -348,9 +348,9 @@ Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single lin
 
 [Source](./src/transforms/true-peak-normalize/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `target` | number (-24 to 0) | `-1` | Target true peak (dBTP). Must be < 0. |
+| Parameter | Type              | Default | Description                           |
+| --------- | ----------------- | ------- | ------------------------------------- |
+| `target`  | number (-24 to 0) | `-1`    | Target true peak (dBTP). Must be < 0. |
 
 ### VST3
 
@@ -358,14 +358,14 @@ Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)
 
 [Source](./src/transforms/vst3/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `vstHostPath` | string | `""` | vst-host — Pedalboard-based VST3 host CLI Download: [vst-host](https://github.com/visionsofparadise/vst-host) |
-| `stages` | Object[] | — | Ordered chain of plugin/preset stages — processed end-to-end inside one Pedalboard offline call |
-| `stages[].pluginPath` | string | — | VST3 plugin file or bundle |
-| `stages[].pluginName` | string, optional | — | Sub-plugin name when pluginPath is a multi-plugin shell (e.g. WaveShell) |
-| `stages[].presetPath` | string, optional | — | Optional .vstpreset state file applied after the plugin loads |
-| `bypass` | boolean | `false` | Pass audio through unchanged (no subprocess spawn) |
+| Parameter             | Type             | Default | Description                                                                                                   |
+| --------------------- | ---------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `vstHostPath`         | string           | `""`    | vst-host — Pedalboard-based VST3 host CLI Download: [vst-host](https://github.com/visionsofparadise/vst-host) |
+| `stages`              | Object[]         | —       | Ordered chain of plugin/preset stages — processed end-to-end inside one Pedalboard offline call               |
+| `stages[].pluginPath` | string           | —       | VST3 plugin file or bundle                                                                                    |
+| `stages[].pluginName` | string, optional | —       | Sub-plugin name when pluginPath is a multi-plugin shell (e.g. WaveShell)                                      |
+| `stages[].presetPath` | string, optional | —       | Optional .vstpreset state file applied after the plugin loads                                                 |
+| `bypass`              | boolean          | `false` | Pass audio through unchanged (no subprocess spawn)                                                            |
 
 ### Waveform
 
@@ -373,10 +373,10 @@ Generate waveform visualization data
 
 [Source](./src/targets/waveform/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `outputPath` | string | `""` | Output Path |
-| `resolution` | number (100 to 10000, step 100) | `1000` | Resolution |
+| Parameter    | Type                            | Default | Description |
+| ------------ | ------------------------------- | ------- | ----------- |
+| `outputPath` | string                          | `""`    | Output Path |
+| `resolution` | number (100 to 10000, step 100) | `1000`  | Resolution  |
 
 ### Write
 
@@ -384,16 +384,16 @@ Write audio to a file
 
 [Source](./src/targets/write/index.ts)
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `path` | string | `""` |  |
-| `ffmpegPath` | string | `""` | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
-| `bitDepth` | "16" \| "24" \| "32" \| "32f" | `"16"` |  |
-| `encoding` | Object, optional | — | Encode through ffmpeg to a non-WAV format. Requires `ffmpegPath`. |
-| `encoding.format` | "wav" \| "flac" \| "mp3" \| "aac" | — |  |
-| `encoding.bitrate` | number (8 to 1024), optional | — | Constant bitrate in kbps for MP3 and AAC. Defaults to 192 kbps. |
-| `encoding.vbr` | number (0 to 9), optional | — |  |
-| `encoding.sampleRate` | number (min 0), optional | — | Output sample rate (Hz). When set, ffmpeg resamples on encode. |
+| Parameter             | Type                              | Default | Description                                                                               |
+| --------------------- | --------------------------------- | ------- | ----------------------------------------------------------------------------------------- |
+| `path`                | string                            | `""`    |                                                                                           |
+| `ffmpegPath`          | string                            | `""`    | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html) |
+| `bitDepth`            | "16" \| "24" \| "32" \| "32f"     | `"16"`  |                                                                                           |
+| `encoding`            | Object, optional                  | —       | Encode through ffmpeg to a non-WAV format. Requires `ffmpegPath`.                         |
+| `encoding.format`     | "wav" \| "flac" \| "mp3" \| "aac" | —       |                                                                                           |
+| `encoding.bitrate`    | number (8 to 1024), optional      | —       | Constant bitrate in kbps for MP3 and AAC. Defaults to 192 kbps.                           |
+| `encoding.vbr`        | number (0 to 9), optional         | —       |                                                                                           |
+| `encoding.sampleRate` | number (min 0), optional          | —       | Output sample rate (Hz). When set, ffmpeg resamples on encode.                            |
 
 ## Creating Nodes
 
@@ -426,7 +426,14 @@ Report progress with `this.emitProgress(phase, framesDone, framesTotal?)` (pace 
 
 ```ts
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type BlockBuffer,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 
 export const schema = z.object({
 	ceiling: z.number().min(0).max(1).multipleOf(0.01).default(1.0).describe("Ceiling"),
@@ -501,12 +508,12 @@ ML-based transforms use ONNX Runtime for inference via a native addon. Nodes tha
 
 Models are not bundled with the package. Each node's parameter table links to the expected model source.
 
-| Node            | Model                            | Source                                                                            |
-| --------------- | -------------------------------- | --------------------------------------------------------------------------------- |
-| dtln            | model_1.onnx, model_2.onnx       | [DTLN](https://github.com/breizhn/DTLN)                                           |
-| deepFilterNet3  | dfn3.onnx                        | [SpeechDenoiser](https://github.com/yuyun2000/SpeechDenoiser)                     |
-| kimVocal2       | Kim_Vocal_2.onnx                 | [uvr_models](https://huggingface.co/seanghay/uvr_models)                          |
-| htdemucs        | htdemucs.onnx + htdemucs.onnx.data | [demucs](https://github.com/facebookresearch/demucs)                            |
+| Node           | Model                              | Source                                                        |
+| -------------- | ---------------------------------- | ------------------------------------------------------------- |
+| dtln           | model_1.onnx, model_2.onnx         | [DTLN](https://github.com/breizhn/DTLN)                       |
+| deepFilterNet3 | dfn3.onnx                          | [SpeechDenoiser](https://github.com/yuyun2000/SpeechDenoiser) |
+| kimVocal2      | Kim_Vocal_2.onnx                   | [uvr_models](https://huggingface.co/seanghay/uvr_models)      |
+| htdemucs       | htdemucs.onnx + htdemucs.onnx.data | [demucs](https://github.com/facebookresearch/demucs)          |
 
 ## License
 

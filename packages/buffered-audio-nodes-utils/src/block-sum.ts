@@ -37,7 +37,9 @@ export class BlockSumAccumulator {
 		if (frames <= 0) return;
 
 		if (perFrameSums.length < frames) {
-			throw new Error(`BlockSumAccumulator: perFrameSums has ${perFrameSums.length} entries, fewer than the requested ${frames}`);
+			throw new Error(
+				`BlockSumAccumulator: perFrameSums has ${perFrameSums.length} entries, fewer than the requested ${frames}`,
+			);
 		}
 
 		const blockSize = this.blockSize;

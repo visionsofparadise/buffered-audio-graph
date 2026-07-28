@@ -21,10 +21,14 @@ describe("read", () => {
 	});
 
 	it("throws for non-WAV files when only ffmpegPath is set", () => {
-		expect(() => read("test.flac", { ffmpegPath: "/usr/bin/ffmpeg" })).toThrow("Non-WAV file requires ffmpegPath and ffprobePath");
+		expect(() => read("test.flac", { ffmpegPath: "/usr/bin/ffmpeg" })).toThrow(
+			"Non-WAV file requires ffmpegPath and ffprobePath",
+		);
 	});
 
 	it("throws for non-WAV files when only ffprobePath is set", () => {
-		expect(() => read("test.ogg", { ffprobePath: "/usr/bin/ffprobe" })).toThrow("Non-WAV file requires ffmpegPath and ffprobePath");
+		expect(() => read("test.ogg", { ffprobePath: "/usr/bin/ffprobe" })).toThrow(
+			"Non-WAV file requires ffmpegPath and ffprobePath",
+		);
 	});
 });

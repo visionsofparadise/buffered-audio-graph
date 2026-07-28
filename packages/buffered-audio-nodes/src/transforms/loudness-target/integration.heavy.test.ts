@@ -78,20 +78,27 @@ interface RunStreamResult {
  * exposes the iteration's winning `(B, limitDb)` for tests that need to
  * assert on iteration behaviour.
  */
-async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: number, properties: TargetRunOptions): Promise<RunStreamResult> {
+async function runStream(
+	channels: ReadonlyArray<Float32Array>,
+	sampleRate: number,
+	properties: TargetRunOptions,
+): Promise<RunStreamResult> {
 	const channelCount = channels.length;
-	const stream = new LoudnessTargetStream(loudnessTarget({
-		targetLufs: properties.targetLufs,
-		pivot: properties.pivot,
-		floor: properties.floor,
-		targetTp: properties.targetTp,
-		limitDb: properties.limitDb,
-		limitPercentile: properties.limitPercentile ?? 0.995,
-		smoothing: properties.smoothing ?? 1,
-		tolerance: properties.tolerance ?? 0.5,
-		peakTolerance: properties.peakTolerance ?? 0.1,
-		maxAttempts: properties.maxAttempts ?? 10,
-	}), createTestStreamContext().context);
+	const stream = new LoudnessTargetStream(
+		loudnessTarget({
+			targetLufs: properties.targetLufs,
+			pivot: properties.pivot,
+			floor: properties.floor,
+			targetTp: properties.targetTp,
+			limitDb: properties.limitDb,
+			limitPercentile: properties.limitPercentile ?? 0.995,
+			smoothing: properties.smoothing ?? 1,
+			tolerance: properties.tolerance ?? 0.5,
+			peakTolerance: properties.peakTolerance ?? 0.1,
+			maxAttempts: properties.maxAttempts ?? 10,
+		}),
+		createTestStreamContext().context,
+	);
 
 	const samples: Array<Float32Array> = [];
 
@@ -267,71 +274,75 @@ function makeIntersamplePeakFixture(frames: number, sampleRate: number): Float32
 describe("LoudnessTarget TP-overshoot regression", () => {
 	const TP_TEST_TIMEOUT_MS = 180_000;
 
-	it("output true peak respects targetTp within 0.15 dB on TP-rich content", async () => {
-		// Pre-Phase-4 expected overshoot on this regime: ~0.7–0.9 dB
-		// (the live-QA observation on the Pierce 60 s clip; the plan's
-		// Problem section §1 documents the two effects). Post-Phase-4
-		// expected overshoot: well under 0.15 dB (peakTolerance +
-		// slack; tightened from the predecessor plan's +0.3 by
-		// plan-loudness-target-tp-iteration). The existing ramp-
-		// fixture test "respects targetTp ceiling…" measures +0.026 dB
-		// on the post-Phase-4 path; this fixture is engineered to be
-		// MORE TP-rich than the ramp (cross-frequency sum produces
-		// stronger inter-sample peaks than a single-tone ramp); the
-		// observed +0.044 dB sits comfortably under the 0.15 bound.
-		const TP_TEST_FRAMES = TEST_SAMPLE_RATE * 30; // 30 s mono.
-		const input = makeIntersamplePeakFixture(TP_TEST_FRAMES, TEST_SAMPLE_RATE);
-		const sourcePeakDb = measureTruePeak([input], TEST_SAMPLE_RATE);
-		const sourceLufs = measureLufs([input], TEST_SAMPLE_RATE);
-		const targetTp = -1;
-		// Plan §6.1 spec'd `targetLufs: -16` against an unmodulated
-		// two-tone fixture; with the body-plus-overlay fixture
-		// (deviation captured in the docstring above) sourceLufs lands
-		// around -12.5 LUFS. Setting `targetLufs = sourceLufs - 4`
-		// (rounded to the schema's `multipleOf(0.1)` grid) puts the
-		// target inside the iteration's reach with a meaningful cut
-		// (~4 LU) that exercises the upper-segment descending regime
-		// where Effect-2 (IIR averaging across peak boundary) would
-		// have produced the pre-Phase-4 overshoot. The absolute
-		// `targetLufs` value isn't load-bearing — what matters is
-		// (a) a non-trivial cut so the curve has descending upper
-		// segment, and (b) `targetTp = -1` close enough to source peak
-		// that the closed-form `peakGainDb` is non-zero.
-		const targetLufs = Math.round((sourceLufs - 4) * 10) / 10;
-		const output = await runStream([input], TEST_SAMPLE_RATE, {
-			targetLufs,
-			targetTp,
-			smoothing: 1,
-		});
-		const outputChannel = output.channels[0];
+	it(
+		"output true peak respects targetTp within 0.15 dB on TP-rich content",
+		async () => {
+			// Pre-Phase-4 expected overshoot on this regime: ~0.7–0.9 dB
+			// (the live-QA observation on the Pierce 60 s clip; the plan's
+			// Problem section §1 documents the two effects). Post-Phase-4
+			// expected overshoot: well under 0.15 dB (peakTolerance +
+			// slack; tightened from the predecessor plan's +0.3 by
+			// plan-loudness-target-tp-iteration). The existing ramp-
+			// fixture test "respects targetTp ceiling…" measures +0.026 dB
+			// on the post-Phase-4 path; this fixture is engineered to be
+			// MORE TP-rich than the ramp (cross-frequency sum produces
+			// stronger inter-sample peaks than a single-tone ramp); the
+			// observed +0.044 dB sits comfortably under the 0.15 bound.
+			const TP_TEST_FRAMES = TEST_SAMPLE_RATE * 30; // 30 s mono.
+			const input = makeIntersamplePeakFixture(TP_TEST_FRAMES, TEST_SAMPLE_RATE);
+			const sourcePeakDb = measureTruePeak([input], TEST_SAMPLE_RATE);
+			const sourceLufs = measureLufs([input], TEST_SAMPLE_RATE);
+			const targetTp = -1;
+			// Plan §6.1 spec'd `targetLufs: -16` against an unmodulated
+			// two-tone fixture; with the body-plus-overlay fixture
+			// (deviation captured in the docstring above) sourceLufs lands
+			// around -12.5 LUFS. Setting `targetLufs = sourceLufs - 4`
+			// (rounded to the schema's `multipleOf(0.1)` grid) puts the
+			// target inside the iteration's reach with a meaningful cut
+			// (~4 LU) that exercises the upper-segment descending regime
+			// where Effect-2 (IIR averaging across peak boundary) would
+			// have produced the pre-Phase-4 overshoot. The absolute
+			// `targetLufs` value isn't load-bearing — what matters is
+			// (a) a non-trivial cut so the curve has descending upper
+			// segment, and (b) `targetTp = -1` close enough to source peak
+			// that the closed-form `peakGainDb` is non-zero.
+			const targetLufs = Math.round((sourceLufs - 4) * 10) / 10;
+			const output = await runStream([input], TEST_SAMPLE_RATE, {
+				targetLufs,
+				targetTp,
+				smoothing: 1,
+			});
+			const outputChannel = output.channels[0];
 
-		expect(outputChannel).toBeDefined();
-		expect(outputChannel?.length).toBe(input.length);
+			expect(outputChannel).toBeDefined();
+			expect(outputChannel?.length).toBe(input.length);
 
-		const outputTruePeakDb = measureTruePeak([outputChannel ?? new Float32Array(0)], TEST_SAMPLE_RATE);
-		const overshoot = outputTruePeakDb - targetTp;
+			const outputTruePeakDb = measureTruePeak([outputChannel ?? new Float32Array(0)], TEST_SAMPLE_RATE);
+			const overshoot = outputTruePeakDb - targetTp;
 
-		console.log(
-			`[test:tp-overshoot-regression] sourceLufs=${sourceLufs.toFixed(3)} ` +
-				`targetLufs=${targetLufs.toFixed(3)} sourcePeakDb=${sourcePeakDb.toFixed(3)} ` +
-				`outputTruePeakDb=${outputTruePeakDb.toFixed(3)} target=${targetTp} ` +
-				`overshoot=${overshoot.toFixed(3)} dB (pre-Phase-4 expected ~0.7–0.9 dB)`,
-		);
+			console.log(
+				`[test:tp-overshoot-regression] sourceLufs=${sourceLufs.toFixed(3)} ` +
+					`targetLufs=${targetLufs.toFixed(3)} sourcePeakDb=${sourcePeakDb.toFixed(3)} ` +
+					`outputTruePeakDb=${outputTruePeakDb.toFixed(3)} target=${targetTp} ` +
+					`overshoot=${overshoot.toFixed(3)} dB (pre-Phase-4 expected ~0.7–0.9 dB)`,
+			);
 
-		// Structural assertion (Phase 5, plan-loudness-target-tp-iteration,
-		// 2026-05-10): <= +0.15 dB overshoot (= peakTolerance default 0.10
-		// + 0.05 dB measurement / damping slack). Tightened from the
-		// predecessor plan's +0.3 dB bound now that the iterator clamps
-		// post-IIR peak overshoot via per-attempt `peakGainDb` proportional
-		// feedback. Observed at Phase 3 close on this fixture: +0.044 dB
-		// (an order of magnitude under +0.15 dB). If this regresses past
-		// +0.15 dB, escalate per the iteration plan's Phase 5 pitfall
-		// note — either the AA balance has broken, a max-pool half-width
-		// / IIR alpha mismatch at 4× rate has re-introduced Effect (2),
-		// or the iterator's proportional-feedback damping is too
-		// aggressive (try `PEAK_DAMPING = 0.5`).
-		expect(outputTruePeakDb).toBeLessThanOrEqual(targetTp + 0.15);
-	}, TP_TEST_TIMEOUT_MS);
+			// Structural assertion (Phase 5, plan-loudness-target-tp-iteration,
+			// 2026-05-10): <= +0.15 dB overshoot (= peakTolerance default 0.10
+			// + 0.05 dB measurement / damping slack). Tightened from the
+			// predecessor plan's +0.3 dB bound now that the iterator clamps
+			// post-IIR peak overshoot via per-attempt `peakGainDb` proportional
+			// feedback. Observed at Phase 3 close on this fixture: +0.044 dB
+			// (an order of magnitude under +0.15 dB). If this regresses past
+			// +0.15 dB, escalate per the iteration plan's Phase 5 pitfall
+			// note — either the AA balance has broken, a max-pool half-width
+			// / IIR alpha mismatch at 4× rate has re-introduced Effect (2),
+			// or the iterator's proportional-feedback damping is too
+			// aggressive (try `PEAK_DAMPING = 0.5`).
+			expect(outputTruePeakDb).toBeLessThanOrEqual(targetTp + 0.15);
+		},
+		TP_TEST_TIMEOUT_MS,
+	);
 });
 
 /**
@@ -478,7 +489,11 @@ async function snapshotArrayBuffersAfterGc(): Promise<number> {
  * carried across trials. The caller is responsible for forcing GC
  * BEFORE the call to establish a clean baseline.
  */
-async function runProcessAndMeasureArrayBuffers(frames: number, sampleRate: number, baselineBytes: number): Promise<{
+async function runProcessAndMeasureArrayBuffers(
+	frames: number,
+	sampleRate: number,
+	baselineBytes: number,
+): Promise<{
 	peakArrayBuffersBytes: number;
 	postProcessRetainedBytes: number;
 	winningEnvelopeLength: number;
@@ -489,13 +504,16 @@ async function runProcessAndMeasureArrayBuffers(frames: number, sampleRate: numb
 	await buffer.write([samples], sampleRate, 32);
 	await buffer.flushWrites();
 
-	const stream = new LoudnessTargetStream(loudnessTarget({
-		targetLufs: -20,
-		smoothing: 1,
-		tolerance: 0.5,
-		peakTolerance: 0.1,
-		maxAttempts: 10,
-	}), createTestStreamContext().context);
+	const stream = new LoudnessTargetStream(
+		loudnessTarget({
+			targetLufs: -20,
+			smoothing: 1,
+			tolerance: 0.5,
+			peakTolerance: 0.1,
+			maxAttempts: 10,
+		}),
+		createTestStreamContext().context,
+	);
 
 	let peakBytes = baselineBytes;
 	const samplePeak = (): void => {
@@ -561,176 +579,180 @@ function median(values: ReadonlyArray<number>): number {
 describe("LoudnessTarget memory regression", () => {
 	const MEMORY_TEST_TIMEOUT_MS = 600_000;
 
-	it("peak heap during _process scales with chunk size + bounded scratch + winning envelope, not source size", async () => {
-		const gc = (globalThis as { gc?: () => void }).gc;
+	it(
+		"peak heap during _process scales with chunk size + bounded scratch + winning envelope, not source size",
+		async () => {
+			const gc = (globalThis as { gc?: () => void }).gc;
 
-		if (gc === undefined) {
-			process.stderr.write(
-				"[loudness-target memory test] global.gc unavailable — `--expose-gc` is not wired into the vitest worker. " +
-					"Skipping the heap-delta assertion. The heavy config at packages/buffered-audio-nodes/vitest.heavy.config.ts " +
-					"sets `pool: 'forks'` with `execArgv: ['--expose-gc']`; if this warning fires, that wiring has regressed.\n",
-			);
+			if (gc === undefined) {
+				process.stderr.write(
+					"[loudness-target memory test] global.gc unavailable — `--expose-gc` is not wired into the vitest worker. " +
+						"Skipping the heap-delta assertion. The heavy config at packages/buffered-audio-nodes/vitest.heavy.config.ts " +
+						"sets `pool: 'forks'` with `execArgv: ['--expose-gc']`; if this warning fires, that wiring has regressed.\n",
+				);
 
-			// Emit a soft assertion failure so CI surfaces the gap. Per
-			// the plan: "DO NOT make the test silently pass when GC is
-			// unavailable — the regression test must actually run." We
-			// fail with a clear message rather than skip, so the
-			// regression test is never inert in CI.
-			expect.fail(
-				"global.gc is unavailable — `--expose-gc` plumbing has regressed. The memory regression test cannot run without it. " +
-					"Re-check packages/buffered-audio-nodes/vitest.heavy.config.ts.",
-			);
+				// Emit a soft assertion failure so CI surfaces the gap. Per
+				// the plan: "DO NOT make the test silently pass when GC is
+				// unavailable — the regression test must actually run." We
+				// fail with a clear message rather than skip, so the
+				// regression test is never inert in CI.
+				expect.fail(
+					"global.gc is unavailable — `--expose-gc` plumbing has regressed. The memory regression test cannot run without it. " +
+						"Re-check packages/buffered-audio-nodes/vitest.heavy.config.ts.",
+				);
 
-			return;
-		}
+				return;
+			}
 
-		const frames = MEMORY_TEST_FRAMES_PER_TRIAL;
-		// Post `plan-loudness-target-deterministic` Phase 2: iteration
-		// collapsed to a single solve + single apply pass. The buffer
-		// model is now:
-		//   1. `detectionEnvelope` cache at BASE rate (~10 MB ceiling
-		//      but actually much smaller — 1 channel × frames base-
-		//      rate samples × 4 bytes ≈ 11 MB on this fixture, just
-		//      above the threshold and spilling). Closed immediately
-		//      after the apply pass.
-		//   2. `forwardEnv` at BASE rate (~10 MB ceiling) — transient
-		//      Walk A output. Closed immediately after the backward
-		//      pass.
-		//   3. `minHeldEnv` at BASE rate (~10 MB ceiling) — transient
-		//      brick-wall ceiling. Closed immediately after the
-		//      backward pass.
-		//   4. `winningSmoothedEnvelopeBuffer` (`smoothedEnv` while
-		//      `_process` runs) at BASE rate (~10 MB ceiling) — the
-		//      survivor. Closed in `_destroy`.
-		// Plus a transient `iirForwardOrder` ChunkBuffer (~10 MB)
-		// allocated INSIDE `applyBackwardPassOverChunkBuffer` for the
-		// reverse-then-clamp path; coexists with detection / forward /
-		// minHeld / smoothed for the duration of the clamp pass, then
-		// closes before any of the persistent four. Peak coexistence
-		// during the clamp pass: 5 base-rate ChunkBuffers.
-		//
-		// The prior 2D-iteration design (pre-Phase-2) carried a
-		// double-buffered active/winning swap plus the `activeBufferA`
-		// / `activeBufferB` lifecycle — 5 base-rate ChunkBuffers
-		// permanently and 6 momentarily during the clamp pass. Phase 2
-		// removes the swap mechanic; the solver runs ONE apply pass
-		// against the solved anchors and never holds two
-		// smoothed-envelope buffers concurrently.
-		//
-		// Plus per-chunk apply scratch (bounded by `CHUNK_FRAMES`),
-		// per-chunk allocations inside `applyForwardPass` and
-		// `applyBackwardPassOverChunkBuffer`, and the source-channel
-		// `Float32Array` held by the test's in-memory `ChunkBuffer`
-		// scratch (the 1-min fixture is just above the 10 MB threshold
-		// and spills).
-		const chunkBufferMemoryCeilingBytes = 10 * 1024 * 1024; // ~10 MB per ChunkBuffer in RAM
-		const fileChunkBuffersDuringIteration = 5; // detection, forward, minHeld, smoothed, transient iirForwardOrder during clamp
-		const sourceChannelBytes = frames * FLOAT32_BYTES; // in-memory ChunkBuffer scratch keeps the source flat
-		// Per-chunk allocation churn during iteration. Each chunk
-		// (~705 KB at the upsampled rate, ~176K samples × 4 bytes)
-		// allocates: `Float32Array.from(input)` inside
-		// `applyForwardPass`, `Float32Array` returns from
-		// `Oversampler.downsample`, per-channel transformed scratch
-		// (kept by `LoudnessAccumulator.push` + `TruePeakAccumulator.push`).
-		// GC timing affects how many of these coexist during the
-		// sampling interval. Empirically the peak fluctuates ~10-20 MB
-		// trial-to-trial under full-suite parallel load. Budget ~80 MB
-		// here to absorb that churn comfortably — far below the
-		// pre-Phase-3 138 MB structural component (3 × frames × 16
-		// bytes for forwardScratch / winning / defensive-copy).
-		const perChunkChurnBytes = 50 * 1024 * 1024;
-		const peakBoundBytes
-			= fileChunkBuffersDuringIteration * chunkBufferMemoryCeilingBytes
-			+ sourceChannelBytes
-			+ perChunkChurnBytes
-			+ MEMORY_TEST_SLACK_BYTES;
-		// Sanity: the bound is substantially below the pre-Phase-3
-		// `frames × 48 + 100 MB` ceiling. If a regression to flat
-		// `Float32Array` envelopes lands, the resulting peak will
-		// exceed this bound by ~46 MB (one envelope's worth of flat
-		// frames × 16 bytes) and the assertion below catches it.
-		const prePhase3Bound = frames * 48 + MEMORY_TEST_SLACK_BYTES;
+			const frames = MEMORY_TEST_FRAMES_PER_TRIAL;
+			// Post `plan-loudness-target-deterministic` Phase 2: iteration
+			// collapsed to a single solve + single apply pass. The buffer
+			// model is now:
+			//   1. `detectionEnvelope` cache at BASE rate (~10 MB ceiling
+			//      but actually much smaller — 1 channel × frames base-
+			//      rate samples × 4 bytes ≈ 11 MB on this fixture, just
+			//      above the threshold and spilling). Closed immediately
+			//      after the apply pass.
+			//   2. `forwardEnv` at BASE rate (~10 MB ceiling) — transient
+			//      Walk A output. Closed immediately after the backward
+			//      pass.
+			//   3. `minHeldEnv` at BASE rate (~10 MB ceiling) — transient
+			//      brick-wall ceiling. Closed immediately after the
+			//      backward pass.
+			//   4. `winningSmoothedEnvelopeBuffer` (`smoothedEnv` while
+			//      `_process` runs) at BASE rate (~10 MB ceiling) — the
+			//      survivor. Closed in `_destroy`.
+			// Plus a transient `iirForwardOrder` ChunkBuffer (~10 MB)
+			// allocated INSIDE `applyBackwardPassOverChunkBuffer` for the
+			// reverse-then-clamp path; coexists with detection / forward /
+			// minHeld / smoothed for the duration of the clamp pass, then
+			// closes before any of the persistent four. Peak coexistence
+			// during the clamp pass: 5 base-rate ChunkBuffers.
+			//
+			// The prior 2D-iteration design (pre-Phase-2) carried a
+			// double-buffered active/winning swap plus the `activeBufferA`
+			// / `activeBufferB` lifecycle — 5 base-rate ChunkBuffers
+			// permanently and 6 momentarily during the clamp pass. Phase 2
+			// removes the swap mechanic; the solver runs ONE apply pass
+			// against the solved anchors and never holds two
+			// smoothed-envelope buffers concurrently.
+			//
+			// Plus per-chunk apply scratch (bounded by `CHUNK_FRAMES`),
+			// per-chunk allocations inside `applyForwardPass` and
+			// `applyBackwardPassOverChunkBuffer`, and the source-channel
+			// `Float32Array` held by the test's in-memory `ChunkBuffer`
+			// scratch (the 1-min fixture is just above the 10 MB threshold
+			// and spills).
+			const chunkBufferMemoryCeilingBytes = 10 * 1024 * 1024; // ~10 MB per ChunkBuffer in RAM
+			const fileChunkBuffersDuringIteration = 5; // detection, forward, minHeld, smoothed, transient iirForwardOrder during clamp
+			const sourceChannelBytes = frames * FLOAT32_BYTES; // in-memory ChunkBuffer scratch keeps the source flat
+			// Per-chunk allocation churn during iteration. Each chunk
+			// (~705 KB at the upsampled rate, ~176K samples × 4 bytes)
+			// allocates: `Float32Array.from(input)` inside
+			// `applyForwardPass`, `Float32Array` returns from
+			// `Oversampler.downsample`, per-channel transformed scratch
+			// (kept by `LoudnessAccumulator.push` + `TruePeakAccumulator.push`).
+			// GC timing affects how many of these coexist during the
+			// sampling interval. Empirically the peak fluctuates ~10-20 MB
+			// trial-to-trial under full-suite parallel load. Budget ~80 MB
+			// here to absorb that churn comfortably — far below the
+			// pre-Phase-3 138 MB structural component (3 × frames × 16
+			// bytes for forwardScratch / winning / defensive-copy).
+			const perChunkChurnBytes = 50 * 1024 * 1024;
+			const peakBoundBytes =
+				fileChunkBuffersDuringIteration * chunkBufferMemoryCeilingBytes +
+				sourceChannelBytes +
+				perChunkChurnBytes +
+				MEMORY_TEST_SLACK_BYTES;
+			// Sanity: the bound is substantially below the pre-Phase-3
+			// `frames × 48 + 100 MB` ceiling. If a regression to flat
+			// `Float32Array` envelopes lands, the resulting peak will
+			// exceed this bound by ~46 MB (one envelope's worth of flat
+			// frames × 16 bytes) and the assertion below catches it.
+			const prePhase3Bound = frames * 48 + MEMORY_TEST_SLACK_BYTES;
 
-		expect(peakBoundBytes).toBeLessThan(prePhase3Bound);
+			expect(peakBoundBytes).toBeLessThan(prePhase3Bound);
 
-		// Retained bound: only the winning-envelope buffer survives
-		// `_process` (closed in `_destroy`, not before) post the
-		// 2026-05-13 base-rate-downstream rewrite — the upsampled-
-		// source cache no longer exists. Plus the source-channel
-		// in-memory ChunkBuffer copy and per-chunk scratch reclaimed
-		// by GC. Slack absorbs GC residue / JIT artefacts.
-		const retainedBoundBytes
-			= 1 * chunkBufferMemoryCeilingBytes // winning envelope only (no upsampled-source post-rewrite)
-			+ sourceChannelBytes
-			+ MEMORY_TEST_SLACK_BYTES;
+			// Retained bound: only the winning-envelope buffer survives
+			// `_process` (closed in `_destroy`, not before) post the
+			// 2026-05-13 base-rate-downstream rewrite — the upsampled-
+			// source cache no longer exists. Plus the source-channel
+			// in-memory ChunkBuffer copy and per-chunk scratch reclaimed
+			// by GC. Slack absorbs GC residue / JIT artefacts.
+			const retainedBoundBytes =
+				1 * chunkBufferMemoryCeilingBytes + // winning envelope only (no upsampled-source post-rewrite)
+				sourceChannelBytes +
+				MEMORY_TEST_SLACK_BYTES;
 
-		const peakDeltas: Array<number> = [];
-		const retainedDeltas: Array<number> = [];
-		const winningLengths: Array<number> = [];
+			const peakDeltas: Array<number> = [];
+			const retainedDeltas: Array<number> = [];
+			const winningLengths: Array<number> = [];
 
-		for (let trialIdx = 0; trialIdx < MEMORY_TEST_TRIALS; trialIdx++) {
-			const baselineBytes = await snapshotArrayBuffersAfterGc();
-			const trial = await runProcessAndMeasureArrayBuffers(frames, TEST_SAMPLE_RATE, baselineBytes);
-			const peakDelta = trial.peakArrayBuffersBytes - baselineBytes;
-			const retainedDelta = trial.postProcessRetainedBytes - baselineBytes;
+			for (let trialIdx = 0; trialIdx < MEMORY_TEST_TRIALS; trialIdx++) {
+				const baselineBytes = await snapshotArrayBuffersAfterGc();
+				const trial = await runProcessAndMeasureArrayBuffers(frames, TEST_SAMPLE_RATE, baselineBytes);
+				const peakDelta = trial.peakArrayBuffersBytes - baselineBytes;
+				const retainedDelta = trial.postProcessRetainedBytes - baselineBytes;
 
-			peakDeltas.push(peakDelta);
-			retainedDeltas.push(retainedDelta);
-			winningLengths.push(trial.winningEnvelopeLength);
+				peakDeltas.push(peakDelta);
+				retainedDeltas.push(retainedDelta);
+				winningLengths.push(trial.winningEnvelopeLength);
+
+				console.log(
+					`[loudness-target memory] trial=${trialIdx + 1}/${MEMORY_TEST_TRIALS} ` +
+						`peakDeltaMB=${(peakDelta / (1024 * 1024)).toFixed(1)} ` +
+						`retainedDeltaMB=${(retainedDelta / (1024 * 1024)).toFixed(1)} ` +
+						`winningEnvelopeLen=${trial.winningEnvelopeLength}`,
+				);
+			}
+
+			const medianPeak = median(peakDeltas);
+			const medianRetained = median(retainedDeltas);
 
 			console.log(
-				`[loudness-target memory] trial=${trialIdx + 1}/${MEMORY_TEST_TRIALS} ` +
-					`peakDeltaMB=${(peakDelta / (1024 * 1024)).toFixed(1)} ` +
-					`retainedDeltaMB=${(retainedDelta / (1024 * 1024)).toFixed(1)} ` +
-					`winningEnvelopeLen=${trial.winningEnvelopeLength}`,
+				`[loudness-target memory] medianPeakDeltaMB=${(medianPeak / (1024 * 1024)).toFixed(1)} ` +
+					`boundMB=${(peakBoundBytes / (1024 * 1024)).toFixed(1)} ` +
+					`medianRetainedDeltaMB=${(medianRetained / (1024 * 1024)).toFixed(1)} ` +
+					`retainedBoundMB=${(retainedBoundBytes / (1024 * 1024)).toFixed(1)}`,
 			);
-		}
 
-		const medianPeak = median(peakDeltas);
-		const medianRetained = median(retainedDeltas);
+			// Assertion 1 — peak-heap bound. Catches catastrophic
+			// regressions such as accidental flat `frames × 16` byte
+			// `Float32Array` envelopes (the pre-Phase-3 state) — that
+			// would re-add ~46 MB to the bound on this fixture, which
+			// already includes 100 MB slack. Post `plan-loudness-target-
+			// deterministic` Phase 2 the structural component is ~5 ×
+			// 10 MB = 50 MB of ChunkBuffer RAM (detection / forwardEnv /
+			// minHeldEnv / smoothedEnv / transient iirForwardOrder during
+			// the clamp pass) plus the source-channel in-memory ChunkBuffer
+			// copy plus per-chunk scratch.
+			expect(medianPeak).toBeLessThan(peakBoundBytes);
 
-		console.log(
-			`[loudness-target memory] medianPeakDeltaMB=${(medianPeak / (1024 * 1024)).toFixed(1)} ` +
-				`boundMB=${(peakBoundBytes / (1024 * 1024)).toFixed(1)} ` +
-				`medianRetainedDeltaMB=${(medianRetained / (1024 * 1024)).toFixed(1)} ` +
-				`retainedBoundMB=${(retainedBoundBytes / (1024 * 1024)).toFixed(1)}`,
-		);
+			// Assertion 2 — post-`_process` retained heap is bounded by
+			// the persistent `winningSmoothedEnvelopeBuffer` RAM ceiling
+			// (the only ChunkBuffer that survives `_process` post Phase 2
+			// — detection / forward / minHeld are all closed before
+			// `_process` returns) + the source-channel in-memory
+			// `ChunkBuffer` copy + slack. The winning envelope is a
+			// ~10 MB ChunkBuffer ceiling; the source channel is
+			// `frames × 4` bytes flat. If a regression accidentally
+			// retains a transient envelope as a flat `Float32Array`
+			// (e.g. assigning `forwardScratch` to a stream-class field),
+			// this assertion fires on the extra `frames × 16` bytes
+			// failing to release.
+			expect(medianRetained).toBeLessThan(retainedBoundBytes);
 
-		// Assertion 1 — peak-heap bound. Catches catastrophic
-		// regressions such as accidental flat `frames × 16` byte
-		// `Float32Array` envelopes (the pre-Phase-3 state) — that
-		// would re-add ~46 MB to the bound on this fixture, which
-		// already includes 100 MB slack. Post `plan-loudness-target-
-		// deterministic` Phase 2 the structural component is ~5 ×
-		// 10 MB = 50 MB of ChunkBuffer RAM (detection / forwardEnv /
-		// minHeldEnv / smoothedEnv / transient iirForwardOrder during
-		// the clamp pass) plus the source-channel in-memory ChunkBuffer
-		// copy plus per-chunk scratch.
-		expect(medianPeak).toBeLessThan(peakBoundBytes);
-
-		// Assertion 2 — post-`_process` retained heap is bounded by
-		// the persistent `winningSmoothedEnvelopeBuffer` RAM ceiling
-		// (the only ChunkBuffer that survives `_process` post Phase 2
-		// — detection / forward / minHeld are all closed before
-		// `_process` returns) + the source-channel in-memory
-		// `ChunkBuffer` copy + slack. The winning envelope is a
-		// ~10 MB ChunkBuffer ceiling; the source channel is
-		// `frames × 4` bytes flat. If a regression accidentally
-		// retains a transient envelope as a flat `Float32Array`
-		// (e.g. assigning `forwardScratch` to a stream-class field),
-		// this assertion fires on the extra `frames × 16` bytes
-		// failing to release.
-		expect(medianRetained).toBeLessThan(retainedBoundBytes);
-
-		// Assertion 3 — winning envelope is at the expected `frames
-		// * 4` frames count (single-channel `ChunkBuffer.frames`
-		// post-Phase-3). Sanity-checks that the iteration actually
-		// produced an envelope — if a trial's pass-through bail
-		// short-circuited (`winningSmoothedEnvelopeBuffer` is `null`
-		// or zero-frames), the retained-heap bound would look
-		// artificially tight and the test would lose its teeth.
-		for (const length of winningLengths) {
-			expect(length).toBe(frames);
-		}
-	}, MEMORY_TEST_TIMEOUT_MS);
+			// Assertion 3 — winning envelope is at the expected `frames
+			// * 4` frames count (single-channel `ChunkBuffer.frames`
+			// post-Phase-3). Sanity-checks that the iteration actually
+			// produced an envelope — if a trial's pass-through bail
+			// short-circuited (`winningSmoothedEnvelopeBuffer` is `null`
+			// or zero-frames), the retained-heap bound would look
+			// artificially tight and the test would lose its teeth.
+			for (const length of winningLengths) {
+				expect(length).toBe(frames);
+			}
+		},
+		MEMORY_TEST_TIMEOUT_MS,
+	);
 });

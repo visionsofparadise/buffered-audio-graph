@@ -26,7 +26,10 @@ describe("computeLoudnessRange", () => {
 describe("getLraConsideredStats", () => {
 	it("returns infinite anchors when no value survives the absolute gate", () => {
 		expect(getLraConsideredStats([])).toEqual({ min: Number.POSITIVE_INFINITY, median: Number.POSITIVE_INFINITY });
-		expect(getLraConsideredStats([-80, -71])).toEqual({ min: Number.POSITIVE_INFINITY, median: Number.POSITIVE_INFINITY });
+		expect(getLraConsideredStats([-80, -71])).toEqual({
+			min: Number.POSITIVE_INFINITY,
+			median: Number.POSITIVE_INFINITY,
+		});
 	});
 
 	it("returns the project-local minimum and median of the gated set", () => {

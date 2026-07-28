@@ -9,7 +9,7 @@ export async function selectSmokeTab(page: Page): Promise<void> {
 	if (!closeButton) throw new Error("Persisted smoke tab was not found");
 
 	await closeButton.evaluate((element) => {
-		(element.parentElement)?.click();
+		element.parentElement?.click();
 	});
 
 	const deadline = Date.now() + 10000;

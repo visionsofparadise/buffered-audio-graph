@@ -22,9 +22,10 @@ export function BooleanRow({
 	readonly onParameterUnset?: (name: string) => void;
 }) {
 	const controlDisabled = param.optional && !param.defined;
-	const setDefinedHandler = onParameterChange || onParameterUnset
-		? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-		: undefined;
+	const setDefinedHandler =
+		onParameterChange || onParameterUnset
+			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
+			: undefined;
 
 	return (
 		<div className={cn("flex items-center justify-between gap-3", dimmed && "opacity-40")}>

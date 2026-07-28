@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { BufferedAudioNode } from "../node";
 import type { Block } from "../node/stream/block";
-import { BufferedSourceStream, SourceNode, type SourceMetadata, type SourceNodeProperties } from "../node/stream/source";
+import {
+	BufferedSourceStream,
+	SourceNode,
+	type SourceMetadata,
+	type SourceNodeProperties,
+} from "../node/stream/source";
 import { BufferedTargetStream, TargetNode, type TargetNodeProperties } from "../node/stream/target";
 import { createRenderJobs } from "./create-render-jobs";
 import type { GraphDefinition, NodeRegistry } from "./definition";
@@ -77,8 +82,20 @@ describe("createRenderJobs parameter substitution", () => {
 		name: "Test",
 		apiVersion: 1,
 		nodes: [
-			{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "path-source", parameters: { path: "{{dir}}/in.wav" } },
-			{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "path-target", parameters: { path: "{{dir}}/out.wav" } },
+			{
+				id: "s",
+				packageName: "test",
+				packageVersion: "1.0.0",
+				nodeName: "path-source",
+				parameters: { path: "{{dir}}/in.wav" },
+			},
+			{
+				id: "t",
+				packageName: "test",
+				packageVersion: "1.0.0",
+				nodeName: "path-target",
+				parameters: { path: "{{dir}}/out.wav" },
+			},
 		],
 		edges: [{ from: "s", to: "t" }],
 	};

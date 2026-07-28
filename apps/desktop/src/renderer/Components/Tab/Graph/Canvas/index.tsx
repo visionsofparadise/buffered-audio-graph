@@ -35,7 +35,8 @@ interface Props {
 }
 
 export const GraphCanvas = retrack<Props>(({ context }: Props) => {
-	const { startRender, abortRender, clearRenderError, surfaceRenderError, activeJobId, processingNodes, renderError } = useRenderJob(context);
+	const { startRender, abortRender, clearRenderError, surfaceRenderError, activeJobId, processingNodes, renderError } =
+		useRenderJob(context);
 
 	const initialNodes = useMemo(
 		() => buildReactFlowNodes(context),
@@ -112,18 +113,17 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 
 			if (!graphNode) return;
 
-			const { schema } = lookupNode(
-				graphNode.packageName,
-				graphNode.packageVersion,
-				graphNode.nodeName,
-				context,
-			);
+			const { schema } = lookupNode(graphNode.packageName, graphNode.packageVersion, graphNode.nodeName, context);
 			const prop = schemaPropertyAtPath(schema, path);
 
 			const extensions = prop?.accept
-				? prop.accept.split(",").map((entry) => entry.trim().replace(/^\./, "")).filter((entry) => entry !== "")
+				? prop.accept
+						.split(",")
+						.map((entry) => entry.trim().replace(/^\./, ""))
+						.filter((entry) => entry !== "")
 				: [];
-			const filters = extensions.length > 0 ? [{ name: extensions.join(", ").toUpperCase(), extensions }] : undefined;
+			const filters =
+				extensions.length > 0 ? [{ name: extensions.join(", ").toUpperCase(), extensions }] : undefined;
 
 			if (prop?.mode === "save") {
 				let current: unknown = graphNode.parameters;
@@ -174,7 +174,11 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 	);
 
 	const statFile = useCallback(
-		(value: string) => context.main.stat(value).then((stats) => stats.isFile).catch(() => false),
+		(value: string) =>
+			context.main
+				.stat(value)
+				.then((stats) => stats.isFile)
+				.catch(() => false),
 		[context.main],
 	);
 

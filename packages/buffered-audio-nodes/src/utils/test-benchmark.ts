@@ -13,7 +13,12 @@ export interface BenchmarkResult {
 	readonly realTimeMultiplier: number;
 }
 
-export async function runBenchmark(name: string, transform: TransformNode, inputPath: string, renderOptions?: RenderOptions): Promise<BenchmarkResult> {
+export async function runBenchmark(
+	name: string,
+	transform: TransformNode,
+	inputPath: string,
+	renderOptions?: RenderOptions,
+): Promise<BenchmarkResult> {
 	const tempPath = resolve(tmpdir(), `ban-bench-${randomBytes(8).toString("hex")}.wav`);
 
 	try {

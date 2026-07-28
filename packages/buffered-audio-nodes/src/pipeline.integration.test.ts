@@ -35,7 +35,9 @@ describe("Pipeline integration", () => {
 			await source.createRenderJob().render();
 
 			const outputData = await readFile(outputPath);
-			const outputWav = new WaveFile(new Uint8Array(outputData.buffer, outputData.byteOffset, outputData.byteLength));
+			const outputWav = new WaveFile(
+				new Uint8Array(outputData.buffer, outputData.byteOffset, outputData.byteLength),
+			);
 			outputWav.toBitDepth("32f");
 			const rawOutput = outputWav.getSamples(false, Float64Array) as unknown;
 			const outputSamples = new Float32Array(rawOutput as Float64Array);

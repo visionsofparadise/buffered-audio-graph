@@ -19,7 +19,12 @@ export function deinterleave(buffer: Buffer, channels: number): Array<Float32Arr
 	return samples;
 }
 
-export function buildBlock(samples: Array<Float32Array>, offset: number, sampleRate?: number, bitDepth?: number): Block {
+export function buildBlock(
+	samples: Array<Float32Array>,
+	offset: number,
+	sampleRate?: number,
+	bitDepth?: number,
+): Block {
 	return { samples, offset, sampleRate: sampleRate ?? 0, bitDepth: bitDepth ?? 0 };
 }
 

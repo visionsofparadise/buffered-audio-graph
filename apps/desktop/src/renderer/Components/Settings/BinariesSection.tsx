@@ -49,33 +49,32 @@ export const BinariesSection = retrack<Props>(({ context }: Props) => {
 
 	return (
 		<div>
-			{binaries.length === 0 && <p className="text-dimmed text-xs">No binary dependencies declared by installed nodes.</p>}
+			{binaries.length === 0 && (
+				<p className="text-dimmed text-xs">No binary dependencies declared by installed nodes.</p>
+			)}
 
 			<ul className="flex flex-col gap-2">
 				{binaries.map((binary) => {
 					const isBundled = binary.currentPath !== undefined && bundledPaths.has(binary.currentPath);
 
 					return (
-						<li
-							key={binary.name}
-							className="flex items-center gap-2"
-						>
+						<li key={binary.name} className="flex items-center gap-2">
 							<span className="type-label text-text-primary w-32">{binary.name}</span>
 							<span className="text-sm flex-1 truncate flex items-center gap-2">
 								{binary.currentPath ? (
 									<>
 										<span className="text-text-secondary truncate">{binary.currentPath}</span>
-										{isBundled && <span className="type-label text-xs text-dimmed bg-surface px-1.5 shrink-0">Bundled default</span>}
+										{isBundled && (
+											<span className="type-label text-xs text-dimmed bg-surface px-1.5 shrink-0">
+												Bundled default
+											</span>
+										)}
 									</>
 								) : (
 									<span className="text-dimmed">Not configured</span>
 								)}
 							</span>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => void handleBrowse(binary.name)}
-							>
+							<Button variant="outline" size="sm" onClick={() => void handleBrowse(binary.name)}>
 								Browse
 							</Button>
 						</li>

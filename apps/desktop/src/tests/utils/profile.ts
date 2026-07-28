@@ -44,7 +44,9 @@ export interface PersistedGraphState {
 
 export function readGraphPositions(bagId: string): Record<string, { x: number; y: number }> {
 	try {
-		const graphState = JSON.parse(readFileSync(join(PROFILE_DIR, "graphs", `${bagId}.json`), "utf8")) as PersistedGraphState;
+		const graphState = JSON.parse(
+			readFileSync(join(PROFILE_DIR, "graphs", `${bagId}.json`), "utf8"),
+		) as PersistedGraphState;
 
 		return graphState.positions ?? {};
 	} catch {
@@ -52,7 +54,12 @@ export function readGraphPositions(bagId: string): Record<string, { x: number; y
 	}
 }
 
-export async function waitForPositionEntry(bagId: string, nodeId: string, present: boolean, timeoutMs: number): Promise<boolean> {
+export async function waitForPositionEntry(
+	bagId: string,
+	nodeId: string,
+	present: boolean,
+	timeoutMs: number,
+): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
 
 	while (Date.now() < deadline) {
@@ -98,7 +105,11 @@ export function readVst3FirstStage(): PersistedStage | null {
 
 export function readBuiltinVersion(): string | null {
 	try {
-		return readPersistedBag().nodes.find((node) => typeof node.packageVersion === "string" && node.packageVersion.length > 0)?.packageVersion ?? null;
+		return (
+			readPersistedBag().nodes.find(
+				(node) => typeof node.packageVersion === "string" && node.packageVersion.length > 0,
+			)?.packageVersion ?? null
+		);
 	} catch {
 		return null;
 	}
@@ -118,12 +129,14 @@ export function readRestoredDependencyState(): PersistedPackage | null {
 	try {
 		const state = JSON.parse(readFileSync(join(PROFILE_DIR, "state.json"), "utf8")) as PersistedState;
 
-		return state.packages?.find(
-			(entry) =>
-				entry.origin === "dependency" &&
-				entry.name === BUILTIN_PACKAGE &&
-				entry.version === STALE_BUILTIN_VERSION,
-		) ?? null;
+		return (
+			state.packages?.find(
+				(entry) =>
+					entry.origin === "dependency" &&
+					entry.name === BUILTIN_PACKAGE &&
+					entry.version === STALE_BUILTIN_VERSION,
+			) ?? null
+		);
 	} catch {
 		return null;
 	}

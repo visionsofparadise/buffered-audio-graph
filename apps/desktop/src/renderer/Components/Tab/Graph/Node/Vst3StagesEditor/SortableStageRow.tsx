@@ -48,11 +48,7 @@ export function SortableStageRow({
 	const groups = groupEntries(entries);
 
 	return (
-		<div
-			ref={setNodeRef}
-			style={style}
-			className="flex flex-col gap-2"
-		>
+		<div ref={setNodeRef} style={style} className="flex flex-col gap-2">
 			<div className="flex items-center gap-1.5">
 				<div
 					className="nodrag flex cursor-grab items-center text-text-secondary active:cursor-grabbing"
@@ -76,25 +72,21 @@ export function SortableStageRow({
 							{title ?? "Select plugin…"}
 						</button>
 					</DropdownMenuTrigger>
-					<DropdownMenuContent
-						align="start"
-						className="max-h-[400px] overflow-y-auto"
-					>
+					<DropdownMenuContent align="start" className="max-h-[400px] overflow-y-auto">
 						{entries.length === 0 ? (
 							<DropdownMenuLabel>Scanning…</DropdownMenuLabel>
 						) : (
 							groups.map((root) => (
 								<DropdownMenuGroup key={root.rootPath}>
-									<DropdownMenuLabel
-										className="truncate"
-										title={root.rootPath}
-									>
+									<DropdownMenuLabel className="truncate" title={root.rootPath}>
 										{basename(root.rootPath) || root.rootPath}
 									</DropdownMenuLabel>
 									{root.vendors.map((vendor) => (
 										<DropdownMenuGroup key={`${root.rootPath}::${vendor.vendorFolder}`}>
 											{vendor.vendorFolder && (
-												<DropdownMenuLabel className="pl-5 text-dimmed">{vendor.vendorFolder}</DropdownMenuLabel>
+												<DropdownMenuLabel className="pl-5 text-dimmed">
+													{vendor.vendorFolder}
+												</DropdownMenuLabel>
 											)}
 											{vendor.entries.map((entry) => (
 												<DropdownMenuItem

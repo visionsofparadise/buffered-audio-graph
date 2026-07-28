@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { BlockBuffer, type Block, type LogPayload, type RenderEvents, type StreamSetupContext, type StreamContext } from "@buffered-audio/core";
+import {
+	BlockBuffer,
+	type Block,
+	type LogPayload,
+	type RenderEvents,
+	type StreamSetupContext,
+	type StreamContext,
+} from "@buffered-audio/core";
 import { vst3, Vst3Stream } from ".";
 import { processStreamingThroughVstHost, spawnVstHostReady, VstHostExitedBeforeReadyError } from "./utils/process";
 
@@ -45,7 +52,11 @@ const renderContext = (): StreamContext => ({ events: new EventEmitter() as Rend
 // pipe (setup), reads the enqueued output blocks back, and concatenates them per channel for round-trip
 // comparison. Reading to completion runs setup -> buffer-accumulate -> flush(transform) -> destroy — the
 // same lifecycle a real render drives, so the stages-JSON file is written and live during transform.
-const processWholeFile = async (stream: Vst3Stream, channels: Array<Float32Array>, sampleRate = 44100): Promise<Array<Float32Array>> => {
+const processWholeFile = async (
+	stream: Vst3Stream,
+	channels: Array<Float32Array>,
+	sampleRate = 44100,
+): Promise<Array<Float32Array>> => {
 	const input = new ReadableStream<Block>({
 		start: (controller) => {
 			controller.enqueue({ samples: channels, offset: 0, sampleRate, bitDepth: 32 });
@@ -94,19 +105,22 @@ describe("Vst3Stream subprocess lifecycle", () => {
 
 		events.on("log", (_identity, payload) => logs.push(payload));
 
-		const stream = new Vst3Stream(vst3({
-			vstHostPath: process.execPath,
-			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
-			extraArgs: [stubBinary],
-			monitorIntervalMs: 20,
-			monitorSampler: async () => {
-				monitorSampleCount += 1;
+		const stream = new Vst3Stream(
+			vst3({
+				vstHostPath: process.execPath,
+				stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
+				extraArgs: [stubBinary],
+				monitorIntervalMs: 20,
+				monitorSampler: async () => {
+					monitorSampleCount += 1;
 
-				if (monitorSampleCount === 3) throw new Error("test sample failure");
+					if (monitorSampleCount === 3) throw new Error("test sample failure");
 
-				return { cpuMs: monitorSampleCount * 100, pidCount: 1 };
-			},
-		}), { events, nextStreamId: () => 0 });
+					return { cpuMs: monitorSampleCount * 100, pidCount: 1 };
+				},
+			}),
+			{ events, nextStreamId: () => 0 },
+		);
 
 		const channels = 2;
 		const frames = 8192;
@@ -136,13 +150,17 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			}
 		}
 
-		expect(logs.find((log) => log.message === "vst-host liveness")).toEqual(expect.objectContaining({
-			data: expect.objectContaining({ state: expect.stringMatching(/^(active|idle)$/) }),
-		}));
-		expect(logs.find((log) => log.message === "vst-host liveness sample failed")).toEqual(expect.objectContaining({
-			level: "warn",
-			data: { error: "Error: test sample failure" },
-		}));
+		expect(logs.find((log) => log.message === "vst-host liveness")).toEqual(
+			expect.objectContaining({
+				data: expect.objectContaining({ state: expect.stringMatching(/^(active|idle)$/) }),
+			}),
+		);
+		expect(logs.find((log) => log.message === "vst-host liveness sample failed")).toEqual(
+			expect.objectContaining({
+				level: "warn",
+				data: { error: "Error: test sample failure" },
+			}),
+		);
 		expect(logs.find((log) => log.message === "vst-host input")?.data).toEqual({
 			framesDone: frames,
 			framesTotal: frames,
@@ -155,7 +173,6 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			bytesDone: frames * channels * 4,
 			bytesTotal: frames * channels * 4,
 		});
-
 	}, 30_000);
 
 	it("preserves non-telemetry stderr and reports exact callback totals", async () => {
@@ -171,7 +188,15 @@ describe("Vst3Stream subprocess lifecycle", () => {
 		await buffer.flushWrites();
 
 		try {
-			const handle = await spawnVstHostReady(process.execPath, [stubBinary, "--stages-json", stagesPath, "--sample-rate", "48000", "--channels", "1"]);
+			const handle = await spawnVstHostReady(process.execPath, [
+				stubBinary,
+				"--stages-json",
+				stagesPath,
+				"--sample-rate",
+				"48000",
+				"--channels",
+				"1",
+			]);
 
 			await processStreamingThroughVstHost(handle, buffer, {
 				channelCount,
@@ -181,9 +206,21 @@ describe("Vst3Stream subprocess lifecycle", () => {
 				onOutputProgress: (progress) => outputProgress.push(progress),
 			});
 
-			expect(inputProgress.at(-1)).toEqual({ framesDone: frames, framesTotal: frames, bytesDone: frames * 4, bytesTotal: frames * 4 });
-			expect(outputProgress.at(-1)).toEqual({ framesDone: frames, framesTotal: frames, bytesDone: frames * 4, bytesTotal: frames * 4 });
-			expect(handle.getStderrTail()).toBe("stub-binary: ordinary diagnostic\nstub-binary: incomplete final diagnostic");
+			expect(inputProgress.at(-1)).toEqual({
+				framesDone: frames,
+				framesTotal: frames,
+				bytesDone: frames * 4,
+				bytesTotal: frames * 4,
+			});
+			expect(outputProgress.at(-1)).toEqual({
+				framesDone: frames,
+				framesTotal: frames,
+				bytesDone: frames * 4,
+				bytesTotal: frames * 4,
+			});
+			expect(handle.getStderrTail()).toBe(
+				"stub-binary: ordinary diagnostic\nstub-binary: incomplete final diagnostic",
+			);
 			expect(handle.getStderrTail()).not.toContain("VST_HOST_EVENT");
 
 			await buffer.reset();
@@ -197,11 +234,14 @@ describe("Vst3Stream subprocess lifecycle", () => {
 
 	it("handles a non-block-aligned buffer", async () => {
 		// Whole-file mode has no per-block alignment requirement; any positive frame count must round-trip.
-		const stream = new Vst3Stream(vst3({
-			vstHostPath: process.execPath,
-			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
-			extraArgs: [stubBinary],
-		}), renderContext());
+		const stream = new Vst3Stream(
+			vst3({
+				vstHostPath: process.execPath,
+				stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
+				extraArgs: [stubBinary],
+			}),
+			renderContext(),
+		);
 
 		const frames = 1500;
 		const samples: Array<Float32Array> = [Float32Array.from({ length: frames }, (_, i) => i / frames)];
@@ -214,7 +254,6 @@ describe("Vst3Stream subprocess lifecycle", () => {
 		for (let i = 0; i < frames; i++) {
 			expect(after[0]![i]).toBeCloseTo(before[i]!, 6);
 		}
-
 	}, 30_000);
 });
 
@@ -222,11 +261,14 @@ describe("Vst3Stream init-crash retry", () => {
 	it("re-spawns past a non-deterministic init crash and processes cleanly", async () => {
 		// Crashes (exit 3221225477 before READY) on the first 2 spawns, succeeds on the 3rd; retry is transparent.
 		const counter = await newCounterFile();
-		const stream = new Vst3Stream(vst3({
-			vstHostPath: process.execPath,
-			stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
-			extraArgs: [crashBinary, "--crash-file", counter, "--crash-count", "2", "--crash-code", "3221225477"],
-		}), renderContext());
+		const stream = new Vst3Stream(
+			vst3({
+				vstHostPath: process.execPath,
+				stages: [{ pluginPath: "/dev/null/ignored-by-stub.vst3" }],
+				extraArgs: [crashBinary, "--crash-file", counter, "--crash-count", "2", "--crash-code", "3221225477"],
+			}),
+			renderContext(),
+		);
 
 		const frames = 2048;
 		const samples: Array<Float32Array> = [Float32Array.from({ length: frames }, (_, i) => i / frames)];
@@ -246,9 +288,25 @@ describe("Vst3Stream init-crash retry", () => {
 	it("exhausts maxAttempts on a persistent crash and rejects with the typed error", async () => {
 		const counter = await newCounterFile();
 		const stagesPath = await writeStagesFile();
-		const args = [crashBinary, "--crash-file", counter, "--crash-count", "10", "--crash-code", "3221225477", "--stages-json", stagesPath, "--sample-rate", "48000", "--channels", "1"];
+		const args = [
+			crashBinary,
+			"--crash-file",
+			counter,
+			"--crash-count",
+			"10",
+			"--crash-code",
+			"3221225477",
+			"--stages-json",
+			stagesPath,
+			"--sample-rate",
+			"48000",
+			"--channels",
+			"1",
+		];
 
-		await expect(spawnVstHostReady(process.execPath, args, { maxAttempts: 3, backoffMs: 0 })).rejects.toBeInstanceOf(VstHostExitedBeforeReadyError);
+		await expect(spawnVstHostReady(process.execPath, args, { maxAttempts: 3, backoffMs: 0 })).rejects.toBeInstanceOf(
+			VstHostExitedBeforeReadyError,
+		);
 
 		expect(await readCount(counter)).toBe(3); // exactly maxAttempts spawns, no more
 	}, 30_000);
@@ -256,9 +314,25 @@ describe("Vst3Stream init-crash retry", () => {
 	it("does not retry a deterministic wrapper error (exit code 2)", async () => {
 		const counter = await newCounterFile();
 		const stagesPath = await writeStagesFile();
-		const args = [crashBinary, "--crash-file", counter, "--crash-count", "10", "--crash-code", "2", "--stages-json", stagesPath, "--sample-rate", "48000", "--channels", "1"];
+		const args = [
+			crashBinary,
+			"--crash-file",
+			counter,
+			"--crash-count",
+			"10",
+			"--crash-code",
+			"2",
+			"--stages-json",
+			stagesPath,
+			"--sample-rate",
+			"48000",
+			"--channels",
+			"1",
+		];
 
-		await expect(spawnVstHostReady(process.execPath, args, { maxAttempts: 5, backoffMs: 0 })).rejects.toBeInstanceOf(VstHostExitedBeforeReadyError);
+		await expect(spawnVstHostReady(process.execPath, args, { maxAttempts: 5, backoffMs: 0 })).rejects.toBeInstanceOf(
+			VstHostExitedBeforeReadyError,
+		);
 
 		expect(await readCount(counter)).toBe(1); // failed fast — single spawn, no retries
 	}, 30_000);

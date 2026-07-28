@@ -4,7 +4,10 @@ import type { SourceNode } from "../node/stream/source";
 import { resolvePackageVersion } from "../utils/resolve-package-version";
 import { validateGraphDefinition, type GraphDefinition, type GraphEdge, type GraphNode } from "./definition";
 
-export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: string; id?: string; anchor?: string }): GraphDefinition {
+export function pack(
+	sources: ReadonlyArray<SourceNode>,
+	metadata?: { name?: string; id?: string; anchor?: string },
+): GraphDefinition {
 	const visited = new Set<BufferedAudioNode>();
 	const nodes: Array<GraphNode> = [];
 	const edges: Array<GraphEdge> = [];
@@ -19,7 +22,9 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 		const anchor = metadata?.anchor ?? process.argv[1];
 
 		if (anchor === undefined) {
-			throw new Error("Cannot resolve package versions: no anchor was provided and process.argv[1] is undefined (REPL or `node -e`). Pass `anchor: import.meta.url` to pack().");
+			throw new Error(
+				"Cannot resolve package versions: no anchor was provided and process.argv[1] is undefined (REPL or `node -e`). Pass `anchor: import.meta.url` to pack().",
+			);
 		}
 
 		const version = resolvePackageVersion(packageName, anchor);
@@ -46,7 +51,11 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 		const id = ensureId(node);
 		const parameters = constructor.schema.parse(node.properties);
 
-		apiVersions.push({ packageName: constructor.packageName, nodeName: constructor.nodeName, apiVersion: constructor.apiVersion });
+		apiVersions.push({
+			packageName: constructor.packageName,
+			nodeName: constructor.nodeName,
+			apiVersion: constructor.apiVersion,
+		});
 
 		const options: { bypass?: boolean } = {};
 
@@ -57,7 +66,9 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 			packageName: constructor.packageName,
 			packageVersion: node.properties.packageVersion ?? detect(constructor.packageName),
 			nodeName: constructor.nodeName,
-			...(Object.keys(parameters as Record<string, unknown>).length > 0 && { parameters: parameters as Record<string, unknown> }),
+			...(Object.keys(parameters as Record<string, unknown>).length > 0 && {
+				parameters: parameters as Record<string, unknown>,
+			}),
 			...(Object.keys(options).length > 0 && { options }),
 		};
 
@@ -85,5 +96,11 @@ export function pack(sources: ReadonlyArray<SourceNode>, metadata?: { name?: str
 
 	const apiVersion = [...distinctVersions][0];
 
-	return validateGraphDefinition({ id: metadata?.id ?? randomUUID(), name: metadata?.name ?? "Untitled", apiVersion, nodes, edges });
+	return validateGraphDefinition({
+		id: metadata?.id ?? randomUUID(),
+		name: metadata?.name ?? "Untitled",
+		apiVersion,
+		nodes,
+		edges,
+	});
 }

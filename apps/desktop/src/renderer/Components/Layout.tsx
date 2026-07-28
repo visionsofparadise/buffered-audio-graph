@@ -40,17 +40,9 @@ export function Layout({
 			{hasPassedLoading ? (
 				<Tab context={context} />
 			) : (
-				<LoadingScreen
-					packages={packages}
-					isLoading={isLoadingPackages}
-					onContinue={onContinueLoading}
-				/>
+				<LoadingScreen packages={packages} isLoading={isLoadingPackages} onContinue={onContinueLoading} />
 			)}
-			<Settings
-				isOpen={settingsOpen}
-				onClose={() => setSettingsOpen(false)}
-				context={context}
-			/>
+			<Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} context={context} />
 		</div>
 	);
 }

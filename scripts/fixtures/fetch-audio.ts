@@ -1,155 +1,143 @@
-import { createHash } from "node:crypto"
-import { createWriteStream, promises as fs } from "node:fs"
-import path from "node:path"
-import { Readable } from "node:stream"
-import { pipeline } from "node:stream/promises"
-import { fileURLToPath } from "node:url"
+import { createHash } from "node:crypto";
+import { createWriteStream, promises as fs } from "node:fs";
+import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
 
 interface FixtureAsset {
-	filename: string
-	sha256: string
-	size: number
+	filename: string;
+	sha256: string;
+	size: number;
 }
 
 interface FixturesManifest {
-	version: number
-	bucket: string
-	region: string
-	assets: Array<FixtureAsset>
+	version: number;
+	bucket: string;
+	region: string;
+	assets: Array<FixtureAsset>;
 }
 
 function resolveRepoRoot(): string {
-	const scriptDir = path.dirname(fileURLToPath(import.meta.url))
+	const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
-	return path.resolve(scriptDir, "..", "..")
+	return path.resolve(scriptDir, "..", "..");
 }
 
 function resolveAudioDir(): string {
-	return path.resolve(resolveRepoRoot(), "..", "fixtures", "audio")
+	return path.resolve(resolveRepoRoot(), "..", "fixtures", "audio");
 }
 
 function assetUrl(manifest: FixturesManifest, asset: FixtureAsset): string {
-	return `https://${manifest.bucket}.s3.${manifest.region}.amazonaws.com/sha256/${asset.sha256}`
+	return `https://${manifest.bucket}.s3.${manifest.region}.amazonaws.com/sha256/${asset.sha256}`;
 }
 
 async function sha256File(filePath: string): Promise<string> {
-	const hash = createHash("sha256")
-	const handle = await fs.open(filePath, "r")
+	const hash = createHash("sha256");
+	const handle = await fs.open(filePath, "r");
 
 	try {
-		const stream = handle.createReadStream()
+		const stream = handle.createReadStream();
 
 		for await (const chunk of stream) {
-			hash.update(chunk as Buffer)
+			hash.update(chunk as Buffer);
 		}
 	} finally {
-		await handle.close()
+		await handle.close();
 	}
 
-	return hash.digest("hex")
+	return hash.digest("hex");
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
 	try {
-		await fs.stat(filePath)
+		await fs.stat(filePath);
 
-		return true
+		return true;
 	} catch {
-		return false
+		return false;
 	}
 }
 
-async function downloadAndVerify(
-	url: string,
-	destination: string,
-	expectedSha256: string,
-): Promise<void> {
-	const tempPath = `${destination}.tmp`
+async function downloadAndVerify(url: string, destination: string, expectedSha256: string): Promise<void> {
+	const tempPath = `${destination}.tmp`;
 
-	await fs.mkdir(path.dirname(destination), { recursive: true })
+	await fs.mkdir(path.dirname(destination), { recursive: true });
 
-	const response = await fetch(url)
+	const response = await fetch(url);
 
 	if (!response.ok || response.body === null) {
-		throw new Error(
-			`Download failed for ${url}: HTTP ${response.status} ${response.statusText}`,
-		)
+		throw new Error(`Download failed for ${url}: HTTP ${response.status} ${response.statusText}`);
 	}
 
-	const hash = createHash("sha256")
-	const writeStream = createWriteStream(tempPath)
-	const bodyStream = Readable.fromWeb(
-		response.body as Parameters<typeof Readable.fromWeb>[0],
-	)
+	const hash = createHash("sha256");
+	const writeStream = createWriteStream(tempPath);
+	const bodyStream = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
 
 	try {
 		await pipeline(
 			bodyStream,
 			async function* (source: AsyncIterable<Buffer | Uint8Array>) {
 				for await (const chunk of source) {
-					const buf = chunk instanceof Buffer ? chunk : Buffer.from(chunk)
+					const buf = chunk instanceof Buffer ? chunk : Buffer.from(chunk);
 
-					hash.update(buf)
-					yield buf
+					hash.update(buf);
+					yield buf;
 				}
 			},
 			writeStream,
-		)
+		);
 	} catch (error) {
-		await fs.rm(tempPath, { force: true })
-		throw error
+		await fs.rm(tempPath, { force: true });
+		throw error;
 	}
 
-	const actualSha256 = hash.digest("hex")
+	const actualSha256 = hash.digest("hex");
 
 	if (actualSha256 !== expectedSha256) {
-		await fs.rm(tempPath, { force: true })
-		throw new Error(
-			`sha256 mismatch for ${url} — expected ${expectedSha256}, got ${actualSha256}`,
-		)
+		await fs.rm(tempPath, { force: true });
+		throw new Error(`sha256 mismatch for ${url} — expected ${expectedSha256}, got ${actualSha256}`);
 	}
 
-	await fs.rename(tempPath, destination)
+	await fs.rename(tempPath, destination);
 }
 
 async function main(): Promise<void> {
-	const manifestPath = path.join(resolveRepoRoot(), "fixtures.manifest.json")
-	const manifest = JSON.parse(
-		await fs.readFile(manifestPath, "utf8"),
-	) as FixturesManifest
+	const manifestPath = path.join(resolveRepoRoot(), "fixtures.manifest.json");
+	const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as FixturesManifest;
 
-	const audioDir = resolveAudioDir()
+	const audioDir = resolveAudioDir();
 
-	console.warn(`[fixtures] audio dir: ${audioDir}`)
-	console.warn(`[fixtures] assets:    ${manifest.assets.length}`)
+	console.warn(`[fixtures] audio dir: ${audioDir}`);
+	console.warn(`[fixtures] assets:    ${manifest.assets.length}`);
 
 	for (const asset of manifest.assets) {
-		const destination = path.join(audioDir, asset.filename)
+		const destination = path.join(audioDir, asset.filename);
 
 		if (await fileExists(destination)) {
-			const existing = await sha256File(destination)
+			const existing = await sha256File(destination);
 
 			if (existing === asset.sha256) {
-				console.warn(`[fixtures] cache hit  ${asset.filename}`)
-				continue
+				console.warn(`[fixtures] cache hit  ${asset.filename}`);
+				continue;
 			}
 
 			console.warn(
 				`[fixtures] stale      ${asset.filename} (sha256 ${existing} != ${asset.sha256}) — re-downloading`,
-			)
-			await fs.rm(destination, { force: true })
+			);
+			await fs.rm(destination, { force: true });
 		}
 
-		const url = assetUrl(manifest, asset)
+		const url = assetUrl(manifest, asset);
 
-		console.warn(`[fixtures] download   ${asset.filename} <- ${url}`)
-		await downloadAndVerify(url, destination, asset.sha256)
+		console.warn(`[fixtures] download   ${asset.filename} <- ${url}`);
+		await downloadAndVerify(url, destination, asset.sha256);
 	}
 
-	console.warn(`[fixtures] done — ${manifest.assets.length} audio fixture(s) ready`)
+	console.warn(`[fixtures] done — ${manifest.assets.length} audio fixture(s) ready`);
 }
 
 main().catch((error: unknown) => {
-	console.error(error)
-	process.exit(1)
-})
+	console.error(error);
+	process.exit(1);
+});

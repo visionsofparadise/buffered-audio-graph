@@ -83,9 +83,7 @@ export function PackageNodeList({ app, onSelect }: Props) {
 				app.packages
 					.filter(
 						(nodePackage): nodePackage is ReadyPackage =>
-							nodePackage.status === "ready" &&
-							nodePackage.version !== null &&
-							nodePackage.origin === "catalog",
+							nodePackage.status === "ready" && nodePackage.version !== null && nodePackage.origin === "catalog",
 					)
 					.reduce((packagesByName, nodePackage) => {
 						const current = packagesByName.get(nodePackage.name);
@@ -114,7 +112,11 @@ export function PackageNodeList({ app, onSelect }: Props) {
 					packageName: nodePackage.name,
 					nodes: nodePackage.nodes
 						.filter((node) => node.category === key && matches(node.nodeName))
-						.map((node) => ({ packageName: nodePackage.name, nodeName: node.nodeName, description: node.description })),
+						.map((node) => ({
+							packageName: nodePackage.name,
+							nodeName: node.nodeName,
+							description: node.description,
+						})),
 				}))
 				.filter((entry) => entry.nodes.length > 0);
 
@@ -123,7 +125,10 @@ export function PackageNodeList({ app, onSelect }: Props) {
 	}, [latestReadyPackages, normalizedQuery]);
 
 	const searchFlat = useMemo<ReadonlyArray<CatalogNode>>(
-		() => (normalizedQuery === "" ? [] : categories.flatMap((category) => category.packages.flatMap((entry) => entry.nodes))),
+		() =>
+			normalizedQuery === ""
+				? []
+				: categories.flatMap((category) => category.packages.flatMap((entry) => entry.nodes)),
 		[normalizedQuery, categories],
 	);
 
@@ -173,7 +178,9 @@ export function PackageNodeList({ app, onSelect }: Props) {
 						<div key={category.key}>
 							<DropdownMenuLabel>{category.label}</DropdownMenuLabel>
 							{category.packages.flatMap((entry) =>
-								entry.nodes.map((node) => <NodeItem key={`${node.packageName}/${node.nodeName}`} node={node} onSelect={onSelect} />),
+								entry.nodes.map((node) => (
+									<NodeItem key={`${node.packageName}/${node.nodeName}`} node={node} onSelect={onSelect} />
+								)),
 							)}
 						</div>
 					))}
@@ -198,7 +205,9 @@ export function PackageNodeList({ app, onSelect }: Props) {
 											</div>
 										))
 									: category.packages.flatMap((entry) =>
-											entry.nodes.map((node) => <NodeItem key={node.nodeName} node={node} onSelect={onSelect} />),
+											entry.nodes.map((node) => (
+												<NodeItem key={node.nodeName} node={node} onSelect={onSelect} />
+											)),
 										)}
 							</DropdownMenuSubContent>
 						</DropdownMenuSub>

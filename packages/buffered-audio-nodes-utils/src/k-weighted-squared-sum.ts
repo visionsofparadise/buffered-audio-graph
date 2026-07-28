@@ -35,7 +35,9 @@ export class KWeightedSquaredSum {
 		const weights = channelWeights ?? new Array<number>(channelCount).fill(1);
 
 		if (weights.length !== channelCount) {
-			throw new Error(`KWeightedSquaredSum: channelWeights length ${weights.length} does not match channel count ${channelCount}`);
+			throw new Error(
+				`KWeightedSquaredSum: channelWeights length ${weights.length} does not match channel count ${channelCount}`,
+			);
 		}
 
 		this.channelCount = channelCount;
@@ -87,12 +89,16 @@ export class KWeightedSquaredSum {
 			const channel = channels[channelIndex] ?? new Float32Array(0);
 
 			if (channel.length < frames) {
-				throw new Error(`KWeightedSquaredSum: channel ${channelIndex} has ${channel.length} samples, fewer than the requested ${frames}`);
+				throw new Error(
+					`KWeightedSquaredSum: channel ${channelIndex} has ${channel.length} samples, fewer than the requested ${frames}`,
+				);
 			}
 		}
 
 		if (output.length < frames) {
-			throw new Error(`KWeightedSquaredSum: output buffer has ${output.length} entries, fewer than the requested ${frames}`);
+			throw new Error(
+				`KWeightedSquaredSum: output buffer has ${output.length} entries, fewer than the requested ${frames}`,
+			);
 		}
 
 		const channelCount = this.channelCount;

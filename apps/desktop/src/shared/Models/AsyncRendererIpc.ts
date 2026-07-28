@@ -5,7 +5,9 @@ export type IpcHandlerReturn<Ipc> = Ipc extends AsyncRendererIpc<infer _A, infer
 export abstract class AsyncRendererIpc<A extends string, P extends Array<unknown>, R> {
 	abstract action: A;
 
-	register(ipcRenderer: { invoke: (action: string, ...args: Array<unknown>) => Promise<unknown> }): [A, (...parameters: P) => Promise<R>] {
+	register(ipcRenderer: {
+		invoke: (action: string, ...args: Array<unknown>) => Promise<unknown>;
+	}): [A, (...parameters: P) => Promise<R>] {
 		return [this.action, (...parameters: P) => ipcRenderer.invoke(this.action, ...parameters) as Promise<R>];
 	}
 }

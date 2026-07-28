@@ -32,7 +32,11 @@ const buffersToClose: BlockBuffer[] = [];
 async function makeBufferFromChannels(channels: ReadonlyArray<Float32Array>): Promise<BlockBuffer> {
 	const buffer = new BlockBuffer();
 
-	await buffer.write(channels.map((channel) => new Float32Array(channel)), SAMPLE_RATE, 32);
+	await buffer.write(
+		channels.map((channel) => new Float32Array(channel)),
+		SAMPLE_RATE,
+		32,
+	);
 	await buffer.flushWrites();
 
 	buffersToClose.push(buffer);
@@ -77,7 +81,7 @@ describe("measureSource — limitAutoDb (top-down percentile walk)", () => {
 		const frames = SAMPLE_RATE * durationSeconds;
 		const channel = new Float32Array(frames);
 		const angularStep = (2 * Math.PI * 220) / SAMPLE_RATE;
-		const rand = makeLcg(0xAB_CD_12_34);
+		const rand = makeLcg(0xab_cd_12_34);
 
 		for (let frameIndex = 0; frameIndex < frames; frameIndex++) {
 			channel[frameIndex] = 0.05 * Math.sin(angularStep * frameIndex);
@@ -89,7 +93,11 @@ describe("measureSource — limitAutoDb (top-down percentile walk)", () => {
 		const transientStride = Math.floor(SAMPLE_RATE * 0.2);
 		const transientWidth = 4;
 
-		for (let transientStart = transientStride; transientStart < frames - transientWidth; transientStart += transientStride) {
+		for (
+			let transientStart = transientStride;
+			transientStart < frames - transientWidth;
+			transientStart += transientStride
+		) {
 			const jitter = Math.floor(rand() * 1000);
 			const start = Math.min(frames - transientWidth, Math.max(0, transientStart + jitter));
 

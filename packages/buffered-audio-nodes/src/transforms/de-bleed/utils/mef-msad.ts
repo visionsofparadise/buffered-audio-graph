@@ -235,7 +235,14 @@ export function computeMsadDecision(
 	const decisions = new Array<boolean>(channelCount);
 
 	for (let chIdx = 0; chIdx < channelCount; chIdx++) {
-		decisions[chIdx] = computeChannelDecision(channelReals[chIdx]!, channelImags[chIdx]!, channelStates[chIdx]!.smoothedPsd, channelStates[chIdx]!.noiseTracker.noisePsd, sprMasks[chIdx]!, numBins);
+		decisions[chIdx] = computeChannelDecision(
+			channelReals[chIdx]!,
+			channelImags[chIdx]!,
+			channelStates[chIdx]!.smoothedPsd,
+			channelStates[chIdx]!.noiseTracker.noisePsd,
+			sprMasks[chIdx]!,
+			numBins,
+		);
 	}
 
 	return {
@@ -264,7 +271,12 @@ export function createIspState(numBins: number): IspState {
 	};
 }
 
-export function applyIspRestoration(kalmanState: KalmanState, ispState: IspState, referenceActive: boolean, thresholdFrames: number): void {
+export function applyIspRestoration(
+	kalmanState: KalmanState,
+	ispState: IspState,
+	referenceActive: boolean,
+	thresholdFrames: number,
+): void {
 	const numBins = kalmanState.hReal.length;
 
 	if (referenceActive) {

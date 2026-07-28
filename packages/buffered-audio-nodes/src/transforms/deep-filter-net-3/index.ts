@@ -1,4 +1,12 @@
-import { BufferedTransformStream, TransformNode, type Block, type BlockBuffer, type StreamContext, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	TransformNode,
+	type Block,
+	type BlockBuffer,
+	type StreamContext,
+	type StreamSetupContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { createOnnxSession, type OnnxSession } from "../../utils/onnx-runtime";
@@ -12,19 +20,37 @@ export const schema = z.object({
 	modelPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", accept: ".onnx", binary: "dfn3", download: "https://github.com/yuyun2000/SpeechDenoiser" })
+		.meta({
+			input: "file",
+			mode: "open",
+			accept: ".onnx",
+			binary: "dfn3",
+			download: "https://github.com/yuyun2000/SpeechDenoiser",
+		})
 		.describe("DeepFilterNet3 48 kHz denoiser model (.onnx)"),
 	ffmpegPath: z
 		.string()
 		.default("")
 		.meta({ input: "file", mode: "open", binary: "ffmpeg", download: "https://ffmpeg.org/download.html" })
-		.describe("FFmpeg — used when the input audio is not 48 kHz to chain up/down resamplers around the inference stream; can be left blank for 48 kHz input."),
+		.describe(
+			"FFmpeg — used when the input audio is not 48 kHz to chain up/down resamplers around the inference stream; can be left blank for 48 kHz input.",
+		),
 	onnxAddonPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "onnx-addon", download: "https://github.com/visionsofparadise/onnx-runtime-addon" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "onnx-addon",
+			download: "https://github.com/visionsofparadise/onnx-runtime-addon",
+		})
 		.describe("ONNX Runtime native addon"),
-	attenuation: z.number().min(0).max(100).default(30).describe("Attenuation cap in dB. Maps to the ONNX `atten_lim_db` input; 0 = no cap"),
+	attenuation: z
+		.number()
+		.min(0)
+		.max(100)
+		.default(30)
+		.describe("Attenuation cap in dB. Maps to the ONNX `atten_lim_db` input; 0 = no cap"),
 });
 
 export interface DeepFilterNet3Properties extends z.infer<typeof schema>, TransformNodeProperties {}
@@ -45,9 +71,19 @@ export class DeepFilterNet3Stream extends BufferedTransformStream<DeepFilterNet3
 	}
 
 	override _setup(context: StreamSetupContext): void {
-		this.session = createOnnxSession(this.properties.onnxAddonPath, this.properties.modelPath, { executionProviders: ["cpu"] }, (message, data) => this.log(message, data));
+		this.session = createOnnxSession(
+			this.properties.onnxAddonPath,
+			this.properties.modelPath,
+			{ executionProviders: ["cpu"] },
+			(message, data) => this.log(message, data),
+		);
 
-		const composition = createResampleComposition({ context, streamContext: this.renderContext, ffmpegPath: this.properties.ffmpegPath, modelRate: DFN3_SAMPLE_RATE });
+		const composition = createResampleComposition({
+			context,
+			streamContext: this.renderContext,
+			ffmpegPath: this.properties.ffmpegPath,
+			modelRate: DFN3_SAMPLE_RATE,
+		});
 
 		if (composition) {
 			this.upResample = composition.upResample;
@@ -113,6 +149,12 @@ export class DeepFilterNet3Node extends TransformNode<DeepFilterNet3Properties> 
 	static override readonly Stream = DeepFilterNet3Stream;
 }
 
-export function deepFilterNet3(options: { modelPath: string; ffmpegPath?: string; onnxAddonPath?: string; attenuation?: number; id?: string }): DeepFilterNet3Node {
+export function deepFilterNet3(options: {
+	modelPath: string;
+	ffmpegPath?: string;
+	onnxAddonPath?: string;
+	attenuation?: number;
+	id?: string;
+}): DeepFilterNet3Node {
 	return new DeepFilterNet3Node(options);
 }

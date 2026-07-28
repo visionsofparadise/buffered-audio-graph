@@ -18,7 +18,12 @@ describe("createResampleComposition", () => {
 	it("returns nothing and leaves the cursor untouched when the edge rate is already the model rate", () => {
 		const context = createTestSetupContext({ sourceSampleRate: MODEL_RATE, sampleRate: MODEL_RATE });
 
-		const composition = createResampleComposition({ context, streamContext: createTestStreamContext().context, ffmpegPath: "ffmpeg", modelRate: MODEL_RATE });
+		const composition = createResampleComposition({
+			context,
+			streamContext: createTestStreamContext().context,
+			ffmpegPath: "ffmpeg",
+			modelRate: MODEL_RATE,
+		});
 
 		expect(composition).toBeUndefined();
 		expect(context.sampleRate).toBe(MODEL_RATE);
@@ -27,7 +32,12 @@ describe("createResampleComposition", () => {
 	it("restores the cursor to the edge rate after building both resamplers", () => {
 		const context = createTestSetupContext({ sourceSampleRate: EDGE_RATE, sampleRate: EDGE_RATE });
 
-		const composition = createResampleComposition({ context, streamContext: createTestStreamContext().context, ffmpegPath: "ffmpeg", modelRate: MODEL_RATE });
+		const composition = createResampleComposition({
+			context,
+			streamContext: createTestStreamContext().context,
+			ffmpegPath: "ffmpeg",
+			modelRate: MODEL_RATE,
+		});
 
 		expect(composition).toBeDefined();
 		expect(context.sampleRate).toBe(EDGE_RATE);
@@ -36,7 +46,12 @@ describe("createResampleComposition", () => {
 	it("builds each side with its own aresample filter and outgoing rate", () => {
 		const context = createTestSetupContext({ sourceSampleRate: EDGE_RATE, sampleRate: EDGE_RATE });
 
-		const composition = createResampleComposition({ context, streamContext: createTestStreamContext().context, ffmpegPath: "/bin/ffmpeg", modelRate: MODEL_RATE });
+		const composition = createResampleComposition({
+			context,
+			streamContext: createTestStreamContext().context,
+			ffmpegPath: "/bin/ffmpeg",
+			modelRate: MODEL_RATE,
+		});
 
 		if (!composition) throw new Error("expected a composition");
 
@@ -54,7 +69,12 @@ describe("createResampleComposition", () => {
 	it("spawns no child process at construction", () => {
 		const context = createTestSetupContext({ sourceSampleRate: EDGE_RATE, sampleRate: EDGE_RATE });
 
-		createResampleComposition({ context, streamContext: createTestStreamContext().context, ffmpegPath: "ffmpeg", modelRate: MODEL_RATE });
+		createResampleComposition({
+			context,
+			streamContext: createTestStreamContext().context,
+			ffmpegPath: "ffmpeg",
+			modelRate: MODEL_RATE,
+		});
 
 		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
 	});

@@ -1,10 +1,6 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuTrigger,
-} from "../../../UI/DropdownMenu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "../../../UI/DropdownMenu";
 import type { Snapshot } from "opshot";
 import type { AppState } from "../../../../Models/State/App";
 import { PackageNodeList } from "../PackageNodeList";
@@ -29,11 +25,7 @@ export function TopLeftOverlay({ app, onAddNode }: Props) {
 						<span>Add node</span>
 					</button>
 				</DropdownMenuTrigger>
-				<DropdownMenuContent
-					side="bottom"
-					align="start"
-					className="max-h-[calc(100vh-120px)] w-80 overflow-y-auto"
-				>
+				<DropdownMenuContent side="bottom" align="start" className="max-h-[calc(100vh-120px)] w-80 overflow-y-auto">
 					<PackageNodeList
 						app={app}
 						onSelect={(packageName, nodeName) => {

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { UnbufferedTransformStream, TransformNode, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	UnbufferedTransformStream,
+	TransformNode,
+	type Block,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { applyAllpass, invertSamples, phaseCoefficient } from "./utils/phase-shift";
 
@@ -32,7 +37,12 @@ export class PhaseStream extends UnbufferedTransformStream<PhaseNode> {
 	}
 
 	private applyInvert(chunk: Block): Block {
-		return { samples: invertSamples(chunk.samples), offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		return {
+			samples: invertSamples(chunk.samples),
+			offset: chunk.offset,
+			sampleRate: chunk.sampleRate,
+			bitDepth: chunk.bitDepth,
+		};
 	}
 
 	private applyPhaseRotation(chunk: Block, angle: number): Block {

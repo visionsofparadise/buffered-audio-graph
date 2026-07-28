@@ -37,9 +37,21 @@ function renderContext(): StreamContext {
 	return { events: new EventEmitter() as RenderEvents, nextStreamId: () => 0 };
 }
 
-async function runStats(channels: ReadonlyArray<Float32Array>, sampleRate: number, options?: { bucketCount?: number; outputPath?: string }): Promise<NonNullable<LoudnessStatsStream["stats"]>> {
-	const stream = new LoudnessStatsStream(loudnessStats({ bucketCount: options?.bucketCount ?? 1024, outputPath: options?.outputPath ?? "" }), renderContext());
-	const chunk: Block = { samples: channels.map((channel) => new Float32Array(channel)), offset: 0, sampleRate, bitDepth: 32 };
+async function runStats(
+	channels: ReadonlyArray<Float32Array>,
+	sampleRate: number,
+	options?: { bucketCount?: number; outputPath?: string },
+): Promise<NonNullable<LoudnessStatsStream["stats"]>> {
+	const stream = new LoudnessStatsStream(
+		loudnessStats({ bucketCount: options?.bucketCount ?? 1024, outputPath: options?.outputPath ?? "" }),
+		renderContext(),
+	);
+	const chunk: Block = {
+		samples: channels.map((channel) => new Float32Array(channel)),
+		offset: 0,
+		sampleRate,
+		bitDepth: 32,
+	};
 	const input = new ReadableStream<Block>({
 		start(controller) {
 			controller.enqueue(chunk);
@@ -98,7 +110,8 @@ describe("loudness-stats", () => {
 
 		const targetStream = job.streams.get(target)?.[0];
 
-		if (!(targetStream instanceof LoudnessStatsStream)) throw new Error("expected a LoudnessStatsStream for the target node");
+		if (!(targetStream instanceof LoudnessStatsStream))
+			throw new Error("expected a LoudnessStatsStream for the target node");
 
 		const stats = targetStream.stats;
 

@@ -28,11 +28,7 @@ describe("TruePeakAccumulator", () => {
 	});
 
 	it("includes a maximum that occurs only in the flushed FIR tail", () => {
-		const input = new Float32Array([
-			-0.08388812094926834,
-			0.6030386090278625,
-			-0.7042242288589478,
-		]);
+		const input = new Float32Array([-0.08388812094926834, 0.6030386090278625, -0.7042242288589478]);
 
 		expect(Math.abs(measure([input], 48000) - 0.7503057227)).toBeLessThan(1e-6);
 	});

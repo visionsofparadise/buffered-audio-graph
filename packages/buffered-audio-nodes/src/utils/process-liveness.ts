@@ -28,13 +28,15 @@ export async function sampleProcessTreeCpu(rootPid: number): Promise<{ cpuMs: nu
 			pidCount: liveStats.length,
 		};
 	} catch {
-		const stats = await Promise.all(pids.map(async (pid) => {
-			try {
-				return await pidusage(pid);
-			} catch {
-				return undefined;
-			}
-		}));
+		const stats = await Promise.all(
+			pids.map(async (pid) => {
+				try {
+					return await pidusage(pid);
+				} catch {
+					return undefined;
+				}
+			}),
+		);
 		const liveStats = stats.filter((stat) => stat !== undefined);
 
 		return {

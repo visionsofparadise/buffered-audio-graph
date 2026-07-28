@@ -3,8 +3,10 @@ import type { SourceNode } from "../node/stream/source";
 import type { TransformNode } from "../node/transform";
 import type { GraphDefinition, NodeRegistry } from "./definition";
 
-const canConnect = (node: BufferedAudioNode): node is SourceNode | TransformNode => typeof (node as { to?: unknown }).to === "function";
-const isRenderable = (node: BufferedAudioNode): node is SourceNode => typeof (node as { createRenderJob?: unknown }).createRenderJob === "function";
+const canConnect = (node: BufferedAudioNode): node is SourceNode | TransformNode =>
+	typeof (node as { to?: unknown }).to === "function";
+const isRenderable = (node: BufferedAudioNode): node is SourceNode =>
+	typeof (node as { createRenderJob?: unknown }).createRenderJob === "function";
 
 export function unpack(definition: GraphDefinition, registry: NodeRegistry): Array<SourceNode> {
 	const nodeMap = new Map<string, BufferedAudioNode>();
@@ -13,16 +15,22 @@ export function unpack(definition: GraphDefinition, registry: NodeRegistry): Arr
 		const packageVersions = registry.get(nodeDefinition.packageName);
 		const packageNodes = packageVersions?.get(nodeDefinition.packageVersion);
 
-		if (!packageNodes) throw new Error(`Unknown package: "${nodeDefinition.packageName}@${nodeDefinition.packageVersion}"`);
+		if (!packageNodes)
+			throw new Error(`Unknown package: "${nodeDefinition.packageName}@${nodeDefinition.packageVersion}"`);
 
 		const NodeClass = packageNodes.get(nodeDefinition.nodeName);
 
-		if (!NodeClass) throw new Error(`Unknown node: "${nodeDefinition.nodeName}" in package "${nodeDefinition.packageName}@${nodeDefinition.packageVersion}"`);
+		if (!NodeClass)
+			throw new Error(
+				`Unknown node: "${nodeDefinition.nodeName}" in package "${nodeDefinition.packageName}@${nodeDefinition.packageVersion}"`,
+			);
 
 		const classApiVersion = (NodeClass as unknown as typeof BufferedAudioNode).apiVersion;
 
 		if (classApiVersion !== definition.apiVersion) {
-			throw new Error(`apiVersion mismatch for node "${nodeDefinition.nodeName}": class is apiVersion ${classApiVersion}, bag is apiVersion ${definition.apiVersion}`);
+			throw new Error(
+				`apiVersion mismatch for node "${nodeDefinition.nodeName}": class is apiVersion ${classApiVersion}, bag is apiVersion ${definition.apiVersion}`,
+			);
 		}
 
 		const instance = new NodeClass({

@@ -5,7 +5,9 @@ import type { TransformNodeProperties } from "../../transform";
 import type { Block } from "../block";
 import { createProgressGate, type ProgressGate } from "../utils/progress-gate";
 
-export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>> extends BufferedStream<N> {
+export abstract class UnbufferedTransformStream<
+	N extends BufferedAudioNode<TransformNodeProperties> = BufferedAudioNode<TransformNodeProperties>,
+> extends BufferedStream<N> {
 	private framesBuffered = 0;
 	private framesEmitted = 0;
 	private hasStarted = false;
@@ -40,7 +42,8 @@ export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<Tran
 
 				this.framesBuffered += block.samples[0]?.length ?? 0;
 
-				if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+				if (bufferGate(this.framesBuffered, Date.now()))
+					this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
 				const output = this._transform(block);
 				const timed = this.timed(output);
@@ -67,7 +70,8 @@ export abstract class UnbufferedTransformStream<N extends BufferedAudioNode<Tran
 
 			this.framesEmitted += block.samples[0]?.length ?? 0;
 
-			if (emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+			if (emitGate(this.framesEmitted, Date.now()))
+				this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		}
 	}
 

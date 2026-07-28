@@ -18,7 +18,6 @@ function truePeakDb(channels: ReadonlyArray<Float32Array>, sampleRate: number): 
 	return linearToDb(accumulator.finalize());
 }
 
-
 function makeAsymmetric(frames: number, sampleRate: number): Float32Array {
 	const out = new Float32Array(frames);
 	let state = 5 >>> 0;
@@ -169,7 +168,10 @@ async function runStream(
 ): Promise<Array<Float32Array>> {
 	const channelCount = channels.length;
 	const frameSize = properties.frameSize ?? 2048;
-	const stream = new CrestReduceStream(crestReduce({ smoothing: properties.smoothing ?? 100, frameSize }), createTestStreamContext().context);
+	const stream = new CrestReduceStream(
+		crestReduce({ smoothing: properties.smoothing ?? 100, frameSize }),
+		createTestStreamContext().context,
+	);
 
 	const chunk: Block = { samples: channels.map((channel) => channel), offset: 0, sampleRate, bitDepth: 32 };
 	const output = await stream.setup(readableFrom([chunk]), createTestSetupContext());
@@ -193,7 +195,10 @@ async function runStream(
 		}
 	}
 
-	const out = Array.from({ length: channelCount }, (_unused, channelIndex) => new Float32Array(lengths[channelIndex] ?? 0));
+	const out = Array.from(
+		{ length: channelCount },
+		(_unused, channelIndex) => new Float32Array(lengths[channelIndex] ?? 0),
+	);
 	const offsets = new Array<number>(channelCount).fill(0);
 
 	for (const piece of collected) {
@@ -268,27 +273,31 @@ describe("CrestReduce (i) NON-DEGENERACY / efficacy (the mandatory 5F.4/5R.2 gua
 	const TIMEOUT = 120_000;
 	const FRAMES = TEST_SAMPLE_RATE; // 1 s
 
-	it("on headroom-bearing content the transform is non-trivial AND genuinely reduces whole-signal 4× TP at the default smoothing", async () => {
-		const input = makeHeadroomBearing(FRAMES, TEST_SAMPLE_RATE);
-		const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
-		const output = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 100 });
-		const out0 = output[0] ?? new Float32Array(0);
-		const outputTp = truePeakDb([out0], TEST_SAMPLE_RATE);
+	it(
+		"on headroom-bearing content the transform is non-trivial AND genuinely reduces whole-signal 4× TP at the default smoothing",
+		async () => {
+			const input = makeHeadroomBearing(FRAMES, TEST_SAMPLE_RATE);
+			const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
+			const output = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 100 });
+			const out0 = output[0] ?? new Float32Array(0);
+			const outputTp = truePeakDb([out0], TEST_SAMPLE_RATE);
 
-		expect(out0.length).toBe(input.length);
+			expect(out0.length).toBe(input.length);
 
-		// 1. NON-TRIVIAL: not a mere delayed/identity copy (a degenerate
-		//    floored-to-identity no-op would make this ≈0).
-		const minDiff = minShiftedDifference(input, out0, 2048);
+			// 1. NON-TRIVIAL: not a mere delayed/identity copy (a degenerate
+			//    floored-to-identity no-op would make this ≈0).
+			const minDiff = minShiftedDifference(input, out0, 2048);
 
-		expect(minDiff).toBeGreaterThan(1e-2);
+			expect(minDiff).toBeGreaterThan(1e-2);
 
-		// 2. GENUINE REDUCTION: a real, non-zero whole-signal 4× TP
-		//    reduction on headroom-bearing content (≥ 1.0 dB — a real
-		//    efficacy gate, not a tautology; within the prior-art-
-		//    consistent transparent range, Item 10).
-		expect(inputTp - outputTp).toBeGreaterThanOrEqual(1.0);
-	}, TIMEOUT);
+			// 2. GENUINE REDUCTION: a real, non-zero whole-signal 4× TP
+			//    reduction on headroom-bearing content (≥ 1.0 dB — a real
+			//    efficacy gate, not a tautology; within the prior-art-
+			//    consistent transparent range, Item 10).
+			expect(inputTp - outputTp).toBeGreaterThanOrEqual(1.0);
+		},
+		TIMEOUT,
+	);
 });
 
 /**
@@ -303,26 +312,30 @@ describe("CrestReduce (i-sparse) SPARSE-BINDING regression guard", () => {
 	const TIMEOUT = 120_000;
 	const FRAMES = 4 * TEST_SAMPLE_RATE; // 4 s — long quiet bed, a few isolated bursts ⇒ a SMALL % of frames bind
 
-	it("on sparse-binding content the envelope is non-bit-identical AND genuinely reduces whole-signal 4× TP at the default smoothing", async () => {
-		const input = makeSparseBinding(FRAMES, TEST_SAMPLE_RATE);
-		const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
-		const output = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 100 });
-		const out0 = output[0] ?? new Float32Array(0);
-		const outputTp = truePeakDb([out0], TEST_SAMPLE_RATE);
+	it(
+		"on sparse-binding content the envelope is non-bit-identical AND genuinely reduces whole-signal 4× TP at the default smoothing",
+		async () => {
+			const input = makeSparseBinding(FRAMES, TEST_SAMPLE_RATE);
+			const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
+			const output = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 100 });
+			const out0 = output[0] ?? new Float32Array(0);
+			const outputTp = truePeakDb([out0], TEST_SAMPLE_RATE);
 
-		expect(out0.length).toBe(input.length);
+			expect(out0.length).toBe(input.length);
 
-		const { pct, maxAbs } = pctChangedAndMax(input, out0);
+			const { pct, maxAbs } = pctChangedAndMax(input, out0);
 
-		// 1. NOT a bit-identical no-op (the 8.2 defect signature).
-		expect(pct).toBeGreaterThan(1);
-		expect(maxAbs).toBeGreaterThan(1e-3);
+			// 1. NOT a bit-identical no-op (the 8.2 defect signature).
+			expect(pct).toBeGreaterThan(1);
+			expect(maxAbs).toBeGreaterThan(1e-3);
 
-		// 2. GENUINE whole-signal 4× TP reduction (floor 0.10 dB —
-		//    decisively above the defect's exact 0.00; the strict primary
-		//    defect catch is the non-bit-identical pair above).
-		expect(inputTp - outputTp).toBeGreaterThanOrEqual(0.1);
-	}, TIMEOUT);
+			// 2. GENUINE whole-signal 4× TP reduction (floor 0.10 dB —
+			//    decisively above the defect's exact 0.00; the strict primary
+			//    defect catch is the non-bit-identical pair above).
+			expect(inputTp - outputTp).toBeGreaterThanOrEqual(0.1);
+		},
+		TIMEOUT,
+	);
 });
 
 /**
@@ -376,38 +389,54 @@ describe("CrestReduce (ii) adversarial fixtures — per-peak never-worsen contra
 		expect(truePeakDb(output, TEST_SAMPLE_RATE)).toBeLessThanOrEqual(inputTp + BLOWUP_CEILING_DB);
 	}
 
-	it("dense / music-like — processed, finite, length-preserving, no blow-up (whole-signal 4× TP is not a guaranteed quantity — never was)", async () => {
-		const input = makeDense(FRAMES, TEST_SAMPLE_RATE);
-		const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
+	it(
+		"dense / music-like — processed, finite, length-preserving, no blow-up (whole-signal 4× TP is not a guaranteed quantity — never was)",
+		async () => {
+			const input = makeDense(FRAMES, TEST_SAMPLE_RATE);
+			const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
 
-		assertProcessedNoBlowUp(input, await runStream([input], TEST_SAMPLE_RATE), inputTp);
-	}, TIMEOUT);
+			assertProcessedNoBlowUp(input, await runStream([input], TEST_SAMPLE_RATE), inputTp);
+		},
+		TIMEOUT,
+	);
 
-	it("transient — processed, finite, length-preserving, no blow-up (whole-signal 4× TP is not a guaranteed quantity; the ≈+1.07 dB cross-window bleed on this synthetic is expected, not a regression)", async () => {
-		const input = makeTransient(FRAMES, TEST_SAMPLE_RATE);
-		const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
+	it(
+		"transient — processed, finite, length-preserving, no blow-up (whole-signal 4× TP is not a guaranteed quantity; the ≈+1.07 dB cross-window bleed on this synthetic is expected, not a regression)",
+		async () => {
+			const input = makeTransient(FRAMES, TEST_SAMPLE_RATE);
+			const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
 
-		assertProcessedNoBlowUp(input, await runStream([input], TEST_SAMPLE_RATE), inputTp);
-	}, TIMEOUT);
+			assertProcessedNoBlowUp(input, await runStream([input], TEST_SAMPLE_RATE), inputTp);
+		},
+		TIMEOUT,
+	);
 
-	it("asymmetric — processed, finite, length-preserving, no blow-up (whole-signal 4× TP is not a guaranteed quantity — never was)", async () => {
-		const input = makeAsymmetric(FRAMES, TEST_SAMPLE_RATE);
-		const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
+	it(
+		"asymmetric — processed, finite, length-preserving, no blow-up (whole-signal 4× TP is not a guaranteed quantity — never was)",
+		async () => {
+			const input = makeAsymmetric(FRAMES, TEST_SAMPLE_RATE);
+			const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
 
-		assertProcessedNoBlowUp(input, await runStream([input], TEST_SAMPLE_RATE), inputTp);
-	}, TIMEOUT);
+			assertProcessedNoBlowUp(input, await runStream([input], TEST_SAMPLE_RATE), inputTp);
+		},
+		TIMEOUT,
+	);
 
-	it("already-limited (pre-clipped ±1) — TIGHT non-worsening (the ITEM-10 ≈identity contract, NOT the retired whole-signal veto)", async () => {
-		const input = [makePreClipped(FRAMES, TEST_SAMPLE_RATE)];
-		const inputTp = truePeakDb(input, TEST_SAMPLE_RATE);
-		const output = await runStream(input, TEST_SAMPLE_RATE);
+	it(
+		"already-limited (pre-clipped ±1) — TIGHT non-worsening (the ITEM-10 ≈identity contract, NOT the retired whole-signal veto)",
+		async () => {
+			const input = [makePreClipped(FRAMES, TEST_SAMPLE_RATE)];
+			const inputTp = truePeakDb(input, TEST_SAMPLE_RATE);
+			const output = await runStream(input, TEST_SAMPLE_RATE);
 
-		// Pre-clipped ⇒ no phase-only-recoverable headroom ⇒ the gate makes
-		// every window non-binding ⇒ ≈identity (crest-invariant pure delay)
-		// ⇒ whole-signal 4× TP must NOT rise (§Algorithm Item 10). A
-		// distinct still-valid contract — not the retired never-worsen veto.
-		expect(truePeakDb(output, TEST_SAMPLE_RATE)).toBeLessThanOrEqual(inputTp + SLACK);
-	}, TIMEOUT);
+			// Pre-clipped ⇒ no phase-only-recoverable headroom ⇒ the gate makes
+			// every window non-binding ⇒ ≈identity (crest-invariant pure delay)
+			// ⇒ whole-signal 4× TP must NOT rise (§Algorithm Item 10). A
+			// distinct still-valid contract — not the retired never-worsen veto.
+			expect(truePeakDb(output, TEST_SAMPLE_RATE)).toBeLessThanOrEqual(inputTp + SLACK);
+		},
+		TIMEOUT,
+	);
 });
 
 /**
@@ -438,98 +467,106 @@ describe("CrestReduce (iii) `smoothing` — present, default 100; reduction smoo
 		expect(crestReduce().properties.smoothing).toBe(100);
 	});
 
-	it("whole-signal 4× TP reduction is smoothing-INVARIANT, yet the two outputs differ in the inter-peak spill regions", async () => {
-		const input = makeSparseBinding(SPARSE_FRAMES, TEST_SAMPLE_RATE);
-		const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
+	it(
+		"whole-signal 4× TP reduction is smoothing-INVARIANT, yet the two outputs differ in the inter-peak spill regions",
+		async () => {
+			const input = makeSparseBinding(SPARSE_FRAMES, TEST_SAMPLE_RATE);
+			const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
 
-		const tight = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 20 });
-		const wide = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 400 });
+			const tight = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 20 });
+			const wide = await runStream([input], TEST_SAMPLE_RATE, { smoothing: 400 });
 
-		const a = tight[0] ?? new Float32Array(0);
-		const b = wide[0] ?? new Float32Array(0);
+			const a = tight[0] ?? new Float32Array(0);
+			const b = wide[0] ?? new Float32Array(0);
 
-		expect(a.length).toBe(b.length);
-		expect(a.length).toBeGreaterThan(0);
+			expect(a.length).toBe(b.length);
+			expect(a.length).toBeGreaterThan(0);
 
-		// ── (a) SMOOTHING-INVARIANT whole-signal 4× TP reduction ─────────
-		const tpTight = truePeakDb([a], TEST_SAMPLE_RATE);
-		const tpWide = truePeakDb([b], TEST_SAMPLE_RATE);
-		const deltaTight = inputTp - tpTight;
-		const deltaWide = inputTp - tpWide;
-		const deltaSpread = Math.abs(deltaTight - deltaWide);
+			// ── (a) SMOOTHING-INVARIANT whole-signal 4× TP reduction ─────────
+			const tpTight = truePeakDb([a], TEST_SAMPLE_RATE);
+			const tpWide = truePeakDb([b], TEST_SAMPLE_RATE);
+			const deltaTight = inputTp - tpTight;
+			const deltaWide = inputTp - tpWide;
+			const deltaSpread = Math.abs(deltaTight - deltaWide);
 
-		expect(deltaSpread).toBeLessThanOrEqual(0.05);
+			expect(deltaSpread).toBeLessThanOrEqual(0.05);
 
-		// Both reductions are GENUINE (not a trivially-invariant no-op).
-		expect(deltaTight).toBeGreaterThanOrEqual(0.1);
-		expect(deltaWide).toBeGreaterThanOrEqual(0.1);
+			// Both reductions are GENUINE (not a trivially-invariant no-op).
+			expect(deltaTight).toBeGreaterThanOrEqual(0.1);
+			expect(deltaWide).toBeGreaterThanOrEqual(0.1);
 
-		// ── (b) peaks UNTOUCHED by smoothing, spill OUTSIDE reshaped ─────
-		const burstFrames = Math.round(0.03 * TEST_SAMPLE_RATE);
-		const burstStarts = [0.35, 0.5, 0.62, 0.78, 0.9].map((fraction) => Math.round(fraction * SPARSE_FRAMES));
-		const inBurstCore = (index: number): boolean => {
-			for (const start of burstStarts) {
-				if (index >= start && index < start + burstFrames) return true;
+			// ── (b) peaks UNTOUCHED by smoothing, spill OUTSIDE reshaped ─────
+			const burstFrames = Math.round(0.03 * TEST_SAMPLE_RATE);
+			const burstStarts = [0.35, 0.5, 0.62, 0.78, 0.9].map((fraction) => Math.round(fraction * SPARSE_FRAMES));
+			const inBurstCore = (index: number): boolean => {
+				for (const start of burstStarts) {
+					if (index >= start && index < start + burstFrames) return true;
+				}
+
+				return false;
+			};
+
+			let coreMaxAbsDiff = 0;
+			let outsideMaxAbsDiff = 0;
+			let outsideSumAbsDiff = 0;
+			let outsideCount = 0;
+
+			for (let index = 0; index < a.length; index++) {
+				const diff = Math.abs((a[index] ?? 0) - (b[index] ?? 0));
+
+				if (inBurstCore(index)) {
+					coreMaxAbsDiff = Math.max(coreMaxAbsDiff, diff);
+				} else {
+					outsideMaxAbsDiff = Math.max(outsideMaxAbsDiff, diff);
+					outsideSumAbsDiff += diff;
+					outsideCount += 1;
+				}
 			}
 
-			return false;
-		};
+			const outsideMeanAbsDiff = outsideCount > 0 ? outsideSumAbsDiff / outsideCount : 0;
 
-		let coreMaxAbsDiff = 0;
-		let outsideMaxAbsDiff = 0;
-		let outsideSumAbsDiff = 0;
-		let outsideCount = 0;
+			// STRICT: the peak (exact-hold) cores are BIT-IDENTICAL across the
+			// two smoothing settings — smoothing does not touch the peaks.
+			expect(coreMaxAbsDiff).toBe(0);
 
-		for (let index = 0; index < a.length; index++) {
-			const diff = Math.abs((a[index] ?? 0) - (b[index] ?? 0));
+			// OUTSIDE the cores the two outputs genuinely differ — the spill
+			// is demonstrably reshaped (a real wired effect on the SPREAD).
+			expect(outsideMaxAbsDiff).toBeGreaterThan(1e-3);
+			expect(outsideMeanAbsDiff).toBeGreaterThan(1e-6);
 
-			if (inBurstCore(index)) {
-				coreMaxAbsDiff = Math.max(coreMaxAbsDiff, diff);
-			} else {
-				outsideMaxAbsDiff = Math.max(outsideMaxAbsDiff, diff);
-				outsideSumAbsDiff += diff;
-				outsideCount += 1;
-			}
-		}
-
-		const outsideMeanAbsDiff = outsideCount > 0 ? outsideSumAbsDiff / outsideCount : 0;
-
-		// STRICT: the peak (exact-hold) cores are BIT-IDENTICAL across the
-		// two smoothing settings — smoothing does not touch the peaks.
-		expect(coreMaxAbsDiff).toBe(0);
-
-		// OUTSIDE the cores the two outputs genuinely differ — the spill
-		// is demonstrably reshaped (a real wired effect on the SPREAD).
-		expect(outsideMaxAbsDiff).toBeGreaterThan(1e-3);
-		expect(outsideMeanAbsDiff).toBeGreaterThan(1e-6);
-
-		expect(Number.isFinite(tpTight)).toBe(true);
-		expect(Number.isFinite(tpWide)).toBe(true);
-	}, TIMEOUT);
+			expect(Number.isFinite(tpTight)).toBe(true);
+			expect(Number.isFinite(tpWide)).toBe(true);
+		},
+		TIMEOUT,
+	);
 });
 
 describe("CrestReduce (iv) determinism / reproducibility (re-spec of the superseded `strength` monotonicity)", () => {
 	const TIMEOUT = 120_000;
 	const FRAMES = TEST_SAMPLE_RATE;
 
-	it("same input ⇒ BIT-IDENTICAL output (the search/gate/envelope path is fully deterministic — no RNG), and a genuine reduction holds", async () => {
-		const input = makeHeadroomBearing(FRAMES, TEST_SAMPLE_RATE);
-		const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
+	it(
+		"same input ⇒ BIT-IDENTICAL output (the search/gate/envelope path is fully deterministic — no RNG), and a genuine reduction holds",
+		async () => {
+			const input = makeHeadroomBearing(FRAMES, TEST_SAMPLE_RATE);
+			const inputTp = truePeakDb([input], TEST_SAMPLE_RATE);
 
-		const first = await runStream([input], TEST_SAMPLE_RATE);
-		const second = await runStream([input], TEST_SAMPLE_RATE);
+			const first = await runStream([input], TEST_SAMPLE_RATE);
+			const second = await runStream([input], TEST_SAMPLE_RATE);
 
-		const a = first[0] ?? new Float32Array(0);
-		const b = second[0] ?? new Float32Array(0);
+			const a = first[0] ?? new Float32Array(0);
+			const b = second[0] ?? new Float32Array(0);
 
-		expect(a.length).toBe(b.length);
-		expect(a.length).toBe(input.length);
+			expect(a.length).toBe(b.length);
+			expect(a.length).toBe(input.length);
 
-		for (let index = 0; index < a.length; index++) expect(a[index]).toBe(b[index]);
+			for (let index = 0; index < a.length; index++) expect(a[index]).toBe(b[index]);
 
-		// Efficacy is not weakened: a genuine reduction still holds.
-		expect(inputTp - truePeakDb([a], TEST_SAMPLE_RATE)).toBeGreaterThanOrEqual(1.0);
-	}, TIMEOUT);
+			// Efficacy is not weakened: a genuine reduction still holds.
+			expect(inputTp - truePeakDb([a], TEST_SAMPLE_RATE)).toBeGreaterThanOrEqual(1.0);
+		},
+		TIMEOUT,
+	);
 });
 
 /**
@@ -552,24 +589,28 @@ describe("CrestReduce (v) linked stereo", () => {
 	// whole-signal never-worsen rule; catches NaN/Inf/gross regression.
 	const BLOWUP_CEILING_DB = 6;
 
-	it("processes a 2-channel signal: length + finiteness preserved, genuinely transformed, no blow-up (whole-signal 4× TP not a guaranteed quantity — see (ii))", async () => {
-		const left = makeHeadroomBearing(FRAMES, TEST_SAMPLE_RATE);
-		const right = makeAsymmetric(FRAMES, TEST_SAMPLE_RATE);
-		const inputTp = truePeakDb([left, right], TEST_SAMPLE_RATE);
-		const output = await runStream([left, right], TEST_SAMPLE_RATE);
+	it(
+		"processes a 2-channel signal: length + finiteness preserved, genuinely transformed, no blow-up (whole-signal 4× TP not a guaranteed quantity — see (ii))",
+		async () => {
+			const left = makeHeadroomBearing(FRAMES, TEST_SAMPLE_RATE);
+			const right = makeAsymmetric(FRAMES, TEST_SAMPLE_RATE);
+			const inputTp = truePeakDb([left, right], TEST_SAMPLE_RATE);
+			const output = await runStream([left, right], TEST_SAMPLE_RATE);
 
-		expect(output.length).toBe(2);
-		expect(output[0]?.length).toBe(left.length);
-		expect(output[1]?.length).toBe(right.length);
+			expect(output.length).toBe(2);
+			expect(output[0]?.length).toBe(left.length);
+			expect(output[1]?.length).toBe(right.length);
 
-		for (const channel of output) for (const value of channel) expect(Number.isFinite(value)).toBe(true);
+			for (const channel of output) for (const value of channel) expect(Number.isFinite(value)).toBe(true);
 
-		// Genuinely transformed (no accidental bypass) + blow-up sanity.
-		const { pct } = pctChangedAndMax(left, output[0] ?? new Float32Array(0));
+			// Genuinely transformed (no accidental bypass) + blow-up sanity.
+			const { pct } = pctChangedAndMax(left, output[0] ?? new Float32Array(0));
 
-		expect(pct).toBeGreaterThan(0);
-		expect(truePeakDb(output, TEST_SAMPLE_RATE)).toBeLessThanOrEqual(inputTp + BLOWUP_CEILING_DB);
-	}, TIMEOUT);
+			expect(pct).toBeGreaterThan(0);
+			expect(truePeakDb(output, TEST_SAMPLE_RATE)).toBeLessThanOrEqual(inputTp + BLOWUP_CEILING_DB);
+		},
+		TIMEOUT,
+	);
 });
 
 /**
@@ -582,24 +623,32 @@ describe("CrestReduce (v) linked stereo", () => {
 describe("CrestReduce (vi) silence / sub-frame", () => {
 	const TIMEOUT = 120_000;
 
-	it("silence passes through finite and exactly zero", async () => {
-		const input = [new Float32Array(TEST_SAMPLE_RATE)];
-		const output = await runStream(input, TEST_SAMPLE_RATE);
+	it(
+		"silence passes through finite and exactly zero",
+		async () => {
+			const input = [new Float32Array(TEST_SAMPLE_RATE)];
+			const output = await runStream(input, TEST_SAMPLE_RATE);
 
-		expect(output[0]?.length).toBe(TEST_SAMPLE_RATE);
+			expect(output[0]?.length).toBe(TEST_SAMPLE_RATE);
 
-		for (const value of output[0] ?? []) {
-			expect(Number.isFinite(value)).toBe(true);
-			expect(value).toBe(0);
-		}
-	}, TIMEOUT);
+			for (const value of output[0] ?? []) {
+				expect(Number.isFinite(value)).toBe(true);
+				expect(value).toBe(0);
+			}
+		},
+		TIMEOUT,
+	);
 
-	it("a sub-frame input does not throw and yields finite output", async () => {
-		const input = [makeDense(512, TEST_SAMPLE_RATE)];
-		const output = await runStream(input, TEST_SAMPLE_RATE);
+	it(
+		"a sub-frame input does not throw and yields finite output",
+		async () => {
+			const input = [makeDense(512, TEST_SAMPLE_RATE)];
+			const output = await runStream(input, TEST_SAMPLE_RATE);
 
-		for (const value of output[0] ?? []) expect(Number.isFinite(value)).toBe(true);
-	}, TIMEOUT);
+			for (const value of output[0] ?? []) expect(Number.isFinite(value)).toBe(true);
+		},
+		TIMEOUT,
+	);
 });
 
 // the node always runs the path — no bypass (there is no `strength`).
@@ -607,33 +656,41 @@ describe("CrestReduce (vii) always runs the path — no bypass (re-spec of the s
 	const TIMEOUT = 120_000;
 	const SYNTHETIC_FRAMES = TEST_SAMPLE_RATE;
 
-	it("synthetic LCG content is genuinely transformed (no bypass; deterministic path), length-preserving and finite", async () => {
-		const input = makeSynthetic(SYNTHETIC_FRAMES, TEST_SAMPLE_RATE);
-		const output = await runStream([input], TEST_SAMPLE_RATE);
-		const out0 = output[0] ?? new Float32Array(0);
+	it(
+		"synthetic LCG content is genuinely transformed (no bypass; deterministic path), length-preserving and finite",
+		async () => {
+			const input = makeSynthetic(SYNTHETIC_FRAMES, TEST_SAMPLE_RATE);
+			const output = await runStream([input], TEST_SAMPLE_RATE);
+			const out0 = output[0] ?? new Float32Array(0);
 
-		expect(out0.length).toBe(input.length);
+			expect(out0.length).toBe(input.length);
 
-		for (const value of out0) expect(Number.isFinite(value)).toBe(true);
+			for (const value of out0) expect(Number.isFinite(value)).toBe(true);
 
-		// No bypass: the path always runs. (`makeSynthetic` has genuine
-		// crest headroom on its 220/880 Hz tones + noise, so a real
-		// transform is applied — not a verbatim passthrough.)
-		const { pct } = pctChangedAndMax(input, out0);
+			// No bypass: the path always runs. (`makeSynthetic` has genuine
+			// crest headroom on its 220/880 Hz tones + noise, so a real
+			// transform is applied — not a verbatim passthrough.)
+			const { pct } = pctChangedAndMax(input, out0);
 
-		expect(pct).toBeGreaterThan(0);
-	}, TIMEOUT);
+			expect(pct).toBeGreaterThan(0);
+		},
+		TIMEOUT,
+	);
 
-	it.skipIf(!hasAudioFixtures("testVoice"))("voice fixture is processed (no bypass), length-preserving and finite", async () => {
-		const { samples, sampleRate } = await readWavSamples(audio.testVoice);
-		const output = await runStream(samples, sampleRate);
+	it.skipIf(!hasAudioFixtures("testVoice"))(
+		"voice fixture is processed (no bypass), length-preserving and finite",
+		async () => {
+			const { samples, sampleRate } = await readWavSamples(audio.testVoice);
+			const output = await runStream(samples, sampleRate);
 
-		expect(output.length).toBe(samples.length);
+			expect(output.length).toBe(samples.length);
 
-		for (let channelIndex = 0; channelIndex < samples.length; channelIndex++) {
-			expect(output[channelIndex]?.length).toBe(samples[channelIndex]?.length);
+			for (let channelIndex = 0; channelIndex < samples.length; channelIndex++) {
+				expect(output[channelIndex]?.length).toBe(samples[channelIndex]?.length);
 
-			for (const value of output[channelIndex] ?? []) expect(Number.isFinite(value)).toBe(true);
-		}
-	}, TIMEOUT);
+				for (const value of output[channelIndex] ?? []) expect(Number.isFinite(value)).toBe(true);
+			}
+		},
+		TIMEOUT,
+	);
 });

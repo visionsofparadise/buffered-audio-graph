@@ -8,7 +8,8 @@ import { notSilent, expectedDuration, somethingChanged, notAnomalous } from "../
 import { audio, binaries, hasBinaryFixtures, hasAudioFixtures } from "../../utils/test-binaries";
 import { deepFilterNet3 } from ".";
 
-const describeIfFixtureSet = hasBinaryFixtures("dfn3", "ffmpeg", "onnxAddon") && hasAudioFixtures("testVoice") ? describe : describe.skip;
+const describeIfFixtureSet =
+	hasBinaryFixtures("dfn3", "ffmpeg", "onnxAddon") && hasAudioFixtures("testVoice") ? describe : describe.skip;
 
 // Minimal 32-bit float WAV writer, sufficient for the read path.
 function encodeWavFloat32(samples: Float32Array, sampleRate: number): Buffer {

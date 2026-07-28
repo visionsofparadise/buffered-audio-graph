@@ -10,7 +10,10 @@ import {
 export class ShowOpenDialogMainIpc extends AsyncMainIpc<ShowOpenDialogIpcParameters, ShowOpenDialogIpcReturn> {
 	action = SHOW_OPEN_DIALOG_ACTION;
 
-	async handler(options: ShowOpenDialogOptions, dependencies: IpcHandlerDependencies): Promise<ShowOpenDialogIpcReturn> {
+	async handler(
+		options: ShowOpenDialogOptions,
+		dependencies: IpcHandlerDependencies,
+	): Promise<ShowOpenDialogIpcReturn> {
 		const result = await dialog.showOpenDialog(dependencies.browserWindow, {
 			title: options.title,
 			defaultPath: options.defaultPath,

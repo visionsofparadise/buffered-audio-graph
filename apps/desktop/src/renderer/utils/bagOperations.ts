@@ -36,7 +36,11 @@ export async function loadBag(main: Main, bagPath: string): Promise<GraphDefinit
 	let needsWrite = false;
 	const parsed = json as Record<string, unknown>;
 
-	if (!parsed.id || typeof parsed.id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.id)) {
+	if (
+		!parsed.id ||
+		typeof parsed.id !== "string" ||
+		!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.id)
+	) {
 		parsed.id = crypto.randomUUID();
 		needsWrite = true;
 	}
@@ -44,7 +48,9 @@ export async function loadBag(main: Main, bagPath: string): Promise<GraphDefinit
 	const definition = await main.validateGraphDefinition(parsed);
 
 	if (!SUPPORTED_API_VERSIONS.has(definition.apiVersion)) {
-		throw new Error(`Bag API version ${String(definition.apiVersion)} is not supported (supported: ${Array.from(SUPPORTED_API_VERSIONS).join(", ")})`);
+		throw new Error(
+			`Bag API version ${String(definition.apiVersion)} is not supported (supported: ${Array.from(SUPPORTED_API_VERSIONS).join(", ")})`,
+		);
 	}
 
 	if (needsWrite) {

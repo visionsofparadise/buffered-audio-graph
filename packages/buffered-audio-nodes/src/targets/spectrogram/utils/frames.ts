@@ -95,7 +95,18 @@ export function computeSpectrogramFrames(
 		const { re: batchRe, im: batchIm } = addon.batchFft(batchInput, fftSize, batchFrames);
 
 		for (let fi = 0; fi < batchFrames; fi++) {
-			frames.push(computeFrameMagnitudes(batchRe, batchIm, fi * linearBins, linearBins, magScale, outputBins, bandMappings, magnitudeBuffer));
+			frames.push(
+				computeFrameMagnitudes(
+					batchRe,
+					batchIm,
+					fi * linearBins,
+					linearBins,
+					magScale,
+					outputBins,
+					bandMappings,
+					magnitudeBuffer,
+				),
+			);
 		}
 	} else {
 		const windowed = new Float32Array(fftSize);
@@ -109,7 +120,9 @@ export function computeSpectrogramFrames(
 
 			const { re, im } = fft(windowed, workspace);
 
-			frames.push(computeFrameMagnitudes(re, im, 0, linearBins, magScale, outputBins, bandMappings, magnitudeBuffer));
+			frames.push(
+				computeFrameMagnitudes(re, im, 0, linearBins, magScale, outputBins, bandMappings, magnitudeBuffer),
+			);
 		}
 	}
 

@@ -23,10 +23,7 @@ export function NodeMenuItems({ bypassed, packageName, packageVersion, onBypass,
 		<>
 			{packageName !== "" && (
 				<>
-					<DropdownMenuLabel
-						title={`${packageName}@${packageVersion}`}
-						className="max-w-64 truncate text-dimmed"
-					>
+					<DropdownMenuLabel title={`${packageName}@${packageVersion}`} className="max-w-64 truncate text-dimmed">
 						{packageName}@{packageVersion}
 					</DropdownMenuLabel>
 					<DropdownMenuSeparator />

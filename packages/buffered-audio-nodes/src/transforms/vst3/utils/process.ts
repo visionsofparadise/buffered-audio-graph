@@ -41,9 +41,10 @@ export function observeVstHostStderr(stderr: NodeJS.ReadableStream): () => strin
 	stderr.on("data", (chunk: Buffer) => {
 		const combined = diagnosticTail.length === 0 ? chunk : Buffer.concat([diagnosticTail, chunk]);
 
-		diagnosticTail = combined.length <= DIAGNOSTIC_TAIL_BYTES
-			? combined
-			: combined.subarray(combined.length - DIAGNOSTIC_TAIL_BYTES);
+		diagnosticTail =
+			combined.length <= DIAGNOSTIC_TAIL_BYTES
+				? combined
+				: combined.subarray(combined.length - DIAGNOSTIC_TAIL_BYTES);
 	});
 
 	return () => diagnosticTail.toString("utf8");
@@ -130,8 +131,7 @@ export function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): V
 		proc.once("close", onClose);
 	});
 
-	stdin.on("error", () => {
-	});
+	stdin.on("error", () => {});
 
 	return { proc, stdin, stdout, stderr, ready, getStderrTail };
 }
@@ -150,7 +150,11 @@ export interface SpawnVstHostReadyOptions {
 	readonly onRetry?: (failedAttempt: number, error: VstHostExitedBeforeReadyError) => void;
 }
 
-export async function spawnVstHostReady(binaryPath: string, args: ReadonlyArray<string>, options: SpawnVstHostReadyOptions = {}): Promise<VstHostHandle> {
+export async function spawnVstHostReady(
+	binaryPath: string,
+	args: ReadonlyArray<string>,
+	options: SpawnVstHostReadyOptions = {},
+): Promise<VstHostHandle> {
 	const maxAttempts = options.maxAttempts ?? 5;
 	const backoffMs = options.backoffMs ?? 750;
 
@@ -174,7 +178,9 @@ export async function spawnVstHostReady(binaryPath: string, args: ReadonlyArray<
 	throw new Error(`spawnVstHostReady: exhausted ${maxAttempts} attempts without a result`);
 }
 
-export async function writeStagesJson(stages: ReadonlyArray<VstStage>): Promise<{ path: string; cleanup: () => Promise<void> }> {
+export async function writeStagesJson(
+	stages: ReadonlyArray<VstStage>,
+): Promise<{ path: string; cleanup: () => Promise<void> }> {
 	const dir = await mkdtemp(join(tmpdir(), "vst-host-stages-"));
 	const path = join(dir, "stages.json");
 
@@ -305,15 +311,21 @@ export async function processStreamingThroughVstHost(
 	if (exit.code !== 0) {
 		const stderrOutput = handle.getStderrTail();
 
-		throw new Error(`vst-host exited with code ${exit.code ?? "null"}${exit.signal ? ` (signal ${exit.signal})` : ""}: ${stderrOutput}`);
+		throw new Error(
+			`vst-host exited with code ${exit.code ?? "null"}${exit.signal ? ` (signal ${exit.signal})` : ""}: ${stderrOutput}`,
+		);
 	}
 
 	if (outputBytesReceived !== expectedOutputBytes) {
-		throw new Error(`vst-host returned ${outputBytesReceived} bytes, expected ${expectedOutputBytes} (${inputFrames} frames × ${channelCount} channels × 4)`);
+		throw new Error(
+			`vst-host returned ${outputBytesReceived} bytes, expected ${expectedOutputBytes} (${inputFrames} frames × ${channelCount} channels × 4)`,
+		);
 	}
 
 	if (stdoutTail.length !== 0) {
-		throw new Error(`vst-host returned an unaligned trailing fragment of ${stdoutTail.length} bytes (not a multiple of ${bytesPerFrame})`);
+		throw new Error(
+			`vst-host returned an unaligned trailing fragment of ${stdoutTail.length} bytes (not a multiple of ${bytesPerFrame})`,
+		);
 	}
 
 	await buffer.flushWrites();

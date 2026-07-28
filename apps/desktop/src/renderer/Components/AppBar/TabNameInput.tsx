@@ -21,10 +21,7 @@ export function TabNameInput({ tabId, label, onRename }: TabNameInputProps) {
 
 	return (
 		<span className="inline-grid max-w-[180px] items-center">
-			<span
-				aria-hidden="true"
-				className="invisible col-start-1 row-start-1 whitespace-pre pr-px"
-			>
+			<span aria-hidden="true" className="invisible col-start-1 row-start-1 whitespace-pre pr-px">
 				{value || " "}
 			</span>
 			<input

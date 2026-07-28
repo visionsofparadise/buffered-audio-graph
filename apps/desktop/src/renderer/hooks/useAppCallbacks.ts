@@ -15,11 +15,7 @@ interface UseAppCallbacksReturn {
 	readonly newBagTab: () => Promise<void>;
 }
 
-export function useAppCallbacks(
-	app: State<AppState>,
-	main: Main,
-	logger: Logger,
-): UseAppCallbacksReturn {
+export function useAppCallbacks(app: State<AppState>, main: Main, logger: Logger): UseAppCallbacksReturn {
 	const tabNames = useTrackedState<TabNamesState>({ names: {} });
 
 	const addTab = useCallback(
@@ -70,7 +66,11 @@ export function useAppCallbacks(
 		if (!result) return;
 
 		const readyBufferedAudioNodes = app.packages.filter(
-			(entry) => entry.name === "@buffered-audio/nodes" && entry.origin === "catalog" && entry.status === "ready" && entry.version !== null,
+			(entry) =>
+				entry.name === "@buffered-audio/nodes" &&
+				entry.origin === "catalog" &&
+				entry.status === "ready" &&
+				entry.version !== null,
 		);
 
 		if (readyBufferedAudioNodes.length > 0) {

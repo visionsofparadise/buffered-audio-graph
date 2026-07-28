@@ -40,13 +40,7 @@ export function FileInput({
 					onKeyDown={onKeyDown}
 					className="min-w-0 flex-1 rounded-xs bg-surface px-2 py-1 text-body text-text-primary outline-none placeholder:text-dimmed"
 				/>
-				<IconButton
-					icon={FolderOpen}
-					label="Browse for file"
-					variant="ghost"
-					size="sm"
-					onClick={onBrowse}
-				/>
+				<IconButton icon={FolderOpen} label="Browse for file" variant="ghost" size="sm" onClick={onBrowse} />
 			</div>
 		</div>
 	);

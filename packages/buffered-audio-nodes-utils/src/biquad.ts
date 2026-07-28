@@ -3,7 +3,11 @@ interface BiquadCoefficients {
 	fa: [number, number, number];
 }
 
-export function biquadFilter(samples: Float32Array, fb: [number, number, number], fa: [number, number, number]): Float32Array {
+export function biquadFilter(
+	samples: Float32Array,
+	fb: [number, number, number],
+	fa: [number, number, number],
+): Float32Array {
 	const output = new Float32Array(samples.length);
 	let x1 = 0;
 	let x2 = 0;
@@ -62,7 +66,11 @@ export function zeroPhaseBiquadFilter(signal: Float32Array, coefficients: Biquad
 
 // eslint-disable-next-line comment-rules/no-restricted-comments
 // Low/high-pass coefficient forms follow Robert Bristow-Johnson's Audio EQ Cookbook (W3C copy).
-export function lowPassCoefficients(sampleRate: number, frequency: number, quality: number = Math.SQRT1_2): BiquadCoefficients {
+export function lowPassCoefficients(
+	sampleRate: number,
+	frequency: number,
+	quality: number = Math.SQRT1_2,
+): BiquadCoefficients {
 	const w0 = (2 * Math.PI * frequency) / sampleRate;
 	const cosW0 = Math.cos(w0);
 	const sinW0 = Math.sin(w0);
@@ -75,7 +83,11 @@ export function lowPassCoefficients(sampleRate: number, frequency: number, quali
 	};
 }
 
-export function highPassCoefficients(sampleRate: number, frequency: number, quality: number = Math.SQRT1_2): BiquadCoefficients {
+export function highPassCoefficients(
+	sampleRate: number,
+	frequency: number,
+	quality: number = Math.SQRT1_2,
+): BiquadCoefficients {
 	const w0 = (2 * Math.PI * frequency) / sampleRate;
 	const cosW0 = Math.cos(w0);
 	const sinW0 = Math.sin(w0);
@@ -83,7 +95,7 @@ export function highPassCoefficients(sampleRate: number, frequency: number, qual
 	const a0 = 1 + alpha;
 
 	return {
-		fb: [(1 + cosW0) / 2 / a0, (-(1 + cosW0)) / a0, (1 + cosW0) / 2 / a0],
+		fb: [(1 + cosW0) / 2 / a0, -(1 + cosW0) / a0, (1 + cosW0) / 2 / a0],
 		fa: [1.0, (-2 * cosW0) / a0, (1 - alpha) / a0],
 	};
 }
@@ -106,7 +118,11 @@ export function preFilterCoefficients(sampleRate: number): BiquadCoefficients {
 	const a0 = 1 + kk / quality + kk * kk;
 
 	return {
-		fb: [(vh + (vb * kk) / quality + kk * kk) / a0, (2 * (kk * kk - vh)) / a0, (vh - (vb * kk) / quality + kk * kk) / a0],
+		fb: [
+			(vh + (vb * kk) / quality + kk * kk) / a0,
+			(2 * (kk * kk - vh)) / a0,
+			(vh - (vb * kk) / quality + kk * kk) / a0,
+		],
 		fa: [1.0, (2 * (kk * kk - 1)) / a0, (1 - kk / quality + kk * kk) / a0],
 	};
 }

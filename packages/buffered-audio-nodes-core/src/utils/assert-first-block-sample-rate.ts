@@ -1,6 +1,10 @@
 import type { Block } from "../node/stream/block";
 
-export function assertFirstBlockSampleRate(readable: ReadableStream<Block>, expected: number, nodeName: string): ReadableStream<Block> {
+export function assertFirstBlockSampleRate(
+	readable: ReadableStream<Block>,
+	expected: number,
+	nodeName: string,
+): ReadableStream<Block> {
 	const reader = readable.getReader();
 	let checked = false;
 

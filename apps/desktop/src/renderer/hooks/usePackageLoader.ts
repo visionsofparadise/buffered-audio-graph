@@ -4,14 +4,9 @@ import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
 import { mutatePackageAt, runPackagePipeline } from "./packagePipeline";
 
-export function usePackageLoader(
-	app: State<AppState>,
-	main: Main,
-): { isLoading: boolean } {
+export function usePackageLoader(app: State<AppState>, main: Main): { isLoading: boolean } {
 	const [isLoading, setIsLoading] = useState(() =>
-		app.packages.some(
-			(entry) => entry.origin === "catalog" && entry.status !== "ready" && entry.status !== "error",
-		),
+		app.packages.some((entry) => entry.origin === "catalog" && entry.status !== "ready" && entry.status !== "error"),
 	);
 
 	useEffect(() => {
@@ -22,7 +17,9 @@ export function usePackageLoader(
 				.unwrap()
 				.packages.map((entry, index) => ({ entry, index }))
 				.filter(({ entry }) => entry.origin === "catalog" && entry.status === "pending")
-				.sort((left, right) => (left.entry.isBuiltIn === right.entry.isBuiltIn ? 0 : left.entry.isBuiltIn ? -1 : 1));
+				.sort((left, right) =>
+					left.entry.isBuiltIn === right.entry.isBuiltIn ? 0 : left.entry.isBuiltIn ? -1 : 1,
+				);
 
 			if (indices.length > 0) {
 				setIsLoading(true);

@@ -135,9 +135,7 @@ async function main(): Promise<void> {
 		const cachePath = cachePaths.get(entry.sourceFilename);
 
 		if (cachePath === undefined) {
-			throw new Error(
-				`Internal error: cache path missing for ${entry.sourceFilename} after fetch`,
-			);
+			throw new Error(`Internal error: cache path missing for ${entry.sourceFilename} after fetch`);
 		}
 
 		const destination = path.join(outDir, entry.destFilename);
@@ -151,9 +149,7 @@ async function main(): Promise<void> {
 		console.warn(`[fixtures:binaries] copy   ${entry.destFilename}`);
 	}
 
-	console.warn(
-		`[fixtures:binaries] done — ${entries.length} asset(s) into ${outDir} for ${formatTarget(target)}`,
-	);
+	console.warn(`[fixtures:binaries] done — ${entries.length} asset(s) into ${outDir} for ${formatTarget(target)}`);
 }
 
 main().catch((error: unknown) => {

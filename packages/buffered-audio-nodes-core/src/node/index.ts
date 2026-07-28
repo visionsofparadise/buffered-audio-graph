@@ -8,14 +8,19 @@ export interface BufferedAudioNodeProperties {
 	readonly children?: ReadonlyArray<BufferedAudioNode>;
 }
 
-export type BufferedAudioNodeInput<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> = Partial<P> & BufferedAudioNodeProperties;
+export type BufferedAudioNodeInput<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> = Partial<P> &
+	BufferedAudioNodeProperties;
 
 export interface Composition {
 	readonly head: BufferedAudioNode;
 	readonly tail: BufferedAudioNode;
 }
 
-function parseNodeProperties<P extends BufferedAudioNodeProperties>(schema: z.ZodType, value: unknown, nodeName: string): P {
+function parseNodeProperties<P extends BufferedAudioNodeProperties>(
+	schema: z.ZodType,
+	value: unknown,
+	nodeName: string,
+): P {
 	try {
 		return schema.parse(value) as P;
 	} catch (error) {

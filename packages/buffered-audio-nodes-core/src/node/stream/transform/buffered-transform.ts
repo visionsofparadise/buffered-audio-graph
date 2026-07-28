@@ -14,7 +14,9 @@ export interface BufferedTransformNodeProperties extends TransformNodeProperties
 	readonly streamChunkSize?: number;
 }
 
-export abstract class BufferedTransformStream<N extends BufferedAudioNode<BufferedTransformNodeProperties> = BufferedAudioNode<BufferedTransformNodeProperties>> extends BufferedStream<N> {
+export abstract class BufferedTransformStream<
+	N extends BufferedAudioNode<BufferedTransformNodeProperties> = BufferedAudioNode<BufferedTransformNodeProperties>,
+> extends BufferedStream<N> {
 	blockSize: number;
 
 	private framesBuffered = 0;
@@ -30,7 +32,8 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 
 		const blockSize = this.properties.blockSize ?? WHOLE_FILE;
 
-		if (blockSize === 0) throw new Error("BufferedTransformStream: blockSize must be a positive integer or WHOLE_FILE, not 0");
+		if (blockSize === 0)
+			throw new Error("BufferedTransformStream: blockSize must be a positive integer or WHOLE_FILE, not 0");
 
 		this.blockSize = blockSize;
 	}
@@ -83,8 +86,11 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 
 				const blockFrames = block.samples[0]?.length ?? 0;
 
-				for (let offset = 0; offset < blockFrames; ) {
-					const frames = this.blockSize === WHOLE_FILE ? blockFrames : Math.min(this.blockSize - buffer.frames, blockFrames - offset);
+				for (let offset = 0; offset < blockFrames;) {
+					const frames =
+						this.blockSize === WHOLE_FILE
+							? blockFrames
+							: Math.min(this.blockSize - buffer.frames, blockFrames - offset);
 					const start = performance.now();
 					const prepared = await this._prepare(sliceBlock(block, offset, frames));
 
@@ -94,9 +100,11 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 					offset += frames;
 					this.framesBuffered += frames;
 
-					if (bufferGate(this.framesBuffered, Date.now())) this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+					if (bufferGate(this.framesBuffered, Date.now()))
+						this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
-					if (this.blockSize !== WHOLE_FILE && buffer.frames >= this.blockSize) yield* this.batch(buffer, emitGate);
+					if (this.blockSize !== WHOLE_FILE && buffer.frames >= this.blockSize)
+						yield* this.batch(buffer, emitGate);
 				}
 			}
 
@@ -138,14 +146,16 @@ export abstract class BufferedTransformStream<N extends BufferedAudioNode<Buffer
 			const cap = this.outputChunkSize;
 
 			if (frames > cap) {
-				for (let start = 0; start < frames; start += cap) yield sliceBlock(block, start, Math.min(cap, frames - start));
+				for (let start = 0; start < frames; start += cap)
+					yield sliceBlock(block, start, Math.min(cap, frames - start));
 			} else {
 				yield block;
 			}
 
 			this.framesEmitted += frames;
 
-			if (emitGate(this.framesEmitted, Date.now())) this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
+			if (emitGate(this.framesEmitted, Date.now()))
+				this.emitProgress("emit", this.framesEmitted, this.sourceTotalFrames);
 		}
 	}
 

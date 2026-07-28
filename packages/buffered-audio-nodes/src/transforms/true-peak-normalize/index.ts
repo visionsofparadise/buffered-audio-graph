@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { BufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type BlockBuffer,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { TruePeakAccumulator } from "@buffered-audio/utils";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { resolveTruePeakGain } from "./utils/gain";
@@ -65,7 +72,8 @@ export class TruePeakNormalizeStream extends BufferedTransformStream<TruePeakNor
 export class TruePeakNormalizeNode extends TransformNode<TruePeakNormalizeProperties> {
 	static override readonly nodeName = "True Peak Normalize";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly description = "Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single linear gain to hit a target dBTP";
+	static override readonly description =
+		"Measure source true peak (4× upsampled, BS.1770-4 style) and apply a single linear gain to hit a target dBTP";
 	static override readonly schema = schema;
 	static override readonly Stream = TruePeakNormalizeStream;
 }

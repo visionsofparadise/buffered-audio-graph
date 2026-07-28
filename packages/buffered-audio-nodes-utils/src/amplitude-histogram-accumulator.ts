@@ -9,7 +9,9 @@ export class AmplitudeHistogramAccumulator {
 
 	constructor(bucketCount: number) {
 		if (!Number.isInteger(bucketCount) || bucketCount <= 0) {
-			throw new Error(`AmplitudeHistogramAccumulator: bucketCount must be a positive integer, got ${String(bucketCount)}`);
+			throw new Error(
+				`AmplitudeHistogramAccumulator: bucketCount must be a positive integer, got ${String(bucketCount)}`,
+			);
 		}
 
 		this.bucketCount = bucketCount;
@@ -27,7 +29,9 @@ export class AmplitudeHistogramAccumulator {
 			const channel = channels[channelIndex];
 
 			if (channel === undefined || channel.length < frames) {
-				throw new Error(`AmplitudeHistogramAccumulator: channel ${channelIndex} has ${channel?.length ?? 0} samples, fewer than the requested ${frames}`);
+				throw new Error(
+					`AmplitudeHistogramAccumulator: channel ${channelIndex} has ${channel?.length ?? 0} samples, fewer than the requested ${frames}`,
+				);
 			}
 		}
 

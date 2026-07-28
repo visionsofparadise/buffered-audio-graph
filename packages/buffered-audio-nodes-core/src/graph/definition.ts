@@ -31,7 +31,10 @@ export type GraphNode = z.infer<typeof graphNodeSchema>;
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;
 export type GraphDefinition = z.infer<typeof graphDefinitionSchema>;
 
-export type NodeRegistry = Map<string, Map<string, Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>>>;
+export type NodeRegistry = Map<
+	string,
+	Map<string, Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>>
+>;
 
 export function validateGraphDefinition(json: unknown): GraphDefinition {
 	return graphDefinitionSchema.parse(json);

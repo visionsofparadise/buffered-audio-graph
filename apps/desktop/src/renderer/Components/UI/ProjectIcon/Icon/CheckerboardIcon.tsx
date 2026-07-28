@@ -22,7 +22,11 @@ export function CheckerboardIcon({ color, size = 32, className, ref, style, ...r
 					key={`cell-${ix}`}
 					style={{
 						backgroundColor:
-							ix === 10 ? "var(--color-accent-primary)" : (Math.floor(ix / 4) + (ix % 4)) % 2 === 0 ? color : "transparent",
+							ix === 10
+								? "var(--color-accent-primary)"
+								: (Math.floor(ix / 4) + (ix % 4)) % 2 === 0
+									? color
+									: "transparent",
 					}}
 				/>
 			))}

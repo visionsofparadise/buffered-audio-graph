@@ -48,7 +48,9 @@ export class SlidingWindowMinStream {
 
 	constructor(halfWidth: number) {
 		if (halfWidth < 0 || !Number.isFinite(halfWidth)) {
-			throw new RangeError(`SlidingWindowMinStream: halfWidth must be a non-negative finite number, got ${halfWidth}`);
+			throw new RangeError(
+				`SlidingWindowMinStream: halfWidth must be a non-negative finite number, got ${halfWidth}`,
+			);
 		}
 
 		this.halfWidth = halfWidth;

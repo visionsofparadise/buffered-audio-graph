@@ -7,7 +7,10 @@ import {
 	type UnloadPackageNodesIpcReturn,
 } from "./Renderer";
 
-export class UnloadPackageNodesMainIpc extends AsyncMainIpc<UnloadPackageNodesIpcParameters, UnloadPackageNodesIpcReturn> {
+export class UnloadPackageNodesMainIpc extends AsyncMainIpc<
+	UnloadPackageNodesIpcParameters,
+	UnloadPackageNodesIpcReturn
+> {
 	action = UNLOAD_PACKAGE_NODES_ACTION;
 
 	handler(input: UnloadPackageNodesInput, dependencies: IpcHandlerDependencies): UnloadPackageNodesIpcReturn {

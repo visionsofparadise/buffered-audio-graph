@@ -10,7 +10,11 @@ const testVoice = audio.testVoice;
 
 describe("htdemucs benchmark", () => {
 	it("benchmarks htdemucs", async () => {
-		const result = await runBenchmark("htdemucs", htdemucs(binaries.htdemucs, { vocals: 1, drums: 0, bass: 0, other: 0 }, { onnxAddonPath: binaries.onnxAddon}), testVoice);
+		const result = await runBenchmark(
+			"htdemucs",
+			htdemucs(binaries.htdemucs, { vocals: 1, drums: 0, bass: 0, other: 0 }, { onnxAddonPath: binaries.onnxAddon }),
+			testVoice,
+		);
 		await appendBenchmarkLog(here, result);
 	}, 240_000);
 });

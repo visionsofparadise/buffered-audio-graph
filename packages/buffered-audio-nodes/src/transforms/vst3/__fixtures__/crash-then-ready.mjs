@@ -40,7 +40,9 @@ attempt += 1;
 writeFileSync(crashFile, String(attempt));
 
 if (attempt <= crashCount) {
-	process.stderr.write(`crash-then-ready: simulated init crash on spawn ${String(attempt)} (code ${String(crashCode)})\n`);
+	process.stderr.write(
+		`crash-then-ready: simulated init crash on spawn ${String(attempt)} (code ${String(crashCode)})\n`,
+	);
 	process.exit(crashCode);
 }
 

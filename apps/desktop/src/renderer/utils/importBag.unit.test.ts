@@ -17,9 +17,9 @@ describe("mergeImportedBag", () => {
 		const currentDefinition = buildDefinition({ apiVersion: 1 });
 		const importedDefinition = buildDefinition({ apiVersion: 2 });
 
-		expect(() =>
-			mergeImportedBag({ currentDefinition, currentPositions: {}, importedDefinition }),
-		).toThrow("Cannot import a bag on API version 2 into a bag on API version 1");
+		expect(() => mergeImportedBag({ currentDefinition, currentPositions: {}, importedDefinition })).toThrow(
+			"Cannot import a bag on API version 2 into a bag on API version 1",
+		);
 	});
 
 	it("appends imported nodes with fresh ids after the current nodes", () => {

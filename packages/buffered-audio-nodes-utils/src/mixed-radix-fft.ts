@@ -95,7 +95,14 @@ export class MixedRadixFft {
 		}
 	}
 
-	private radix2(outRe: Float32Array, outIm: Float32Array, nn: number, groupSize: number, subSize: number, twOffset: number): number {
+	private radix2(
+		outRe: Float32Array,
+		outIm: Float32Array,
+		nn: number,
+		groupSize: number,
+		subSize: number,
+		twOffset: number,
+	): number {
 		for (let group = 0; group < nn; group += groupSize) {
 			for (let ni = 0; ni < subSize; ni++) {
 				const idx0 = group + ni;
@@ -117,7 +124,14 @@ export class MixedRadixFft {
 		return twOffset + subSize - 1;
 	}
 
-	private radix3(outRe: Float32Array, outIm: Float32Array, nn: number, groupSize: number, subSize: number, twOffset: number): number {
+	private radix3(
+		outRe: Float32Array,
+		outIm: Float32Array,
+		nn: number,
+		groupSize: number,
+		subSize: number,
+		twOffset: number,
+	): number {
 		const c3 = -0.5;
 		const s3 = -Math.sqrt(3) / 2;
 
@@ -130,7 +144,10 @@ export class MixedRadixFft {
 				let tw1Re: number, tw1Im: number, tw2Re: number, tw2Im: number;
 
 				if (ni === 0) {
-					tw1Re = 1; tw1Im = 0; tw2Re = 1; tw2Im = 0;
+					tw1Re = 1;
+					tw1Im = 0;
+					tw2Re = 1;
+					tw2Im = 0;
 				} else {
 					tw1Re = this.twiddleRe[twOffset + ni - 1] ?? 0;
 					tw1Im = this.twiddleIm[twOffset + ni - 1] ?? 0;
@@ -163,7 +180,14 @@ export class MixedRadixFft {
 		return twOffset + 2 * (subSize - 1);
 	}
 
-	private radix5(outRe: Float32Array, outIm: Float32Array, nn: number, groupSize: number, subSize: number, twOffset: number): number {
+	private radix5(
+		outRe: Float32Array,
+		outIm: Float32Array,
+		nn: number,
+		groupSize: number,
+		subSize: number,
+		twOffset: number,
+	): number {
 		const cos1 = Math.cos((2 * Math.PI) / 5);
 		const cos2 = Math.cos((4 * Math.PI) / 5);
 		const sin1 = -Math.sin((2 * Math.PI) / 5);
@@ -183,8 +207,14 @@ export class MixedRadixFft {
 				let tw4Re: number, tw4Im: number;
 
 				if (ni === 0) {
-					tw1Re = 1; tw1Im = 0; tw2Re = 1; tw2Im = 0;
-					tw3Re = 1; tw3Im = 0; tw4Re = 1; tw4Im = 0;
+					tw1Re = 1;
+					tw1Im = 0;
+					tw2Re = 1;
+					tw2Im = 0;
+					tw3Re = 1;
+					tw3Im = 0;
+					tw4Re = 1;
+					tw4Im = 0;
 				} else {
 					tw1Re = this.twiddleRe[twOffset + ni - 1] ?? 0;
 					tw1Im = this.twiddleIm[twOffset + ni - 1] ?? 0;

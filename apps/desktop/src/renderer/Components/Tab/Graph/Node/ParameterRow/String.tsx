@@ -31,9 +31,10 @@ export function StringRow({
 	}, [param.value]);
 
 	const controlDisabled = param.optional && !param.defined;
-	const setDefinedHandler = onParameterChange || onParameterUnset
-		? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
-		: undefined;
+	const setDefinedHandler =
+		onParameterChange || onParameterUnset
+			? (next: boolean) => (next ? onParameterChange?.(param.name, param.value) : onParameterUnset?.(param.name))
+			: undefined;
 
 	const updateLocal = (next: string): void => {
 		localRef.current = next;

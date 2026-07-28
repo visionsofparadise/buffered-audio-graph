@@ -10,9 +10,7 @@ export interface BuildBaseRateDetectionCacheArgs {
 	halfWidth: number;
 }
 
-export async function buildBaseRateDetectionCache(
-	args: BuildBaseRateDetectionCacheArgs,
-): Promise<BlockBuffer> {
+export async function buildBaseRateDetectionCache(args: BuildBaseRateDetectionCacheArgs): Promise<BlockBuffer> {
 	const { buffer, sampleRate, channelCount, frames, halfWidth } = args;
 
 	const detectionEnvelope = new BlockBuffer();

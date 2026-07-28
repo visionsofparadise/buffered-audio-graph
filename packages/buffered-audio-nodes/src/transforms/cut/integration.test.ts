@@ -26,7 +26,11 @@ describe("cut", () => {
 	});
 
 	it("removes matching frames when the cut spans a chunk boundary", async () => {
-		const { blocks } = await runTransformStream(cut([{ start: 1, end: 2 }]), [makeRamp(1500, 0), makeRamp(1500, 1500), makeRamp(1000, 3000)]);
+		const { blocks } = await runTransformStream(cut([{ start: 1, end: 2 }]), [
+			makeRamp(1500, 0),
+			makeRamp(1500, 1500),
+			makeRamp(1000, 3000),
+		]);
 
 		expect(channelSamples(blocks, 0).length).toBe(3000);
 	});

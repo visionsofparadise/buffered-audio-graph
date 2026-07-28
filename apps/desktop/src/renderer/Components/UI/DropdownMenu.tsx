@@ -19,20 +19,14 @@ export function DropdownMenuContent({
 			<DropdownMenuPrimitive.Content
 				sideOffset={sideOffset}
 				collisionPadding={collisionPadding}
-				className={cn(
-					"z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-2 outline-none",
-					className,
-				)}
+				className={cn("z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-2 outline-none", className)}
 				{...props}
 			/>
 		</DropdownMenuPrimitive.Portal>
 	);
 }
 
-export function DropdownMenuItem({
-	className,
-	...props
-}: ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item>) {
+export function DropdownMenuItem({ className, ...props }: ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item>) {
 	return (
 		<DropdownMenuPrimitive.Item
 			className={cn(
@@ -52,10 +46,7 @@ export function DropdownMenuLabel({
 }: ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label>) {
 	return (
 		<DropdownMenuPrimitive.Label
-			className={cn(
-				"type-label px-4 py-2 text-xs text-text-secondary",
-				className,
-			)}
+			className={cn("type-label px-4 py-2 text-xs text-text-secondary", className)}
 			{...props}
 		/>
 	);
@@ -65,12 +56,7 @@ export function DropdownMenuSeparator({
 	className,
 	...props
 }: ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>) {
-	return (
-		<DropdownMenuPrimitive.Separator
-			className={cn("mx-2 my-1 h-px bg-border", className)}
-			{...props}
-		/>
-	);
+	return <DropdownMenuPrimitive.Separator className={cn("mx-2 my-1 h-px bg-border", className)} {...props} />;
 }
 
 export function DropdownMenuSubTrigger({
@@ -98,10 +84,7 @@ export function DropdownMenuSubContent({
 	return (
 		<DropdownMenuPrimitive.Portal>
 			<DropdownMenuPrimitive.SubContent
-				className={cn(
-					"z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-2 outline-none",
-					className,
-				)}
+				className={cn("z-50 flex min-w-44 flex-col rounded-xs bg-elevated py-2 outline-none", className)}
 				{...props}
 			/>
 		</DropdownMenuPrimitive.Portal>

@@ -18,7 +18,9 @@ export interface RenderTiming {
 
 export interface SourceNodeProperties extends BufferedAudioNodeProperties {}
 
-export abstract class BufferedSourceStream<N extends BufferedAudioNode<SourceNodeProperties> = BufferedAudioNode<SourceNodeProperties>> extends BufferedStream<N> {
+export abstract class BufferedSourceStream<
+	N extends BufferedAudioNode<SourceNodeProperties> = BufferedAudioNode<SourceNodeProperties>,
+> extends BufferedStream<N> {
 	private framesRead = 0;
 	private hasStarted = false;
 
@@ -75,7 +77,8 @@ export abstract class BufferedSourceStream<N extends BufferedAudioNode<SourceNod
 
 						this.framesRead += chunk.samples[0]?.length ?? 0;
 						controller.enqueue(chunk);
-						if (readGate(this.framesRead, Date.now())) this.emitProgress("read", this.framesRead, sourceTotalFrames);
+						if (readGate(this.framesRead, Date.now()))
+							this.emitProgress("read", this.framesRead, sourceTotalFrames);
 					} catch (error) {
 						done = true;
 						await this.destroy();

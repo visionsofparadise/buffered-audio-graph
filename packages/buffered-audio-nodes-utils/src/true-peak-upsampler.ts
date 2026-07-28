@@ -5,28 +5,28 @@ const TAPS_PER_PHASE_4X = 12;
 const HISTORY_LENGTH_4X = TAPS_PER_PHASE_4X;
 const FLUSH_INPUT_4X = new Float32Array(TAPS_PER_PHASE_4X - 1);
 
-const P0T0 = 0.0017089843750;
-const P0T1 = 0.0109863281250;
+const P0T0 = 0.001708984375;
+const P0T1 = 0.010986328125;
 const P0T2 = -0.0196533203125;
-const P0T3 = 0.0332031250000;
+const P0T3 = 0.033203125;
 const P0T4 = -0.0594482421875;
 const P0T5 = 0.1373291015625;
-const P0T6 = 0.9721679687500;
-const P0T7 = -0.1022949218750;
-const P0T8 = 0.0476074218750;
-const P0T9 = -0.0266113281250;
-const P0T10 = 0.0148925781250;
-const P0T11 = -0.0083007812500;
+const P0T6 = 0.97216796875;
+const P0T7 = -0.102294921875;
+const P0T8 = 0.047607421875;
+const P0T9 = -0.026611328125;
+const P0T10 = 0.014892578125;
+const P0T11 = -0.00830078125;
 
 const P1T0 = -0.0291748046875;
-const P1T1 = 0.0292968750000;
-const P1T2 = -0.0517578125000;
-const P1T3 = 0.0891113281250;
-const P1T4 = -0.1665039062500;
-const P1T5 = 0.4650878906250;
-const P1T6 = 0.7797851562500;
+const P1T1 = 0.029296875;
+const P1T2 = -0.0517578125;
+const P1T3 = 0.089111328125;
+const P1T4 = -0.16650390625;
+const P1T5 = 0.465087890625;
+const P1T6 = 0.77978515625;
 const P1T7 = -0.2003173828125;
-const P1T8 = 0.1015625000000;
+const P1T8 = 0.1015625;
 const P1T9 = -0.0582275390625;
 const P1T10 = 0.0330810546875;
 const P1T11 = -0.0189208984375;
@@ -34,28 +34,28 @@ const P1T11 = -0.0189208984375;
 const P2T0 = -0.0189208984375;
 const P2T1 = 0.0330810546875;
 const P2T2 = -0.0582275390625;
-const P2T3 = 0.1015625000000;
+const P2T3 = 0.1015625;
 const P2T4 = -0.2003173828125;
-const P2T5 = 0.7797851562500;
-const P2T6 = 0.4650878906250;
-const P2T7 = -0.1665039062500;
-const P2T8 = 0.0891113281250;
-const P2T9 = -0.0517578125000;
-const P2T10 = 0.0292968750000;
+const P2T5 = 0.77978515625;
+const P2T6 = 0.465087890625;
+const P2T7 = -0.16650390625;
+const P2T8 = 0.089111328125;
+const P2T9 = -0.0517578125;
+const P2T10 = 0.029296875;
 const P2T11 = -0.0291748046875;
 
-const P3T0 = -0.0083007812500;
-const P3T1 = 0.0148925781250;
-const P3T2 = -0.0266113281250;
-const P3T3 = 0.0476074218750;
-const P3T4 = -0.1022949218750;
-const P3T5 = 0.9721679687500;
+const P3T0 = -0.00830078125;
+const P3T1 = 0.014892578125;
+const P3T2 = -0.026611328125;
+const P3T3 = 0.047607421875;
+const P3T4 = -0.102294921875;
+const P3T5 = 0.97216796875;
 const P3T6 = 0.1373291015625;
 const P3T7 = -0.0594482421875;
-const P3T8 = 0.0332031250000;
+const P3T8 = 0.033203125;
 const P3T9 = -0.0196533203125;
-const P3T10 = 0.0109863281250;
-const P3T11 = 0.0017089843750;
+const P3T10 = 0.010986328125;
+const P3T11 = 0.001708984375;
 
 export type TruePeakUpsamplingFactor = 4 | 8 | 16;
 
@@ -67,7 +67,9 @@ export class TruePeakUpsampler {
 
 	constructor(factor: TruePeakUpsamplingFactor = 4) {
 		if (factor !== 4) {
-			throw new Error(`TruePeakUpsampler: factor ${factor} is not yet implemented; only 4× (BS.1770-5 Annex 2) is supported`);
+			throw new Error(
+				`TruePeakUpsampler: factor ${factor} is not yet implemented; only 4× (BS.1770-5 Annex 2) is supported`,
+			);
 		}
 
 		this.factor = factor;
@@ -100,9 +102,10 @@ export class TruePeakUpsampler {
 		const factor = this.factor;
 		const inputLength = input.length;
 		const outputLength = inputLength * factor;
-		const output = outputScratch !== undefined && outputScratch.length >= outputLength
-			? outputScratch.subarray(0, outputLength)
-			: new Float32Array(outputLength);
+		const output =
+			outputScratch !== undefined && outputScratch.length >= outputLength
+				? outputScratch.subarray(0, outputLength)
+				: new Float32Array(outputLength);
 		const history = this.history;
 		const historyLength = HISTORY_LENGTH_4X;
 		const workLength = historyLength + inputLength;

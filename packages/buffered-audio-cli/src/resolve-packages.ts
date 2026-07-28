@@ -19,7 +19,11 @@ interface PackageManifest {
 }
 
 interface PacoteApi {
-	extract: (spec: string, dest: string, options?: Record<string, unknown>) => Promise<{ from?: string; integrity?: string; resolved?: string }>;
+	extract: (
+		spec: string,
+		dest: string,
+		options?: Record<string, unknown>,
+	) => Promise<{ from?: string; integrity?: string; resolved?: string }>;
 }
 
 function readManifest(packageDir: string): PackageManifest {
@@ -32,15 +36,28 @@ function collectExportEntries(exportsValue: PackageExports): Array<string> {
 	if (Array.isArray(exportsValue)) return exportsValue.flatMap((value) => collectExportEntries(value));
 
 	const preferredKeys = ["import", "default", "require", "node"];
-	const orderedKeys = [...preferredKeys.filter((key) => key in exportsValue), ...Object.keys(exportsValue).filter((key) => key !== "types" && !preferredKeys.includes(key))];
+	const orderedKeys = [
+		...preferredKeys.filter((key) => key in exportsValue),
+		...Object.keys(exportsValue).filter((key) => key !== "types" && !preferredKeys.includes(key)),
+	];
 
 	return orderedKeys.flatMap((key) => collectExportEntries(exportsValue[key]));
 }
 
 function resolveEntryPath(packageDir: string): string {
 	const manifest = readManifest(packageDir);
-	const rootExports = manifest.exports && typeof manifest.exports === "object" && !Array.isArray(manifest.exports) && "." in manifest.exports ? manifest.exports["."] : manifest.exports;
-	const candidates = [...collectExportEntries(rootExports), ...(manifest.module ? [manifest.module] : []), ...(manifest.main ? [manifest.main] : [])];
+	const rootExports =
+		manifest.exports &&
+		typeof manifest.exports === "object" &&
+		!Array.isArray(manifest.exports) &&
+		"." in manifest.exports
+			? manifest.exports["."]
+			: manifest.exports;
+	const candidates = [
+		...collectExportEntries(rootExports),
+		...(manifest.module ? [manifest.module] : []),
+		...(manifest.main ? [manifest.main] : []),
+	];
 
 	for (const candidate of candidates) {
 		if (!candidate || candidate.startsWith("#")) continue;
@@ -109,7 +126,11 @@ function indexExports(mod: Record<string, unknown>): Map<string, NodeConstructor
 	return packageMap;
 }
 
-async function resolvePackage(name: string, version: string, options: { install: boolean; overrides: Map<string, string> }): Promise<Record<string, unknown>> {
+async function resolvePackage(
+	name: string,
+	version: string,
+	options: { install: boolean; overrides: Map<string, string> },
+): Promise<Record<string, unknown>> {
 	const overridePath = options.overrides.get(name);
 
 	if (overridePath !== undefined) {
@@ -141,7 +162,10 @@ async function resolvePackage(name: string, version: string, options: { install:
 	return importPackageDir(cacheDir);
 }
 
-export async function resolvePackages(pairs: ReadonlyArray<{ packageName: string; packageVersion: string }>, options: { install: boolean; overrides: Map<string, string> }): Promise<NodeRegistry> {
+export async function resolvePackages(
+	pairs: ReadonlyArray<{ packageName: string; packageVersion: string }>,
+	options: { install: boolean; overrides: Map<string, string> },
+): Promise<NodeRegistry> {
 	const registry: NodeRegistry = new Map();
 
 	for (const { packageName, packageVersion } of pairs) {

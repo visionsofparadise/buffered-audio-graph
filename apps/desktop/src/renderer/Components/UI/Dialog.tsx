@@ -21,12 +21,7 @@ export const DialogClose = Close;
 export const DialogPortal = Portal;
 
 export function DialogOverlay({ className, ...props }: DialogOverlayProps) {
-	return (
-		<Overlay
-			className={cn("fixed inset-0 z-50 bg-black/60", className)}
-			{...props}
-		/>
-	);
+	return <Overlay className={cn("fixed inset-0 z-50 bg-black/60", className)} {...props} />;
 }
 
 export function DialogContent({ className, children, ...props }: DialogContentProps) {
@@ -47,37 +42,17 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
 }
 
 export function DialogHeader({ className, ...props }: ComponentPropsWithoutRef<"div">) {
-	return (
-		<div
-			className={cn("flex items-center justify-between px-6 py-4", className)}
-			{...props}
-		/>
-	);
+	return <div className={cn("flex items-center justify-between px-6 py-4", className)} {...props} />;
 }
 
 export function DialogFooter({ className, ...props }: ComponentPropsWithoutRef<"div">) {
-	return (
-		<div
-			className={cn("flex items-center justify-end px-6 py-4", className)}
-			{...props}
-		/>
-	);
+	return <div className={cn("flex items-center justify-end px-6 py-4", className)} {...props} />;
 }
 
 export function DialogTitle({ className, ...props }: DialogTitleProps) {
-	return (
-		<Title
-			className={cn("type-label text-body text-text-primary", className)}
-			{...props}
-		/>
-	);
+	return <Title className={cn("type-label text-body text-text-primary", className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: DialogDescriptionProps) {
-	return (
-		<Description
-			className={cn("text-body text-text-secondary", className)}
-			{...props}
-		/>
-	);
+	return <Description className={cn("text-body text-text-secondary", className)} {...props} />;
 }

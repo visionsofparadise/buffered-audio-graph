@@ -1,6 +1,14 @@
 import type { Logger } from "../../shared/Models/Logger";
 import type { Vst3ScanEntry } from "../../shared/ipc/Vst3/Vst3ScanEntry";
-import { isCacheHit, readCache, statModule, writeCache, type CacheRecord, type ModuleStat, type ScanCache } from "./cache";
+import {
+	isCacheHit,
+	readCache,
+	statModule,
+	writeCache,
+	type CacheRecord,
+	type ModuleStat,
+	type ScanCache,
+} from "./cache";
 import { deriveErrorEntry, derivePendingEntry, deriveReadyEntries } from "./entries";
 import { listModule } from "./listing";
 import { walkVst3Roots, type WalkModule } from "./walk";
@@ -61,7 +69,9 @@ export class Vst3Scanner {
 			if (cached !== undefined) {
 				entriesByModule.set(module.modulePath, recordToEntries(module, cached));
 			} else if (!cli.exists) {
-				entriesByModule.set(module.modulePath, [deriveErrorEntry(module, `vst-demon-cli binary not found at ${cli.path}`)]);
+				entriesByModule.set(module.modulePath, [
+					deriveErrorEntry(module, `vst-demon-cli binary not found at ${cli.path}`),
+				]);
 			} else {
 				entriesByModule.set(module.modulePath, [derivePendingEntry(module)]);
 				toProbe.push(module);
@@ -116,7 +126,10 @@ export class Vst3Scanner {
 		this.writeCacheSafe(nextCache);
 	}
 
-	private flatten(modules: ReadonlyArray<WalkModule>, entriesByModule: Map<string, ReadonlyArray<Vst3ScanEntry>>): ReadonlyArray<Vst3ScanEntry> {
+	private flatten(
+		modules: ReadonlyArray<WalkModule>,
+		entriesByModule: Map<string, ReadonlyArray<Vst3ScanEntry>>,
+	): ReadonlyArray<Vst3ScanEntry> {
 		const entries: Array<Vst3ScanEntry> = [];
 
 		for (const module of modules) {
@@ -128,7 +141,10 @@ export class Vst3Scanner {
 		return entries;
 	}
 
-	private async runPool(modules: ReadonlyArray<WalkModule>, worker: (module: WalkModule) => Promise<void>): Promise<void> {
+	private async runPool(
+		modules: ReadonlyArray<WalkModule>,
+		worker: (module: WalkModule) => Promise<void>,
+	): Promise<void> {
 		let cursor = 0;
 
 		const runNext = async (): Promise<void> => {
@@ -152,7 +168,11 @@ export class Vst3Scanner {
 		try {
 			return statModule(module.modulePath);
 		} catch (error) {
-			this.options.logger.warn("Failed to stat module", { namespace: "vst3", modulePath: module.modulePath, error: String(error) });
+			this.options.logger.warn("Failed to stat module", {
+				namespace: "vst3",
+				modulePath: module.modulePath,
+				error: String(error),
+			});
 
 			return undefined;
 		}
@@ -162,7 +182,11 @@ export class Vst3Scanner {
 		try {
 			writeCache(this.options.cachePath, cache);
 		} catch (error) {
-			this.options.logger.warn("Failed to write scan cache", { namespace: "vst3", cachePath: this.options.cachePath, error: String(error) });
+			this.options.logger.warn("Failed to write scan cache", {
+				namespace: "vst3",
+				cachePath: this.options.cachePath,
+				error: String(error),
+			});
 		}
 	}
 }

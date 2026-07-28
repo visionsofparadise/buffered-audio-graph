@@ -74,7 +74,9 @@ describe("DuplicateChannelsNode", () => {
 			bitDepth: 32,
 		};
 
-		expect(() => Array.from(stream._transform(chunk))).toThrow(/DuplicateChannelsNode requires exactly 1 input channel/);
+		expect(() => Array.from(stream._transform(chunk))).toThrow(
+			/DuplicateChannelsNode requires exactly 1 input channel/,
+		);
 	});
 
 	it("duplicates a mono stream through the harness", async () => {

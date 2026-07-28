@@ -124,7 +124,10 @@ function loadSavedPackages(savedPackages: Array<unknown> | undefined): Array<Nod
 	);
 }
 
-async function bagFileExists(main: { stat: (filePath: string) => Promise<{ isFile: boolean }> }, bagPath: string): Promise<boolean> {
+async function bagFileExists(
+	main: { stat: (filePath: string) => Promise<{ isFile: boolean }> },
+	bagPath: string,
+): Promise<boolean> {
 	try {
 		const stats = await main.stat(bagPath);
 
@@ -167,7 +170,9 @@ export async function loadAppState(main: {
 	const tabs = savedTabs.filter((_, index) => tabExists[index]);
 	const recentFiles = savedRecentFiles.filter((_, index) => recentExists[index]);
 
-	const activeTabId = tabs.some((tab) => tab.id === saved.activeTabId) ? (saved.activeTabId ?? null) : (tabs[0]?.id ?? null);
+	const activeTabId = tabs.some((tab) => tab.id === saved.activeTabId)
+		? (saved.activeTabId ?? null)
+		: (tabs[0]?.id ?? null);
 
 	const packages = loadSavedPackages(saved.packages);
 

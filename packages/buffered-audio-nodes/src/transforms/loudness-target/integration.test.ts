@@ -110,20 +110,27 @@ interface RunStreamResult {
  * exposes the iteration's winning `(B, limitDb)` for tests that need to
  * assert on iteration behaviour.
  */
-async function runStream(channels: ReadonlyArray<Float32Array>, sampleRate: number, properties: TargetRunOptions): Promise<RunStreamResult> {
+async function runStream(
+	channels: ReadonlyArray<Float32Array>,
+	sampleRate: number,
+	properties: TargetRunOptions,
+): Promise<RunStreamResult> {
 	const channelCount = channels.length;
-	const stream = new LoudnessTargetStream(loudnessTarget({
-		targetLufs: properties.targetLufs,
-		pivot: properties.pivot,
-		floor: properties.floor,
-		targetTp: properties.targetTp,
-		limitDb: properties.limitDb,
-		limitPercentile: properties.limitPercentile ?? 0.995,
-		smoothing: properties.smoothing ?? 1,
-		tolerance: properties.tolerance ?? 0.5,
-		peakTolerance: properties.peakTolerance ?? 0.1,
-		maxAttempts: properties.maxAttempts ?? 10,
-	}), createTestStreamContext().context);
+	const stream = new LoudnessTargetStream(
+		loudnessTarget({
+			targetLufs: properties.targetLufs,
+			pivot: properties.pivot,
+			floor: properties.floor,
+			targetTp: properties.targetTp,
+			limitDb: properties.limitDb,
+			limitPercentile: properties.limitPercentile ?? 0.995,
+			smoothing: properties.smoothing ?? 1,
+			tolerance: properties.tolerance ?? 0.5,
+			peakTolerance: properties.peakTolerance ?? 0.1,
+			maxAttempts: properties.maxAttempts ?? 10,
+		}),
+		createTestStreamContext().context,
+	);
 
 	const samples: Array<Float32Array> = [];
 
@@ -221,7 +228,9 @@ describe("LoudnessTarget end-to-end", () => {
 
 		const sourcePeakDb = measureTruePeak([input], TEST_SAMPLE_RATE);
 
-		console.log(`[test:auto-pivot] outputLufs=${lufs.toFixed(3)} target=${targetLufs.toFixed(3)} winningLimitDb=${output.winningLimitDb?.toFixed(4) ?? "?"} sourcePeakDb=${sourcePeakDb.toFixed(4)}`);
+		console.log(
+			`[test:auto-pivot] outputLufs=${lufs.toFixed(3)} target=${targetLufs.toFixed(3)} winningLimitDb=${output.winningLimitDb?.toFixed(4) ?? "?"} sourcePeakDb=${sourcePeakDb.toFixed(4)}`,
+		);
 
 		// Re-baseline note (2026-05-11, plan-loudness-target-percentile-
 		// limit Phase 4.2): tightened LUFS bound from 0.6 to keep the
@@ -276,7 +285,9 @@ describe("LoudnessTarget end-to-end", () => {
 		const bestB = output.winningB ?? 0;
 		const peakWithBOnly = sourcePeakDb + bestB;
 
-		console.log(`[test:TP-ceiling] outputTruePeakDb=${truePeakDb.toFixed(3)} target=${targetTp} sourcePeakDb=${sourcePeakDb.toFixed(3)} bestB=${bestB.toFixed(3)} peakWithBOnly=${peakWithBOnly.toFixed(3)}`);
+		console.log(
+			`[test:TP-ceiling] outputTruePeakDb=${truePeakDb.toFixed(3)} target=${targetTp} sourcePeakDb=${sourcePeakDb.toFixed(3)} bestB=${bestB.toFixed(3)} peakWithBOnly=${peakWithBOnly.toFixed(3)}`,
+		);
 
 		// (a) Output true peak respects the cap (small smoothing-induced
 		//     overshoot allowance).
@@ -354,7 +365,9 @@ describe("LoudnessTarget end-to-end", () => {
 		expect(outputChannel).toBeDefined();
 		expect(outputChannel?.length).toBe(input.length);
 
-		console.log(`[test:explicit-limit] winningLimitDb=${result.winningLimitDb?.toFixed(4) ?? "?"} limitDbOverride=${limitDb} sourcePeakDb=${sourcePeakDb.toFixed(3)}`);
+		console.log(
+			`[test:explicit-limit] winningLimitDb=${result.winningLimitDb?.toFixed(4) ?? "?"} limitDbOverride=${limitDb} sourcePeakDb=${sourcePeakDb.toFixed(3)}`,
+		);
 
 		// `winningLimitDb` equals the override (within float tolerance —
 		// the iterator's internal `clampLimit` is a no-op for values in
@@ -390,6 +403,6 @@ describe("LoudnessTarget end-to-end", () => {
 		// final answer). Iteration's secant + proportional feedback
 		// drive `(B, peakGainDb)` to within the bag's
 		// `0.5 iteration tolerance + 0.1 residual headroom envelope`.
-		expect(Math.abs(lufs - (-16))).toBeLessThan(0.6);
+		expect(Math.abs(lufs - -16)).toBeLessThan(0.6);
 	});
 });

@@ -28,7 +28,7 @@ function directTransform(real: ArrayLike<number>, imag: ArrayLike<number>, inver
 		let sumImag = 0;
 
 		for (let index = 0; index < size; index++) {
-			const angle = direction * 2 * Math.PI * bin * index / size;
+			const angle = (direction * 2 * Math.PI * bin * index) / size;
 			const cosine = Math.cos(angle);
 			const sine = Math.sin(angle);
 			const inputReal = real[index] ?? 0;
@@ -55,7 +55,12 @@ function createSignal(size: number): Float32Array {
 	return signal;
 }
 
-function expectComplexClose(actualReal: ArrayLike<number>, actualImag: ArrayLike<number>, expected: ComplexResult, tolerance: number): void {
+function expectComplexClose(
+	actualReal: ArrayLike<number>,
+	actualImag: ArrayLike<number>,
+	expected: ComplexResult,
+	tolerance: number,
+): void {
 	let maxError = 0;
 
 	for (let index = 0; index < expected.real.length; index++) {
@@ -118,7 +123,9 @@ describe("radix-2 validation", () => {
 
 		expect(() => createFftWorkspace(size)).toThrow("positive power-of-two integer");
 		expect(() => stft(values, size, 1)).toThrow("positive power-of-two integer");
-		expect(() => istft({ real: values, imag: values, frames: 0, fftSize: size }, 1, 0)).toThrow("positive power-of-two integer");
+		expect(() => istft({ real: values, imag: values, frames: 0, fftSize: size }, 1, 0)).toThrow(
+			"positive power-of-two integer",
+		);
 		expect(() => bitReverse(values, values, size)).toThrow("positive power-of-two integer");
 		expect(() => butterflyStages(values, values, size)).toThrow("positive power-of-two integer");
 	});

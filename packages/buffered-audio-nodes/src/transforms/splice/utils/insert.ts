@@ -4,7 +4,12 @@ export interface InsertOverlap {
 	insertOffset: number;
 }
 
-export function computeInsertOverlap(chunkStart: number, chunkFrames: number, insertAt: number, insertLength: number): InsertOverlap | undefined {
+export function computeInsertOverlap(
+	chunkStart: number,
+	chunkFrames: number,
+	insertAt: number,
+	insertLength: number,
+): InsertOverlap | undefined {
 	const chunkEnd = chunkStart + chunkFrames;
 	const insertEnd = insertAt + insertLength;
 

@@ -12,4 +12,3 @@ export function measureFrameTruePeakDb(channels: ReadonlyArray<Float32Array>, sa
 
 	return linearToDb(accumulator.finalize());
 }
-

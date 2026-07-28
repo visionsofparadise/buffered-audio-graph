@@ -54,8 +54,20 @@ function writeBag(path: string, packageVersion: string, inputPath: string, outpu
 		name: "cli-integration",
 		apiVersion: 1,
 		nodes: [
-			{ id: "read", packageName: "@buffered-audio/nodes", packageVersion, nodeName: "Read WAV", parameters: { path: inputPath } },
-			{ id: "write", packageName: "@buffered-audio/nodes", packageVersion, nodeName: "Write", parameters: { path: outputPath, bitDepth: "16" } },
+			{
+				id: "read",
+				packageName: "@buffered-audio/nodes",
+				packageVersion,
+				nodeName: "Read WAV",
+				parameters: { path: inputPath },
+			},
+			{
+				id: "write",
+				packageName: "@buffered-audio/nodes",
+				packageVersion,
+				nodeName: "Write",
+				parameters: { path: outputPath, bitDepth: "16" },
+			},
 		],
 		edges: [{ from: "read", to: "write" }],
 	};
@@ -79,10 +91,18 @@ describe("bag render", () => {
 		const outputPath = join(workDir, "output.wav");
 		const bagPath = join(workDir, "graph.bag");
 
-		writeWav(inputPath, Array.from({ length: 256 }, (_, i) => Math.round(Math.sin(i / 8) * 10000)), 8000);
+		writeWav(
+			inputPath,
+			Array.from({ length: 256 }, (_, i) => Math.round(Math.sin(i / 8) * 10000)),
+			8000,
+		);
 		writeBag(bagPath, nodesVersion, inputPath, outputPath);
 
-		const result = spawnSync(process.execPath, [cliPath, "render", bagPath, "--resolve", `@buffered-audio/nodes=${nodesDir}`], { encoding: "utf-8" });
+		const result = spawnSync(
+			process.execPath,
+			[cliPath, "render", bagPath, "--resolve", `@buffered-audio/nodes=${nodesDir}`],
+			{ encoding: "utf-8" },
+		);
 
 		expect(result.status, result.stderr).toBe(0);
 		expect(existsSync(outputPath)).toBe(true);
@@ -94,7 +114,11 @@ describe("bag render", () => {
 		const outputPath = join(workDir, "output2.wav");
 		const bagPath = join(workDir, "graph2.bag");
 
-		writeWav(inputPath, Array.from({ length: 64 }, () => 0), 8000);
+		writeWav(
+			inputPath,
+			Array.from({ length: 64 }, () => 0),
+			8000,
+		);
 		writeBag(bagPath, "999.0.0", inputPath, outputPath);
 
 		const result = spawnSync(process.execPath, [cliPath, "render", bagPath, "--no-install"], { encoding: "utf-8" });

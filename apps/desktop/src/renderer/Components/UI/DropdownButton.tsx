@@ -10,17 +10,17 @@ import {
 
 export type MenuItem =
 	| {
-		readonly kind: "action";
-		readonly label: string;
-		readonly icon?: LucideIcon;
-		readonly shortcut?: string;
-		readonly color?: string;
-		readonly disabled?: boolean;
-		readonly onClick?: () => void;
-	}
+			readonly kind: "action";
+			readonly label: string;
+			readonly icon?: LucideIcon;
+			readonly shortcut?: string;
+			readonly color?: string;
+			readonly disabled?: boolean;
+			readonly onClick?: () => void;
+	  }
 	| {
-		readonly kind: "separator";
-	};
+			readonly kind: "separator";
+	  };
 
 export interface DropdownButtonProps {
 	readonly trigger: ReactNode;
@@ -35,9 +35,7 @@ export function DropdownButton({ trigger, items, align = "left" }: DropdownButto
 			<DropdownMenuContent align={align === "right" ? "end" : "start"}>
 				{items.map((item, index) => {
 					if (item.kind === "separator") {
-						return (
-							<DropdownMenuSeparator key={`separator-${String(index)}`} />
-						);
+						return <DropdownMenuSeparator key={`separator-${String(index)}`} />;
 					}
 
 					const ItemIcon = item.icon;
@@ -49,14 +47,10 @@ export function DropdownButton({ trigger, items, align = "left" }: DropdownButto
 							onSelect={item.onClick ? () => item.onClick?.() : undefined}
 							className={item.color}
 						>
-							{ItemIcon && (
-								<ItemIcon size={14} strokeWidth={1.5} aria-hidden="true" />
-							)}
+							{ItemIcon && <ItemIcon size={14} strokeWidth={1.5} aria-hidden="true" />}
 							<span className="flex-1">{item.label}</span>
 							{item.shortcut && (
-								<span className="type-label ml-4 text-body text-text-secondary">
-									{item.shortcut}
-								</span>
+								<span className="type-label ml-4 text-body text-text-secondary">{item.shortcut}</span>
 							)}
 						</DropdownMenuItem>
 					);

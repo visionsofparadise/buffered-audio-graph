@@ -81,7 +81,10 @@ async function resolveLoadEntryPath(installDirectory: string): Promise<string> {
 	const raw = await readFile(join(installDirectory, "package.json"), "utf-8");
 	const packageJson = JSON.parse(raw) as InstalledPackageJson;
 	const rootExports =
-		packageJson.exports && typeof packageJson.exports === "object" && !Array.isArray(packageJson.exports) && "." in packageJson.exports
+		packageJson.exports &&
+		typeof packageJson.exports === "object" &&
+		!Array.isArray(packageJson.exports) &&
+		"." in packageJson.exports
 			? packageJson.exports["."]
 			: packageJson.exports;
 	const candidates = [
@@ -106,12 +109,7 @@ async function resolveLoadEntryPath(installDirectory: string): Promise<string> {
 }
 
 function packageDirectory(packageName: string, packageVersion: string): string {
-	return join(
-		app.getPath("userData"),
-		"packages",
-		encodeURIComponent(packageName),
-		packageVersion,
-	);
+	return join(app.getPath("userData"), "packages", encodeURIComponent(packageName), packageVersion);
 }
 
 async function loadPacote(): Promise<PacoteModule> {
@@ -130,7 +128,12 @@ async function loadPacote(): Promise<PacoteModule> {
 
 function isNodeClass(value: unknown): value is NodeClass {
 	return (
-		typeof value === "function" && "nodeName" in value && typeof value.nodeName === "string" && "description" in value && typeof value.description === "string" && "schema" in value
+		typeof value === "function" &&
+		"nodeName" in value &&
+		typeof value.nodeName === "string" &&
+		"description" in value &&
+		typeof value.description === "string" &&
+		"schema" in value
 	);
 }
 

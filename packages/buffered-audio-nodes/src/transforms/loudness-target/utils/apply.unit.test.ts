@@ -52,8 +52,8 @@ describe("applyBaseRateChunk", () => {
 		// rate. Verify the bytes match an inline reference exactly
 		// modulo IEEE-754 multiply order (zero with our compiler).
 		const frames = 1024;
-		const sourceL = makeSineWithNoise(0xC0DE_BABE, frames, 0.25, 1000);
-		const sourceR = makeSineWithNoise(0xFACE_FEED, frames, 0.20, 1500);
+		const sourceL = makeSineWithNoise(0xc0de_babe, frames, 0.25, 1000);
+		const sourceR = makeSineWithNoise(0xface_feed, frames, 0.2, 1500);
 		const envelope = makeRampGain(frames, 0.5, 1.0);
 
 		const output = applyBaseRateChunk({
@@ -98,7 +98,7 @@ describe("applyBaseRateChunk", () => {
 		// the same envelope is sliced consistently across chunk
 		// boundaries.
 		const frames = 4096;
-		const source = makeSineWithNoise(0x0A0B_0C0D, frames, 0.2, 1000);
+		const source = makeSineWithNoise(0x0a0b_0c0d, frames, 0.2, 1000);
 		const envelope = makeRampGain(frames, 0.5, 1.0);
 
 		// Single-chunk path.
@@ -195,8 +195,8 @@ describe("applyBaseRateChunk", () => {
 		// hoist the per-chunk apply output to a persistent caller-side
 		// scratch. The two paths must produce byte-equal results.
 		const frames = 2048;
-		const sourceL = makeSineWithNoise(0xC0DE_BABE, frames, 0.25, 1000);
-		const sourceR = makeSineWithNoise(0xFACE_FEED, frames, 0.20, 1500);
+		const sourceL = makeSineWithNoise(0xc0de_babe, frames, 0.25, 1000);
+		const sourceR = makeSineWithNoise(0xface_feed, frames, 0.2, 1500);
 		const envelope = makeRampGain(frames, 0.5, 1.0);
 
 		const defaultOutput = applyBaseRateChunk({
@@ -204,10 +204,7 @@ describe("applyBaseRateChunk", () => {
 			smoothedGain: envelope,
 		});
 
-		const overrideOutput: Array<Float32Array> = [
-			new Float32Array(frames),
-			new Float32Array(frames),
-		];
+		const overrideOutput: Array<Float32Array> = [new Float32Array(frames), new Float32Array(frames)];
 		const overrideReturn = applyBaseRateChunk({
 			chunkSamples: [sourceL, sourceR],
 			smoothedGain: envelope,

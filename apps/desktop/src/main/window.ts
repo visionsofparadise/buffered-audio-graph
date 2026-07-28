@@ -53,7 +53,15 @@ export const createWindow = (logger: Logger): BrowserWindow => {
 	});
 
 	for (const AsyncMainIpc of ASYNC_MAIN_IPCS) {
-		new AsyncMainIpc().register({ browserWindow, fileWatcherManager, jobManager, logger, nodeRegistry, vst3Scanner, windowId });
+		new AsyncMainIpc().register({
+			browserWindow,
+			fileWatcherManager,
+			jobManager,
+			logger,
+			nodeRegistry,
+			vst3Scanner,
+			windowId,
+		});
 	}
 
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;

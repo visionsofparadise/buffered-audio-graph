@@ -1,15 +1,5 @@
-import {
-	DndContext,
-	PointerSensor,
-	closestCenter,
-	useSensor,
-	useSensors,
-	type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-	SortableContext,
-	verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { cn } from "../../../../../utils/cn";
 import { Plus } from "lucide-react";
 import type { ArrayParameter } from "../utils/buildParameters";
@@ -52,15 +42,8 @@ export function ArrayRow({
 			<span className={paramLabelClass(true)}>{itemNoun}</span>
 
 			<div className="flex flex-col gap-3">
-				<DndContext
-					sensors={sensors}
-					collisionDetection={closestCenter}
-					onDragEnd={handleDragEnd}
-				>
-					<SortableContext
-						items={param.rows.map((row) => row.rowId)}
-						strategy={verticalListSortingStrategy}
-					>
+				<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+					<SortableContext items={param.rows.map((row) => row.rowId)} strategy={verticalListSortingStrategy}>
 						<div className="flex flex-col gap-3">
 							{param.rows.map((row, rowIndex) => (
 								<SortableArrayRow

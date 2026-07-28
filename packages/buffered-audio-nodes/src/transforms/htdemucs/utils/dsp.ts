@@ -60,7 +60,11 @@ export function computeStftScaled(signal: Float32Array): ComplexStft {
 	return { real, imag };
 }
 
-export function computeIstftScaled(real: Array<Float32Array>, imag: Array<Float32Array>, outputLength: number): Float32Array {
+export function computeIstftScaled(
+	real: Array<Float32Array>,
+	imag: Array<Float32Array>,
+	outputLength: number,
+): Float32Array {
 	const scale = Math.sqrt(FFT_SIZE);
 	const frames = real.length;
 	const halfSize = FFT_SIZE / 2 + 1;

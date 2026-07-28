@@ -26,8 +26,13 @@ describe("zodToRows", () => {
 		});
 
 		const expected: Array<Row> = [
-			{ name: "detection", type: "\"peak\" \\| \"rms\"", default: "`\"peak\"`", description: "Detection mode" },
-			{ name: "stereoLink", type: "\"average\" \\| \"max\" \\| \"none\"", default: "`\"average\"`", description: "Stereo link" },
+			{ name: "detection", type: '"peak" \\| "rms"', default: '`"peak"`', description: "Detection mode" },
+			{
+				name: "stereoLink",
+				type: '"average" \\| "max" \\| "none"',
+				default: '`"average"`',
+				description: "Stereo link",
+			},
 		];
 
 		expect(zodToRows(schema)).toEqual(expected);
@@ -40,7 +45,12 @@ describe("zodToRows", () => {
 		});
 
 		const expected: Array<Row> = [
-			{ name: "gain", type: "number (-24 to 24, step 0.1), optional", default: "—", description: "Gain (dB) — peaking and shelf only" },
+			{
+				name: "gain",
+				type: "number (-24 to 24, step 0.1), optional",
+				default: "—",
+				description: "Gain (dB) — peaking and shelf only",
+			},
 			{ name: "label", type: "string, optional", default: "—", description: "Display label" },
 		];
 
@@ -60,9 +70,19 @@ describe("zodToRows", () => {
 
 		const expected: Array<Row> = [
 			{ name: "bands", type: "Object[]", default: "`[]`", description: "EQ bands" },
-			{ name: "bands[].type", type: "\"lowpass\" \\| \"peaking\"", default: "`\"peaking\"`", description: "Filter type" },
-			{ name: "bands[].frequency", type: "number (20 to 20000, step 1)", default: "`1000`", description: "Frequency (Hz)" },
-			{ name: "bands[].gain", type: "number (-24 to 24, step 0.1), optional", default: "—", description: "Gain (dB)" },
+			{ name: "bands[].type", type: '"lowpass" \\| "peaking"', default: '`"peaking"`', description: "Filter type" },
+			{
+				name: "bands[].frequency",
+				type: "number (20 to 20000, step 1)",
+				default: "`1000`",
+				description: "Frequency (Hz)",
+			},
+			{
+				name: "bands[].gain",
+				type: "number (-24 to 24, step 0.1), optional",
+				default: "—",
+				description: "Gain (dB)",
+			},
 			{ name: "bands[].enabled", type: "boolean", default: "`true`", description: "Enabled" },
 		];
 
@@ -74,7 +94,13 @@ describe("zodToRows", () => {
 			modelPath1: z
 				.string()
 				.default("")
-				.meta({ input: "file", mode: "open", accept: ".onnx", binary: "dtln-model_1", download: "https://github.com/breizhn/DTLN" })
+				.meta({
+					input: "file",
+					mode: "open",
+					accept: ".onnx",
+					binary: "dtln-model_1",
+					download: "https://github.com/breizhn/DTLN",
+				})
 				.describe("DTLN magnitude mask model (.onnx)"),
 			ffmpegPath: z
 				.string()
@@ -87,13 +113,13 @@ describe("zodToRows", () => {
 			{
 				name: "modelPath1",
 				type: "string",
-				default: "`\"\"`",
+				default: '`""`',
 				description: "DTLN magnitude mask model (.onnx) Download: [dtln-model_1](https://github.com/breizhn/DTLN)",
 			},
 			{
 				name: "ffmpegPath",
 				type: "string",
-				default: "`\"\"`",
+				default: '`""`',
 				description: "FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html)",
 			},
 		];
@@ -103,8 +129,14 @@ describe("zodToRows", () => {
 
 	it("renders unions of literals as pipe-separated literal labels (dither bitDepth pattern)", () => {
 		const schema = z.object({
-			bitDepth: z.union([z.literal(16), z.literal(24)]).default(16).describe("Bit Depth"),
-			oversampling: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8)]).default(2).describe("Oversampling"),
+			bitDepth: z
+				.union([z.literal(16), z.literal(24)])
+				.default(16)
+				.describe("Bit Depth"),
+			oversampling: z
+				.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8)])
+				.default(2)
+				.describe("Oversampling"),
 		});
 
 		const expected: Array<Row> = [

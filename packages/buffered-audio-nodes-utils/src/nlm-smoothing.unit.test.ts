@@ -28,16 +28,28 @@ function scalarNlm(mask: Float32Array, numFrames: number, numBins: number, param
 			let valueSum = 0;
 			let weightSum = 0;
 
-			for (let candidateFrame = centreFrame - params.searchTimePre; candidateFrame <= centreFrame + params.searchTimePost; candidateFrame++) {
-				for (let candidateBin = centreBin - params.searchFreqRadius; candidateBin <= centreBin + params.searchFreqRadius; candidateBin++) {
+			for (
+				let candidateFrame = centreFrame - params.searchTimePre;
+				candidateFrame <= centreFrame + params.searchTimePost;
+				candidateFrame++
+			) {
+				for (
+					let candidateBin = centreBin - params.searchFreqRadius;
+					candidateBin <= centreBin + params.searchFreqRadius;
+					candidateBin++
+				) {
 					const clampedCandidateFrame = clamp(candidateFrame, numFrames - 1);
 					const clampedCandidateBin = clamp(candidateBin, numBins - 1);
 					let distanceSquared = 0;
 
 					for (let patchFrame = -halfPatch; patchFrame < halfPatch; patchFrame++) {
 						for (let patchBin = -halfPatch; patchBin < halfPatch; patchBin++) {
-							const centrePosition = clamp(centreFrame + patchFrame, numFrames - 1) * numBins + clamp(centreBin + patchBin, numBins - 1);
-							const candidatePosition = clamp(clampedCandidateFrame + patchFrame, numFrames - 1) * numBins + clamp(clampedCandidateBin + patchBin, numBins - 1);
+							const centrePosition =
+								clamp(centreFrame + patchFrame, numFrames - 1) * numBins +
+								clamp(centreBin + patchBin, numBins - 1);
+							const candidatePosition =
+								clamp(clampedCandidateFrame + patchFrame, numFrames - 1) * numBins +
+								clamp(clampedCandidateBin + patchBin, numBins - 1);
 							const difference = (mask[centrePosition] ?? 0) - (mask[candidatePosition] ?? 0);
 
 							distanceSquared += difference * difference;
@@ -54,7 +66,11 @@ function scalarNlm(mask: Float32Array, numFrames: number, numBins: number, param
 			const smoothed = valueSum / weightSum;
 			const clampedSmoothed = Math.max(0, Math.min(smoothed, 1));
 
-			for (let pasteFrame = 0; pasteFrame < params.pasteBlockSize && blockFrame + pasteFrame < numFrames; pasteFrame++) {
+			for (
+				let pasteFrame = 0;
+				pasteFrame < params.pasteBlockSize && blockFrame + pasteFrame < numFrames;
+				pasteFrame++
+			) {
 				for (let pasteBin = 0; pasteBin < params.pasteBlockSize && blockBin + pasteBin < numBins; pasteBin++) {
 					output[(blockFrame + pasteFrame) * numBins + blockBin + pasteBin] = clampedSmoothed;
 				}
@@ -79,7 +95,10 @@ describe("applyNlmSmoothing", () => {
 	it("matches an independent scalar NLM on an asymmetric mask", () => {
 		const numFrames = 5;
 		const numBins = 7;
-		const mask = Float32Array.from({ length: numFrames * numBins }, (_, index) => ((index * 17 + index % 5 * 11) % 101) / 100);
+		const mask = Float32Array.from(
+			{ length: numFrames * numBins },
+			(_, index) => ((index * 17 + (index % 5) * 11) % 101) / 100,
+		);
 		const output = new Float32Array(mask.length);
 		const expected = scalarNlm(mask, numFrames, numBins, defaultParams);
 
@@ -105,7 +124,7 @@ describe("applyNlmSmoothing", () => {
 		const numFrames = 5;
 		const numBins = 6;
 		const params = { ...defaultParams, pasteBlockSize: 2 };
-		const mask = Float32Array.from({ length: numFrames * numBins }, (_, index) => (index * 13 % 29) / 28);
+		const mask = Float32Array.from({ length: numFrames * numBins }, (_, index) => ((index * 13) % 29) / 28);
 		const full = new Float32Array(mask.length);
 		const ranged = new Float32Array(mask.length).fill(-1);
 
@@ -118,9 +137,16 @@ describe("applyNlmSmoothing", () => {
 	});
 
 	it("clamps gain-mask output and writes only its owned paste rows", () => {
-		const mask = Float32Array.from({ length: 24 }, (_, index) => index % 2 === 0 ? -2 : 2);
+		const mask = Float32Array.from({ length: 24 }, (_, index) => (index % 2 === 0 ? -2 : 2));
 		const output = new Float32Array(mask.length).fill(-7);
-		const params = { ...defaultParams, patchSize: 2, searchFreqRadius: 0, searchTimePre: 0, searchTimePost: 0, pasteBlockSize: 2 };
+		const params = {
+			...defaultParams,
+			patchSize: 2,
+			searchFreqRadius: 0,
+			searchTimePre: 0,
+			searchTimePost: 0,
+			pasteBlockSize: 2,
+		};
 
 		applyNlmSmoothingRange(mask, 6, 4, params, output, 2, 4);
 
@@ -187,7 +213,11 @@ describe("applyNlmSmoothing", () => {
 	});
 
 	it("rejects masks and outputs whose lengths do not exactly match the geometry", () => {
-		expect(() => applyNlmSmoothing(new Float32Array(15), 4, 4, defaultParams, new Float32Array(16))).toThrow("lengths must equal 16");
-		expect(() => applyNlmSmoothing(new Float32Array(16), 4, 4, defaultParams, new Float32Array(17))).toThrow("lengths must equal 16");
+		expect(() => applyNlmSmoothing(new Float32Array(15), 4, 4, defaultParams, new Float32Array(16))).toThrow(
+			"lengths must equal 16",
+		);
+		expect(() => applyNlmSmoothing(new Float32Array(16), 4, 4, defaultParams, new Float32Array(17))).toThrow(
+			"lengths must equal 16",
+		);
 	});
 });

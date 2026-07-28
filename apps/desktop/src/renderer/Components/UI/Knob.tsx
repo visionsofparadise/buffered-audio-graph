@@ -12,16 +12,7 @@ export interface KnobProps {
 	readonly disabled?: boolean;
 }
 
-export const Knob = ({
-	value,
-	label,
-	size = 32,
-	onChange,
-	onChangeEnd,
-	className,
-	hideValue,
-	disabled,
-}: KnobProps) => {
+export const Knob = ({ value, label, size = 32, onChange, onChangeEnd, className, hideValue, disabled }: KnobProps) => {
 	const [dragging, setDragging] = useState(false);
 	const startY = useRef(0);
 	const startValue = useRef(0);
@@ -84,9 +75,7 @@ export const Knob = ({
 	return (
 		<div className={cn("flex flex-col items-center gap-1", className)}>
 			{!hideValue && (
-				<span className="type-value w-9 text-center text-label text-text-secondary">
-					{Math.round(value * 100)}
-				</span>
+				<span className="type-value w-9 text-center text-label text-text-secondary">{Math.round(value * 100)}</span>
 			)}
 			<svg
 				width={size}
@@ -97,22 +86,12 @@ export const Knob = ({
 				onPointerMove={onPointerMove}
 				onPointerUp={onPointerUp}
 			>
-				<path
-					d={arcPath(startAngle, totalSweep)}
-					fill="none"
-					className="knob-arc stroke-border"
-				/>
+				<path d={arcPath(startAngle, totalSweep)} fill="none" className="knob-arc stroke-border" />
 				{valueSweep > 0 && (
-					<path
-						d={arcPath(startAngle, valueSweep)}
-						fill="none"
-						className="knob-arc stroke-accent-primary"
-					/>
+					<path d={arcPath(startAngle, valueSweep)} fill="none" className="knob-arc stroke-accent-primary" />
 				)}
 			</svg>
-			{label && (
-				<span className="type-label text-text-secondary">{label}</span>
-			)}
+			{label && <span className="type-label text-text-secondary">{label}</span>}
 		</div>
 	);
 };

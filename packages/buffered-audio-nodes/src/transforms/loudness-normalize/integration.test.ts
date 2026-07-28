@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { WaveFile } from "wavefile";
-import { channelSamples, createTestSetupContext, createTestStreamContext, readableFrom, runTransformStream } from "@buffered-audio/core/testing";
+import {
+	channelSamples,
+	createTestSetupContext,
+	createTestStreamContext,
+	readableFrom,
+	runTransformStream,
+} from "@buffered-audio/core/testing";
 import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import { read } from "../../sources/read";
 import { write } from "../../targets/write";
@@ -93,112 +99,136 @@ async function runNormalize(input: Float32Array, sampleRate: number, target: num
 describe("LoudnessNormalize", () => {
 	const TEST_TIMEOUT_MS = 60_000;
 
-	it("applies output[n] = input[n] × G to floating-point precision", async () => {
-		const target = -16;
-		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
-		const measured = measureLufs([input], TEST_SAMPLE_RATE);
-		const expectedGain = Math.pow(10, (target - measured) / 20);
+	it(
+		"applies output[n] = input[n] × G to floating-point precision",
+		async () => {
+			const target = -16;
+			const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
+			const measured = measureLufs([input], TEST_SAMPLE_RATE);
+			const expectedGain = Math.pow(10, (target - measured) / 20);
 
-		const output = await runNormalize(input, TEST_SAMPLE_RATE, target);
-
-		expect(output.length).toBe(input.length);
-
-		const probes = [0, 100, 1000, 12345, TEST_FRAMES - 1];
-
-		for (const index of probes) {
-			const expected = (input[index] ?? 0) * expectedGain;
-			const actual = output[index] ?? 0;
-
-			expect(Math.abs(actual - expected)).toBeLessThan(1e-5);
-		}
-	}, TEST_TIMEOUT_MS);
-
-	it("output integrated LUFS lands within 0.1 dB of target across multiple targets", async () => {
-		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
-
-		for (const target of [-23, -16, -10]) {
 			const output = await runNormalize(input, TEST_SAMPLE_RATE, target);
-			const measured = measureLufs([output], TEST_SAMPLE_RATE);
 
-			expect(Math.abs(measured - target)).toBeLessThan(0.1);
-		}
-	}, TEST_TIMEOUT_MS);
+			expect(output.length).toBe(input.length);
 
-	it("produces a 32-bit-float-safe signal with peaks > 1.0 — no NaN/Inf, peak = inputPeak × G", async () => {
-		const target = -3;
-		const inputPeak = 0.9;
-		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, inputPeak);
-		const measured = measureLufs([input], TEST_SAMPLE_RATE);
-		const expectedGain = Math.pow(10, (target - measured) / 20);
-		const expectedPeak = inputPeak * expectedGain;
+			const probes = [0, 100, 1000, 12345, TEST_FRAMES - 1];
 
-		// Sanity: this configuration is supposed to push peaks above unity.
-		expect(expectedPeak).toBeGreaterThan(1.0);
+			for (const index of probes) {
+				const expected = (input[index] ?? 0) * expectedGain;
+				const actual = output[index] ?? 0;
 
-		const output = await runNormalize(input, TEST_SAMPLE_RATE, target);
+				expect(Math.abs(actual - expected)).toBeLessThan(1e-5);
+			}
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-		let observedPeak = 0;
-		let saw1 = false;
+	it(
+		"output integrated LUFS lands within 0.1 dB of target across multiple targets",
+		async () => {
+			const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
 
-		for (let index = 0; index < output.length; index++) {
-			const sample = output[index] ?? 0;
+			for (const target of [-23, -16, -10]) {
+				const output = await runNormalize(input, TEST_SAMPLE_RATE, target);
+				const measured = measureLufs([output], TEST_SAMPLE_RATE);
 
-			expect(Number.isFinite(sample)).toBe(true);
+				expect(Math.abs(measured - target)).toBeLessThan(0.1);
+			}
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-			const absolute = Math.abs(sample);
+	it(
+		"produces a 32-bit-float-safe signal with peaks > 1.0 — no NaN/Inf, peak = inputPeak × G",
+		async () => {
+			const target = -3;
+			const inputPeak = 0.9;
+			const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, inputPeak);
+			const measured = measureLufs([input], TEST_SAMPLE_RATE);
+			const expectedGain = Math.pow(10, (target - measured) / 20);
+			const expectedPeak = inputPeak * expectedGain;
 
-			if (absolute > observedPeak) observedPeak = absolute;
-			if (absolute >= 1.0) saw1 = true;
-		}
+			// Sanity: this configuration is supposed to push peaks above unity.
+			expect(expectedPeak).toBeGreaterThan(1.0);
 
-		expect(saw1).toBe(true);
-		expect(Math.abs(observedPeak - expectedPeak)).toBeLessThan(1e-3);
-	}, TEST_TIMEOUT_MS);
+			const output = await runNormalize(input, TEST_SAMPLE_RATE, target);
+
+			let observedPeak = 0;
+			let saw1 = false;
+
+			for (let index = 0; index < output.length; index++) {
+				const sample = output[index] ?? 0;
+
+				expect(Number.isFinite(sample)).toBe(true);
+
+				const absolute = Math.abs(sample);
+
+				if (absolute > observedPeak) observedPeak = absolute;
+				if (absolute >= 1.0) saw1 = true;
+			}
+
+			expect(saw1).toBe(true);
+			expect(Math.abs(observedPeak - expectedPeak)).toBeLessThan(1e-3);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
 	it("normalises to the target LUFS through the harness", async () => {
 		const target = -16;
 		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
-		const { blocks } = await runTransformStream(loudnessNormalize({ target }), [{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]);
+		const { blocks } = await runTransformStream(loudnessNormalize({ target }), [
+			{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 },
+		]);
 		const out = channelSamples(blocks, 0);
 
 		expect(out.length).toBe(input.length);
 		expect(Math.abs(measureLufs([out], TEST_SAMPLE_RATE) - target)).toBeLessThan(0.1);
 	}, 60_000);
 
-	it("renders end-to-end with no ffmpeg involvement", async () => {
-		// ESM namespace exports can't be patched in vitest (`Cannot redefine property: spawn`), so drive
-		// the stream directly. The schema has no `ffmpegPath`, so adding a subprocess would be visible in review.
-		const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
-		const stream = new LoudnessNormalizeStream(loudnessNormalize({ target: -16 }), createTestStreamContext().context);
-		const outputStream = await stream.setup(readableFrom([{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]), createTestSetupContext());
-		const reader = outputStream.getReader();
+	it(
+		"renders end-to-end with no ffmpeg involvement",
+		async () => {
+			// ESM namespace exports can't be patched in vitest (`Cannot redefine property: spawn`), so drive
+			// the stream directly. The schema has no `ffmpegPath`, so adding a subprocess would be visible in review.
+			const input = makeSine(1000, TEST_FRAMES, TEST_SAMPLE_RATE, 0.1);
+			const stream = new LoudnessNormalizeStream(
+				loudnessNormalize({ target: -16 }),
+				createTestStreamContext().context,
+			);
+			const outputStream = await stream.setup(
+				readableFrom([{ samples: [input], offset: 0, sampleRate: TEST_SAMPLE_RATE, bitDepth: 32 }]),
+				createTestSetupContext(),
+			);
+			const reader = outputStream.getReader();
 
-		const collected: Array<Float32Array> = [];
+			const collected: Array<Float32Array> = [];
 
-		for (;;) {
-			const next = await reader.read();
+			for (;;) {
+				const next = await reader.read();
 
-			if (next.done) break;
+				if (next.done) break;
 
-			const channel = next.value.samples[0];
+				const channel = next.value.samples[0];
 
-			if (channel) collected.push(channel);
-		}
+				if (channel) collected.push(channel);
+			}
 
-		const totalLength = collected.reduce((sum, channel) => sum + channel.length, 0);
+			const totalLength = collected.reduce((sum, channel) => sum + channel.length, 0);
 
-		expect(totalLength).toBe(input.length);
+			expect(totalLength).toBe(input.length);
 
-		const output = new Float32Array(totalLength);
-		let writeIndex = 0;
+			const output = new Float32Array(totalLength);
+			let writeIndex = 0;
 
-		for (const channel of collected) {
-			output.set(channel, writeIndex);
-			writeIndex += channel.length;
-		}
+			for (const channel of collected) {
+				output.set(channel, writeIndex);
+				writeIndex += channel.length;
+			}
 
-		const measured = measureLufs([output], TEST_SAMPLE_RATE);
+			const measured = measureLufs([output], TEST_SAMPLE_RATE);
 
-		expect(Math.abs(measured - -16)).toBeLessThan(0.1);
-	}, TEST_TIMEOUT_MS);
+			expect(Math.abs(measured - -16)).toBeLessThan(0.1);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });

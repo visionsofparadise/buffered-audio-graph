@@ -15,7 +15,12 @@ export class DownmixMonoStream extends UnbufferedTransformStream {
 			return;
 		}
 
-		yield { samples: [downmixToMono(chunk.samples)], offset: chunk.offset, sampleRate: chunk.sampleRate, bitDepth: chunk.bitDepth };
+		yield {
+			samples: [downmixToMono(chunk.samples)],
+			offset: chunk.offset,
+			sampleRate: chunk.sampleRate,
+			bitDepth: chunk.bitDepth,
+		};
 	}
 }
 

@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { BufferedTransformStream, BlockBuffer, createProgressGate, TransformNode, WHOLE_FILE, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	BlockBuffer,
+	createProgressGate,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { applyBaseRateChunk } from "./utils/apply";
 import { windowSamplesFromMs } from "./utils/envelope";
@@ -9,21 +17,58 @@ import { predictInitialB } from "./utils/solve";
 
 const FLOOR_PIVOT_EPSILON_DB = 0.01;
 
-export const schema = z.object({
-	targetLufs:    z.number().min(-50).max(0).multipleOf(0.1).default(-16).describe("Target integrated loudness (LUFS)"),
-	pivot:         z.number().min(-80).lt(0).optional().describe("Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1."),
-	floor:         z.number().min(-100).lt(0).optional().describe("Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating."),
-	limitPercentile: z.number().min(0.5).max(1.0).default(0.995).describe("Top-1−p fraction of detection samples to brick-wall. Default 0.995 brick-walls the top 0.5%."),
-	limitDb:       z.number().min(-60).lt(0).optional().describe("Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor."),
-	maxAttempts:   z.number().int().min(1).default(10).describe("Hard cap on iteration attempts."),
-	targetTp:      z.number().min(-24).lt(0).optional().describe("True-peak target (dBTP). Default: source true peak (peaks unchanged)."),
-	smoothing:     z.number().min(0.01).max(200).default(1).describe("Peak-respecting envelope time constant (ms)."),
-	tolerance:     z.number().gt(0).max(6).default(0.5).describe("Iteration exit threshold (LUFS dB)."),
-	peakTolerance: z.number().gt(0).max(6).default(0.1).describe("One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored)."),
-}).refine(
-	({ floor, pivot }) => floor === undefined || pivot === undefined || floor < pivot,
-	{ message: "loudnessTarget requires floor < pivot when floor is set" },
-);
+export const schema = z
+	.object({
+		targetLufs: z.number().min(-50).max(0).multipleOf(0.1).default(-16).describe("Target integrated loudness (LUFS)"),
+		pivot: z
+			.number()
+			.min(-80)
+			.lt(0)
+			.optional()
+			.describe("Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1."),
+		floor: z
+			.number()
+			.min(-100)
+			.lt(0)
+			.optional()
+			.describe(
+				"Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating.",
+			),
+		limitPercentile: z
+			.number()
+			.min(0.5)
+			.max(1.0)
+			.default(0.995)
+			.describe("Top-1−p fraction of detection samples to brick-wall. Default 0.995 brick-walls the top 0.5%."),
+		limitDb: z
+			.number()
+			.min(-60)
+			.lt(0)
+			.optional()
+			.describe(
+				"Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor.",
+			),
+		maxAttempts: z.number().int().min(1).default(10).describe("Hard cap on iteration attempts."),
+		targetTp: z
+			.number()
+			.min(-24)
+			.lt(0)
+			.optional()
+			.describe("True-peak target (dBTP). Default: source true peak (peaks unchanged)."),
+		smoothing: z.number().min(0.01).max(200).default(1).describe("Peak-respecting envelope time constant (ms)."),
+		tolerance: z.number().gt(0).max(6).default(0.5).describe("Iteration exit threshold (LUFS dB)."),
+		peakTolerance: z
+			.number()
+			.gt(0)
+			.max(6)
+			.default(0.1)
+			.describe(
+				"One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored).",
+			),
+	})
+	.refine(({ floor, pivot }) => floor === undefined || pivot === undefined || floor < pivot, {
+		message: "loudnessTarget requires floor < pivot when floor is set",
+	});
 
 export interface LoudnessTargetProperties extends z.infer<typeof schema>, TransformNodeProperties {}
 
@@ -86,12 +131,22 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		if (frames === 0 || channelCount === 0) return;
 
-		const { targetLufs, targetTp, limitDb: limitDbOverride, limitPercentile, smoothing, tolerance, peakTolerance, maxAttempts } = this.properties;
+		const {
+			targetLufs,
+			targetTp,
+			limitDb: limitDbOverride,
+			limitPercentile,
+			smoothing,
+			tolerance,
+			peakTolerance,
+			maxAttempts,
+		} = this.properties;
 
 		const tMeasure0 = Date.now();
-		const measurement = this.measurementAccumulator !== undefined
-			? await this.measurementAccumulator.finalize()
-			: await measureSource(buffer, sampleRate, limitPercentile, windowSamplesFromMs(smoothing, sampleRate));
+		const measurement =
+			this.measurementAccumulator !== undefined
+				? await this.measurementAccumulator.finalize()
+				: await measureSource(buffer, sampleRate, limitPercentile, windowSamplesFromMs(smoothing, sampleRate));
 
 		this.learnTimingMs.sourceMeasurement += Date.now() - tMeasure0;
 
@@ -99,9 +154,10 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		this.capturedDetectionEnvelope = null;
 
-		const detectionEnvelope = capturedDetectionEnvelope !== null && capturedDetectionEnvelope.frames === frames
-			? capturedDetectionEnvelope
-			: undefined;
+		const detectionEnvelope =
+			capturedDetectionEnvelope !== null && capturedDetectionEnvelope.frames === frames
+				? capturedDetectionEnvelope
+				: undefined;
 
 		if (detectionEnvelope === undefined && capturedDetectionEnvelope !== null) {
 			this.log(
@@ -154,10 +210,12 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		if (effectiveFloorDb !== null && effectiveFloorDb >= effectivePivotDb) {
 			const clampedFloorDb = effectivePivotDb - FLOOR_PIVOT_EPSILON_DB;
 
-			this.log(
-				"floor >= pivot; clamping floor to (pivot - epsilon)",
-				{ floorDb: effectiveFloorDb, pivotDb: effectivePivotDb, clampedFloorDb, epsilonDb: FLOOR_PIVOT_EPSILON_DB },
-			);
+			this.log("floor >= pivot; clamping floor to (pivot - epsilon)", {
+				floorDb: effectiveFloorDb,
+				pivotDb: effectivePivotDb,
+				clampedFloorDb,
+				epsilonDb: FLOOR_PIVOT_EPSILON_DB,
+			});
 			effectiveFloorDb = clampedFloorDb;
 		}
 
@@ -228,19 +286,23 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 		const outputLufsRepr = result.winnerOutputLufs !== null ? result.winnerOutputLufs.toFixed(2) : "n/a";
 		const outputLraRepr = result.winnerOutputLra !== null ? result.winnerOutputLra.toFixed(2) : "n/a";
-		const lufsDeltaRepr = result.winnerOutputLufs !== null ? (result.winnerOutputLufs - targetLufs).toFixed(2) : "n/a";
-		const outputTruePeakRepr = result.winnerOutputTruePeakDb !== null ? result.winnerOutputTruePeakDb.toFixed(2) : "n/a";
-		const peakDeltaRepr = result.winnerOutputTruePeakDb !== null ? (result.winnerOutputTruePeakDb - effectiveTargetTp).toFixed(2) : "n/a";
+		const lufsDeltaRepr =
+			result.winnerOutputLufs !== null ? (result.winnerOutputLufs - targetLufs).toFixed(2) : "n/a";
+		const outputTruePeakRepr =
+			result.winnerOutputTruePeakDb !== null ? result.winnerOutputTruePeakDb.toFixed(2) : "n/a";
+		const peakDeltaRepr =
+			result.winnerOutputTruePeakDb !== null
+				? (result.winnerOutputTruePeakDb - effectiveTargetTp).toFixed(2)
+				: "n/a";
 		const bestPeakGainDbRepr = result.bestPeakGainDb.toFixed(4);
 		const bestLimitDbRepr = result.bestLimitDb.toFixed(4);
-		const pivotRepr = userPivot === undefined
-			? `${effectivePivotDb.toFixed(2)} (auto)`
-			: String(userPivot);
-		const floorRepr = userFloor !== undefined
-			? String(userFloor)
-			: effectiveFloorDb === null
-				? "none"
-				: `${effectiveFloorDb.toFixed(2)} (auto)`;
+		const pivotRepr = userPivot === undefined ? `${effectivePivotDb.toFixed(2)} (auto)` : String(userPivot);
+		const floorRepr =
+			userFloor !== undefined
+				? String(userFloor)
+				: effectiveFloorDb === null
+					? "none"
+					: `${effectiveFloorDb.toFixed(2)} (auto)`;
 		let limitDbSource: "user" | "auto" | "none";
 
 		if (limitDbOverride !== undefined) {
@@ -295,7 +357,11 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 
 	override async _destroy(): Promise<void> {
 		if (this.winningSmoothedEnvelopeBuffer !== null) {
-			const total = this.learnTimingMs.sourceMeasurement + this.learnTimingMs.detection + this.learnTimingMs.iteration + this.unbufferElapsedMs;
+			const total =
+				this.learnTimingMs.sourceMeasurement +
+				this.learnTimingMs.detection +
+				this.learnTimingMs.iteration +
+				this.unbufferElapsedMs;
 			const bRepr = this.winningB === null ? "n/a" : this.winningB.toFixed(4);
 			const limitDbRepr = this.winningLimitDb === null ? "n/a" : this.winningLimitDb.toFixed(4);
 			const peakGainDbRepr = this.winningPeakGainDb === null ? "n/a" : this.winningPeakGainDb.toFixed(4);
@@ -372,11 +438,24 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 export class LoudnessTargetNode extends TransformNode<LoudnessTargetProperties> {
 	static override readonly nodeName = "Loudness Target";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly description = "Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.";
+	static override readonly description =
+		"Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.";
 	static override readonly schema = schema;
 	static override readonly Stream = LoudnessTargetStream;
 }
 
-export function loudnessTarget(options: { targetLufs?: number; pivot?: number; floor?: number; targetTp?: number; limitPercentile?: number; limitDb?: number; smoothing?: number; tolerance?: number; peakTolerance?: number; maxAttempts?: number; id?: string }): LoudnessTargetNode {
+export function loudnessTarget(options: {
+	targetLufs?: number;
+	pivot?: number;
+	floor?: number;
+	targetTp?: number;
+	limitPercentile?: number;
+	limitDb?: number;
+	smoothing?: number;
+	tolerance?: number;
+	peakTolerance?: number;
+	maxAttempts?: number;
+	id?: string;
+}): LoudnessTargetNode {
 	return new LoudnessTargetNode(options);
 }

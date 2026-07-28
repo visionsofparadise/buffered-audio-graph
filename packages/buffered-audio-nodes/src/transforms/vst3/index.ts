@@ -1,14 +1,21 @@
 import { z } from "zod";
-import { BufferedTransformStream, createProgressGate, UnbufferedTransformStream, TransformNode, WHOLE_FILE, type Block, type BlockBuffer, type StreamSetupContext, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	createProgressGate,
+	UnbufferedTransformStream,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type BlockBuffer,
+	type StreamSetupContext,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { startProcessLivenessMonitor, type ProcessLivenessOptions } from "../../utils/process-liveness";
 import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
 
 export const stageSchema = z.object({
-	pluginPath: z
-		.string()
-		.meta({ input: "file", mode: "open", accept: ".vst3" })
-		.describe("VST3 plugin file or bundle"),
+	pluginPath: z.string().meta({ input: "file", mode: "open", accept: ".vst3" }).describe("VST3 plugin file or bundle"),
 	pluginName: z
 		.string()
 		.optional()
@@ -24,7 +31,12 @@ export const schema = z.object({
 	vstHostPath: z
 		.string()
 		.default("")
-		.meta({ input: "file", mode: "open", binary: "vst-host", download: "https://github.com/visionsofparadise/vst-host" })
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "vst-host",
+			download: "https://github.com/visionsofparadise/vst-host",
+		})
 		.describe("vst-host — Pedalboard-based VST3 host CLI"),
 	stages: z
 		.array(stageSchema)
@@ -51,7 +63,9 @@ export interface Vst3Properties extends TransformNodeProperties {
 	readonly monitorSampler?: ProcessLivenessOptions["sampler"];
 }
 
-export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends UnbufferedTransformStream<Vst3Node<P>> {
+export class Vst3PassthroughStream<P extends Vst3Properties = Vst3Properties> extends UnbufferedTransformStream<
+	Vst3Node<P>
+> {
 	override *_transform(block: Block): Generator<Block> {
 		yield block;
 	}
@@ -100,17 +114,22 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 				this.log("vst-host init crash, retrying", { attempt: failedAttempt, error: error.message }, "warn");
 			},
 		});
-		const stopMonitor = handle.proc.pid === undefined
-			? undefined
-			: startProcessLivenessMonitor(handle.proc.pid, (sample) => {
-				this.log("vst-host liveness", { ...sample }, sample.state === "idle" ? "warn" : "info");
-			}, {
-				intervalMs: this.properties.monitorIntervalMs,
-				sampler: this.properties.monitorSampler,
-				onError: (error) => {
-					this.log("vst-host liveness sample failed", { error: String(error) }, "warn");
-				},
-			});
+		const stopMonitor =
+			handle.proc.pid === undefined
+				? undefined
+				: startProcessLivenessMonitor(
+						handle.proc.pid,
+						(sample) => {
+							this.log("vst-host liveness", { ...sample }, sample.state === "idle" ? "warn" : "info");
+						},
+						{
+							intervalMs: this.properties.monitorIntervalMs,
+							sampler: this.properties.monitorSampler,
+							onError: (error) => {
+								this.log("vst-host liveness sample failed", { error: String(error) }, "warn");
+							},
+						},
+					);
 
 		try {
 			await processStreamingThroughVstHost(handle, buffered, {
@@ -166,7 +185,8 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 export class Vst3Node<P extends Vst3Properties = Vst3Properties> extends TransformNode<P> {
 	static override readonly nodeName: string = "VST3";
 	static override readonly packageName = PACKAGE_NAME;
-	static override readonly description: string = "Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)";
+	static override readonly description: string =
+		"Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)";
 	static override readonly schema: z.ZodType = schema;
 	static override readonly Stream = Vst3Stream;
 }

@@ -1,4 +1,10 @@
-import { BufferedSourceStream, SourceNode, type Block, type SourceMetadata, type SourceNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedSourceStream,
+	SourceNode,
+	type Block,
+	type SourceMetadata,
+	type SourceNodeProperties,
+} from "@buffered-audio/core";
 import { open, type FileHandle } from "node:fs/promises";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../../package-metadata";

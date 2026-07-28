@@ -73,10 +73,7 @@ export function NodeContainer({ data, selected }: NodeProps) {
 	return (
 		<div className="relative" style={{ width }}>
 			<div
-				className={cn(
-					"flex flex-col overflow-hidden rounded-[2px] bg-elevated",
-					isBypassed && "opacity-60",
-				)}
+				className={cn("flex flex-col overflow-hidden rounded-[2px] bg-elevated", isBypassed && "opacity-60")}
 				style={{ boxShadow: panelShadow }}
 			>
 				<div
@@ -115,11 +112,7 @@ export function NodeContainer({ data, selected }: NodeProps) {
 
 				{nodeData.unresolvedReason !== null ? (
 					<div className="nodrag nopan flex items-start gap-2 px-4 py-4">
-						<TriangleAlert
-							size={14}
-							strokeWidth={1.5}
-							className="mt-0.5 shrink-0 text-error"
-						/>
+						<TriangleAlert size={14} strokeWidth={1.5} className="mt-0.5 shrink-0 text-error" />
 						<div className="flex flex-col gap-1">
 							<span className="type-label text-xs text-error">Node unavailable</span>
 							<span className="text-xs leading-snug text-text-secondary">{nodeData.unresolvedReason}</span>

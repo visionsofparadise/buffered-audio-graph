@@ -183,7 +183,7 @@ describe("predictInitialB", () => {
 		const sourceLufs = -23;
 		const targetLufs = -19;
 		const anchorsBase = { floorDb: null, pivotDb: -28, limitDb: -6 };
-		const closedFormPeakGainDb = -1 - (-6);
+		const closedFormPeakGainDb = -1 - -6;
 		const tolerance = 0.1;
 		const seedB = predictInitialB({
 			sourceLufs,

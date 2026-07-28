@@ -231,11 +231,9 @@ function numberConstraints(schema: z.ZodType): string | null {
 
 	if (min !== undefined && max !== undefined) {
 		parts.push(`${String(min)} to ${String(max)}`);
-	}
-	else if (min !== undefined) {
+	} else if (min !== undefined) {
 		parts.push(`min ${String(min)}`);
-	}
-	else if (max !== undefined) {
+	} else if (max !== undefined) {
 		parts.push(`max ${String(max)}`);
 	}
 

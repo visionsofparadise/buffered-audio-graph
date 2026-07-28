@@ -51,29 +51,20 @@ export const Vst3ScanRootsSection = retrack<Props>(({ context }: Props) => {
 		<div className="flex flex-col gap-3">
 			<div className="flex items-center justify-between">
 				<h3 className="type-label text-text-secondary">VST3 scan roots</h3>
-				<Button
-					variant="outline"
-					size="sm"
-					icon={Plus}
-					onClick={() => void handleAddRoot()}
-				>
+				<Button variant="outline" size="sm" icon={Plus} onClick={() => void handleAddRoot()}>
 					Add folder
 				</Button>
 			</div>
 
 			{scanRoots.length === 0 ? (
-				<p className="text-dimmed text-xs">No scan roots configured. Add a folder to discover installed VST3 plugins.</p>
+				<p className="text-dimmed text-xs">
+					No scan roots configured. Add a folder to discover installed VST3 plugins.
+				</p>
 			) : (
 				<ul className="flex flex-col gap-2">
 					{scanRoots.map((root) => (
-						<li
-							key={root}
-							className="flex items-center gap-2"
-						>
-							<span
-								className="text-sm text-text-secondary flex-1 truncate"
-								title={root}
-							>
+						<li key={root} className="flex items-center gap-2">
+							<span className="text-sm text-text-secondary flex-1 truncate" title={root}>
 								{root}
 							</span>
 							<Button
@@ -82,11 +73,7 @@ export const Vst3ScanRootsSection = retrack<Props>(({ context }: Props) => {
 								aria-label={`Remove ${root}`}
 								onClick={() => handleRemoveRoot(root)}
 							>
-								<X
-									size={14}
-									strokeWidth={1.5}
-									aria-hidden="true"
-								/>
+								<X size={14} strokeWidth={1.5} aria-hidden="true" />
 							</Button>
 						</li>
 					))}

@@ -12,7 +12,8 @@ export class WindowReader {
 		this.channels = channels;
 		this.windowSamples = windowSamples;
 		this.scratch = [];
-		for (let channelIndex = 0; channelIndex < channels; channelIndex++) this.scratch.push(new Float32Array(windowSamples));
+		for (let channelIndex = 0; channelIndex < channels; channelIndex++)
+			this.scratch.push(new Float32Array(windowSamples));
 	}
 
 	getScratch(): Array<Float32Array> {

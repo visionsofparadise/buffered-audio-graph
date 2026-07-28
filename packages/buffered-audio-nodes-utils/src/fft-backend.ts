@@ -6,9 +6,20 @@ export type FftBackend = "vkfft" | "fftw" | "js";
 interface FftAddon {
 	batchFft(input: Float32Array, fftSize: number, batchCount: number): { re: Float32Array; im: Float32Array };
 	batchIfft(re: Float32Array, im: Float32Array, fftSize: number, batchCount: number): Float32Array;
-	batchFft2D(input: Float32Array, rows: number, cols: number, batchCount: number): { re: Float32Array; im: Float32Array };
+	batchFft2D(
+		input: Float32Array,
+		rows: number,
+		cols: number,
+		batchCount: number,
+	): { re: Float32Array; im: Float32Array };
 	batchIfft2D(re: Float32Array, im: Float32Array, rows: number, cols: number, batchCount: number): Float32Array;
-	batchFftInto?(input: Float32Array, outRe: Float32Array, outIm: Float32Array, fftSize: number, batchCount: number): void;
+	batchFftInto?(
+		input: Float32Array,
+		outRe: Float32Array,
+		outIm: Float32Array,
+		fftSize: number,
+		batchCount: number,
+	): void;
 	batchIfftInto?(re: Float32Array, im: Float32Array, outTime: Float32Array, fftSize: number, batchCount: number): void;
 }
 
@@ -38,7 +49,10 @@ function tryLoadFftw(fftwPath?: string): FftAddon | null {
 	}
 }
 
-export function detectFftBackend(executionProviders: ReadonlyArray<ExecutionProvider>, options?: { vkfftPath?: string; fftwPath?: string }): FftBackend {
+export function detectFftBackend(
+	executionProviders: ReadonlyArray<ExecutionProvider>,
+	options?: { vkfftPath?: string; fftwPath?: string },
+): FftBackend {
 	for (const provider of executionProviders) {
 		if (provider === "gpu") {
 			const vkfft = tryLoadVkfft(options?.vkfftPath);
@@ -73,7 +87,10 @@ export interface FftBackendConfig {
 	readonly addonOptions: { vkfftPath?: string; fftwPath?: string };
 }
 
-export function initFftBackend(executionProviders: ReadonlyArray<ExecutionProvider>, properties: { vkfftAddonPath?: string; fftwAddonPath?: string }): FftBackendConfig {
+export function initFftBackend(
+	executionProviders: ReadonlyArray<ExecutionProvider>,
+	properties: { vkfftAddonPath?: string; fftwAddonPath?: string },
+): FftBackendConfig {
 	const addonOptions = { vkfftPath: properties.vkfftAddonPath, fftwPath: properties.fftwAddonPath };
 	const backend = detectFftBackend(executionProviders, addonOptions);
 

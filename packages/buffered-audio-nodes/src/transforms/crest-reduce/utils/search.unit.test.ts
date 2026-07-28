@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import { TruePeakUpsampler } from "@buffered-audio/utils";
 import { LATTICE_ORDER, stepDownToReflection } from "./lattice";
 import { designDispersionAllpass, schroederTargetToDelay } from "./dispersion";
-import { GROUP_DELAY_CEILING_MS, SEARCH_GRID_POINTS, SEARCH_REFINE_ITERS, applyWindowAtScale, groupDelayLambda, searchBindingPeak, truePeakPower4x } from "./search";
+import {
+	GROUP_DELAY_CEILING_MS,
+	SEARCH_GRID_POINTS,
+	SEARCH_REFINE_ITERS,
+	applyWindowAtScale,
+	groupDelayLambda,
+	searchBindingPeak,
+	truePeakPower4x,
+} from "./search";
 
 // ─────────────────────────────────────────────────────────────────────
 // crest-reduce search suite — RE-SPEC'd to the 2026-05-17 KEYSTONE
@@ -187,7 +195,8 @@ describe("crest-reduce search — DETERMINISTIC per-binding-peak minimiser (sear
 		const window = makeSinglePeakWindow(FRAME_SIZE);
 		const right = new Float32Array(FRAME_SIZE);
 
-		for (let sample = 0; sample < FRAME_SIZE; sample++) right[sample] = Math.sin((2 * Math.PI * 137 * sample) / SAMPLE_RATE) * 0.4;
+		for (let sample = 0; sample < FRAME_SIZE; sample++)
+			right[sample] = Math.sin((2 * Math.PI * 137 * sample) / SAMPLE_RATE) * 0.4;
 
 		const channelWindows = [window, right];
 		const row = fitReflectionRow(window);
@@ -261,7 +270,8 @@ describe("crest-reduce search — DETERMINISTIC per-binding-peak minimiser (sear
 		// A pure sine ≈ no phase-only-recoverable headroom (crest ≈ √2).
 		const window = new Float32Array(FRAME_SIZE);
 
-		for (let sample = 0; sample < FRAME_SIZE; sample++) window[sample] = Math.sin((2 * Math.PI * 200 * sample) / SAMPLE_RATE) * 0.9;
+		for (let sample = 0; sample < FRAME_SIZE; sample++)
+			window[sample] = Math.sin((2 * Math.PI * 200 * sample) / SAMPLE_RATE) * 0.9;
 
 		const channelWindows = [window];
 		const row = fitReflectionRow(window);
@@ -283,7 +293,8 @@ describe("crest-reduce search — DETERMINISTIC per-binding-peak minimiser (sear
 		const left = makeSinglePeakWindow(FRAME_SIZE);
 		const right = new Float32Array(FRAME_SIZE);
 
-		for (let sample = 0; sample < FRAME_SIZE; sample++) right[sample] = Math.sin((2 * Math.PI * 130 * sample) / SAMPLE_RATE) * 0.3;
+		for (let sample = 0; sample < FRAME_SIZE; sample++)
+			right[sample] = Math.sin((2 * Math.PI * 130 * sample) / SAMPLE_RATE) * 0.3;
 
 		const channelWindows = [left, right];
 		const row = fitReflectionRow(left);
@@ -295,7 +306,9 @@ describe("crest-reduce search — DETERMINISTIC per-binding-peak minimiser (sear
 		expect(result.committedPeakPower).toBeLessThanOrEqual(result.identityPeakPower + 1e-9);
 		// The committed cross-channel 4× true peak does not exceed the
 		// identity cross-channel 4× true peak.
-		expect(truePeak4xAbs(channelWindows, row, result.scale)).toBeLessThanOrEqual(truePeak4xAbs(channelWindows, row, 0) + 1e-6);
+		expect(truePeak4xAbs(channelWindows, row, result.scale)).toBeLessThanOrEqual(
+			truePeak4xAbs(channelWindows, row, 0) + 1e-6,
+		);
 	});
 });
 
@@ -340,11 +353,7 @@ describe("crest-reduce search — applyWindowAtScale is the verbatim normalized-
 	});
 
 	it("includes a maximum that occurs only in the flushed FIR tail", () => {
-		const input = new Float32Array([
-			-0.08388812094926834,
-			0.6030386090278625,
-			-0.7042242288589478,
-		]);
+		const input = new Float32Array([-0.08388812094926834, 0.6030386090278625, -0.7042242288589478]);
 		const upsampler = new TruePeakUpsampler(4);
 		const sourceAligned = upsampler.upsample(input);
 		const sourceAlignedPeak = peakAbs(sourceAligned);

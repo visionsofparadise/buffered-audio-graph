@@ -1,10 +1,10 @@
-import { CfnOutput, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib"
-import { BlockPublicAccess, Bucket, BucketEncryption } from "aws-cdk-lib/aws-s3"
-import type { Construct } from "constructs"
+import { CfnOutput, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
+import { BlockPublicAccess, Bucket, BucketEncryption } from "aws-cdk-lib/aws-s3";
+import type { Construct } from "constructs";
 
 export class FixturesStack extends Stack {
 	constructor(scope: Construct, id: string, props?: StackProps) {
-		super(scope, id, props)
+		super(scope, id, props);
 
 		const bucket = new Bucket(this, "Bucket", {
 			bucketName: "buffered-audio-test-fixtures-345340320424",
@@ -18,14 +18,14 @@ export class FixturesStack extends Stack {
 			versioned: true,
 			encryption: BucketEncryption.S3_MANAGED,
 			removalPolicy: RemovalPolicy.RETAIN,
-		})
+		});
 
 		new CfnOutput(this, "BucketName", {
 			value: bucket.bucketName,
-		})
+		});
 
 		new CfnOutput(this, "BucketRegionalDomainName", {
 			value: bucket.bucketRegionalDomainName,
-		})
+		});
 	}
 }

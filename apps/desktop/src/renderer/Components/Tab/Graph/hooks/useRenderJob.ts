@@ -32,7 +32,8 @@ export function unreadyRenderPairs(
 		seen.add(key);
 
 		const ready = packages.some(
-			(entry) => entry.name === node.packageName && entry.version === node.packageVersion && entry.status === "ready",
+			(entry) =>
+				entry.name === node.packageName && entry.version === node.packageVersion && entry.status === "ready",
 		);
 
 		if (!ready) missing.push(key);

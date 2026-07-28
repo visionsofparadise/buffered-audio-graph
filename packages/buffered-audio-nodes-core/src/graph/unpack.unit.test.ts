@@ -37,7 +37,13 @@ const registry: NodeRegistry = new Map([
 ]);
 
 function graph(nodes: GraphDefinition["nodes"], edges: GraphDefinition["edges"] = []): GraphDefinition {
-	return validateGraphDefinition({ id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", name: "Test", apiVersion: 1, nodes, edges });
+	return validateGraphDefinition({
+		id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		name: "Test",
+		apiVersion: 1,
+		nodes,
+		edges,
+	});
 }
 
 describe("unpack apiVersion enforcement", () => {
@@ -50,7 +56,17 @@ describe("unpack apiVersion enforcement", () => {
 		}
 
 		const versionTwoRegistry: NodeRegistry = new Map([
-			["test", new Map([["1.0.0", new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([["v2-source", VersionTwoSource as never]])]])],
+			[
+				"test",
+				new Map([
+					[
+						"1.0.0",
+						new Map<string, new (options?: Record<string, unknown>) => BufferedAudioNode>([
+							["v2-source", VersionTwoSource as never],
+						]),
+					],
+				]),
+			],
 		]);
 		const definition = graph([{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "v2-source" }]);
 
@@ -91,7 +107,13 @@ describe("unpack applies node schema defaults (2026-05-19 regression)", () => {
 		const definition = graph(
 			[
 				{ id: "s", packageName: "test", packageVersion: "1.0.0", nodeName: "versioned-source" },
-				{ id: "t", packageName: "test", packageVersion: "1.0.0", nodeName: "defaulting-transform", parameters: { smoothing: 30 } },
+				{
+					id: "t",
+					packageName: "test",
+					packageVersion: "1.0.0",
+					nodeName: "defaulting-transform",
+					parameters: { smoothing: 30 },
+				},
 			],
 			[{ from: "s", to: "t" }],
 		);
@@ -124,7 +146,9 @@ describe("mixed-version bags — per-node pins", () => {
 	});
 
 	it("unpack names the name@version pair when the pinned version is unknown", () => {
-		const definition = graph([{ id: "s", packageName: "test", packageVersion: "9.9.9", nodeName: "versioned-source" }]);
+		const definition = graph([
+			{ id: "s", packageName: "test", packageVersion: "9.9.9", nodeName: "versioned-source" },
+		]);
 
 		expect(() => unpack(definition, registry)).toThrow(/Unknown package: "test@9\.9\.9"/);
 	});
@@ -138,7 +162,10 @@ describe("unpack graph errors", () => {
 	});
 
 	it("throws when an edge references an unknown node", () => {
-		const definition = graph([{ id: "s", packageName: "test", packageVersion: "0.20.0", nodeName: "versioned-source" }], [{ from: "s", to: "missing" }]);
+		const definition = graph(
+			[{ id: "s", packageName: "test", packageVersion: "0.20.0", nodeName: "versioned-source" }],
+			[{ from: "s", to: "missing" }],
+		);
 
 		expect(() => unpack(definition, registry)).toThrow('Edge references unknown node: "missing"');
 	});
@@ -156,7 +183,9 @@ describe("unpack graph errors", () => {
 	});
 
 	it("throws when the graph has no source node", () => {
-		const definition = graph([{ id: "t", packageName: "test", packageVersion: "0.20.0", nodeName: "versioned-target" }]);
+		const definition = graph([
+			{ id: "t", packageName: "test", packageVersion: "0.20.0", nodeName: "versioned-target" },
+		]);
 
 		expect(() => unpack(definition, registry)).toThrow("No source nodes found in graph definition");
 	});

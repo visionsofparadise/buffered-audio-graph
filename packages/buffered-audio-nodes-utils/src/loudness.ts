@@ -74,7 +74,9 @@ export class IntegratedLufsAccumulator {
 		}
 
 		if (channelWeights !== undefined && channelWeights.length !== channelCount) {
-			throw new Error(`IntegratedLufsAccumulator: channelWeights length ${channelWeights.length} does not match channel count ${channelCount}`);
+			throw new Error(
+				`IntegratedLufsAccumulator: channelWeights length ${channelWeights.length} does not match channel count ${channelCount}`,
+			);
 		}
 
 		this.blockSize = Math.round(BLOCK_DURATION_SECONDS * sampleRate);
@@ -142,7 +144,9 @@ export class LoudnessAccumulator {
 		}
 
 		if (channelWeights !== undefined && channelWeights.length !== channelCount) {
-			throw new Error(`LoudnessAccumulator: channelWeights length ${channelWeights.length} does not match channel count ${channelCount}`);
+			throw new Error(
+				`LoudnessAccumulator: channelWeights length ${channelWeights.length} does not match channel count ${channelCount}`,
+			);
 		}
 
 		this.blockSize400 = Math.round(BLOCK_DURATION_SECONDS * sampleRate);
@@ -178,7 +182,10 @@ export class LoudnessAccumulator {
 
 		this.finalized = true;
 
-		const sourceShortTermCount = this.sourceFrames < this.blockSize3s ? 0 : Math.floor((this.sourceFrames - this.blockSize3s) / this.blockStep) + 1;
+		const sourceShortTermCount =
+			this.sourceFrames < this.blockSize3s
+				? 0
+				: Math.floor((this.sourceFrames - this.blockSize3s) / this.blockStep) + 1;
 		const tailFrames = Math.round(FILE_LRA_TAIL_SECONDS * this.sampleRate);
 		const tailChunkFrames = Math.min(FILE_LRA_TAIL_CHUNK_FRAMES, tailFrames);
 		const zeroChannels = Array.from({ length: this.channelCount }, () => new Float32Array(tailChunkFrames));

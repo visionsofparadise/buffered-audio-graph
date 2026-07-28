@@ -5,7 +5,12 @@ export interface KeepRange {
 	end: number;
 }
 
-export function computeKeepRanges(sortedRegions: Array<CutRegion>, chunkStartSec: number, sampleRate: number, chunkFrames: number): Array<KeepRange> {
+export function computeKeepRanges(
+	sortedRegions: Array<CutRegion>,
+	chunkStartSec: number,
+	sampleRate: number,
+	chunkFrames: number,
+): Array<KeepRange> {
 	const keepRanges: Array<KeepRange> = [];
 	let cursor = 0;
 

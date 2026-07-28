@@ -7,13 +7,19 @@ export const isCrashExit = (code: number | null): boolean => code !== null && CR
 
 const classNamesSchema = z.array(z.string());
 
-export const parseClassNames = (stdout: string): ReadonlyArray<string> => classNamesSchema.parse(JSON.parse(stdout.trim()));
+export const parseClassNames = (stdout: string): ReadonlyArray<string> =>
+	classNamesSchema.parse(JSON.parse(stdout.trim()));
 
-export const tailLines = (text: string, count = 5): string => text.trim().split(/\r?\n/).slice(-count).join("\n").trim();
+export const tailLines = (text: string, count = 5): string =>
+	text.trim().split(/\r?\n/).slice(-count).join("\n").trim();
 
-export type ListResult = { readonly ok: true; readonly classNames: ReadonlyArray<string> } | { readonly ok: false; readonly error: string };
+export type ListResult =
+	{ readonly ok: true; readonly classNames: ReadonlyArray<string> } | { readonly ok: false; readonly error: string };
 
-const runOnce = async (cliPath: string, modulePath: string): Promise<{ code: number | null; stdout: string; stderr: string }> =>
+const runOnce = async (
+	cliPath: string,
+	modulePath: string,
+): Promise<{ code: number | null; stdout: string; stderr: string }> =>
 	new Promise((resolve, reject) => {
 		const child = spawn(cliPath, ["--plugin", modulePath, "--list"]);
 

@@ -124,9 +124,10 @@ function buildObjectChildren(
 	requiredSet: ReadonlySet<string>,
 	logger?: Logger,
 ): ReadonlyArray<Parameter> {
-	const record = currentValue !== null && typeof currentValue === "object" && !Array.isArray(currentValue)
-		? (currentValue as Record<string, unknown>)
-		: {};
+	const record =
+		currentValue !== null && typeof currentValue === "object" && !Array.isArray(currentValue)
+			? (currentValue as Record<string, unknown>)
+			: {};
 	const children: Array<Parameter> = [];
 
 	for (const [fieldName, fieldProp] of Object.entries(properties)) {
@@ -144,9 +145,10 @@ function buildArrayRow(
 	binaryDefaults: Record<string, string>,
 	requiredSet: ReadonlySet<string>,
 ): ArrayRow {
-	const record = rowValue !== null && typeof rowValue === "object" && !Array.isArray(rowValue)
-		? (rowValue as Record<string, unknown>)
-		: {};
+	const record =
+		rowValue !== null && typeof rowValue === "object" && !Array.isArray(rowValue)
+			? (rowValue as Record<string, unknown>)
+			: {};
 	const fields: Array<LeafParameter> = [];
 
 	for (const [fieldName, fieldProp] of Object.entries(itemProperties)) {
@@ -172,7 +174,13 @@ function buildSingleParameter(
 		return {
 			kind: "object",
 			name,
-			children: buildObjectChildren(prop.properties, containerValue, binaryDefaults, new Set(prop.required ?? []), logger),
+			children: buildObjectChildren(
+				prop.properties,
+				containerValue,
+				binaryDefaults,
+				new Set(prop.required ?? []),
+				logger,
+			),
 		};
 	}
 
@@ -212,7 +220,14 @@ export function buildParameters(
 	const parameters: Array<Parameter> = [];
 
 	for (const [propertyName, prop] of Object.entries(nodeSchema.properties)) {
-		const param = buildSingleParameter(propertyName, prop, graphNode.parameters?.[propertyName], binaryDefaults, requiredSet, logger);
+		const param = buildSingleParameter(
+			propertyName,
+			prop,
+			graphNode.parameters?.[propertyName],
+			binaryDefaults,
+			requiredSet,
+			logger,
+		);
 
 		if (param !== null) parameters.push(param);
 	}
@@ -220,7 +235,9 @@ export function buildParameters(
 	return parameters;
 }
 
-export function buildDefaultArrayItem(itemProperties: Readonly<Record<string, NodeJsonSchemaProperty>>): Record<string, unknown> {
+export function buildDefaultArrayItem(
+	itemProperties: Readonly<Record<string, NodeJsonSchemaProperty>>,
+): Record<string, unknown> {
 	const result: Record<string, unknown> = {};
 
 	for (const [fieldName, fieldProp] of Object.entries(itemProperties)) {

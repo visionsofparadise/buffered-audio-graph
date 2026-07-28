@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { BufferedTransformStream, type BlockBuffer, TransformNode, WHOLE_FILE, type Block, type TransformNodeProperties } from "@buffered-audio/core";
+import {
+	BufferedTransformStream,
+	type BlockBuffer,
+	TransformNode,
+	WHOLE_FILE,
+	type Block,
+	type TransformNodeProperties,
+} from "@buffered-audio/core";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { computeTrimRegion, findFirstAbove, findLastAbove } from "./utils/silence";
 
@@ -31,7 +38,10 @@ export class TrimStream extends BufferedTransformStream<TrimNode> {
 			const abs = this.scanOffset + localFirst;
 
 			if (abs < this.firstAbove) this.firstAbove = abs;
-			this.lastAbove = Math.max(this.lastAbove, this.scanOffset + findLastAbove(block.samples, chunkFrames, threshold));
+			this.lastAbove = Math.max(
+				this.lastAbove,
+				this.scanOffset + findLastAbove(block.samples, chunkFrames, threshold),
+			);
 		}
 
 		this.scanOffset += chunkFrames;
@@ -47,7 +57,14 @@ export class TrimStream extends BufferedTransformStream<TrimNode> {
 
 		const sr = buffered.sampleRate ?? 44100;
 		const marginFrames = Math.round(this.properties.margin * sr);
-		const region = computeTrimRegion(this.firstAbove, this.lastAbove, frames, marginFrames, this.properties.start, this.properties.end);
+		const region = computeTrimRegion(
+			this.firstAbove,
+			this.lastAbove,
+			frames,
+			marginFrames,
+			this.properties.start,
+			this.properties.end,
+		);
 
 		if (region === undefined) return;
 
@@ -63,7 +80,12 @@ export class TrimStream extends BufferedTransformStream<TrimNode> {
 			if (overlapEnd <= overlapStart) continue;
 
 			if (overlapStart === chunkStart && overlapEnd === chunkEnd) {
-				yield { samples: block.samples, offset: chunkStart - startFrame, sampleRate: block.sampleRate, bitDepth: block.bitDepth };
+				yield {
+					samples: block.samples,
+					offset: chunkStart - startFrame,
+					sampleRate: block.sampleRate,
+					bitDepth: block.bitDepth,
+				};
 
 				continue;
 			}
@@ -89,6 +111,12 @@ export class TrimNode extends TransformNode<TrimProperties> {
 	static override readonly Stream = TrimStream;
 }
 
-export function trim(options?: { threshold?: number; margin?: number; start?: boolean; end?: boolean; id?: string }): TrimNode {
+export function trim(options?: {
+	threshold?: number;
+	margin?: number;
+	start?: boolean;
+	end?: boolean;
+	id?: string;
+}): TrimNode {
 	return new TrimNode(options ?? {});
 }
