@@ -65,6 +65,7 @@ export default tseslint.config(
 			react: {
 				version: "detect",
 			},
+			...importX.flatConfigs.typescript.settings,
 			"import-x/resolver": {
 				typescript: { alwaysTryTypes: true },
 			},
