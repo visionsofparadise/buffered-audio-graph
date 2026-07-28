@@ -1,9 +1,9 @@
-import type { LeafParameter } from "../utils/buildParameters";
 import { BooleanRow } from "./Boolean";
 import { EnumRow } from "./Enum";
 import { FileRow } from "./File";
 import { NumberRow } from "./Number";
 import { StringRow } from "./String";
+import type { LeafParameter } from "../utils/buildParameters";
 
 export function LeafField({
 	param,

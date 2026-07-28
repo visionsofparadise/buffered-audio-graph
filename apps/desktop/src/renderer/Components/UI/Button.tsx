@@ -1,6 +1,6 @@
-import type { LucideIcon } from "lucide-react";
 import { cn } from "../../utils/cn";
 import { iconSizes, sizeStyles, variantStyles } from "./utils/buttonStyles";
+import type { LucideIcon } from "lucide-react";
 
 export interface ButtonProps extends React.ComponentPropsWithRef<"button"> {
 	readonly variant?: "default" | "outline" | "ghost";

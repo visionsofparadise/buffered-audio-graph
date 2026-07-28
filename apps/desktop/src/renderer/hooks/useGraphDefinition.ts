@@ -1,15 +1,15 @@
-import type { State } from "opshot";
 import { useCallback, useEffect, useRef } from "react";
 import { SUPPORTED_API_VERSIONS } from "../../shared/Models/ApiVersion";
-import type { FileChangedPayload } from "../../shared/utilities/emitToRenderer";
-import type { AppContext } from "../Models/Context";
-import type { GraphMeta } from "../Models/History";
 import {
 	loadGraphDefinition,
 	serializeGraphDefinition,
 	type GraphDefinitionState,
 } from "../Models/State/GraphDefinition";
 import { ensureGraphPackagesInstalled } from "./packagePipeline";
+import type { FileChangedPayload } from "../../shared/utilities/emitToRenderer";
+import type { AppContext } from "../Models/Context";
+import type { GraphMeta } from "../Models/History";
+import type { State } from "opshot";
 
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -121,7 +121,9 @@ export function useGraphDefinition(
 	useEffect(() => {
 		const handler = (payload: FileChangedPayload): void => {
 			if (payload.path !== bagPath) return;
+
 			if (hashRef.current === null) return;
+
 			if (payload.contentHash === hashRef.current) return;
 
 			void (async () => {

@@ -1,6 +1,6 @@
-import { app } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { app } from "electron";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { DELETE_FILE_ACTION, type DeleteFileIpcParameters, type DeleteFileIpcReturn } from "./Renderer";
 

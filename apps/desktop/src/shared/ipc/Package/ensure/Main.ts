@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app } from "electron";
 import { toJSONSchema } from "zod";
-import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { SUPPORTED_API_VERSIONS } from "../../../Models/ApiVersion";
+import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { registerPackage, type NodeClass } from "../../../Models/NodeRegistry";
 import {
 	ENSURE_PACKAGE_ACTION,
@@ -65,7 +65,9 @@ async function pathExists(path: string): Promise<boolean> {
 
 function collectExportEntries(exportsValue: PackageExports): Array<string> {
 	if (!exportsValue) return [];
+
 	if (typeof exportsValue === "string") return [exportsValue];
+
 	if (Array.isArray(exportsValue)) return exportsValue.flatMap((value) => collectExportEntries(value));
 
 	const preferredKeys = ["import", "default", "require", "node"];
@@ -142,6 +144,7 @@ function getNodeCategory(value: NodeClass): "source" | "transform" | "target" {
 
 	if (typeof prototype === "object" && prototype !== null) {
 		if ("createRenderJob" in prototype && typeof prototype.createRenderJob === "function") return "source";
+
 		if ("to" in prototype && typeof prototype.to === "function") return "transform";
 	}
 

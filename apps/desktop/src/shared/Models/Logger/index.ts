@@ -87,6 +87,7 @@ export class Logger {
 
 	private serialize(value: unknown): unknown {
 		if (value === null || value === undefined) return value;
+
 		if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
 
 		if (value instanceof Error) {
@@ -122,6 +123,7 @@ export class Logger {
 
 	debug(message: string, context?: Logger.EntryContext): void {
 		if (!Logger.shouldLog("debug")) return;
+
 		const entry = this.createLogEntry("debug", message, context);
 
 		this.baseLogger.debug(this.toLogData(entry));
@@ -129,6 +131,7 @@ export class Logger {
 
 	info(message: string, context?: Logger.EntryContext): void {
 		if (!Logger.shouldLog("info")) return;
+
 		const entry = this.createLogEntry("info", message, context);
 
 		this.baseLogger.info(this.toLogData(entry));
@@ -136,6 +139,7 @@ export class Logger {
 
 	warn(message: string, context?: Logger.EntryContext): void {
 		if (!Logger.shouldLog("warn")) return;
+
 		const entry = this.createLogEntry("warn", message, context);
 
 		this.baseLogger.warn(this.toLogData(entry));
@@ -143,6 +147,7 @@ export class Logger {
 
 	error(message: string, error?: Error, context?: Logger.EntryContext): void {
 		if (!Logger.shouldLog("error")) return;
+
 		const entry = this.createLogEntry("error", message, context, error);
 
 		this.baseLogger.error(this.toLogData(entry));
@@ -154,15 +159,19 @@ export class Logger {
 		switch (entry.level) {
 			case "debug":
 				this.baseLogger.debug(data);
+
 				break;
 			case "info":
 				this.baseLogger.info(data);
+
 				break;
 			case "warn":
 				this.baseLogger.warn(data);
+
 				break;
 			case "error":
 				this.baseLogger.error(data);
+
 				break;
 		}
 	}

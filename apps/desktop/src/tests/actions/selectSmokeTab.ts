@@ -1,7 +1,6 @@
-import type { Page } from "puppeteer-core";
-
 import { nodeCount } from "../utils/graph";
 import { sleep } from "../utils/page";
+import type { Page } from "puppeteer-core";
 
 export async function selectSmokeTab(page: Page): Promise<void> {
 	const closeButton = await page.$('button[aria-label="Close .smoke-seed"]');

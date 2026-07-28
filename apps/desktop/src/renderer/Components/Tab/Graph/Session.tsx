@@ -1,19 +1,19 @@
-import type { GraphDefinition } from "@buffered-audio/core";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useGroup, useTrackedState } from "opshot/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ensureGraphPackagesInstalled } from "../../../hooks/packagePipeline";
 import { useGraphDefinition } from "../../../hooks/useGraphDefinition";
 import { useGraphState } from "../../../hooks/useGraphState";
-import { ensureGraphPackagesInstalled } from "../../../hooks/packagePipeline";
-import type { AppContext, GraphContext } from "../../../Models/Context";
 import { createHistory, graphMeta } from "../../../Models/History";
-import type { TabEntry } from "../../../Models/State/App";
-import type { GraphState, GraphViewState } from "../../../Models/State/Graph";
-import type { GraphDefinitionState } from "../../../Models/State/GraphDefinition";
 import { computeAutoLayout } from "../../../utils/autoLayout";
 import { importBag } from "../../../utils/bagOperations";
 import { mergeImportedBag } from "../../../utils/importBag";
 import { GraphCanvas } from "./Canvas";
+import type { AppContext, GraphContext } from "../../../Models/Context";
+import type { TabEntry } from "../../../Models/State/App";
+import type { GraphState, GraphViewState } from "../../../Models/State/Graph";
+import type { GraphDefinitionState } from "../../../Models/State/GraphDefinition";
+import type { GraphDefinition } from "@buffered-audio/core";
 
 interface Props {
 	readonly initialGraphState: GraphState;

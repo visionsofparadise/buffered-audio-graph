@@ -1,8 +1,8 @@
 import { retrack } from "opshot/react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "../UI/Button";
-import type { AppContext } from "../../Models/Context";
 import { extractBinaries } from "./utils/extractBinaries";
+import type { AppContext } from "../../Models/Context";
 
 interface Props {
 	readonly context: AppContext;

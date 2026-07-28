@@ -1,5 +1,5 @@
-import type { GraphDefinition } from "@buffered-audio/core";
 import { AsyncRendererIpc } from "../../../Models/AsyncRendererIpc";
+import type { GraphDefinition } from "@buffered-audio/core";
 
 export interface RenderGraphInput {
 	jobId: string;

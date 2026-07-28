@@ -1,4 +1,3 @@
-import type { GraphDefinition } from "@buffered-audio/core";
 import {
 	MiniMap,
 	ReactFlow,
@@ -14,14 +13,12 @@ import {
 import "@xyflow/react/dist/style.css";
 import { retrack } from "opshot/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { GraphContext } from "../../../../Models/Context";
 import { computeAutoLayout } from "../../../../utils/autoLayout";
-import { buildDefaultArrayItem } from "../Node/utils/buildParameters";
-import { lookupNode, schemaPropertyAtPath } from "../Node/utils/nodeLookup";
 import { GraphContextMenu, type ContextMenuAction, type ContextMenuPosition } from "../GraphContextMenu";
 import { useGraphMutations } from "../hooks/useGraphMutations";
-import type { NodeContainerData } from "../Node/Container";
 import { unreadyRenderPairs, useRenderJob } from "../hooks/useRenderJob";
+import { buildDefaultArrayItem } from "../Node/utils/buildParameters";
+import { lookupNode, schemaPropertyAtPath } from "../Node/utils/nodeLookup";
 import { BottomRightOverlay } from "../Overlays/BottomRightOverlay";
 import { TopLeftOverlay } from "../Overlays/TopLeftOverlay";
 import { TopRightOverlay } from "../Overlays/TopRightOverlay";
@@ -29,6 +26,9 @@ import { RenderParametersModal } from "../RenderParametersModal";
 import { EDGE_TYPES, EMPTY_REMEMBERED_PARAMETERS, NODE_TYPES } from "./utils/constants";
 import { minimapNodeColor } from "./utils/minimapColors";
 import { buildReactFlowEdges, buildReactFlowNodes } from "./utils/reactFlowBuilders";
+import type { GraphContext } from "../../../../Models/Context";
+import type { NodeContainerData } from "../Node/Container";
+import type { GraphDefinition } from "@buffered-audio/core";
 
 interface Props {
 	readonly context: GraphContext;
@@ -131,6 +131,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 				for (const segment of path) {
 					if (current === null || typeof current !== "object") {
 						current = undefined;
+
 						break;
 					}
 
@@ -336,12 +337,14 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 					}
 
 					setContextMenu(null);
+
 					break;
 				}
 
 				case "render": {
 					requestRender();
 					setContextMenu(null);
+
 					break;
 				}
 
@@ -351,6 +354,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 					}
 
 					setContextMenu(null);
+
 					break;
 				}
 
@@ -360,18 +364,21 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 					}
 
 					setContextMenu(null);
+
 					break;
 				}
 
 				case "undo": {
 					context.history.undo();
 					setContextMenu(null);
+
 					break;
 				}
 
 				case "redo": {
 					context.history.redo();
 					setContextMenu(null);
+
 					break;
 				}
 			}
@@ -427,6 +434,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 
 				if (selectedNodes.length > 0) {
 					event.preventDefault();
+
 					for (const node of selectedNodes) {
 						mutations.removeNode(node.id);
 					}

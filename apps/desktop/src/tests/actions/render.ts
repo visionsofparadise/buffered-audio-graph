@@ -1,7 +1,6 @@
-import type { Page } from "puppeteer-core";
-
 import { clickPoint, rectByText, rectOf, sleep } from "../utils/page";
 import { fileSize } from "../utils/wav";
+import type { Page } from "puppeteer-core";
 
 interface RenderToastState {
 	readonly present: boolean;

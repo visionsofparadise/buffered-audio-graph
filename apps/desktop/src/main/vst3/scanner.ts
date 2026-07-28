@@ -1,5 +1,3 @@
-import type { Logger } from "../../shared/Models/Logger";
-import type { Vst3ScanEntry } from "../../shared/ipc/Vst3/Vst3ScanEntry";
 import {
 	isCacheHit,
 	readCache,
@@ -12,6 +10,8 @@ import {
 import { deriveErrorEntry, derivePendingEntry, deriveReadyEntries } from "./entries";
 import { listModule } from "./listing";
 import { walkVst3Roots, type WalkModule } from "./walk";
+import type { Vst3ScanEntry } from "../../shared/ipc/Vst3/Vst3ScanEntry";
+import type { Logger } from "../../shared/Models/Logger";
 
 const LIST_POOL_CONCURRENCY = 3;
 

@@ -1,10 +1,10 @@
 import { retrack } from "opshot/react";
 import { useCallback, useState } from "react";
+import { usePackageManager } from "../../hooks/usePackageManager";
 import { Button } from "../UI/Button";
 import { Input } from "../UI/Input";
 import { Toggle } from "../UI/Toggle";
 import type { AppContext } from "../../Models/Context";
-import { usePackageManager } from "../../hooks/usePackageManager";
 
 interface Props {
 	readonly context: AppContext;

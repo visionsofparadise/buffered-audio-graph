@@ -3,15 +3,15 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../../../../../utils/cn";
-import type { Main } from "../../../../../Models/Main";
-import type { MainEvents } from "../../../../../Models/MainEvents";
+import { paramLabelClass } from "../ParameterRow/utils/labels";
+import { SortableStageRow } from "./SortableStageRow";
+import { readStage, type Stage } from "./utils/helpers";
 import type { Vst3EditorEventPayload } from "../../../../../../shared/ipc/Vst3/Vst3EditorEvent";
 import type { Vst3ScanEntry } from "../../../../../../shared/ipc/Vst3/Vst3ScanEntry";
-import type { ArrayParameter } from "../utils/buildParameters";
+import type { Main } from "../../../../../Models/Main";
+import type { MainEvents } from "../../../../../Models/MainEvents";
 import type { ParameterCallbacks } from "../ParameterRow/utils/callbacks";
-import { paramLabelClass } from "../ParameterRow/utils/labels";
-import { readStage, type Stage } from "./utils/helpers";
-import { SortableStageRow } from "./SortableStageRow";
+import type { ArrayParameter } from "../utils/buildParameters";
 
 export function Vst3StagesEditor({
 	param,

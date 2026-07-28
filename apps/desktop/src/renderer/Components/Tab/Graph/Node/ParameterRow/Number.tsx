@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Knob } from "../../../../UI/Knob";
 import { cn } from "../../../../../utils/cn";
+import { Knob } from "../../../../UI/Knob";
 import { FieldLabel } from "./FieldLabel";
 import { formatParamValue, snapToStep } from "./utils/numberParamUtils";
 
@@ -36,10 +36,17 @@ export function NumberRow({
 	const [localValue, setLocalValue] = useState(param.value);
 	const [editText, setEditText] = useState<string | null>(null);
 	const draggingRef = useRef(false);
+	const editInputRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
 		if (!draggingRef.current) setLocalValue(param.value);
 	}, [param.value]);
+
+	const isEditing = editText !== null;
+
+	useEffect(() => {
+		if (isEditing) editInputRef.current?.focus();
+	}, [isEditing]);
 
 	const normalized = normalize(localValue);
 	const controlDisabled = (disabled ?? false) || (param.optional && !param.defined);
@@ -91,8 +98,8 @@ export function NumberRow({
 			>
 				{editText !== null ? (
 					<input
+						ref={editInputRef}
 						type="number"
-						autoFocus
 						value={editText}
 						min={param.min}
 						max={param.max}
@@ -126,6 +133,7 @@ export function NumberRow({
 							}}
 							onChangeEnd={(norm: number) => {
 								draggingRef.current = false;
+
 								const committed = snapToStep(denormalize(norm), param.step);
 
 								setLocalValue(committed);

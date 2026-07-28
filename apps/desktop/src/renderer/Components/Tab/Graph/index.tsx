@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { ensureGraphPackagesInstalled } from "../../../hooks/packagePipeline";
 import { loadGraphDefinition } from "../../../hooks/useGraphDefinition";
+import { loadGraphState } from "../../../Models/State/Graph";
+import { GraphSession } from "./Session";
 import type { AppContext } from "../../../Models/Context";
 import type { TabEntry } from "../../../Models/State/App";
 import type { GraphState } from "../../../Models/State/Graph";
-import { loadGraphState } from "../../../Models/State/Graph";
 import type { GraphDefinitionState } from "../../../Models/State/GraphDefinition";
-import { GraphSession } from "./Session";
 
 interface Props {
 	readonly tab: TabEntry;

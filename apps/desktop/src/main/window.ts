@@ -1,15 +1,16 @@
-import { app, BrowserWindow } from "electron";
 import path from "path";
-import { JobManager } from "../shared/utilities/JobManager";
-import { emitToRenderer } from "../shared/utilities/emitToRenderer";
+import { app, BrowserWindow } from "electron";
 import { ASYNC_MAIN_IPCS } from "../shared/ipc/asyncMainIpcs";
-import type { Logger } from "../shared/Models/Logger";
 import { createNodeRegistry } from "../shared/Models/NodeRegistry";
-import { FileWatcherManager } from "./FileWatcherManager";
+import { emitToRenderer } from "../shared/utilities/emitToRenderer";
+import { JobManager } from "../shared/utilities/JobManager";
 import { getVst3CliPath } from "./bundledBinaries";
+import { FileWatcherManager } from "./FileWatcherManager";
 import { Vst3Scanner } from "./vst3/scanner";
+import type { Logger } from "../shared/Models/Logger";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
+
 declare const MAIN_WINDOW_VITE_NAME: string;
 
 const WINDOW_CONFIG = {
@@ -74,6 +75,7 @@ export const createWindow = (logger: Logger): BrowserWindow => {
 
 	const debouncedEmit = (): void => {
 		if (debounceTimer) clearTimeout(debounceTimer);
+
 		debounceTimer = setTimeout(emitBounds, 500);
 	};
 

@@ -1,12 +1,12 @@
-import type { State } from "opshot";
 import { useTrackedState } from "opshot/react";
 import { useCallback } from "react";
+import { loadBag, newBag, openBag, saveBagDefinition } from "../utils/bagOperations";
+import { comparePackageVersions } from "./packagePipeline";
 import type { Logger } from "../../shared/Models/Logger";
 import type { TabNamesState } from "../Models/Context";
 import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
-import { loadBag, newBag, openBag, saveBagDefinition } from "../utils/bagOperations";
-import { comparePackageVersions } from "./packagePipeline";
+import type { State } from "opshot";
 
 interface UseAppCallbacksReturn {
 	readonly tabNames: State<TabNamesState>;

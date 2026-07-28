@@ -1,13 +1,13 @@
 import { retrack } from "opshot/react";
 import { useState } from "react";
 import { cn } from "../../utils/cn";
-import type { AppContext } from "../../Models/Context";
 import { Button } from "../UI/Button";
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from "../UI/Dialog";
 import { BinariesSection } from "./BinariesSection";
 import { PackagesSection } from "./PackagesSection";
-import { Vst3ScanRootsSection } from "./Vst3ScanRootsSection";
 import { SECTIONS, type SectionId } from "./utils/sections";
+import { Vst3ScanRootsSection } from "./Vst3ScanRootsSection";
+import type { AppContext } from "../../Models/Context";
 
 interface Props {
 	readonly isOpen: boolean;

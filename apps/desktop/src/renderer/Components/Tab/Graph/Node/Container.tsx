@@ -1,14 +1,14 @@
-import { cn } from "../../../../utils/cn";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Power, TriangleAlert } from "lucide-react";
+import { cn } from "../../../../utils/cn";
+import { NodeMenu } from "./Menu";
+import { ParameterField } from "./ParameterRow/ParameterField";
+import { CATEGORY_HEADER_BG } from "./utils/categoryHeaderBg";
+import { Vst3StagesEditor } from "./Vst3StagesEditor";
+import type { ParameterCallbacks } from "./ParameterRow/utils/callbacks";
+import type { Parameter } from "./utils/buildParameters";
 import type { Main } from "../../../../Models/Main";
 import type { MainEvents } from "../../../../Models/MainEvents";
-import { NodeMenu } from "./Menu";
-import type { ParameterCallbacks } from "./ParameterRow/utils/callbacks";
-import { ParameterField } from "./ParameterRow/ParameterField";
-import type { Parameter } from "./utils/buildParameters";
-import { Vst3StagesEditor } from "./Vst3StagesEditor";
-import { CATEGORY_HEADER_BG } from "./utils/categoryHeaderBg";
 
 export type NodeCategory = "source" | "transform" | "target";
 

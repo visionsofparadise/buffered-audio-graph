@@ -4,7 +4,6 @@ import path from "node:path";
 import readline from "node:readline";
 import { getVst3CliPath } from "../../../../main/bundledBinaries";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
-import type { Logger } from "../../../Models/Logger";
 import { emitToRenderer } from "../../../utilities/emitToRenderer";
 import { parseVst3EditorLine, type Vst3EditorEvent } from "../Vst3EditorEvent";
 import {
@@ -13,6 +12,7 @@ import {
 	type Vst3LaunchEditorIpcParameters,
 	type Vst3LaunchEditorIpcReturn,
 } from "./Renderer";
+import type { Logger } from "../../../Models/Logger";
 
 const STDERR_TAIL_LINE_LIMIT = 20;
 const STDERR_TAIL_BYTE_LIMIT = 4096;

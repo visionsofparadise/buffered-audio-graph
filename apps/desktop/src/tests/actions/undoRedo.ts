@@ -1,6 +1,5 @@
-import type { Page } from "puppeteer-core";
-
 import { sleep } from "../utils/page";
+import type { Page } from "puppeteer-core";
 
 export async function undo(page: Page): Promise<void> {
 	await page.keyboard.down("Control");

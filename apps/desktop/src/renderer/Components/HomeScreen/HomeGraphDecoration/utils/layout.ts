@@ -2,6 +2,7 @@ import { mulberry32 } from "./mulberry32";
 
 export const VIEW_W = 1200;
 export const VIEW_H = 700;
+
 const CENTER_X = VIEW_W / 2;
 const CENTER_Y = VIEW_H / 2;
 

@@ -1,8 +1,8 @@
 import { Plus, X } from "lucide-react";
 import { retrack } from "opshot/react";
 import { useCallback } from "react";
-import type { AppContext } from "../../Models/Context";
 import { Button } from "../UI/Button";
+import type { AppContext } from "../../Models/Context";
 
 interface Props {
 	readonly context: AppContext;

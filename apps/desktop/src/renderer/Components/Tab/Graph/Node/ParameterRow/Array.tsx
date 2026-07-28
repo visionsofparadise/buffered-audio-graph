@@ -1,11 +1,11 @@
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { cn } from "../../../../../utils/cn";
 import { Plus } from "lucide-react";
-import type { ArrayParameter } from "../utils/buildParameters";
-import { humanizeFieldName, paramLabelClass } from "./utils/labels";
-import type { ParameterCallbacks } from "./utils/callbacks";
+import { cn } from "../../../../../utils/cn";
 import { SortableArrayRow } from "./SortableArrayRow";
+import { humanizeFieldName, paramLabelClass } from "./utils/labels";
+import type { ArrayParameter } from "../utils/buildParameters";
+import type { ParameterCallbacks } from "./utils/callbacks";
 
 export function ArrayRow({
 	param,

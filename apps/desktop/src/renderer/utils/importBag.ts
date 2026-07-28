@@ -1,5 +1,5 @@
-import type { GraphDefinition, GraphEdge, GraphNode } from "@buffered-audio/core";
 import { computeAutoLayout } from "./autoLayout";
+import type { GraphDefinition, GraphEdge, GraphNode } from "@buffered-audio/core";
 
 const IMPORT_CLUSTER_GAP = 240;
 

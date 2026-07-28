@@ -1,11 +1,11 @@
-import type { GraphNode } from "@buffered-audio/core";
-import type { Logger } from "../../../../../../shared/Models/Logger";
 import type { NodeJsonSchema, NodeJsonSchemaProperty } from "../../../../../../shared/ipc/Package/ensure/Renderer";
+import type { Logger } from "../../../../../../shared/Models/Logger";
 import type { BooleanParameter } from "../ParameterRow/Boolean";
 import type { EnumParameter } from "../ParameterRow/Enum";
 import type { FileParameter } from "../ParameterRow/File";
 import type { NumberParameter } from "../ParameterRow/Number";
 import type { StringParameter } from "../ParameterRow/String";
+import type { GraphNode } from "@buffered-audio/core";
 
 export type LeafParameter = NumberParameter | BooleanParameter | EnumParameter | StringParameter | FileParameter;
 

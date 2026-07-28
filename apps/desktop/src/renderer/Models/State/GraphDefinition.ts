@@ -1,6 +1,6 @@
+import type { Main } from "../Main";
 import type { GraphDefinition } from "@buffered-audio/core";
 import type { Snapshot } from "opshot";
-import type { Main } from "../Main";
 
 export type GraphDefinitionState = GraphDefinition;
 

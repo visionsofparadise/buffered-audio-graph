@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Input } from "../../../../UI/Input";
 import { cn } from "../../../../../utils/cn";
+import { Input } from "../../../../UI/Input";
 import { FieldLabel } from "./FieldLabel";
 
 export interface StringParameter {

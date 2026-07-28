@@ -1,8 +1,6 @@
 import { AbortJobMainIpc } from "./Audio/abortJob/Main";
 import { RenderGraphMainIpc } from "./Audio/renderGraph/Main";
 import { ShowOpenDialogMainIpc } from "./Dialog/showOpenDialog/Main";
-import { CollectParametersMainIpc } from "./Graph/collectParameters/Main";
-import { ValidateGraphDefinitionMainIpc } from "./Graph/validateDefinition/Main";
 import { ShowSaveDialogMainIpc } from "./Dialog/showSaveDialog/Main";
 import { DeleteFileMainIpc } from "./FileSystem/deleteFile/Main";
 import { EnsureDirectoryMainIpc } from "./FileSystem/ensureDirectory/Main";
@@ -13,20 +11,22 @@ import { StatMainIpc } from "./FileSystem/stat/Main";
 import { UnwatchFileMainIpc } from "./FileSystem/unwatchFile/Main";
 import { WatchFileMainIpc } from "./FileSystem/watchFile/Main";
 import { WriteFileMainIpc } from "./FileSystem/writeFile/Main";
+import { CollectParametersMainIpc } from "./Graph/collectParameters/Main";
+import { ValidateGraphDefinitionMainIpc } from "./Graph/validateDefinition/Main";
 import { EnsurePackageMainIpc } from "./Package/ensure/Main";
 import { UnloadPackageNodesMainIpc } from "./Package/unloadNodes/Main";
 import { GetAllDisplaysMainIpc } from "./System/getAllDisplays/Main";
 import { GetAppVersionMainIpc } from "./System/getAppVersion/Main";
-import { GetUserDataPathMainIpc } from "./System/getUserDataPath/Main";
 import { GetBundledBinaryDefaultsMainIpc } from "./System/getBundledBinaryDefaults/Main";
-import { ListBundledBinariesMainIpc } from "./System/listBundledBinaries/Main";
+import { GetUserDataPathMainIpc } from "./System/getUserDataPath/Main";
 import { GetWindowIdMainIpc } from "./System/getWindowId/Main";
+import { ListBundledBinariesMainIpc } from "./System/listBundledBinaries/Main";
 import { OpenPathMainIpc } from "./System/openPath/Main";
 import { QuitAppMainIpc } from "./System/quitApp/Main";
 import { SetBoundsMainIpc } from "./System/setBounds/Main";
 import { Vst3GetDefaultScanRootsMainIpc } from "./Vst3/getDefaultScanRoots/Main";
-import { Vst3ScanPluginsMainIpc } from "./Vst3/scanPlugins/Main";
 import { Vst3LaunchEditorMainIpc } from "./Vst3/launchEditor/Main";
+import { Vst3ScanPluginsMainIpc } from "./Vst3/scanPlugins/Main";
 
 export const ASYNC_MAIN_IPCS = [
 	AbortJobMainIpc,

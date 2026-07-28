@@ -1,3 +1,4 @@
+import { EllipsisVertical, Power, RotateCcw, Trash2 } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -7,7 +8,6 @@ import {
 	DropdownMenuTrigger,
 } from "../../../UI/DropdownMenu";
 import { IconButton } from "../../../UI/IconButton";
-import { EllipsisVertical, Power, RotateCcw, Trash2 } from "lucide-react";
 
 export interface NodeMenuActions {
 	readonly bypassed: boolean;

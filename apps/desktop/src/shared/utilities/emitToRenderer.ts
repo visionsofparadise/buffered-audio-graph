@@ -1,7 +1,7 @@
-import type { StreamPhase } from "@buffered-audio/core";
-import type { BrowserWindow } from "electron";
 import type { Vst3EditorEventPayload } from "../ipc/Vst3/Vst3EditorEvent";
 import type { Vst3ScanEntry } from "../ipc/Vst3/Vst3ScanEntry";
+import type { StreamPhase } from "@buffered-audio/core";
+import type { BrowserWindow } from "electron";
 
 interface WindowBounds {
 	readonly x: number;

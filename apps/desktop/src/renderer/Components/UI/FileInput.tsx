@@ -1,7 +1,7 @@
-import type { KeyboardEvent } from "react";
 import { FolderOpen } from "lucide-react";
 import { cn } from "../../utils/cn";
 import { IconButton } from "./IconButton";
+import type { KeyboardEvent } from "react";
 
 export interface FileInputProps {
 	readonly value?: string;

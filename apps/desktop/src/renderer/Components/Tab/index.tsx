@@ -1,7 +1,7 @@
 import { retrack } from "opshot/react";
-import type { AppContext } from "../../Models/Context";
 import { HomeScreen } from "../HomeScreen";
 import { Graph } from "./Graph";
+import type { AppContext } from "../../Models/Context";
 
 interface Props {
 	readonly context: AppContext;

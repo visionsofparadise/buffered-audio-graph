@@ -1,12 +1,12 @@
-import { HomeGraphDecoration, type HomeGraphAnchor } from "./HomeGraphDecoration";
 import { FolderOpen, Plus } from "lucide-react";
 import { retrack } from "opshot/react";
 import { cn } from "../../utils/cn";
-import type { AppContext } from "../../Models/Context";
-import type { RecentFile } from "../../Models/State/App";
 import { ProjectIcon } from "../UI/ProjectIcon";
+import { HomeGraphDecoration, type HomeGraphAnchor } from "./HomeGraphDecoration";
 import { formatRelative } from "./utils/formatRelative";
 import { HOME_BARCODE_ACCENT, HOME_BARCODE_BARS } from "./utils/homeBarcodeBars";
+import type { AppContext } from "../../Models/Context";
+import type { RecentFile } from "../../Models/State/App";
 
 interface Props {
 	readonly context: AppContext;

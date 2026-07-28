@@ -1,7 +1,7 @@
-import type { State } from "opshot";
 import { useEffect } from "react";
 import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
+import type { State } from "opshot";
 
 const DEBOUNCE_MS = 500;
 
@@ -23,6 +23,7 @@ export function useAutosave(app: State<AppState>, main: Main, userDataPath: stri
 			pendingData = JSON.stringify(app.op.unwrap(), null, 2);
 
 			if (timer !== null) clearTimeout(timer);
+
 			timer = setTimeout(() => {
 				timer = null;
 				flush();

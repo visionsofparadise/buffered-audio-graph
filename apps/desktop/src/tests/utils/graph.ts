@@ -1,7 +1,6 @@
-import type { Page } from "puppeteer-core";
-
 import { sleep } from "./page";
 import { readPersistedBag } from "./profile";
+import type { Page } from "puppeteer-core";
 
 export async function nodeCount(page: Page): Promise<number> {
 	return page.$$eval(".react-flow__node", (elements) => elements.length);

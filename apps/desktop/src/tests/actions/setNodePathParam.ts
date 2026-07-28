@@ -1,6 +1,5 @@
-import type { Page } from "puppeteer-core";
-
 import { sleep } from "../utils/page";
+import type { Page } from "puppeteer-core";
 
 export async function setNodePathParam(page: Page, nodeId: string, value: string): Promise<void> {
 	const selector = `.react-flow__node[data-id="${nodeId}"] input[type="text"]`;

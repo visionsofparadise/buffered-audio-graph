@@ -1,6 +1,5 @@
-import type { Page } from "puppeteer-core";
-
 import { sleep } from "../utils/page";
+import type { Page } from "puppeteer-core";
 
 export async function openStagePicker(page: Page, nodeId: string): Promise<boolean> {
 	const triggerSelector = `.react-flow__node[data-id="${nodeId}"] button[aria-label="Select plugin"]`;

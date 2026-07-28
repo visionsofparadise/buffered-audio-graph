@@ -1,5 +1,3 @@
-import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -7,6 +5,8 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "./DropdownMenu";
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 export type MenuItem =
 	| {

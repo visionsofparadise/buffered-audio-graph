@@ -1,9 +1,6 @@
-import type { IpcHandlerAction, IpcHandlerParameters, IpcHandlerReturn } from "../Models/AsyncRendererIpc";
 import { AbortJobRendererIpc } from "./Audio/abortJob/Renderer";
 import { RenderGraphRendererIpc } from "./Audio/renderGraph/Renderer";
 import { ShowOpenDialogRendererIpc } from "./Dialog/showOpenDialog/Renderer";
-import { CollectParametersRendererIpc } from "./Graph/collectParameters/Renderer";
-import { ValidateGraphDefinitionRendererIpc } from "./Graph/validateDefinition/Renderer";
 import { ShowSaveDialogRendererIpc } from "./Dialog/showSaveDialog/Renderer";
 import { DeleteFileRendererIpc } from "./FileSystem/deleteFile/Renderer";
 import { EnsureDirectoryRendererIpc } from "./FileSystem/ensureDirectory/Renderer";
@@ -14,20 +11,23 @@ import { StatRendererIpc } from "./FileSystem/stat/Renderer";
 import { UnwatchFileRendererIpc } from "./FileSystem/unwatchFile/Renderer";
 import { WatchFileRendererIpc } from "./FileSystem/watchFile/Renderer";
 import { WriteFileRendererIpc } from "./FileSystem/writeFile/Renderer";
+import { CollectParametersRendererIpc } from "./Graph/collectParameters/Renderer";
+import { ValidateGraphDefinitionRendererIpc } from "./Graph/validateDefinition/Renderer";
 import { EnsurePackageRendererIpc } from "./Package/ensure/Renderer";
 import { UnloadPackageNodesRendererIpc } from "./Package/unloadNodes/Renderer";
 import { GetAllDisplaysRendererIpc } from "./System/getAllDisplays/Renderer";
 import { GetAppVersionRendererIpc } from "./System/getAppVersion/Renderer";
-import { GetUserDataPathRendererIpc } from "./System/getUserDataPath/Renderer";
 import { GetBundledBinaryDefaultsRendererIpc } from "./System/getBundledBinaryDefaults/Renderer";
-import { ListBundledBinariesRendererIpc } from "./System/listBundledBinaries/Renderer";
+import { GetUserDataPathRendererIpc } from "./System/getUserDataPath/Renderer";
 import { GetWindowIdRendererIpc } from "./System/getWindowId/Renderer";
+import { ListBundledBinariesRendererIpc } from "./System/listBundledBinaries/Renderer";
 import { OpenPathRendererIpc } from "./System/openPath/Renderer";
 import { QuitAppRendererIpc } from "./System/quitApp/Renderer";
 import { SetBoundsRendererIpc } from "./System/setBounds/Renderer";
 import { Vst3GetDefaultScanRootsRendererIpc } from "./Vst3/getDefaultScanRoots/Renderer";
-import { Vst3ScanPluginsRendererIpc } from "./Vst3/scanPlugins/Renderer";
 import { Vst3LaunchEditorRendererIpc } from "./Vst3/launchEditor/Renderer";
+import { Vst3ScanPluginsRendererIpc } from "./Vst3/scanPlugins/Renderer";
+import type { IpcHandlerAction, IpcHandlerParameters, IpcHandlerReturn } from "../Models/AsyncRendererIpc";
 
 export const ASYNC_RENDERER_IPCS = [
 	AbortJobRendererIpc,

@@ -1,6 +1,6 @@
-import type { State } from "opshot";
 import { useTrackedState } from "opshot/react";
 import { z } from "zod";
+import type { State } from "opshot";
 
 const TabEntrySchema = z.object({
 	id: z.string(),

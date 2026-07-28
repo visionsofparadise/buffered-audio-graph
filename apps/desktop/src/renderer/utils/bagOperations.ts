@@ -1,7 +1,7 @@
-import type { GraphDefinition } from "@buffered-audio/core";
 import { CURRENT_API_VERSION, SUPPORTED_API_VERSIONS } from "../../shared/Models/ApiVersion";
-import type { Main } from "../Models/Main";
 import { basename } from "./path";
+import type { Main } from "../Models/Main";
+import type { GraphDefinition } from "@buffered-audio/core";
 
 async function selectBag(main: Main, title: string): Promise<string | undefined> {
 	const result = await main.showOpenDialog({

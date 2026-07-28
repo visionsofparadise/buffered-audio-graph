@@ -1,7 +1,4 @@
-import type { ComponentType } from "react";
 import { cn } from "../../../utils/cn";
-import type { IconProps } from "./IconProps";
-import { hashString } from "./utils/hashString";
 import { BarcodeIcon } from "./Icon/BarcodeIcon";
 import { CheckerboardIcon } from "./Icon/CheckerboardIcon";
 import { ConcentricIcon } from "./Icon/ConcentricIcon";
@@ -15,6 +12,9 @@ import { PrimaryIcon } from "./Icon/PrimaryIcon";
 import { QuarterIcon } from "./Icon/QuarterIcon";
 import { RingsIcon } from "./Icon/RingsIcon";
 import { StairsIcon } from "./Icon/StairsIcon";
+import { hashString } from "./utils/hashString";
+import type { IconProps } from "./IconProps";
+import type { ComponentType } from "react";
 
 const PROJECT_ICONS: ReadonlyArray<ComponentType<IconProps>> = [
 	PrimaryIcon,

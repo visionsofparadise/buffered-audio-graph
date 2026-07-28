@@ -1,6 +1,6 @@
-import type { ComponentPropsWithRef } from "react";
 import { cn } from "../../utils/cn";
 import { encodeToElements } from "./utils/barcodeEncoding";
+import type { ComponentPropsWithRef } from "react";
 
 export interface BarcodeProps extends Omit<ComponentPropsWithRef<"div">, "color"> {
 	readonly text: string;

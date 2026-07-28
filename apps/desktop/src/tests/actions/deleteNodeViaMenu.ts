@@ -1,6 +1,5 @@
-import type { Page } from "puppeteer-core";
-
 import { clickMenuItemByText, dumpMenuItems, sleep } from "../utils/page";
+import type { Page } from "puppeteer-core";
 
 export async function deleteNodeViaMenu(page: Page, nodeId: string): Promise<boolean> {
 	const nodeOrigin = await page.$eval(

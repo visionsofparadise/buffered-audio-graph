@@ -1,7 +1,7 @@
-import type { GraphDefinition } from "@buffered-audio/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AudioProgressPayload } from "../../../../../shared/utilities/emitToRenderer";
 import type { GraphContext } from "../../../../Models/Context";
+import type { GraphDefinition } from "@buffered-audio/core";
 
 export interface UseRenderJobReturn {
 	readonly startRender: (parameters: Record<string, string>) => Promise<void>;

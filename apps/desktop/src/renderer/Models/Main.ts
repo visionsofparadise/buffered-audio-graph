@@ -1,6 +1,6 @@
-import type { IpcRendererEvent } from "electron";
 import type { AsyncIpcAction, AsyncIpcParameters, AsyncIpcReturn } from "../../shared/ipc/asyncRendererIpcs";
 import type { MainEventMap } from "../../shared/utilities/emitToRenderer";
+import type { IpcRendererEvent } from "electron";
 
 type MainListener<K extends keyof MainEventMap> = (event: IpcRendererEvent, ...parameters: MainEventMap[K]) => void;
 

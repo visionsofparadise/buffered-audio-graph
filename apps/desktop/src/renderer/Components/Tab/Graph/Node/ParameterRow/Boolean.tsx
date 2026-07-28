@@ -1,5 +1,5 @@
-import { Toggle } from "../../../../UI/Toggle";
 import { cn } from "../../../../../utils/cn";
+import { Toggle } from "../../../../UI/Toggle";
 import { FieldLabel } from "./FieldLabel";
 
 export interface BooleanParameter {

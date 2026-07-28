@@ -1,5 +1,5 @@
-import type { Node as FlowNode } from "@xyflow/react";
 import type { NodeContainerData } from "../../Node/Container";
+import type { Node as FlowNode } from "@xyflow/react";
 
 const CATEGORY_COLOR: Record<NodeContainerData["category"], string> = {
 	source: "var(--color-category-source)",

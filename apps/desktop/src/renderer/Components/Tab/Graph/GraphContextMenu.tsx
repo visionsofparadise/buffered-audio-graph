@@ -1,3 +1,4 @@
+import { Download, Plus, Redo2, Undo2 } from "lucide-react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -7,11 +8,10 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "../../UI/DropdownMenu";
-import { Download, Plus, Redo2, Undo2 } from "lucide-react";
-import type { Snapshot } from "opshot";
-import type { AppState } from "../../../Models/State/App";
 import { NodeMenuItems } from "./Node/Menu";
 import { PackageNodeList } from "./PackageNodeList";
+import type { AppState } from "../../../Models/State/App";
+import type { Snapshot } from "opshot";
 
 export type ContextMenuAction = "delete" | "render" | "undo" | "redo" | "bypass" | "reset";
 

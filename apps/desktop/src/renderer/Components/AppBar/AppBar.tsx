@@ -1,4 +1,5 @@
 import { FilePlus, FolderOpen, Menu, Plus, Save, SaveAll, Settings, X } from "lucide-react";
+import { retrack } from "opshot/react";
 import { cn } from "../../utils/cn";
 import { basename } from "../../utils/path";
 import { DropdownButton, type MenuItem } from "../UI/DropdownButton";
@@ -6,7 +7,6 @@ import { IconButton } from "../UI/IconButton";
 import { ProjectIcon } from "../UI/ProjectIcon";
 import { TabNameInput } from "./TabNameInput";
 import type { AppContext } from "../../Models/Context";
-import { retrack } from "opshot/react";
 
 interface Props {
 	readonly context: AppContext;
@@ -70,6 +70,7 @@ export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) =>
 			const index = mutable.tabs.findIndex((tab) => tab.id === id);
 
 			if (index === -1) return;
+
 			mutable.tabs.splice(index, 1);
 
 			if (mutable.activeTabId === id) {
@@ -111,7 +112,17 @@ export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) =>
 				return (
 					<div
 						key={tab.id}
+						role="button"
+						tabIndex={0}
 						onClick={() => selectTab(tab.id)}
+						onKeyDown={(event) => {
+							if (event.target !== event.currentTarget) return;
+
+							if (event.key === "Enter" || event.key === " ") {
+								event.preventDefault();
+								selectTab(tab.id);
+							}
+						}}
 						className={cn(
 							"app-no-drag group flex h-full cursor-pointer items-center gap-2 px-4 text-body",
 							isActive ? "bg-text-primary text-surface" : "text-text-secondary hover:text-text-primary",

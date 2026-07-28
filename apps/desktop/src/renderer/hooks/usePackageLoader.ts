@@ -1,8 +1,8 @@
-import type { State } from "opshot";
 import { useEffect, useState } from "react";
+import { mutatePackageAt, runPackagePipeline } from "./packagePipeline";
 import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
-import { mutatePackageAt, runPackagePipeline } from "./packagePipeline";
+import type { State } from "opshot";
 
 export function usePackageLoader(app: State<AppState>, main: Main): { isLoading: boolean } {
 	const [isLoading, setIsLoading] = useState(() =>

@@ -1,6 +1,6 @@
-import { app } from "electron";
 import { existsSync, promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
+import { app } from "electron";
 import { z } from "zod";
 
 function getBundledBinariesPath(): string {

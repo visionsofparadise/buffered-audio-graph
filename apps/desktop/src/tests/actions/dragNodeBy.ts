@@ -1,6 +1,5 @@
-import type { Page } from "puppeteer-core";
-
 import { dragBetween, sleep } from "../utils/page";
+import type { Page } from "puppeteer-core";
 
 export async function dragNodeBy(page: Page, nodeId: string, deltaX: number, deltaY: number): Promise<void> {
 	const origin = await page.$eval(`.react-flow__node[data-id="${nodeId}"]`, (element): { x: number; y: number } => {

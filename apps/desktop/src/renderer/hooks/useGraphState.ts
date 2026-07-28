@@ -1,8 +1,8 @@
-import type { State } from "opshot";
 import { useEffect, useRef } from "react";
+import { serializeGraphState, type GraphViewState, type PositionsState } from "../Models/State/Graph";
 import type { AppContext } from "../Models/Context";
 import type { GraphMeta } from "../Models/History";
-import { serializeGraphState, type GraphViewState, type PositionsState } from "../Models/State/Graph";
+import type { State } from "opshot";
 
 const STATE_DEBOUNCE_MS = 800;
 

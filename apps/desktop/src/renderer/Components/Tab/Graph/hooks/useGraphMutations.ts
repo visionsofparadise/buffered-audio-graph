@@ -1,10 +1,10 @@
-import type { GraphEdge, GraphNode } from "@buffered-audio/core";
 import { useMemo, useRef } from "react";
 import { comparePackageVersions } from "../../../../hooks/packagePipeline";
-import type { GraphContext } from "../../../../Models/Context";
-import type { GraphDefinitionState } from "../../../../Models/State/GraphDefinition";
 import { buildDefaultParameters } from "../Node/utils/buildParameters";
 import { lookupNode } from "../Node/utils/nodeLookup";
+import type { GraphContext } from "../../../../Models/Context";
+import type { GraphDefinitionState } from "../../../../Models/State/GraphDefinition";
+import type { GraphEdge, GraphNode } from "@buffered-audio/core";
 
 interface Position {
 	x: number;

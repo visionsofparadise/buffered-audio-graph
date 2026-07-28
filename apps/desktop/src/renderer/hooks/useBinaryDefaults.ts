@@ -1,7 +1,7 @@
-import type { State } from "opshot";
 import { useEffect } from "react";
 import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
+import type { State } from "opshot";
 
 export function useBinaryDefaults(app: State<AppState>, main: Main): void {
 	useEffect(() => {

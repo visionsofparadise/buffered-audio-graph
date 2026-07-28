@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import type { AppContext } from "../Models/Context";
 import { ensurePackageState, mutatePackageAt, packageInstallDirectory, runPackagePipeline } from "./packagePipeline";
+import type { AppContext } from "../Models/Context";
 
 export interface PackageManager {
 	addPackage: (packageSpec: string) => Promise<void>;

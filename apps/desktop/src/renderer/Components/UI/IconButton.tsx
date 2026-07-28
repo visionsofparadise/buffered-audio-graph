@@ -1,6 +1,6 @@
-import type { LucideIcon } from "lucide-react";
 import { cn } from "../../utils/cn";
 import { iconSizes, sizeStyles, variantStyles } from "./utils/iconButtonStyles";
+import type { LucideIcon } from "lucide-react";
 
 export interface IconButtonProps extends Omit<React.ComponentPropsWithRef<"button">, "children" | "aria-label"> {
 	readonly icon: LucideIcon;

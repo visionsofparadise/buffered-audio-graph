@@ -9,8 +9,8 @@ import {
 	type DialogOverlayProps,
 	type DialogTitleProps,
 } from "@radix-ui/react-dialog";
-import type { ComponentPropsWithoutRef } from "react";
 import { cn } from "../../utils/cn";
+import type { ComponentPropsWithoutRef } from "react";
 
 export const Dialog = Root;
 export const DialogClose = Close;

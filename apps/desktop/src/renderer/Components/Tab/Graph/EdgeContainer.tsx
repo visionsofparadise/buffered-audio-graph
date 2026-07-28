@@ -1,11 +1,11 @@
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyflow/react";
-import { useRef, useState } from "react";
 import { Plus } from "lucide-react";
-import type { Snapshot } from "opshot";
-import type { AppState } from "../../../Models/State/App";
+import { useRef, useState } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "../../UI/DropdownMenu";
 import { PackageNodeList } from "./PackageNodeList";
 import { EDGE_HIT_CURSOR } from "./utils/edgeHitCursor";
+import type { AppState } from "../../../Models/State/App";
+import type { Snapshot } from "opshot";
 
 interface EdgeContainerData {
 	readonly app: Snapshot<AppState>;
@@ -70,6 +70,7 @@ export function EdgeContainer({
 					<div
 						className="nodrag nopan"
 						data-edge-insert
+						role="presentation"
 						style={{
 							position: "absolute",
 							transform: `translate(-50%, -50%) translate(${String(labelX)}px, ${String(labelY)}px)`,

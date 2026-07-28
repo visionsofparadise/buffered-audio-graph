@@ -1,7 +1,7 @@
-import type { Snapshot } from "opshot";
 import { Button } from "./UI/Button";
-import type { NodePackageState } from "../Models/State/App";
 import { statusText } from "./utils/statusText";
+import type { NodePackageState } from "../Models/State/App";
+import type { Snapshot } from "opshot";
 
 interface Props {
 	readonly packages: Snapshot<Array<NodePackageState>>;

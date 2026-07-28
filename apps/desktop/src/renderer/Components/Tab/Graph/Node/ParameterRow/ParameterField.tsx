@@ -1,9 +1,9 @@
 import { cn } from "../../../../../utils/cn";
-import type { ObjectParameter, Parameter } from "../utils/buildParameters";
-import type { ParameterCallbacks } from "./utils/callbacks";
-import { humanizeFieldName, paramLabelClass } from "./utils/labels";
 import { ArrayRow } from "./Array";
 import { LeafField } from "./LeafField";
+import { humanizeFieldName, paramLabelClass } from "./utils/labels";
+import type { ObjectParameter, Parameter } from "../utils/buildParameters";
+import type { ParameterCallbacks } from "./utils/callbacks";
 
 export function ParameterField({
 	param,

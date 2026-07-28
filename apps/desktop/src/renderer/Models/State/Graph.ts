@@ -1,6 +1,6 @@
-import type { Snapshot } from "opshot";
 import { z } from "zod";
 import type { Main } from "../Main";
+import type { Snapshot } from "opshot";
 
 const ViewportSchema = z.object({
 	x: z.number(),

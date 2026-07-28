@@ -1,9 +1,9 @@
-import type { BrowserWindow } from "electron";
+import { Logger } from "./Logger";
+import type { NodeRegistryMap } from "./NodeRegistry";
 import type { FileWatcherManager } from "../../main/FileWatcherManager";
 import type { Vst3Scanner } from "../../main/vst3/scanner";
 import type { JobManager } from "../utilities/JobManager";
-import { Logger } from "./Logger";
-import type { NodeRegistryMap } from "./NodeRegistry";
+import type { BrowserWindow } from "electron";
 
 export interface IpcHandlerDependencies {
 	readonly browserWindow: BrowserWindow;
@@ -51,6 +51,7 @@ export abstract class AsyncMainIpc<P extends Array<unknown>, R> {
 					transactionId,
 					action: this.action,
 				});
+
 				throw error;
 			}
 		});

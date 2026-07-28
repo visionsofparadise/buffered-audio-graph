@@ -1,6 +1,3 @@
-import type { QueryClient } from "@tanstack/react-query";
-import type { State } from "opshot";
-import type { Logger } from "../../shared/Models/Logger";
 import type { GraphMeta, History } from "./History";
 import type { Main } from "./Main";
 import type { MainEvents } from "./MainEvents";
@@ -8,6 +5,9 @@ import type { ActiveCommands } from "./State/ActiveCommands";
 import type { AppState } from "./State/App";
 import type { GraphViewState, PositionsState } from "./State/Graph";
 import type { GraphDefinitionState } from "./State/GraphDefinition";
+import type { Logger } from "../../shared/Models/Logger";
+import type { QueryClient } from "@tanstack/react-query";
+import type { State } from "opshot";
 
 export interface TabNamesState {
 	names: Record<string, string>;

@@ -1,13 +1,12 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import http from "node:http";
 import { createServer } from "node:net";
-
-import type { Browser, Page } from "puppeteer-core";
-
 import { PROFILE_DIR, REPO_ROOT } from "./constants";
 import { sleep } from "./page";
+import type { Browser, Page } from "puppeteer-core";
 
 export const pageErrors: Array<string> = [];
+
 const collectorAttached = new WeakSet<Page>();
 
 export function log(message: string): void {

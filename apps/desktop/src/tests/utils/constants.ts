@@ -1,6 +1,7 @@
 import { join, resolve } from "node:path";
 
 const DESKTOP_DIR = resolve(import.meta.dirname, "../../..");
+
 export const REPO_ROOT = resolve(DESKTOP_DIR, "..", "..");
 export const PROFILE_DIR = join(DESKTOP_DIR, ".smoke-profile");
 export const BAG_PATH = join(DESKTOP_DIR, ".smoke-seed.bag");

@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
-import type { Snapshot } from "opshot";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { comparePackageVersions } from "../../../hooks/packagePipeline";
 import {
 	DropdownMenuItem,
 	DropdownMenuLabel,
@@ -8,10 +8,10 @@ import {
 	DropdownMenuSubContent,
 	DropdownMenuSubTrigger,
 } from "../../UI/DropdownMenu";
-import { comparePackageVersions } from "../../../hooks/packagePipeline";
-import type { AppState, NodePackageState } from "../../../Models/State/App";
-import type { NodeCategory } from "./Node/Container";
 import { CATEGORY_ORDER } from "./utils/categoryOrder";
+import type { NodeCategory } from "./Node/Container";
+import type { AppState, NodePackageState } from "../../../Models/State/App";
+import type { Snapshot } from "opshot";
 
 type ReadyPackage = Snapshot<NodePackageState> & {
 	readonly status: "ready";

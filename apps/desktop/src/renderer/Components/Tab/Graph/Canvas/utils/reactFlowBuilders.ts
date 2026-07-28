@@ -1,8 +1,8 @@
-import type { Edge, Node } from "@xyflow/react";
-import type { GraphContext } from "../../../../../Models/Context";
 import { buildParameters, type Parameter } from "../../Node/utils/buildParameters";
 import { lookupNode } from "../../Node/utils/nodeLookup";
+import type { GraphContext } from "../../../../../Models/Context";
 import type { NodeContainerData } from "../../Node/Container";
+import type { Edge, Node } from "@xyflow/react";
 
 export function buildReactFlowNodes(context: GraphContext): Array<Node<NodeContainerData>> {
 	const binaryDefaults = context.app.binaries as Record<string, string>;

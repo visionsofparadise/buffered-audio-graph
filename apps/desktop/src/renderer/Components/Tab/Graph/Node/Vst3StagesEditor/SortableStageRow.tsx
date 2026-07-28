@@ -1,9 +1,8 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ExternalLink, GripVertical, X } from "lucide-react";
+import { cn } from "../../../../../utils/cn";
 import { basename } from "../../../../../utils/path";
-import type { Vst3ScanEntry } from "../../../../../../shared/ipc/Vst3/Vst3ScanEntry";
-import { IconButton } from "../../../../UI/IconButton";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -12,8 +11,9 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "../../../../UI/DropdownMenu";
-import { cn } from "../../../../../utils/cn";
+import { IconButton } from "../../../../UI/IconButton";
 import { groupEntries, stageTitle, type Stage } from "./utils/helpers";
+import type { Vst3ScanEntry } from "../../../../../../shared/ipc/Vst3/Vst3ScanEntry";
 
 export function SortableStageRow({
 	rowId,

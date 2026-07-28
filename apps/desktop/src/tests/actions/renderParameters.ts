@@ -1,6 +1,5 @@
-import type { Page } from "puppeteer-core";
-
 import { sleep } from "../utils/page";
+import type { Page } from "puppeteer-core";
 
 export async function isRenderParametersOpen(page: Page): Promise<boolean> {
 	return page.evaluate((): boolean => document.querySelector("[data-render-params-confirm]") !== null);

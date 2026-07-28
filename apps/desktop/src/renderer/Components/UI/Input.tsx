@@ -1,5 +1,5 @@
-import type { KeyboardEvent } from "react";
 import { cn } from "../../utils/cn";
+import type { KeyboardEvent } from "react";
 
 export interface InputProps {
 	readonly type?: "text" | "number";

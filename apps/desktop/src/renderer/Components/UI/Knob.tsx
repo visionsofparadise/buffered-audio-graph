@@ -36,6 +36,7 @@ export const Knob = ({ value, label, size = 32, onChange, onChangeEnd, className
 
 	const arcPath = (start: number, sweep: number) => {
 		if (sweep <= 0) return "";
+
 		const end = start + sweep;
 		const sp = polarToCartesian(start);
 		const ep = polarToCartesian(end);
@@ -47,6 +48,7 @@ export const Knob = ({ value, label, size = 32, onChange, onChangeEnd, className
 	const onPointerDown = useCallback(
 		(ev: React.PointerEvent) => {
 			if (!onChange || disabled) return;
+
 			setDragging(true);
 			(ev.target as Element).setPointerCapture(ev.pointerId);
 			startY.current = ev.clientY;
@@ -58,6 +60,7 @@ export const Knob = ({ value, label, size = 32, onChange, onChangeEnd, className
 	const onPointerMove = useCallback(
 		(ev: React.PointerEvent) => {
 			if (!dragging || !onChange) return;
+
 			const delta = (startY.current - ev.clientY) / 150;
 			const clamped = Math.max(0, Math.min(1, startValue.current + delta));
 

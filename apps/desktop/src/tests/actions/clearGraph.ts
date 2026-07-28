@@ -1,7 +1,6 @@
-import type { Page } from "puppeteer-core";
-
 import { nodeCount, waitForNodeCount } from "../utils/graph";
 import { sleep } from "../utils/page";
+import type { Page } from "puppeteer-core";
 
 export async function clearGraph(page: Page): Promise<boolean> {
 	for (let attempt = 0; attempt < 6; attempt++) {

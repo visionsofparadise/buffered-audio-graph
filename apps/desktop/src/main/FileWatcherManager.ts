@@ -1,8 +1,8 @@
-import type { BrowserWindow } from "electron";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import { emitToRenderer, type FileChangedPayload } from "../shared/utilities/emitToRenderer";
+import type { BrowserWindow } from "electron";
 
 export class FileWatcherManager {
 	private readonly watchers = new Map<string, fs.FSWatcher>();

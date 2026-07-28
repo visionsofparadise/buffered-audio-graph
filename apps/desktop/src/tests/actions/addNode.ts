@@ -1,8 +1,7 @@
-import type { Page } from "puppeteer-core";
-
 import { DEBOUNCE_WAIT_MS } from "../utils/constants";
 import { nodeCount, nodeIdByLabel, renderedNodeSummary } from "../utils/graph";
 import { clickCmdkItemByText, clickPoint, dumpCmdkItems, rectByText, sleep } from "../utils/page";
+import type { Page } from "puppeteer-core";
 
 async function openAddNodeCatalog(page: Page): Promise<void> {
 	const trigger = await rectByText(page, "button", "Add node");
