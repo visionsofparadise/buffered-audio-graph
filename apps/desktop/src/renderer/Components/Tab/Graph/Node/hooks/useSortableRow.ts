@@ -1,14 +1,15 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DraggableAttributes } from "@dnd-kit/core";
-import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import type { CSSProperties } from "react";
+
+type SortableListeners = ReturnType<typeof useSortable>["listeners"];
 
 export function useSortableRow(rowId: string): {
 	readonly setNodeRef: (node: HTMLElement | null) => void;
 	readonly style: CSSProperties;
 	readonly attributes: DraggableAttributes;
-	readonly listeners: SyntheticListenerMap | undefined;
+	readonly listeners: SortableListeners;
 } {
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rowId });
 
