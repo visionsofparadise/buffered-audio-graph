@@ -18,6 +18,7 @@ repos:
    - repo: local
      hooks:
         - id: trivy
+          stages: [pre-commit]
           name: trivy fs
           language: system
           entry: trivy
@@ -29,9 +30,12 @@ repos:
      rev: 0.35.0
      hooks:
         - id: check-github-workflows
+          stages: [pre-commit]
         - id: check-github-actions
+          stages: [pre-commit]
 
    - repo: https://github.com/rhysd/actionlint
      rev: v1.7.7
      hooks:
         - id: actionlint
+          stages: [pre-commit]

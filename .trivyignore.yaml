@@ -1,5 +1,7 @@
 vulnerabilities:
    - id: CVE-2026-14257
+     purls:
+        - pkg:npm/brace-expansion@5.0.7
      statement: |
         brace-expansion 5.0.7 (DoS) reached only through aws-cdk-lib's bundled
         minimatch. The lock entry carries inBundle: true, so it ships inside the
