@@ -1,0 +1,15 @@
+ignorefile: .trivyignore.yaml
+scan:
+   scanners:
+      - vuln
+      - secret
+      - misconfig
+   skip-dirs:
+      - "**/node_modules"
+      - "**/dist"
+      - "**/out"
+      - "**/build"
+      - "**/cdk.out"
+      - "**/coverage"
+      - "**/scratch"
+      - "**/.git"
