@@ -11,7 +11,7 @@
 		"lint": "eslint . --fix --cache"
 	},
 	"dependencies": {
-		"aws-cdk-lib": "^2.250.0",
+		"aws-cdk-lib": "^2.262.1",
 		"constructs": "^10.6.0"
 	},
 	"devDependencies": {
