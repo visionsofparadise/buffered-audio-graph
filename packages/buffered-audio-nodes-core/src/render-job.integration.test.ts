@@ -1,3 +1,5 @@
+import { access, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { StreamSetupContext } from "./node/stream";
@@ -8,6 +10,10 @@ import { BufferedTargetStream, TargetNode } from "./node/stream/target";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
 import { TransformNode, type TransformNodeProperties } from "./node/transform";
 import { RenderJob } from "./render-job";
+import { createRenderTemporaryDirectory, scavengeRenderTemporaryDirectories } from "./utils/render-temporary-directory";
+
+vi.mock("node:fs/promises", { spy: true });
+vi.mock("./utils/render-temporary-directory", { spy: true });
 
 function createBlock(value: number, offset: number, frames: number, sampleRate = 44100): Block {
 	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate, bitDepth: 32 };
@@ -140,11 +146,279 @@ class FailingTarget extends TargetNode {
 	static override readonly Stream = FailingTargetStream;
 }
 
+class TemporaryDirectoryTargetStream extends MockTargetStream {
+	temporaryDirectory?: string;
+
+	override async _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
+		this.temporaryDirectory = context.temporaryDirectory;
+		await writeFile(join(context.temporaryDirectory, "marker"), "owned by render");
+		await super._setup(input, context);
+	}
+}
+
+class TemporaryDirectoryTarget extends TargetNode {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "temporary-directory-target";
+	static override readonly schema = z.object({});
+	static override readonly Stream = TemporaryDirectoryTargetStream;
+}
+
+class TemporaryDirectoryFailingTargetStream extends TemporaryDirectoryTargetStream {
+	override async _write(): Promise<void> {
+		throw new Error("temporary target failed");
+	}
+}
+
+class TemporaryDirectoryFailingTarget extends TargetNode {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "temporary-directory-failing-target";
+	static override readonly schema = z.object({});
+	static override readonly Stream = TemporaryDirectoryFailingTargetStream;
+}
+
+const setupFailure = new Error("setup failed");
+const cleanupFailure = new Error("cleanup failed");
+const directoryCleanupFailure = new Error("directory cleanup failed");
+
+class RejectingSetupAndDestroyTargetStream extends BufferedTargetStream {
+	temporaryDirectory?: string;
+
+	override async _setup(_input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
+		this.temporaryDirectory = context.temporaryDirectory;
+		await writeFile(join(context.temporaryDirectory, "marker"), "owned by render");
+		throw setupFailure;
+	}
+
+	override _write(): void {}
+
+	override _close(): void {}
+
+	override _destroy(): void {
+		throw cleanupFailure;
+	}
+}
+
+class RejectingSetupAndDestroyTarget extends TargetNode {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "rejecting-setup-and-destroy-target";
+	static override readonly schema = z.object({});
+	static override readonly Stream = RejectingSetupAndDestroyTargetStream;
+}
+
+class RecordingDestroyTargetStream extends BufferedTargetStream {
+	destroyCalled = false;
+	temporaryDirectory?: string;
+
+	override async _setup(_input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
+		this.temporaryDirectory = context.temporaryDirectory;
+		await writeFile(join(context.temporaryDirectory, "marker"), "owned by render");
+	}
+
+	override _write(): void {}
+
+	override _close(): void {}
+
+	override _destroy(): void {
+		this.destroyCalled = true;
+	}
+}
+
+class RecordingDestroyTarget extends TargetNode {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "recording-destroy-target";
+	static override readonly schema = z.object({});
+	static override readonly Stream = RecordingDestroyTargetStream;
+}
+
+class AbortWaitingTargetStream extends BufferedTargetStream {
+	temporaryDirectory?: string;
+	abortedBeforeDestroy = false;
+	observedAbort = false;
+	private signal?: AbortSignal;
+
+	override _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> | void {
+		this.temporaryDirectory = context.temporaryDirectory;
+		this.signal = context.signal;
+
+		return super._setup(input, context);
+	}
+
+	override async _write(): Promise<void> {
+		const signal = this.signal;
+
+		if (!signal) throw new Error("missing render signal");
+
+		if (signal.aborted) {
+			this.observedAbort = true;
+			return;
+		}
+
+		await new Promise<void>((resolve) => {
+			signal.addEventListener(
+				"abort",
+				() => {
+					this.observedAbort = true;
+					resolve();
+				},
+				{ once: true },
+			);
+		});
+	}
+
+	override _close(): void {}
+
+	override _destroy(): void {
+		this.abortedBeforeDestroy = this.signal?.aborted === true;
+	}
+}
+
+class AbortWaitingTarget extends TargetNode {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "abort-waiting-target";
+	static override readonly schema = z.object({});
+	static override readonly Stream = AbortWaitingTargetStream;
+}
+
+async function expectMissing(path: string): Promise<void> {
+	await expect(access(path)).rejects.toMatchObject({ code: "ENOENT" });
+}
+
 function targetStream(job: RenderJob, node: TargetNode): MockTargetStream {
 	return job.streams.get(node)?.[0] as MockTargetStream;
 }
 
 describe("RenderJob execution", () => {
+	it("does not touch temporary-directory helpers until render starts", async () => {
+		vi.clearAllMocks();
+
+		const source = new MockSource([]);
+		const target = new MockTarget();
+
+		source.to(target);
+
+		const job = source.createRenderJob();
+
+		expect(scavengeRenderTemporaryDirectories).not.toHaveBeenCalled();
+		expect(createRenderTemporaryDirectory).not.toHaveBeenCalled();
+
+		await job.render();
+
+		expect(scavengeRenderTemporaryDirectories).toHaveBeenCalledTimes(1);
+		expect(createRenderTemporaryDirectory).toHaveBeenCalledTimes(1);
+	});
+
+	it("removes its temporary directory after a successful render", async () => {
+		const source = new MockSource([createBlock(1, 0, 100)]);
+		const target = new TemporaryDirectoryTarget();
+
+		source.to(target);
+
+		const job = source.createRenderJob();
+		const stream = job.streams.get(target)?.[0] as TemporaryDirectoryTargetStream;
+
+		expect(stream.temporaryDirectory).toBeUndefined();
+
+		await job.render();
+
+		expect(stream.temporaryDirectory).toBeDefined();
+		await expectMissing(stream.temporaryDirectory!);
+	});
+
+	it("removes its temporary directory after render work fails", async () => {
+		const source = new MockSource([createBlock(1, 0, 100)]);
+		const target = new TemporaryDirectoryFailingTarget();
+
+		source.to(target);
+
+		const job = source.createRenderJob();
+		const stream = job.streams.get(target)?.[0] as TemporaryDirectoryFailingTargetStream;
+
+		await expect(job.render()).rejects.toThrow("temporary target failed");
+
+		expect(stream.temporaryDirectory).toBeDefined();
+		await expectMissing(stream.temporaryDirectory!);
+	});
+
+	it("destroys every stream, removes the directory, and aggregates work and cleanup errors", async () => {
+		const source = new MockSource([]);
+		const rejecting = new RejectingSetupAndDestroyTarget();
+		const recording = new RecordingDestroyTarget();
+
+		source.to(rejecting);
+		source.to(recording);
+
+		const job = source.createRenderJob();
+		const rejectingStream = job.streams.get(rejecting)?.[0] as RejectingSetupAndDestroyTargetStream;
+		const recordingStream = job.streams.get(recording)?.[0] as RecordingDestroyTargetStream;
+		const remove = vi.mocked(rm);
+
+		remove.mockRejectedValueOnce(directoryCleanupFailure);
+
+		let thrown: unknown;
+
+		try {
+			await job.render();
+		} catch (error) {
+			thrown = error;
+		}
+
+		expect(thrown).toBeInstanceOf(AggregateError);
+		expect((thrown as AggregateError).errors).toEqual([setupFailure, cleanupFailure, directoryCleanupFailure]);
+		expect(recordingStream.destroyCalled).toBe(true);
+		expect(rejectingStream.temporaryDirectory).toBeDefined();
+
+		const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+
+		await actual.rm(rejectingStream.temporaryDirectory!, { recursive: true, force: true });
+	});
+
+	it("rethrows a sole directory cleanup failure unchanged after destruction and clears liveness", async () => {
+		vi.useFakeTimers();
+
+		try {
+			const source = new MockSource([]);
+			const target = new RecordingDestroyTarget();
+
+			source.to(target);
+
+			const job = source.createRenderJob();
+			const stream = job.streams.get(target)?.[0] as RecordingDestroyTargetStream;
+
+			vi.mocked(rm).mockRejectedValueOnce(directoryCleanupFailure);
+
+			await expect(job.render()).rejects.toBe(directoryCleanupFailure);
+
+			expect(stream.destroyCalled).toBe(true);
+			expect(vi.getTimerCount()).toBe(0);
+			expect(stream.temporaryDirectory).toBeDefined();
+
+			const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+
+			await actual.rm(stream.temporaryDirectory!, { recursive: true, force: true });
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("aborts the shared signal before destroying streams after a branch fails", async () => {
+		const source = new MockSource([createBlock(1, 0, 100)]);
+		const failing = new FailingTarget();
+		const waiting = new AbortWaitingTarget();
+
+		source.to(failing);
+		source.to(waiting);
+
+		const job = source.createRenderJob();
+		const waitingStream = job.streams.get(waiting)?.[0] as AbortWaitingTargetStream;
+
+		await expect(job.render()).rejects.toThrow("write failed");
+
+		expect(waitingStream.observedAbort).toBe(true);
+		expect(waitingStream.abortedBeforeDestroy).toBe(true);
+		expect(waitingStream.temporaryDirectory).toBeDefined();
+		await expectMissing(waitingStream.temporaryDirectory!);
+	});
+
 	it("linear pipeline: source → transform → target", async () => {
 		const source = new MockSource([createBlock(1, 0, 100)]);
 		const transform = new MockTransform();

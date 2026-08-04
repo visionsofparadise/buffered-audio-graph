@@ -1,11 +1,21 @@
+import { tmpdir } from "node:os";
 import { BlockBuffer } from "@buffered-audio/core";
 import { SlidingWindowMaxStream, TruePeakUpsampler, linearToDb } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
 import { CHUNK_FRAMES, OVERSAMPLE_FACTOR } from "./constants";
 import { SourceMeasurementAccumulator } from "./measurement";
-import { buildBaseRateDetectionCache } from "./source-caches";
+import {
+	buildBaseRateDetectionCache as buildBaseRateDetectionCacheInTemporaryDirectory,
+	type BuildBaseRateDetectionCacheArgs,
+} from "./source-caches";
 
 const SAMPLE_RATE = 48_000;
+
+function buildBaseRateDetectionCache(
+	args: Omit<BuildBaseRateDetectionCacheArgs, "temporaryDirectory">,
+): Promise<BlockBuffer> {
+	return buildBaseRateDetectionCacheInTemporaryDirectory({ ...args, temporaryDirectory: tmpdir() });
+}
 
 /** LCG (numerical-recipes constants) for deterministic noise. */
 function makeLcg(seed: number): () => number {

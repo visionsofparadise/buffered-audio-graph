@@ -1,9 +1,11 @@
 import { EventEmitter } from "node:events";
+import { rm } from "node:fs/promises";
 import { BufferedSourceStream, type RenderTiming } from "./node/stream/source";
 import { BufferedTargetStream } from "./node/stream/target";
 import { BufferedTransformStream } from "./node/stream/transform/buffered-transform";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
 import { assertFirstBlockSampleRate } from "./utils/assert-first-block-sample-rate";
+import { createRenderTemporaryDirectory, scavengeRenderTemporaryDirectories } from "./utils/render-temporary-directory";
 import { teeReadable } from "./utils/tee-readable";
 import type { BufferedAudioNode } from "./node";
 import type { SourceNode } from "./node/source";
@@ -135,8 +137,13 @@ export class RenderJob {
 		const livenessInterval = setInterval(() => {
 			this.events.emit("liveness", { createdAt: Date.now(), elapsedMs: performance.now() - renderCalledAt });
 		}, RENDER_LIVENESS_INTERVAL_MS);
+		const errors: Array<unknown> = [];
+		let temporaryDirectory: string | undefined;
 
 		try {
+			await scavengeRenderTemporaryDirectories();
+			temporaryDirectory = await createRenderTemporaryDirectory();
+
 			const meta = await this.sourceStream.getMetadata();
 
 			const defaultProviders: ReadonlyArray<ExecutionProvider> = ["gpu", "cpu-native", "cpu"];
@@ -149,6 +156,7 @@ export class RenderJob {
 			const context: StreamSetupContext = {
 				executionProviders: this.options?.executionProviders ?? defaultProviders,
 				memoryLimit,
+				temporaryDirectory,
 				sourceSampleRate: meta.sampleRate,
 				sampleRate: meta.sampleRate,
 				sourceTotalFrames: meta.durationFrames,
@@ -169,12 +177,6 @@ export class RenderJob {
 
 				await Promise.all(promises);
 			} finally {
-				for (const streams of this.streamsMap.values()) {
-					for (const stream of streams) {
-						await stream.destroy();
-					}
-				}
-
 				const totalMs = performance.now() - start;
 				const audioDurationMs =
 					meta.durationFrames !== undefined ? (meta.durationFrames / meta.sampleRate) * 1000 : 0;
@@ -185,9 +187,34 @@ export class RenderJob {
 					realTimeMultiplier: audioDurationMs > 0 ? audioDurationMs / totalMs : 0,
 				};
 			}
+		} catch (error) {
+			errors.push(error);
+			this.abortController.abort();
 		} finally {
+			for (const streams of this.streamsMap.values()) {
+				for (const stream of streams) {
+					try {
+						await stream.destroy();
+					} catch (error) {
+						errors.push(error);
+					}
+				}
+			}
+
+			if (temporaryDirectory !== undefined) {
+				try {
+					await rm(temporaryDirectory, { recursive: true, force: true });
+				} catch (error) {
+					errors.push(error);
+				}
+			}
+
 			clearInterval(livenessInterval);
 		}
+
+		if (errors.length === 1) throw errors[0];
+
+		if (errors.length > 1) throw new AggregateError(errors, "Render and cleanup failed");
 	}
 
 	private async setupChildren(

@@ -6,7 +6,7 @@
 //   4. Echo all stdin back to stdout verbatim.
 //   5. Close stdout and exit cleanly when stdin closes.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import process from "node:process";
 
 const args = process.argv.slice(2);
@@ -22,6 +22,9 @@ function readArg(name, fallback) {
 const stagesJson = readArg("--stages-json", null);
 const sampleRate = Number.parseInt(readArg("--sample-rate", "0"), 10);
 const channels = Number.parseInt(readArg("--channels", "0"), 10);
+const pidFile = readArg("--pid-file", null);
+const hangBeforeReady = args.includes("--hang-before-ready");
+const hangAfterReady = args.includes("--hang-after-ready");
 
 if (!stagesJson) {
 	process.stderr.write("stub-binary: missing --stages-json\n");
@@ -50,10 +53,26 @@ try {
 	process.exit(2);
 }
 
+if (hangBeforeReady) {
+	if (pidFile) writeFileSync(pidFile, String(process.pid));
+
+	setInterval(() => {}, 60_000);
+	await new Promise(() => {});
+}
+
 process.stdout.write("READY\n");
 process.stderr.write("stub-binary: ordinary diagnostic\n");
 
 await new Promise((resolve) => setTimeout(resolve, 100));
+
+if (hangAfterReady) {
+	await new Promise((resolve) => process.stdin.once("data", resolve));
+
+	if (pidFile) writeFileSync(pidFile, String(process.pid));
+
+	setInterval(() => {}, 60_000);
+	await new Promise(() => {});
+}
 
 process.stdin.on("data", (chunk) => {
 	process.stdout.write(chunk);

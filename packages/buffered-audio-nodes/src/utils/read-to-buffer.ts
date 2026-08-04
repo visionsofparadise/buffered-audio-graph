@@ -42,9 +42,9 @@ export interface ReadToBufferResult {
 	readonly context: SourceMetadata;
 }
 
-export async function readToBuffer(path: string): Promise<ReadToBufferResult> {
+export async function readToBuffer(path: string, temporaryDirectory?: string): Promise<ReadToBufferResult> {
 	const { samples, sampleRate, channels, durationFrames } = await readWavSamples(path);
-	const buffer = new BlockBuffer();
+	const buffer = new BlockBuffer(temporaryDirectory);
 
 	await buffer.write(samples, sampleRate);
 	await buffer.flushWrites();

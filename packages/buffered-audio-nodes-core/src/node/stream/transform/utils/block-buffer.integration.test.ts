@@ -1,8 +1,39 @@
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Block } from "../../block";
 import { BlockBuffer } from "./block-buffer";
 
 describe("BlockBuffer", () => {
+	it("uses its injected directory and unlinks block-buffer files on clear and close", async () => {
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-test-"));
+		const buffer = new BlockBuffer(temporaryDirectory);
+
+		try {
+			await buffer.write([new Float32Array([1, 2, 3])], 44100, 32);
+			await buffer.flushWrites();
+
+			expect(await readdir(temporaryDirectory)).toEqual([expect.stringMatching(/^block-buffer-[\da-f-]+\.bin$/)]);
+
+			await buffer.clear();
+
+			expect(await readdir(temporaryDirectory)).toEqual([]);
+
+			await buffer.write([new Float32Array([4, 5, 6])], 44100, 32);
+			await buffer.flushWrites();
+
+			expect(await readdir(temporaryDirectory)).toEqual([expect.stringMatching(/^block-buffer-[\da-f-]+\.bin$/)]);
+
+			await buffer.close();
+
+			expect(await readdir(temporaryDirectory)).toEqual([]);
+		} finally {
+			await buffer.close();
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	});
+
 	it("write + read round-trips data sequentially after a flush", async () => {
 		const buffer = new BlockBuffer();
 

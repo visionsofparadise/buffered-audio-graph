@@ -5,6 +5,7 @@ import { upsampleChannels, writeMaxAcrossChannels } from "./upsample";
 
 export interface BuildBaseRateDetectionCacheArgs {
 	buffer: BlockBuffer;
+	temporaryDirectory: string;
 	sampleRate: number;
 	channelCount: number;
 	frames: number;
@@ -12,9 +13,9 @@ export interface BuildBaseRateDetectionCacheArgs {
 }
 
 export async function buildBaseRateDetectionCache(args: BuildBaseRateDetectionCacheArgs): Promise<BlockBuffer> {
-	const { buffer, sampleRate, channelCount, frames, halfWidth } = args;
+	const { buffer, temporaryDirectory, sampleRate, channelCount, frames, halfWidth } = args;
 
-	const detectionEnvelope = new BlockBuffer();
+	const detectionEnvelope = new BlockBuffer(temporaryDirectory);
 
 	if (frames === 0 || channelCount === 0) {
 		return detectionEnvelope;

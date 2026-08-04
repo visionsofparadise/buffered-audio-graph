@@ -195,7 +195,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 
 		try {
 			for (const refPath of this.properties.references) {
-				const { buffer: refBuffer } = await readToBuffer(refPath);
+				const { buffer: refBuffer } = await readToBuffer(refPath, context.temporaryDirectory);
 
 				openedBuffers.push(refBuffer);
 			}
@@ -467,7 +467,7 @@ export class DeBleedStream extends BufferedTransformStream<DeBleedNode> {
 		const msadFrameReals = new Array<Float32Array>(refCount + 1);
 		const msadFrameImags = new Array<Float32Array>(refCount + 1);
 
-		const outputBuffer = new BlockBuffer();
+		const outputBuffer = new BlockBuffer(this.temporaryDirectory);
 
 		const progressGate = createProgressGate(processStftFrames);
 

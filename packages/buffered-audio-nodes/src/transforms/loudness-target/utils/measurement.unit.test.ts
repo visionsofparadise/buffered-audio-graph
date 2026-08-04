@@ -21,7 +21,7 @@ const HALF_WIDTH = 48;
 /**
  * Buffers created by `makeBufferFromChannels` during a test. The
  * `afterEach` hook below drains and closes them so the test suite
- * does not leak `%TEMP%\chunk-buffer-*.bin` files.
+ * does not leak `%TEMP%\block-buffer-*.bin` files.
  */
 const buffersToClose: BlockBuffer[] = [];
 

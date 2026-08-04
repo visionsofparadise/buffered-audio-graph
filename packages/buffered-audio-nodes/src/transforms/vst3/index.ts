@@ -12,7 +12,14 @@ import {
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { startProcessLivenessMonitor, type ProcessLivenessOptions } from "../../utils/process-liveness";
-import { processStreamingThroughVstHost, spawnVstHostReady, writeStagesJson, type VstStage } from "./utils/process";
+import {
+	processStreamingThroughVstHost,
+	spawnVstHostReady,
+	terminateVstHost,
+	writeStagesJson,
+	type VstHostHandle,
+	type VstStage,
+} from "./utils/process";
 
 const stageSchema = z.object({
 	pluginPath: z.string().meta({ input: "file", mode: "open", accept: ".vst3" }).describe("VST3 plugin file or bundle"),
@@ -76,15 +83,12 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 
 	private streamContext?: StreamSetupContext;
 	private stagesJsonPath?: string;
-	private stagesJsonCleanup?: () => Promise<void>;
+	private activeHost?: VstHostHandle;
 
 	override async _setup(context: StreamSetupContext): Promise<void> {
 		this.streamContext = context;
 
-		const { path, cleanup } = await writeStagesJson(this.properties.stages);
-
-		this.stagesJsonPath = path;
-		this.stagesJsonCleanup = cleanup;
+		this.stagesJsonPath = await writeStagesJson(this.properties.stages, context.temporaryDirectory);
 	}
 
 	override async *_transform(buffered: BlockBuffer): AsyncGenerator<Block> {
@@ -111,10 +115,14 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 		];
 
 		const handle = await spawnVstHostReady(this.properties.vstHostPath, args, {
+			signal: this.streamContext.signal,
 			onRetry: (failedAttempt, error) => {
 				this.log("vst-host init crash, retrying", { attempt: failedAttempt, error: error.message }, "warn");
 			},
 		});
+
+		this.activeHost = handle;
+
 		const stopMonitor =
 			handle.proc.pid === undefined
 				? undefined
@@ -137,6 +145,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 				channelCount: channels,
 				sampleRate,
 				bitDepth: bd,
+				signal: this.streamContext.signal,
 				onInputProgress: (progress) => {
 					if (inputGate(progress.framesDone, Date.now())) {
 						this.log("vst-host input", {
@@ -159,7 +168,15 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 				},
 			});
 		} finally {
-			await stopMonitor?.();
+			try {
+				await stopMonitor?.();
+			} finally {
+				try {
+					await terminateVstHost(handle);
+				} finally {
+					if (this.activeHost === handle) this.activeHost = undefined;
+				}
+			}
 		}
 
 		await buffered.reset();
@@ -168,18 +185,12 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 	}
 
 	override async _destroy(): Promise<void> {
-		const cleanup = this.stagesJsonCleanup;
+		const activeHost = this.activeHost;
 
+		this.activeHost = undefined;
 		this.stagesJsonPath = undefined;
-		this.stagesJsonCleanup = undefined;
 
-		if (cleanup) {
-			try {
-				await cleanup();
-			} catch (error) {
-				void error;
-			}
-		}
+		if (activeHost) await terminateVstHost(activeHost);
 	}
 }
 

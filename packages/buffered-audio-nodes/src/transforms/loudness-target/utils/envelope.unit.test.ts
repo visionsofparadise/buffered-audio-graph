@@ -1,10 +1,20 @@
+import { tmpdir } from "node:os";
 import { BlockBuffer } from "@buffered-audio/core";
 import { BidirectionalIir, slidingWindowMin } from "@buffered-audio/utils";
 import { describe, expect, it } from "vitest";
 import { type Anchors, gainDbAt } from "./curve";
-import { applyBackwardPassOverChunkBuffer, windowSamplesFromMs } from "./envelope";
+import {
+	applyBackwardPassOverChunkBuffer as applyBackwardPassOverChunkBufferInTemporaryDirectory,
+	windowSamplesFromMs,
+} from "./envelope";
 
 const SAMPLE_RATE = 48000;
+
+function applyBackwardPassOverChunkBuffer(
+	args: Omit<Parameters<typeof applyBackwardPassOverChunkBufferInTemporaryDirectory>[0], "temporaryDirectory">,
+): Promise<void> {
+	return applyBackwardPassOverChunkBufferInTemporaryDirectory({ ...args, temporaryDirectory: tmpdir() });
+}
 
 /**
  * Tests for the disk-backed backward-IIR helper introduced in Phase 3

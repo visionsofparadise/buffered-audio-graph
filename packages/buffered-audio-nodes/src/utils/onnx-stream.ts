@@ -94,7 +94,7 @@ export abstract class WholeFileOnnxStream<
 
 		await buffered.reset();
 
-		const output = new BlockBuffer();
+		const output = new BlockBuffer(this.temporaryDirectory);
 
 		try {
 			await this.runMainPass({ buffer: buffered, output, channels, originalFrames, bitDepth });

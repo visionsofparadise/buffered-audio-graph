@@ -100,7 +100,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		const tPush0 = Date.now();
 
 		if (this.measurementAccumulator === undefined) {
-			this.capturedDetectionEnvelope = new BlockBuffer();
+			this.capturedDetectionEnvelope = new BlockBuffer(this.temporaryDirectory);
 			this.measurementAccumulator = new SourceMeasurementAccumulator(
 				block.sampleRate,
 				channelCount,
@@ -247,6 +247,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		const progressGate = createProgressGate(totalWork);
 		const result = await iterateForTargets({
 			buffer,
+			temporaryDirectory: this.temporaryDirectory,
 			sampleRate,
 			anchorBase: { floorDb: effectiveFloorDb, pivotDb: effectivePivotDb },
 			smoothingMs: smoothing,

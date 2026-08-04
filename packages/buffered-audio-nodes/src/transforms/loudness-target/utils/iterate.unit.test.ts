@@ -1,11 +1,20 @@
+import { tmpdir } from "node:os";
 import { BlockBuffer } from "@buffered-audio/core";
 import { LoudnessAccumulator, TruePeakAccumulator, linearToDb } from "@buffered-audio/utils";
 import { afterEach, describe, expect, it } from "vitest";
-import { iterateForTargets, type IterationAttempt } from "./iterate";
+import {
+	iterateForTargets as iterateForTargetsInTemporaryDirectory,
+	type IterateForTargetsArgs,
+	type IterationAttempt,
+} from "./iterate";
 
 const SAMPLE_RATE = 48_000;
 const DURATION_SECONDS = 8;
 const FRAME_COUNT = SAMPLE_RATE * DURATION_SECONDS;
+
+function iterateForTargets(args: Omit<IterateForTargetsArgs, "temporaryDirectory">) {
+	return iterateForTargetsInTemporaryDirectory({ ...args, temporaryDirectory: tmpdir() });
+}
 
 /**
  * Per-file registry of `BlockBuffer`s that must be closed at the end

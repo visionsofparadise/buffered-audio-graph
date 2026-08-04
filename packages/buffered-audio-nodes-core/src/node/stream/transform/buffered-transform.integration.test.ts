@@ -1,3 +1,6 @@
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { BufferedAudioNode } from "../..";
 import { createBlock } from "../../../testing/blocks";
@@ -64,6 +67,36 @@ describe("BufferedTransformStream default transform (drain identity)", () => {
 
 		expect(output.reduce((sum, b) => sum + (b.samples[0]?.length ?? 0), 0)).toBe(100);
 		expect(output.every((b) => b.samples[0]?.[0] === 0.5)).toBe(true);
+	});
+});
+
+describe("BufferedTransformStream temporary directory", () => {
+	it("creates its framework buffer in the setup context directory", async () => {
+		class RecordingTemporaryDirectoryStream extends BufferedTransformStream {
+			files: Array<string> = [];
+
+			override async *_transform(buffered: BlockBuffer): AsyncIterable<Block> {
+				this.files = await readdir(this.temporaryDirectory);
+
+				yield* super._transform(buffered);
+			}
+		}
+
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "buffered-transform-test-"));
+
+		try {
+			const { context } = createTestStreamContext();
+			const stream = new RecordingTemporaryDirectoryStream(nodeWith({ blockSize: WHOLE_FILE }), context);
+
+			await drainBlocks(
+				await stream.setup(readableFrom([createBlock(1, 0, 10)]), createTestSetupContext({ temporaryDirectory })),
+			);
+
+			expect(stream.files).toEqual([expect.stringMatching(/^block-buffer-[\da-f-]+\.bin$/)]);
+			expect(await readdir(temporaryDirectory)).toEqual([]);
+		} finally {
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
 	});
 });
 

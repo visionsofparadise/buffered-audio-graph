@@ -84,6 +84,7 @@ export interface IterateResult {
 
 export interface IterateForTargetsArgs {
 	buffer: BlockBuffer;
+	temporaryDirectory: string;
 	sampleRate: number;
 	anchorBase: { floorDb: number | null; pivotDb: number };
 	smoothingMs: number;
@@ -105,6 +106,7 @@ export interface IterateForTargetsArgs {
 export async function iterateForTargets(args: IterateForTargetsArgs): Promise<IterateResult> {
 	const {
 		buffer,
+		temporaryDirectory,
 		sampleRate,
 		anchorBase,
 		smoothingMs,
@@ -129,7 +131,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		if (args.detectionEnvelope !== undefined) await args.detectionEnvelope.close();
 
 		return {
-			bestSmoothedEnvelopeBuffer: new BlockBuffer(),
+			bestSmoothedEnvelopeBuffer: new BlockBuffer(temporaryDirectory),
 			bestB: 0,
 			bestLimitDb: sourcePeakDb,
 			bestPeakGainDb: 0,
@@ -162,6 +164,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		args.detectionEnvelope ??
 		(await buildBaseRateDetectionCache({
 			buffer,
+			temporaryDirectory,
 			sampleRate,
 			channelCount,
 			frames,
@@ -169,10 +172,10 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		}));
 	const detectionCacheBuildMs = args.detectionEnvelope !== undefined ? 0 : Date.now() - tCacheBuild0;
 
-	const forwardEnvelopeBuffer = new BlockBuffer();
-	const minHeldEnvelopeBuffer = new BlockBuffer();
-	const activeBufferA = new BlockBuffer();
-	const activeBufferB = new BlockBuffer();
+	const forwardEnvelopeBuffer = new BlockBuffer(temporaryDirectory);
+	const minHeldEnvelopeBuffer = new BlockBuffer(temporaryDirectory);
+	const activeBufferA = new BlockBuffer(temporaryDirectory);
+	const activeBufferB = new BlockBuffer(temporaryDirectory);
 
 	let activeRef: BlockBuffer = activeBufferA;
 	let winningRef: BlockBuffer = activeBufferB;
@@ -221,6 +224,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			await applyBackwardPassOverChunkBuffer({
 				sourceBuffer: forwardEnvelopeBuffer,
 				destBuffer: activeRef,
+				temporaryDirectory,
 				iir,
 				chunkSize: CHUNK_FRAMES,
 				minHeldBuffer: minHeldEnvelopeBuffer,

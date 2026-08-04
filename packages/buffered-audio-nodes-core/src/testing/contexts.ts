@@ -1,10 +1,12 @@
 import { EventEmitter } from "node:events";
+import { tmpdir } from "node:os";
 import type { RenderEvents, StreamContext, StreamSetupContext } from "../node/stream";
 
 export function createTestSetupContext(overrides?: Partial<StreamSetupContext>): StreamSetupContext {
 	return {
 		executionProviders: ["cpu"],
 		memoryLimit: 256 * 1024 * 1024,
+		temporaryDirectory: tmpdir(),
 		highWaterMark: 16,
 		sourceSampleRate: 44100,
 		sampleRate: 44100,

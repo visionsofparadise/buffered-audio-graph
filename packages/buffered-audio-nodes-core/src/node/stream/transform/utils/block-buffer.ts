@@ -30,6 +30,8 @@ export class BlockBuffer {
 
 	private reverseReaders = new Set<ReverseBlockReader>();
 
+	constructor(private readonly temporaryDirectory: string = tmpdir()) {}
+
 	get frames(): number {
 		return this._frames;
 	}
@@ -207,7 +209,7 @@ export class BlockBuffer {
 	}
 
 	private ensureTempPath(): string {
-		this.tempPath ??= join(tmpdir(), `chunk-buffer-${randomUUID()}.bin`);
+		this.tempPath ??= join(this.temporaryDirectory, `block-buffer-${randomUUID()}.bin`);
 
 		return this.tempPath;
 	}

@@ -11,9 +11,11 @@ export abstract class InstrumentedTransformStream<
 	protected framesEmitted = 0;
 	protected hasStarted = false;
 	protected sourceTotalFrames?: number;
+	protected temporaryDirectory!: string;
 
 	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.sourceTotalFrames;
+		this.temporaryDirectory = context.temporaryDirectory;
 
 		await this._setup(context);
 

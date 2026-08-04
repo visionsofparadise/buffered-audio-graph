@@ -50,7 +50,7 @@ export abstract class BufferedTransformStream<
 	}
 
 	protected async *blocks(input: ReadableStream<Block>): AsyncGenerator<Block> {
-		const buffer = (this.buffer ??= new BlockBuffer());
+		const buffer = (this.buffer ??= new BlockBuffer(this.temporaryDirectory));
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
 

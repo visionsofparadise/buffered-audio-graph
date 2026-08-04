@@ -8,12 +8,13 @@ export function windowSamplesFromMs(smoothingMs: number, sampleRate: number): nu
 export async function applyBackwardPassOverChunkBuffer(args: {
 	sourceBuffer: BlockBuffer;
 	destBuffer: BlockBuffer;
+	temporaryDirectory: string;
 	iir: BidirectionalIir;
 	chunkSize: number;
 	minHeldBuffer?: BlockBuffer;
 	progress?: (done: number, total: number) => void;
 }): Promise<void> {
-	const { sourceBuffer, destBuffer, iir, chunkSize, minHeldBuffer, progress } = args;
+	const { sourceBuffer, destBuffer, temporaryDirectory, iir, chunkSize, minHeldBuffer, progress } = args;
 	const totalFrames = sourceBuffer.frames;
 	const totalWork = totalFrames * 2;
 
@@ -32,7 +33,7 @@ export async function applyBackwardPassOverChunkBuffer(args: {
 	const sr = sourceBuffer.sampleRate;
 	const bd = sourceBuffer.bitDepth;
 
-	const filteredReversed = new BlockBuffer();
+	const filteredReversed = new BlockBuffer(temporaryDirectory);
 
 	try {
 		const backwardState = { value: 0 };

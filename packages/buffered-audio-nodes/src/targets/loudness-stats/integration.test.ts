@@ -61,6 +61,7 @@ async function runStats(
 	const context: StreamSetupContext = {
 		executionProviders: ["cpu"],
 		memoryLimit: Number.POSITIVE_INFINITY,
+		temporaryDirectory: tmpdir(),
 		highWaterMark: 1,
 		sourceSampleRate: sampleRate,
 		sampleRate,
@@ -238,6 +239,7 @@ describe("loudness-stats", () => {
 		const context: StreamSetupContext = {
 			executionProviders: ["cpu"],
 			memoryLimit: Number.POSITIVE_INFINITY,
+			temporaryDirectory: tmpdir(),
 			highWaterMark: 1,
 			sourceSampleRate: TEST_SAMPLE_RATE,
 			sampleRate: TEST_SAMPLE_RATE,
