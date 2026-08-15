@@ -145,6 +145,35 @@ export function attemptBeatsWinner(
 	return candidate.outputLufs < winner.outputLufs;
 }
 
+function nextSearchBoost(
+	attempts: ReadonlyArray<IterationAttempt>,
+	residualBoost: number,
+	targetLufs: number,
+): number {
+	let highestUnderBoost: number | undefined;
+	let lowestOverBoost: number | undefined;
+
+	for (const attempt of attempts) {
+		if (attempt.outputLufs <= targetLufs) {
+			if (highestUnderBoost === undefined || attempt.boost > highestUnderBoost) {
+				highestUnderBoost = attempt.boost;
+			}
+		} else if (lowestOverBoost === undefined || attempt.boost < lowestOverBoost) {
+			lowestOverBoost = attempt.boost;
+		}
+	}
+
+	if (
+		highestUnderBoost !== undefined &&
+		lowestOverBoost !== undefined &&
+		highestUnderBoost < lowestOverBoost
+	) {
+		return 0.5 * (highestUnderBoost + lowestOverBoost);
+	}
+
+	return residualBoost;
+}
+
 export async function iterateForTargets(args: IterateForTargetsArgs): Promise<IterateResult> {
 	const {
 		buffer,
@@ -331,7 +360,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 			residual = measured.outputLufs - predictedLufs;
 
-			const nextB = bisectBForTargetLufs({
+			const residualBoost = bisectBForTargetLufs({
 				sourceLufs,
 				targetLufs,
 				anchors: { floorDb: anchorBase.floorDb, pivotDb: anchorBase.pivotDb, limitDb: currentLimit },
@@ -341,6 +370,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				residual,
 				tolerance,
 			});
+			const nextB = nextSearchBoost(attempts, residualBoost, targetLufs);
 
 			const legalWinnerWithinTolerance =
 				winningAttempt !== undefined &&
@@ -354,7 +384,6 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 			if (
 				legalWinnerWithinTolerance ||
-				Math.abs(nextB - currentBoost) < tolerance / 10 ||
 				(currentBoost === BOOST_UPPER_BOUND && measured.outputLufs < targetLufs) ||
 				(currentBoost === BOOST_LOWER_BOUND && measured.outputLufs > targetLufs) ||
 				attemptIdx === maxAttempts - 1
