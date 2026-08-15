@@ -10,18 +10,19 @@ import { applyBaseRateChunk } from "./apply";
 import { CHUNK_FRAMES } from "./constants";
 import { type Anchors, gainDbAt } from "./curve";
 import { applyBackwardPassOverChunkBuffer, windowSamplesFromMs } from "./envelope";
+import {
+	assignPeakGainDb,
+	bisectBForTargetLufs,
+	BOOST_LOWER_BOUND,
+	BOOST_UPPER_BOUND,
+	predictOutputLufs,
+} from "./solve";
 import { buildBaseRateDetectionCache } from "./source-caches";
+import type { DetectionHistogram } from "./measurement";
 
-export const BOOST_LOWER_BOUND = -30;
-export const BOOST_UPPER_BOUND = 30;
+export { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND };
 
 const LIMIT_EPSILON_DB = 0.01;
-
-const PEAK_DAMPING = 0.8;
-
-const PEAK_GAIN_DB_FLOOR = -60;
-
-const MIN_SECANT_SLOPE = 0.05;
 
 const DEFAULT_MAX_ATTEMPTS = 10;
 const DEFAULT_TOLERANCE = 0.5;
@@ -96,11 +97,54 @@ export interface IterateForTargetsArgs {
 	sourcePeakDb: number;
 	maxAttempts?: number;
 	tolerance?: number;
-	peakTolerance: number;
-	seedB?: number | undefined;
+	neverExpand: boolean;
+	histogram: DetectionHistogram;
 	detectionEnvelope?: BlockBuffer | undefined;
 	onAttempt?: (attempt: IterationAttempt, attemptIndex: number) => void;
 	progress?: (done: number, total: number) => void;
+}
+
+function isLegalAttempt(
+	outputLufs: number,
+	outputTruePeakDb: number,
+	targetLufs: number,
+	effectiveTargetTp: number,
+): boolean {
+	return outputLufs <= targetLufs && outputTruePeakDb <= effectiveTargetTp;
+}
+
+export function attemptBeatsWinner(
+	candidate: Pick<IterationAttempt, "outputLufs" | "outputTruePeakDb" | "lufsErr">,
+	winner: Pick<IterationAttempt, "outputLufs" | "outputTruePeakDb" | "lufsErr"> | undefined,
+	targetLufs: number,
+	effectiveTargetTp: number,
+): boolean {
+	if (winner === undefined) return true;
+
+	const candidateLegal = isLegalAttempt(
+		candidate.outputLufs,
+		candidate.outputTruePeakDb,
+		targetLufs,
+		effectiveTargetTp,
+	);
+	const winnerLegal = isLegalAttempt(winner.outputLufs, winner.outputTruePeakDb, targetLufs, effectiveTargetTp);
+
+	if (candidateLegal !== winnerLegal) return candidateLegal;
+
+	if (candidateLegal) return Math.abs(candidate.lufsErr) < Math.abs(winner.lufsErr);
+
+	const candidateHoldsTp = candidate.outputTruePeakDb <= effectiveTargetTp;
+	const winnerHoldsTp = winner.outputTruePeakDb <= effectiveTargetTp;
+
+	if (candidateHoldsTp !== winnerHoldsTp) return candidateHoldsTp;
+
+	if (candidateHoldsTp) return candidate.outputLufs < winner.outputLufs;
+
+	if (candidate.outputTruePeakDb !== winner.outputTruePeakDb) {
+		return candidate.outputTruePeakDb < winner.outputTruePeakDb;
+	}
+
+	return candidate.outputLufs < winner.outputLufs;
 }
 
 export async function iterateForTargets(args: IterateForTargetsArgs): Promise<IterateResult> {
@@ -118,8 +162,8 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		sourcePeakDb,
 		maxAttempts = DEFAULT_MAX_ATTEMPTS,
 		tolerance = DEFAULT_TOLERANCE,
-		peakTolerance,
-		seedB,
+		neverExpand,
+		histogram,
 		onAttempt,
 		progress,
 	} = args;
@@ -155,7 +199,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		currentLimit = sourcePeakDb;
 	}
 
-	let currentPeakGainDb = effectiveTargetTp - currentLimit;
+	const tpCap = effectiveTargetTp - currentLimit;
 	const halfWidth = windowSamplesFromMs(smoothingMs, sampleRate);
 	const iir = new BidirectionalIir({ smoothingMs, sampleRate });
 
@@ -182,27 +226,35 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 	let winningPopulated = false;
 
 	try {
-		const skipPeak = targetTp === undefined;
-
-		let currentBoost = clampBoost(seedB !== undefined && Number.isFinite(seedB) ? seedB : targetLufs - sourceLufs);
+		let residual = 0;
+		let currentBoost = clampBoost(
+			bisectBForTargetLufs({
+				sourceLufs,
+				targetLufs,
+				anchors: { floorDb: anchorBase.floorDb, pivotDb: anchorBase.pivotDb, limitDb: currentLimit },
+				histogram,
+				tpCap,
+				neverExpand,
+				residual: 0,
+				tolerance,
+			}),
+		);
 
 		const attempts: Array<IterationAttempt> = [];
+		let winningAttempt: IterationAttempt | undefined;
 		let bestBoost = currentBoost;
-		let bestPeakGainDb = currentPeakGainDb;
-		let bestScore = Infinity;
+		let bestPeakGainDb = assignPeakGainDb(currentBoost, tpCap, neverExpand);
 		let winnerOutputLufs: number | null = null;
 		let winnerOutputTruePeakDb: number | null = null;
 		let winnerOutputLra: number | null = null;
-		let winnerLufsErr = Infinity;
-		let winnerPeakErr = Infinity;
 
-		let previousStepMagnitude = Infinity;
 		const attemptWork = frames * 4;
 		const totalWork = maxAttempts * attemptWork;
 
 		for (let attemptIdx = 0; attemptIdx < maxAttempts; attemptIdx++) {
 			const attemptBase = attemptIdx * attemptWork;
 			const tAttempt0 = Date.now();
+			const currentPeakGainDb = assignPeakGainDb(currentBoost, tpCap, neverExpand);
 			const anchors: Anchors = {
 				floorDb: anchorBase.floorDb,
 				pivotDb: anchorBase.pivotDb,
@@ -210,6 +262,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				B: currentBoost,
 				peakGainDb: currentPeakGainDb,
 			};
+			const predictedLufs = predictOutputLufs(sourceLufs, anchors, histogram);
 
 			await streamCurveAndForwardIir({
 				detectionEnvelope,
@@ -257,19 +310,13 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			attempts.push(attempt);
 			onAttempt?.(attempt, attemptIdx);
 
-			const lufsScoreTerm = Math.abs(lufsErr) / tolerance;
-			const peakScoreTerm = skipPeak ? 0 : Math.abs(peakErr) / peakTolerance;
-			const score = Math.max(lufsScoreTerm, peakScoreTerm);
-
-			if (score < bestScore) {
-				bestScore = score;
+			if (attemptBeatsWinner(attempt, winningAttempt, targetLufs, effectiveTargetTp)) {
+				winningAttempt = attempt;
 				bestBoost = currentBoost;
 				bestPeakGainDb = currentPeakGainDb;
 				winnerOutputLufs = measured.outputLufs;
 				winnerOutputTruePeakDb = measured.outputTruePeakDb;
 				winnerOutputLra = measured.outputLra;
-				winnerLufsErr = lufsErr;
-				winnerPeakErr = peakErr;
 
 				const previousActive = activeRef;
 
@@ -284,30 +331,46 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 			await forwardEnvelopeBuffer.clear();
 			await minHeldEnvelopeBuffer.clear();
 
-			const matchesToTwoDp =
-				Math.round(Math.abs(lufsErr) * 100) === 0 && (skipPeak || Math.round(Math.abs(peakErr) * 100) === 0);
-			const lufsConverged = Math.abs(lufsErr) < tolerance;
-			const peakConverged = skipPeak || Math.abs(peakErr) < peakTolerance;
+			residual = measured.outputLufs - predictedLufs;
 
-			if (matchesToTwoDp || (lufsConverged && peakConverged)) break;
+			const nextB = bisectBForTargetLufs({
+				sourceLufs,
+				targetLufs,
+				anchors: { floorDb: anchorBase.floorDb, pivotDb: anchorBase.pivotDb, limitDb: currentLimit },
+				histogram,
+				tpCap,
+				neverExpand,
+				residual,
+				tolerance,
+			});
 
-			if (attemptIdx === maxAttempts - 1) break;
+			const legalWinnerWithinTolerance =
+				winningAttempt !== undefined &&
+				isLegalAttempt(
+					winningAttempt.outputLufs,
+					winningAttempt.outputTruePeakDb,
+					targetLufs,
+					effectiveTargetTp,
+				) &&
+				Math.abs(winningAttempt.lufsErr) < tolerance;
 
-			const next = computeBoostStep(attempts, previousStepMagnitude);
-
-			currentBoost = clampBoost(next.boost);
-			previousStepMagnitude = next.stepMagnitude;
-
-			if (!skipPeak && Math.abs(peakErr) > peakTolerance) {
-				currentPeakGainDb = Math.max(PEAK_GAIN_DB_FLOOR, currentPeakGainDb - peakErr * PEAK_DAMPING);
+			if (
+				legalWinnerWithinTolerance ||
+				Math.abs(nextB - currentBoost) < tolerance / 10 ||
+				(currentBoost === BOOST_UPPER_BOUND && measured.outputLufs < targetLufs) ||
+				(currentBoost === BOOST_LOWER_BOUND && measured.outputLufs > targetLufs) ||
+				attemptIdx === maxAttempts - 1
+			) {
+				break;
 			}
+
+			currentBoost = clampBoost(nextB);
 		}
 
 		const converged =
-			winningPopulated &&
-			((Math.round(Math.abs(winnerLufsErr) * 100) === 0 &&
-				(skipPeak || Math.round(Math.abs(winnerPeakErr) * 100) === 0)) ||
-				(Math.abs(winnerLufsErr) < tolerance && (skipPeak || Math.abs(winnerPeakErr) < peakTolerance)));
+			winningAttempt !== undefined &&
+			isLegalAttempt(winningAttempt.outputLufs, winningAttempt.outputTruePeakDb, targetLufs, effectiveTargetTp) &&
+			Math.abs(winningAttempt.lufsErr) < tolerance;
 
 		return {
 			bestSmoothedEnvelopeBuffer: winningRef,
@@ -478,47 +541,6 @@ async function measureAttemptOutput(args: MeasureAttemptArgs): Promise<MeasureAt
 	const outputTruePeakDb = linearToDb(truePeakLinear);
 
 	return { outputLufs: result.integrated, outputLra: result.range, outputTruePeakDb };
-}
-
-interface BoostStep {
-	boost: number;
-	stepMagnitude: number;
-}
-
-function computeBoostStep(attempts: ReadonlyArray<IterationAttempt>, previousStepMagnitude: number): BoostStep {
-	const last = attempts[attempts.length - 1];
-
-	if (last === undefined) return { boost: 0, stepMagnitude: Infinity };
-
-	if (attempts.length === 1) {
-		const stepBoost = -last.lufsErr;
-
-		return { boost: last.boost + stepBoost, stepMagnitude: Math.abs(stepBoost) };
-	}
-
-	const previous = attempts[attempts.length - 2];
-
-	if (previous === undefined) return { boost: last.boost, stepMagnitude: 0 };
-
-	const deltaBoost = last.boost - previous.boost;
-	const deltaLufs = last.lufsErr - previous.lufsErr;
-	let slope = deltaBoost === 0 ? 0 : deltaLufs / deltaBoost;
-
-	if (!Number.isFinite(slope) || Math.abs(slope) < MIN_SECANT_SLOPE) {
-		const sign = slope < 0 ? -1 : 1;
-
-		slope = sign * MIN_SECANT_SLOPE;
-	}
-
-	const stepBoostRaw = -last.lufsErr / slope;
-	const signFlipped =
-		last.lufsErr !== 0 && previous.lufsErr !== 0 && Math.sign(last.lufsErr) !== Math.sign(previous.lufsErr);
-	const magnitudeCap = signFlipped && Number.isFinite(previousStepMagnitude) ? previousStepMagnitude : Infinity;
-	const absStep = Math.abs(stepBoostRaw);
-	const scale = absStep > magnitudeCap && absStep > 0 ? magnitudeCap / absStep : 1;
-	const stepBoost = stepBoostRaw * scale;
-
-	return { boost: last.boost + stepBoost, stepMagnitude: Math.abs(stepBoost) };
 }
 
 function clampBoost(boost: number): number {

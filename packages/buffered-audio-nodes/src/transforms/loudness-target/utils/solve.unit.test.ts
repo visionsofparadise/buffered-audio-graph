@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dbToLinear, linearToDb } from "@buffered-audio/utils";
 import { type Anchors, gainDbAt } from "./curve";
 import type { DetectionHistogram } from "./measurement";
-import { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND, predictInitialB, predictOutputLufs } from "./solve";
+import { assignPeakGainDb, BOOST_LOWER_BOUND, BOOST_UPPER_BOUND, bisectBForTargetLufs, predictOutputLufs } from "./solve";
 
 const baseAnchors = (overrides: Partial<Anchors> = {}): Anchors => ({
 	floorDb: null,
@@ -174,98 +174,171 @@ describe("predictOutputLufs", () => {
 	});
 });
 
-describe("predictInitialB", () => {
-	it("returns a B for which predictOutputLufs(B, anchors, histogram) ≈ targetLufs", () => {
-		// Predictor-only bisection: given a synthetic histogram + a
-		// target, the returned `B` should drive the predictor onto
-		// target within tolerance.
+describe("bisectBForTargetLufs", () => {
+	it("returns a B for which predictOutputLufs(B, assigned peakGainDb) + residual ≈ targetLufs", () => {
 		const histogram = uniformDbRangeHistogram(-30, -6, 100_000);
 		const sourceLufs = -23;
 		const targetLufs = -19;
 		const anchorsBase = { floorDb: null, pivotDb: -28, limitDb: -6 };
-		const closedFormPeakGainDb = -1 - -6;
+		const tpCap = -1 - -6;
+		const neverExpand = false;
 		const tolerance = 0.1;
-		const seedB = predictInitialB({
+		const landingB = bisectBForTargetLufs({
 			sourceLufs,
 			targetLufs,
 			anchors: anchorsBase,
 			histogram,
-			brickWallDormant: false,
-			closedFormPeakGainDb,
+			tpCap,
+			neverExpand,
+			residual: 0,
 			tolerance,
 		});
 
-		expect(seedB).toBeGreaterThanOrEqual(BOOST_LOWER_BOUND);
-		expect(seedB).toBeLessThanOrEqual(BOOST_UPPER_BOUND);
+		expect(landingB).toBeGreaterThanOrEqual(BOOST_LOWER_BOUND);
+		expect(landingB).toBeLessThanOrEqual(BOOST_UPPER_BOUND);
 
-		const seededAnchors: Anchors = {
+		const landedAnchors: Anchors = {
 			...anchorsBase,
-			B: seedB,
-			peakGainDb: closedFormPeakGainDb,
+			B: landingB,
+			peakGainDb: assignPeakGainDb(landingB, tpCap, neverExpand),
 		};
-		const predictedAtSeed = predictOutputLufs(sourceLufs, seededAnchors, histogram);
+		const predictedAtLanding = predictOutputLufs(sourceLufs, landedAnchors, histogram);
 
-		expect(Math.abs(predictedAtSeed - targetLufs)).toBeLessThan(tolerance);
+		expect(Math.abs(predictedAtLanding - targetLufs)).toBeLessThan(tolerance);
 	});
 
 	it("respects the [BOOST_LOWER_BOUND, BOOST_UPPER_BOUND] bracket", () => {
 		const histogram = uniformDbRangeHistogram(-28, -2, 80_000);
-		const seedB = predictInitialB({
+		const landingB = bisectBForTargetLufs({
 			sourceLufs: -22,
 			targetLufs: 100,
 			anchors: { floorDb: null, pivotDb: -30, limitDb: -9 },
 			histogram,
-			brickWallDormant: false,
-			closedFormPeakGainDb: 8,
+			tpCap: 8,
+			neverExpand: false,
+			residual: 0,
 			tolerance: 0.1,
 		});
 
-		expect(seedB).toBeGreaterThanOrEqual(BOOST_LOWER_BOUND);
-		expect(seedB).toBeLessThanOrEqual(BOOST_UPPER_BOUND);
+		expect(landingB).toBeGreaterThanOrEqual(BOOST_LOWER_BOUND);
+		expect(landingB).toBeLessThanOrEqual(BOOST_UPPER_BOUND);
 	});
 
-	it("brickWallDormant=true tracks peakGainDb = B", () => {
-		// Degenerate branch (sourceTpDb <= limitDb): the predictor sees
-		// `peakGainDb = candidateB` per probe. Verify by hand: at the
-		// returned seedB, calling `predictOutputLufs` with `peakGainDb
-		// = seedB` should match what `predictInitialB` saw.
+	it("neverExpand true with expansive tpCap assigns peakGainDb = B", () => {
 		const histogram = uniformDbRangeHistogram(-32, -14, 80_000);
 		const sourceLufs = -25;
 		const targetLufs = -22;
 		const anchorsBase = { floorDb: null, pivotDb: -35, limitDb: -10 };
+		const tpCap = 20;
+		const neverExpand = true;
 		const tolerance = 0.1;
-		const seedB = predictInitialB({
+		const landingB = bisectBForTargetLufs({
 			sourceLufs,
 			targetLufs,
 			anchors: anchorsBase,
 			histogram,
-			brickWallDormant: true,
-			closedFormPeakGainDb: 0,
+			tpCap,
+			neverExpand,
+			residual: 0,
 			tolerance,
 		});
 
-		const seededAnchors: Anchors = {
-			...anchorsBase,
-			B: seedB,
-			peakGainDb: seedB,
-		};
-		const predictedAtSeed = predictOutputLufs(sourceLufs, seededAnchors, histogram);
+		expect(assignPeakGainDb(landingB, tpCap, neverExpand)).toBe(landingB);
 
-		expect(Math.abs(predictedAtSeed - targetLufs)).toBeLessThan(tolerance);
+		const landedAnchors: Anchors = {
+			...anchorsBase,
+			B: landingB,
+			peakGainDb: landingB,
+		};
+		const predictedAtLanding = predictOutputLufs(sourceLufs, landedAnchors, histogram);
+
+		expect(Math.abs(predictedAtLanding - targetLufs)).toBeLessThan(tolerance);
 	});
 
 	it("returns 0 for non-finite sourceLufs", () => {
 		const histogram = uniformDbRangeHistogram(-30, -6, 100_000);
-		const seedB = predictInitialB({
+		const landingB = bisectBForTargetLufs({
 			sourceLufs: -Infinity,
 			targetLufs: -20,
 			anchors: { floorDb: null, pivotDb: -28, limitDb: -6 },
 			histogram,
-			brickWallDormant: false,
-			closedFormPeakGainDb: 5,
+			tpCap: 5,
+			neverExpand: false,
+			residual: 0,
 			tolerance: 0.1,
 		});
 
-		expect(seedB).toBe(0);
+		expect(landingB).toBe(0);
+	});
+
+	it("neverExpand true makes the predictor peakGainDb follow min(B, tpCap) for a negative B", () => {
+		const histogram = uniformDbRangeHistogram(-30, -6, 100_000);
+		const sourceLufs = -20;
+		const targetLufs = -26;
+		const anchorsBase = { floorDb: null, pivotDb: -28, limitDb: -6 };
+		const tpCap = 12;
+		const neverExpand = true;
+		const tolerance = 0.1;
+		const landingB = bisectBForTargetLufs({
+			sourceLufs,
+			targetLufs,
+			anchors: anchorsBase,
+			histogram,
+			tpCap,
+			neverExpand,
+			residual: 0,
+			tolerance,
+		});
+
+		expect(landingB).toBeLessThan(0);
+		expect(assignPeakGainDb(landingB, tpCap, neverExpand)).toBe(landingB);
+
+		const assignedAnchors: Anchors = {
+			...anchorsBase,
+			B: landingB,
+			peakGainDb: assignPeakGainDb(landingB, tpCap, neverExpand),
+		};
+		const ceilingAnchors: Anchors = {
+			...anchorsBase,
+			B: landingB,
+			peakGainDb: tpCap,
+		};
+
+		expect(Math.abs(predictOutputLufs(sourceLufs, assignedAnchors, histogram) - targetLufs)).toBeLessThan(tolerance);
+		expect(predictOutputLufs(sourceLufs, ceilingAnchors, histogram)).not.toBeCloseTo(targetLufs, 1);
+	});
+
+	it("a non-zero residual shifts the bisect landing by about that residual", () => {
+		const histogram = uniformDbRangeHistogram(-30, -6, 100_000);
+		const sourceLufs = -23;
+		const targetLufs = -19;
+		const anchorsBase = { floorDb: null, pivotDb: -28, limitDb: -6 };
+		const tpCap = 20;
+		const neverExpand = true;
+		const tolerance = 0.1;
+		const residual = 1.5;
+		const shared = {
+			sourceLufs,
+			targetLufs,
+			anchors: anchorsBase,
+			histogram,
+			tpCap,
+			neverExpand,
+			tolerance,
+		};
+		const landingWithoutResidual = bisectBForTargetLufs({ ...shared, residual: 0 });
+		const landingWithResidual = bisectBForTargetLufs({ ...shared, residual });
+
+		expect(landingWithoutResidual - landingWithResidual).toBeCloseTo(residual, 0);
+
+		const landedAnchors: Anchors = {
+			...anchorsBase,
+			B: landingWithResidual,
+			peakGainDb: assignPeakGainDb(landingWithResidual, tpCap, neverExpand),
+		};
+
+		expect(
+			Math.abs(predictOutputLufs(sourceLufs, landedAnchors, histogram) + residual - targetLufs),
+		).toBeLessThan(tolerance);
 	});
 });

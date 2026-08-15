@@ -1,8 +1,8 @@
 import { type Anchors, gainDbAt } from "./curve";
-import { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND } from "./iterate";
 import type { DetectionHistogram } from "./measurement";
 
-export { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND };
+export const BOOST_LOWER_BOUND = -30;
+export const BOOST_UPPER_BOUND = 30;
 
 const LINEAR_AMPLITUDE_EPSILON = 1e-12;
 
@@ -45,40 +45,34 @@ export function predictOutputLufs(sourceLufs: number, anchors: Anchors, histogra
 
 const MAX_BISECT_ITERATIONS = 50;
 
-export interface PredictInitialBArgs {
-	readonly sourceLufs: number;
-	readonly targetLufs: number;
-	readonly anchors: Pick<Anchors, "floorDb" | "pivotDb" | "limitDb">;
-	readonly histogram: DetectionHistogram;
-	readonly brickWallDormant: boolean;
-	readonly closedFormPeakGainDb: number;
-	readonly tolerance: number;
+export function assignPeakGainDb(boost: number, tpCap: number, neverExpand: boolean): number {
+	return neverExpand ? Math.min(boost, tpCap) : tpCap;
 }
 
-export function predictInitialB(args: PredictInitialBArgs): number {
-	const {
-		sourceLufs,
-		targetLufs,
-		anchors: anchorBase,
-		histogram,
-		brickWallDormant,
-		closedFormPeakGainDb,
-		tolerance,
-	} = args;
+export function bisectBForTargetLufs(args: {
+	sourceLufs: number;
+	targetLufs: number;
+	anchors: Pick<Anchors, "floorDb" | "pivotDb" | "limitDb">;
+	histogram: DetectionHistogram;
+	tpCap: number;
+	neverExpand: boolean;
+	residual: number;
+	tolerance: number;
+}): number {
+	const { sourceLufs, targetLufs, anchors: anchorBase, histogram, tpCap, neverExpand, residual, tolerance } = args;
 
 	if (!Number.isFinite(sourceLufs)) return 0;
 
 	const predictAt = (candidateB: number): number => {
-		const candidatePeakGainDb = brickWallDormant ? candidateB : closedFormPeakGainDb;
 		const candidateAnchors: Anchors = {
 			floorDb: anchorBase.floorDb,
 			pivotDb: anchorBase.pivotDb,
 			limitDb: anchorBase.limitDb,
 			B: candidateB,
-			peakGainDb: candidatePeakGainDb,
+			peakGainDb: assignPeakGainDb(candidateB, tpCap, neverExpand),
 		};
 
-		return predictOutputLufs(sourceLufs, candidateAnchors, histogram);
+		return predictOutputLufs(sourceLufs, candidateAnchors, histogram) + residual;
 	};
 
 	let lower = BOOST_LOWER_BOUND;

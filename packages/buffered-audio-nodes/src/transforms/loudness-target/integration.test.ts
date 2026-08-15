@@ -126,7 +126,6 @@ async function runStream(
 			limitPercentile: properties.limitPercentile ?? 0.995,
 			smoothing: properties.smoothing ?? 1,
 			tolerance: properties.tolerance ?? 0.5,
-			peakTolerance: properties.peakTolerance ?? 0.1,
 			maxAttempts: properties.maxAttempts ?? 10,
 		}),
 		createTestStreamContext().context,

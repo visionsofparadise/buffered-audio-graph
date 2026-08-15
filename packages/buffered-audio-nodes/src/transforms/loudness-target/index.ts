@@ -11,9 +11,8 @@ import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { applyBaseRateChunk } from "./utils/apply";
 import { windowSamplesFromMs } from "./utils/envelope";
-import { clampLimit, iterateForTargets } from "./utils/iterate";
+import { iterateForTargets } from "./utils/iterate";
 import { measureSource, SourceMeasurementAccumulator } from "./utils/measurement";
-import { predictInitialB } from "./utils/solve";
 
 const FLOOR_PIVOT_EPSILON_DB = 0.01;
 
@@ -57,14 +56,7 @@ const schema = z
 			.describe("True-peak target (dBTP). Default: source true peak (peaks unchanged)."),
 		smoothing: z.number().min(0.01).max(200).default(1).describe("Peak-respecting envelope time constant (ms)."),
 		tolerance: z.number().gt(0).max(6).default(0.5).describe("Iteration exit threshold (LUFS dB)."),
-		peakTolerance: z
-			.number()
-			.gt(0)
-			.max(6)
-			.default(0.1)
-			.describe(
-				"One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored).",
-			),
+		neverExpand: z.boolean().default(false).describe("upper arm flat or compressive (peakGainDb ≤ B)"),
 	})
 	.refine(({ floor, pivot }) => floor === undefined || pivot === undefined || floor < pivot, {
 		message: "loudnessTarget requires floor < pivot when floor is set",
@@ -138,7 +130,7 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			limitPercentile,
 			smoothing,
 			tolerance,
-			peakTolerance,
+			neverExpand,
 			maxAttempts,
 		} = this.properties;
 
@@ -220,27 +212,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		}
 
 		const effectiveTargetTp = targetTp ?? sourcePeakDb;
-		let solvedLimitDb: number;
-
-		if (limitDbOverride !== undefined) {
-			solvedLimitDb = clampLimit(limitDbOverride, effectivePivotDb, sourcePeakDb);
-		} else if (Number.isFinite(measurement.limitAutoDb)) {
-			solvedLimitDb = clampLimit(measurement.limitAutoDb, effectivePivotDb, sourcePeakDb);
-		} else {
-			solvedLimitDb = sourcePeakDb;
-		}
-
-		const brickWallDormant = sourcePeakDb <= solvedLimitDb;
-		const closedFormPeakGainDb = effectiveTargetTp - solvedLimitDb;
-		const seedB = predictInitialB({
-			sourceLufs,
-			targetLufs,
-			anchors: { floorDb: effectiveFloorDb, pivotDb: effectivePivotDb, limitDb: solvedLimitDb },
-			histogram: measurement.detectionHistogram,
-			brickWallDormant,
-			closedFormPeakGainDb,
-			tolerance,
-		});
 
 		const tIterate0 = Date.now();
 		const totalWork = maxAttempts * buffer.frames * 4;
@@ -259,8 +230,8 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			sourcePeakDb,
 			maxAttempts,
 			tolerance,
-			peakTolerance,
-			seedB,
+			neverExpand,
+			histogram: measurement.detectionHistogram,
 			detectionEnvelope,
 			progress: (done, total) => {
 				if (progressGate(done, Date.now())) this.emitProgress("process", done, total);
@@ -322,7 +293,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 		this.log("iteration", {
 			attempts: result.attempts.length,
 			converged: result.converged,
-			seedB,
 			bestB: result.bestB,
 			bestLimitDb: bestLimitDbRepr,
 			bestPeakGainDb: bestPeakGainDbRepr,
@@ -342,7 +312,6 @@ export class LoudnessTargetStream extends BufferedTransformStream<LoudnessTarget
 			floor: floorRepr,
 			smoothing,
 			tolerance: fmt(tolerance),
-			peakTolerance: fmt(peakTolerance),
 			maxAttempts: fmt(maxAttempts),
 			expansiveUpperSegment: expansiveGeometry,
 		});
@@ -440,7 +409,7 @@ export class LoudnessTargetNode extends TransformNode<LoudnessTargetProperties> 
 	static override readonly nodeName = "Loudness Target";
 	static override readonly packageName = PACKAGE_NAME;
 	static override readonly description =
-		"Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.";
+		"Peak-aware content-adaptive curve fitting (LUFS, true-peak) via a level-indexed gain envelope. The solver iterates body gain B and assigns peakGainDb from the true-peak ceiling and optional neverExpand.";
 	static override readonly schema = schema;
 	static override readonly Stream = LoudnessTargetStream;
 }
@@ -454,7 +423,7 @@ export function loudnessTarget(options: {
 	limitDb?: number;
 	smoothing?: number;
 	tolerance?: number;
-	peakTolerance?: number;
+	neverExpand?: boolean;
 	maxAttempts?: number;
 	id?: string;
 }): LoudnessTargetNode {
