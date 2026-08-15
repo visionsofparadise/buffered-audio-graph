@@ -455,6 +455,24 @@ describe("iterateForTargets", () => {
 		expect(attemptBeatsWinner(illegalCloser, legalFarther, targetLufs, effectiveTargetTp)).toBe(false);
 	});
 
+	it("a 0.01 dB true-peak grain still holds the ceiling", () => {
+		const targetLufs = -16;
+		const effectiveTargetTp = -1;
+		const onGrain = {
+			outputLufs: -16.05,
+			outputTruePeakDb: -0.99961,
+			lufsErr: -0.05,
+		};
+		const fartherLegal = {
+			outputLufs: -16.4,
+			outputTruePeakDb: -1,
+			lufsErr: -0.4,
+		};
+
+		expect(attemptBeatsWinner(onGrain, fartherLegal, targetLufs, effectiveTargetTp)).toBe(true);
+		expect(attemptBeatsWinner(fartherLegal, onGrain, targetLufs, effectiveTargetTp)).toBe(false);
+	});
+
 	it(
 		"omitted targetTp uses sourcePeakDb as the TP ceiling",
 		async () => {
@@ -529,7 +547,7 @@ describe("iterateForTargets", () => {
 			expect(result.winnerOutputLufs).not.toBeNull();
 			expect(result.winnerOutputLufs ?? -Infinity).toBeGreaterThan(targetLufs);
 
-			const tpHolding = result.attempts.filter((attempt) => attempt.outputTruePeakDb <= targetTp);
+			const tpHolding = result.attempts.filter((attempt) => attempt.outputTruePeakDb <= targetTp + 0.01);
 			const lowestLufs = Math.min(...tpHolding.map((attempt) => attempt.outputLufs));
 
 			expect(result.winnerOutputLufs).toBe(lowestLufs);

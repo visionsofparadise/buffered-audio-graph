@@ -22,6 +22,8 @@ import type { DetectionHistogram } from "./measurement";
 
 const LIMIT_EPSILON_DB = 0.01;
 
+const TRUE_PEAK_HOLD_EPSILON_DB = 0.01;
+
 const DEFAULT_MAX_ATTEMPTS = 10;
 const DEFAULT_TOLERANCE = 0.5;
 
@@ -102,13 +104,17 @@ export interface IterateForTargetsArgs {
 	progress?: (done: number, total: number) => void;
 }
 
+function holdsTruePeak(outputTruePeakDb: number, effectiveTargetTp: number): boolean {
+	return outputTruePeakDb <= effectiveTargetTp + TRUE_PEAK_HOLD_EPSILON_DB;
+}
+
 function isLegalAttempt(
 	outputLufs: number,
 	outputTruePeakDb: number,
 	targetLufs: number,
 	effectiveTargetTp: number,
 ): boolean {
-	return outputLufs <= targetLufs && outputTruePeakDb <= effectiveTargetTp;
+	return outputLufs <= targetLufs && holdsTruePeak(outputTruePeakDb, effectiveTargetTp);
 }
 
 export function attemptBeatsWinner(
@@ -131,8 +137,8 @@ export function attemptBeatsWinner(
 
 	if (candidateLegal) return Math.abs(candidate.lufsErr) < Math.abs(winner.lufsErr);
 
-	const candidateHoldsTp = candidate.outputTruePeakDb <= effectiveTargetTp;
-	const winnerHoldsTp = winner.outputTruePeakDb <= effectiveTargetTp;
+	const candidateHoldsTp = holdsTruePeak(candidate.outputTruePeakDb, effectiveTargetTp);
+	const winnerHoldsTp = holdsTruePeak(winner.outputTruePeakDb, effectiveTargetTp);
 
 	if (candidateHoldsTp !== winnerHoldsTp) return candidateHoldsTp;
 
