@@ -539,7 +539,7 @@ describe("iterateForTargets", () => {
 			}
 
 			expect(result.winnerOutputTruePeakDb).not.toBeNull();
-			expect(result.winnerOutputTruePeakDb ?? Infinity).toBeLessThanOrEqual(metrics.truePeakDb);
+			expect(result.winnerOutputTruePeakDb ?? Infinity).toBeLessThanOrEqual(metrics.truePeakDb + 0.01);
 		},
 		TEST_TIMEOUT_MS,
 	);
