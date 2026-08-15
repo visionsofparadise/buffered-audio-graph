@@ -473,6 +473,36 @@ describe("iterateForTargets", () => {
 		expect(attemptBeatsWinner(fartherLegal, onGrain, targetLufs, effectiveTargetTp)).toBe(false);
 	});
 
+	it("among attempts that miss the box, closest to target beats quieter or lower peak", () => {
+		const targetLufs = -16;
+		const effectiveTargetTp = -1;
+		const closerLufs = {
+			outputLufs: -16.2,
+			outputTruePeakDb: 2,
+			lufsErr: -0.2,
+		};
+		const quieterSamePeakMiss = {
+			outputLufs: -20,
+			outputTruePeakDb: 2,
+			lufsErr: -4,
+		};
+		const closerTruePeak = {
+			outputLufs: -15.8,
+			outputTruePeakDb: -0.5,
+			lufsErr: 0.2,
+		};
+		const lowerTruePeak = {
+			outputLufs: -15.8,
+			outputTruePeakDb: 3,
+			lufsErr: 0.2,
+		};
+
+		expect(attemptBeatsWinner(closerLufs, quieterSamePeakMiss, targetLufs, effectiveTargetTp)).toBe(true);
+		expect(attemptBeatsWinner(quieterSamePeakMiss, closerLufs, targetLufs, effectiveTargetTp)).toBe(false);
+		expect(attemptBeatsWinner(closerTruePeak, lowerTruePeak, targetLufs, effectiveTargetTp)).toBe(true);
+		expect(attemptBeatsWinner(lowerTruePeak, closerTruePeak, targetLufs, effectiveTargetTp)).toBe(false);
+	});
+
 	it(
 		"omitted targetTp uses sourcePeakDb as the TP ceiling",
 		async () => {
@@ -515,7 +545,7 @@ describe("iterateForTargets", () => {
 	);
 
 	it(
-		"converged is false when the winner is the lowest-LUFS TP-holding fallback",
+		"converged is false when the winner is the closest TP-holding fallback",
 		async () => {
 			const source = makeSyntheticSource(0x3333_4444, 0.1, 0.4);
 			const metrics = measureSourceMetrics(source);

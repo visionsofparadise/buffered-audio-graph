@@ -142,13 +142,14 @@ export function attemptBeatsWinner(
 
 	if (candidateHoldsTp !== winnerHoldsTp) return candidateHoldsTp;
 
-	if (candidateHoldsTp) return candidate.outputLufs < winner.outputLufs;
+	if (candidateHoldsTp) return Math.abs(candidate.lufsErr) < Math.abs(winner.lufsErr);
 
-	if (candidate.outputTruePeakDb !== winner.outputTruePeakDb) {
-		return candidate.outputTruePeakDb < winner.outputTruePeakDb;
-	}
+	const candidatePeakAbs = Math.abs(candidate.outputTruePeakDb - effectiveTargetTp);
+	const winnerPeakAbs = Math.abs(winner.outputTruePeakDb - effectiveTargetTp);
 
-	return candidate.outputLufs < winner.outputLufs;
+	if (candidatePeakAbs !== winnerPeakAbs) return candidatePeakAbs < winnerPeakAbs;
+
+	return Math.abs(candidate.lufsErr) < Math.abs(winner.lufsErr);
 }
 
 function nextSearchBoost(
