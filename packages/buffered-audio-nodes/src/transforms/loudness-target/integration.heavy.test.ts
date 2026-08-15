@@ -56,21 +56,23 @@ interface TargetRunOptions {
 	limitPercentile?: number;
 	smoothing?: number;
 	tolerance?: number;
-	peakTolerance?: number;
+	neverExpand?: boolean;
 	maxAttempts?: number;
 }
 
 /**
  * Outcome of a `runStream` call: the per-channel transformed output
- * plus the diagnostic `winningB` / `winningLimitDb` from the
- * iteration. Tests that need to assert on iteration behaviour read
- * these fields. The fields are private on `LoudnessTargetStream`; the
- * type cast in `runStream` is the only place we reach into them.
+ * plus the diagnostic `winningB` / `winningLimitDb` /
+ * `winningPeakGainDb` from the iteration. Tests that need to assert
+ * on iteration behaviour read these fields. The fields are private
+ * on `LoudnessTargetStream`; the type cast in `runStream` is the
+ * only place we reach into them.
  */
 interface RunStreamResult {
 	channels: Array<Float32Array>;
 	winningB: number | null;
 	winningLimitDb: number | null;
+	winningPeakGainDb: number | null;
 }
 
 /**
@@ -94,6 +96,7 @@ async function runStream(
 			limitPercentile: properties.limitPercentile ?? 0.995,
 			smoothing: properties.smoothing ?? 1,
 			tolerance: properties.tolerance ?? 0.5,
+			neverExpand: properties.neverExpand,
 			maxAttempts: properties.maxAttempts ?? 10,
 		}),
 		createTestStreamContext().context,
@@ -144,38 +147,22 @@ async function runStream(
 		}
 	}
 
-	const diagnostics = stream as unknown as { winningB: number | null; winningLimitDb: number | null };
+	const diagnostics = stream as unknown as {
+		winningB: number | null;
+		winningLimitDb: number | null;
+		winningPeakGainDb: number | null;
+	};
 
-	return { channels: out, winningB: diagnostics.winningB, winningLimitDb: diagnostics.winningLimitDb };
+	return {
+		channels: out,
+		winningB: diagnostics.winningB,
+		winningLimitDb: diagnostics.winningLimitDb,
+		winningPeakGainDb: diagnostics.winningPeakGainDb,
+	};
 }
 
 /**
  * Phase 6 (2026-05-10) — TP-overshoot regression test.
- *
- * Locks in the structural TP-overshoot fix delivered by Phase 4's 4×
- * upsampled detection / max-pool / curve / IIR / apply pipeline AND the
- * Phase-3 iterator (plan-loudness-target-tp-iteration, 2026-05-10) that
- * clamps residual post-IIR peak overshoot via per-attempt `peakGainDb`
- * adjustment (proportional feedback against `peakTolerance`).
- * Pre-refactor (Phase 1 baseline), `loudnessTarget` overshot
- * `targetTp = -1` by ~0.7–0.9 dB on TP-rich material — two effects
- * compounding: native-rate per-sample curve evaluation against a
- * 4× true-peak anchor (Effect 1, ~0.1–0.2 dB), and bidirectional IIR
- * averaging across the peak boundary pulling peak gain upward toward
- * upper-segment neighbours (Effect 2, ~0.7–0.9 dB, dominant). Phase 4
- * runs detection / max-pool / curve / IIR all at 4× rate, matching the
- * apply pass; the iteration-vs-output AA bias collapses, and the IIR's
- * smoothing pole-frequency matches the upsampled signal's bandwidth.
- * The 2026-05-10 iteration plan layered on top: with the iterator now
- * adjusting `peakGainDb` downward on observed overshoot until peak
- * lands within `peakTolerance` (default 0.1 dB) of `targetTp`, any
- * residual cross-boundary IIR pull-up is corrected by feedback rather
- * than carried into the output. Live observation on the existing ramp-
- * fixture test ("respects targetTp ceiling…") at end of Phase 4:
- * outputTruePeakDb ≈ targetTp + 0.026 dB. This test asserts a tighter
- * +0.15 dB bound (= peakTolerance 0.10 + 0.05 dB measurement / damping
- * slack) on a fixture explicitly engineered for inter-sample-peak
- * content.
  *
  * Fixture: 30 s mono at 48 kHz combining (a) a broadband body
  * signal — 220 Hz sine + LCG-seeded white noise, slow amplitude
@@ -191,34 +178,15 @@ async function runStream(
  * and the body-lift iteration cannot converge to any non-trivial
  * `targetLufs` (the per-tone energy is concentrated near peak, so
  * lift / cut cannot pull integrated LUFS far from source). The
- * closest-attempt fallback then runs the curve with a tiny upper-
- * segment width and a steep B-to-peakGainDb jump, where smoothing-
- * induced ripple produces ~0.4 dB TP overshoot for reasons
- * unrelated to Effect-1 / Effect-2 (the structural issues Phase 4
- * fixed). The body-plus-overlay form gives the source measurable
- * LRA (~6.5 LU), pulls auto-derived pivot well below source peak
- * (gain-riding zone width ~13 dB), lets the iteration produce a
- * meaningful operating point, and preserves the cross-frequency
- * inter-sample-peak content the regression is meant to lock in.
- * On the post-Phase-4 path this fixture observes ~0.04 dB
- * overshoot — comfortably under the 0.15 dB bound (tightened from
- * 0.3 dB by plan-loudness-target-tp-iteration). The
- * 4 kHz / 12 kHz overlay amplitudes (-18 / -24 dBFS) keep the
- * TP-rich content audibly subordinate to body so source LUFS is
- * driven by body and the overlay still contributes the
- * inter-sample peaks the 4× pipeline must handle.
- *
- * Methodology: configure `loudnessTarget({ targetLufs: -16, targetTp:
- * -1, smoothing: 1 })`, no `pivot` (auto-derive). Measure output true
- * peak via `TruePeakAccumulator` (4× upsampled, BS.1770-4 style) and
- * assert `outputTruePeakDb <= targetTp + 0.15`. The 0.15 dB threshold
- * is `peakTolerance` (0.10 dB default) plus 0.05 dB measurement /
- * damping slack — tightened from the predecessor plan's +0.3 dB
- * bound by plan-loudness-target-tp-iteration, which extended the
- * iterator with proportional-feedback control on `peakGainDb`. If
- * this test passes pre-refactor (i.e. the fixture isn't TP-rich
- * enough to discriminate), the assertion isn't actually guarding
- * the fix — escalation lever per plan §6.1's pitfall note.
+ * body-plus-overlay form gives the source measurable LRA (~6.5 LU),
+ * pulls auto-derived pivot well below source peak (gain-riding zone
+ * width ~13 dB), lets the iteration produce a meaningful operating
+ * point, and preserves the cross-frequency inter-sample-peak content
+ * the regression is meant to lock in. The 4 kHz / 12 kHz overlay
+ * amplitudes (-18 / -24 dBFS) keep the TP-rich content audibly
+ * subordinate to body so source LUFS is driven by body and the
+ * overlay still contributes the inter-sample peaks the 4× pipeline
+ * must handle.
  */
 
 /**
@@ -274,42 +242,19 @@ describe("LoudnessTarget TP-overshoot regression", () => {
 	const TP_TEST_TIMEOUT_MS = 180_000;
 
 	it(
-		"output true peak respects targetTp within 0.15 dB on TP-rich content",
+		"output true peak respects targetTp on TP-rich content",
 		async () => {
-			// Pre-Phase-4 expected overshoot on this regime: ~0.7–0.9 dB
-			// (the live-QA observation on the Pierce 60 s clip; the plan's
-			// Problem section §1 documents the two effects). Post-Phase-4
-			// expected overshoot: well under 0.15 dB (peakTolerance +
-			// slack; tightened from the predecessor plan's +0.3 by
-			// plan-loudness-target-tp-iteration). The existing ramp-
-			// fixture test "respects targetTp ceiling…" measures +0.026 dB
-			// on the post-Phase-4 path; this fixture is engineered to be
-			// MORE TP-rich than the ramp (cross-frequency sum produces
-			// stronger inter-sample peaks than a single-tone ramp); the
-			// observed +0.044 dB sits comfortably under the 0.15 bound.
 			const TP_TEST_FRAMES = TEST_SAMPLE_RATE * 30; // 30 s mono.
 			const input = makeIntersamplePeakFixture(TP_TEST_FRAMES, TEST_SAMPLE_RATE);
 			const sourcePeakDb = measureTruePeak([input], TEST_SAMPLE_RATE);
 			const sourceLufs = measureLufs([input], TEST_SAMPLE_RATE);
 			const targetTp = -1;
-			// Plan §6.1 spec'd `targetLufs: -16` against an unmodulated
-			// two-tone fixture; with the body-plus-overlay fixture
-			// (deviation captured in the docstring above) sourceLufs lands
-			// around -12.5 LUFS. Setting `targetLufs = sourceLufs - 4`
-			// (rounded to the schema's `multipleOf(0.1)` grid) puts the
-			// target inside the iteration's reach with a meaningful cut
-			// (~4 LU) that exercises the upper-segment descending regime
-			// where Effect-2 (IIR averaging across peak boundary) would
-			// have produced the pre-Phase-4 overshoot. The absolute
-			// `targetLufs` value isn't load-bearing — what matters is
-			// (a) a non-trivial cut so the curve has descending upper
-			// segment, and (b) `targetTp = -1` close enough to source peak
-			// that the closed-form `peakGainDb` is non-zero.
 			const targetLufs = Math.round((sourceLufs - 4) * 10) / 10;
 			const output = await runStream([input], TEST_SAMPLE_RATE, {
 				targetLufs,
 				targetTp,
 				smoothing: 1,
+				neverExpand: true,
 			});
 			const outputChannel = output.channels[0];
 
@@ -323,22 +268,10 @@ describe("LoudnessTarget TP-overshoot regression", () => {
 				`[test:tp-overshoot-regression] sourceLufs=${sourceLufs.toFixed(3)} ` +
 					`targetLufs=${targetLufs.toFixed(3)} sourcePeakDb=${sourcePeakDb.toFixed(3)} ` +
 					`outputTruePeakDb=${outputTruePeakDb.toFixed(3)} target=${targetTp} ` +
-					`overshoot=${overshoot.toFixed(3)} dB (pre-Phase-4 expected ~0.7–0.9 dB)`,
+					`overshoot=${overshoot.toFixed(3)} dB`,
 			);
 
-			// Structural assertion (Phase 5, plan-loudness-target-tp-iteration,
-			// 2026-05-10): <= +0.15 dB overshoot (= peakTolerance default 0.10
-			// + 0.05 dB measurement / damping slack). Tightened from the
-			// predecessor plan's +0.3 dB bound now that the iterator clamps
-			// post-IIR peak overshoot via per-attempt `peakGainDb` proportional
-			// feedback. Observed at Phase 3 close on this fixture: +0.044 dB
-			// (an order of magnitude under +0.15 dB). If this regresses past
-			// +0.15 dB, escalate per the iteration plan's Phase 5 pitfall
-			// note — either the AA balance has broken, a max-pool half-width
-			// / IIR alpha mismatch at 4× rate has re-introduced Effect (2),
-			// or the iterator's proportional-feedback damping is too
-			// aggressive (try `PEAK_DAMPING = 0.5`).
-			expect(outputTruePeakDb).toBeLessThanOrEqual(targetTp + 0.15);
+			expect(outputTruePeakDb).toBeLessThanOrEqual(targetTp);
 		},
 		TP_TEST_TIMEOUT_MS,
 	);

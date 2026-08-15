@@ -88,21 +88,23 @@ interface TargetRunOptions {
 	limitPercentile?: number;
 	smoothing?: number;
 	tolerance?: number;
-	peakTolerance?: number;
+	neverExpand?: boolean;
 	maxAttempts?: number;
 }
 
 /**
  * Outcome of a `runStream` call: the per-channel transformed output
- * plus the diagnostic `winningB` / `winningLimitDb` from the
- * iteration. Tests that need to assert on iteration behaviour read
- * these fields. The fields are private on `LoudnessTargetStream`; the
- * type cast in `runStream` is the only place we reach into them.
+ * plus the diagnostic `winningB` / `winningLimitDb` /
+ * `winningPeakGainDb` from the iteration. Tests that need to assert
+ * on iteration behaviour read these fields. The fields are private
+ * on `LoudnessTargetStream`; the type cast in `runStream` is the
+ * only place we reach into them.
  */
 interface RunStreamResult {
 	channels: Array<Float32Array>;
 	winningB: number | null;
 	winningLimitDb: number | null;
+	winningPeakGainDb: number | null;
 }
 
 /**
@@ -126,6 +128,7 @@ async function runStream(
 			limitPercentile: properties.limitPercentile ?? 0.995,
 			smoothing: properties.smoothing ?? 1,
 			tolerance: properties.tolerance ?? 0.5,
+			neverExpand: properties.neverExpand,
 			maxAttempts: properties.maxAttempts ?? 10,
 		}),
 		createTestStreamContext().context,
@@ -176,9 +179,18 @@ async function runStream(
 		}
 	}
 
-	const diagnostics = stream as unknown as { winningB: number | null; winningLimitDb: number | null };
+	const diagnostics = stream as unknown as {
+		winningB: number | null;
+		winningLimitDb: number | null;
+		winningPeakGainDb: number | null;
+	};
 
-	return { channels: out, winningB: diagnostics.winningB, winningLimitDb: diagnostics.winningLimitDb };
+	return {
+		channels: out,
+		winningB: diagnostics.winningB,
+		winningLimitDb: diagnostics.winningLimitDb,
+		winningPeakGainDb: diagnostics.winningPeakGainDb,
+	};
 }
 
 describe("LoudnessTarget end-to-end", () => {
@@ -288,19 +300,7 @@ describe("LoudnessTarget end-to-end", () => {
 			`[test:TP-ceiling] outputTruePeakDb=${truePeakDb.toFixed(3)} target=${targetTp} sourcePeakDb=${sourcePeakDb.toFixed(3)} bestB=${bestB.toFixed(3)} peakWithBOnly=${peakWithBOnly.toFixed(3)}`,
 		);
 
-		// (a) Output true peak respects the cap (small smoothing-induced
-		//     overshoot allowance).
-		// Phase 4 (2026-05-10): with iteration also running at 4× rate,
-		// the structural TP-overshoot fix lands. Live observation on
-		// this fixture: outputTruePeakDb ≈ targetTp + 0.03 dB (down from
-		// the pre-Phase-4 ~0.7–0.9 dB overshoot the plan targets in
-		// Phase 6). The Phase-1 widening (+0.7 dB) tightens back to
-		// +0.5 dB. Phase 6 adds a dedicated regression test that
-		// asserts overshoot < 0.15 dB on a TP-rich synthetic fixture
-		// (tightened from 0.3 by plan-loudness-target-tp-iteration);
-		// this test continues to guard the looser +0.5 dB envelope on
-		// the existing ramp-fixture path.
-		expect(truePeakDb).toBeLessThan(targetTp + 0.5);
+		expect(truePeakDb).toBeLessThanOrEqual(targetTp + 1e-5);
 
 		// (b) Without the upper segment's `peakGainDb` cap, peaks would
 		//     have exceeded targetTp by a meaningful margin. This guards
@@ -317,9 +317,7 @@ describe("LoudnessTarget end-to-end", () => {
 		// did work" condition is still meaningful — `sourcePeakDb + B`
 		// must exceed `targetTp` so the cap is non-trivial — but the
 		// `+0.5` headroom margin reflected the prior geometry's
-		// over-correction and no longer applies. The cross-test "TP-
-		// overshoot regression" (in the heavy file) guards the tighter
-		// `peakTolerance + 0.05 dB` upper bound on output TP.
+		// over-correction and no longer applies.
 		expect(peakWithBOnly).toBeGreaterThan(targetTp);
 	});
 
@@ -375,12 +373,8 @@ describe("LoudnessTarget end-to-end", () => {
 		expect(result.winningLimitDb ?? 0).toBeCloseTo(limitDb, 6);
 	});
 
-	it("converges with no floor (uniform B below pivot)", async () => {
+	it("no-floor lift stays at or under targetLufs", async () => {
 		const input = makeSynthetic(TEST_FRAMES, TEST_SAMPLE_RATE, 23);
-		// Same anchor concession as test 1 — pivot above source peak so
-		// the no-floor branch (uniform B below pivot) actually drives
-		// LUFS via B alone. With pivot below source peak the upper
-		// segment dominates and the LUFS test stalls.
 		const output = await runStream([input], TEST_SAMPLE_RATE, {
 			targetLufs: -16,
 			pivot: -15,
@@ -395,13 +389,46 @@ describe("LoudnessTarget end-to-end", () => {
 
 		console.log(`[test:no-floor] outputLufs=${lufs.toFixed(3)} target=-16`);
 
-		// `plan-loudness-target-deterministic` 2026-05-13 revert: the
-		// 2D `iterateForTargets` loop is restored (analytical solver +
-		// bounded secant correction were both reverted; the histogram
-		// predictor is now a seed for iteration's initial `B`, not the
-		// final answer). Iteration's secant + proportional feedback
-		// drive `(B, peakGainDb)` to within the bag's
-		// `0.5 iteration tolerance + 0.1 residual headroom envelope`.
-		expect(Math.abs(lufs - -16)).toBeLessThan(0.6);
+		expect(lufs).toBeLessThanOrEqual(-16);
+	});
+
+	it("neverExpand downward ramp holds the never-exceed box and assigns peakGainDb from B", async () => {
+		const input = makeRamp(TEST_FRAMES_LRA, TEST_SAMPLE_RATE, 0.001, 0.5, 13);
+		const targetLufs = -21;
+		const targetTp = -1;
+		const tolerance = 0.5;
+		const output = await runStream([input], TEST_SAMPLE_RATE, {
+			targetLufs,
+			targetTp,
+			neverExpand: true,
+			tolerance,
+		});
+		const outputChannel = output.channels[0];
+
+		expect(outputChannel).toBeDefined();
+		expect(outputChannel?.length).toBe(input.length);
+
+		const measuredChannels = [outputChannel ?? new Float32Array(0)];
+		const outputLufs = measureLufs(measuredChannels, TEST_SAMPLE_RATE);
+		const outputTruePeakDb = measureTruePeak(measuredChannels, TEST_SAMPLE_RATE);
+		const { winningB, winningLimitDb, winningPeakGainDb } = output;
+
+		console.log(
+			`[test:never-expand] outputLufs=${outputLufs.toFixed(3)} target=${targetLufs} ` +
+				`outputTruePeakDb=${outputTruePeakDb.toFixed(3)} targetTp=${targetTp} ` +
+				`winningB=${winningB?.toFixed(4) ?? "?"} winningLimitDb=${winningLimitDb?.toFixed(4) ?? "?"} ` +
+				`winningPeakGainDb=${winningPeakGainDb?.toFixed(4) ?? "?"}`,
+		);
+
+		expect(winningB).not.toBeNull();
+		expect(winningLimitDb).not.toBeNull();
+		expect(winningPeakGainDb).not.toBeNull();
+
+		if (winningB !== null && winningLimitDb !== null && winningB <= targetTp - winningLimitDb) {
+			expect(winningPeakGainDb).toBe(winningB);
+		}
+
+		expect(outputTruePeakDb).toBeLessThanOrEqual(targetTp);
+		expect(Math.abs(outputLufs + 21)).toBeLessThan(tolerance);
 	});
 });

@@ -218,7 +218,7 @@ Measure integrated loudness, true peak, and loudness range per EBU R128, plus an
 
 ### Loudness Target
 
-Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope with a peak-respecting two-stage smoother. The upper-arm peak anchor jointly iterates with the body gain to land both LUFS and true-peak targets in one envelope.
+Peak-aware content-adaptive curve fitting (LUFS, true-peak) via a level-indexed gain envelope. The solver iterates body gain B and assigns peakGainDb from the true-peak ceiling and optional neverExpand.
 
 [Source](./src/transforms/loudness-target/index.ts)
 
@@ -233,7 +233,7 @@ Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single co
 | `targetTp`        | number (-24 to 0), optional  | —       | True-peak target (dBTP). Default: source true peak (peaks unchanged).                                                                          |
 | `smoothing`       | number (0.01 to 200)         | `1`     | Peak-respecting envelope time constant (ms).                                                                                                   |
 | `tolerance`       | number (0 to 6)              | `0.5`   | Iteration exit threshold (LUFS dB).                                                                                                            |
-| `peakTolerance`   | number (0 to 6)              | `0.1`   | One-sided iteration exit threshold for output true-peak overshoot (dBTP; ceiling — undershoot ignored).                                        |
+| `neverExpand`     | boolean                      | `false` | upper arm flat or compressive (peakGainDb ≤ B)                                                                                                 |
 
 ### Normalize
 
