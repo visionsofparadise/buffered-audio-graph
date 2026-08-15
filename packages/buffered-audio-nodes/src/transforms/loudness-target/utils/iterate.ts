@@ -20,8 +20,6 @@ import {
 import { buildBaseRateDetectionCache } from "./source-caches";
 import type { DetectionHistogram } from "./measurement";
 
-export { BOOST_LOWER_BOUND, BOOST_UPPER_BOUND };
-
 const LIMIT_EPSILON_DB = 0.01;
 
 const DEFAULT_MAX_ATTEMPTS = 10;
