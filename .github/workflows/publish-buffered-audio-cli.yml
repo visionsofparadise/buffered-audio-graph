@@ -50,7 +50,7 @@ jobs:
 
          - name: Build (topo-ordered)
            if: steps.check.outputs.skip == 'false'
-           run: npx turbo build --filter=@buffered-audio/cli
+           run: npx turbo build --filter=@buffered-audio/cli --filter=@buffered-audio/nodes
 
          - name: Run integration tests
            if: steps.check.outputs.skip == 'false'
