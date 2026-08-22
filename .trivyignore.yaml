@@ -1,13 +1,1 @@
-vulnerabilities:
-   - id: CVE-2026-14257
-     purls:
-        - pkg:npm/brace-expansion@5.0.7
-     statement: |
-        brace-expansion 5.0.7 (DoS) reached only through aws-cdk-lib's bundled
-        minimatch. The lock entry carries inBundle: true, so it ships inside the
-        aws-cdk-lib tarball: npm cannot override, dedupe or hoist it, and the root
-        brace-expansion is already 5.0.8. aws-cdk-lib is pinned at 2.262.1, the
-        latest published. The only fix is an upstream release. Reached at cdk synth
-        time over this repo's own two stacks, never at runtime and never over
-        untrusted input.
-     expired_at: 2026-10-27
+vulnerabilities: []
