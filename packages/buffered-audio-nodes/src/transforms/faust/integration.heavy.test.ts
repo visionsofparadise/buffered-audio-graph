@@ -47,7 +47,6 @@ describeIfAddon("faust", () => {
 
 	it("has static metadata and schema defaults", () => {
 		expect(FaustNode.nodeName).toBe("Faust");
-		expect(FaustNode.schema).toBe(FaustNode.schema);
 		const node = faust({ code: "process = _;" });
 		expect(node.properties.code).toBe("process = _;");
 		expect(node.properties.faustAddonPath).toBe("");
@@ -78,15 +77,19 @@ describeIfAddon("faust", () => {
 	});
 
 	it("compiles and runs a stdlib lowpass", async () => {
+		const input = ramp(128);
 		const { blocks } = await runFaust(
 			faust({
 				code: `import("stdfaust.lib"); process = fi.lowpass(1, 1000);`,
 				faustAddonPath: binaries.faustAddon,
 			}),
-			[makeBlock([ramp(128)])],
+			[makeBlock([input])],
 		);
+		const output = channelSamples(blocks, 0);
 
-		expect(channelSamples(blocks, 0).length).toBe(128);
+		expect(output.length).toBe(128);
+		expect(output.some((sample) => sample !== 0)).toBe(true);
+		expect(maxError(output, input)).toBeGreaterThan(1e-3);
 	});
 
 	it("mono process = _ <: _,_; yields 2-channel blocks", async () => {
@@ -137,5 +140,34 @@ describeIfAddon("faust", () => {
 		const { blocks: split } = await runFaust(node(), [makeBlock([first], 0), makeBlock([second], 1024)]);
 
 		expect(maxError(channelSamples(oneBlock, 0), channelSamples(split, 0))).toBeLessThan(1e-6);
+	});
+
+	it("preserves per-channel IIR state across blocks on both channels", async () => {
+		const code = `import("stdfaust.lib"); process = fi.lowpass(1, 1000);`;
+		const left = ramp(2048, 0.8);
+		const right = new Float32Array(2048);
+		for (let index = 0; index < right.length; index++) {
+			right[index] = index < 1024 ? 0.6 : -0.6;
+		}
+		const node = () => faust({ code, faustAddonPath: binaries.faustAddon });
+
+		const { blocks: oneBlock } = await runFaust(node(), [makeBlock([left, right])]);
+		const { blocks: split } = await runFaust(node(), [
+			makeBlock([left.slice(0, 1024), right.slice(0, 1024)], 0),
+			makeBlock([left.slice(1024), right.slice(1024)], 1024),
+		]);
+
+		expect(maxError(channelSamples(oneBlock, 0), channelSamples(oneBlock, 1))).toBeGreaterThan(0.1);
+		expect(maxError(channelSamples(oneBlock, 0), channelSamples(split, 0))).toBeLessThan(1e-6);
+		expect(maxError(channelSamples(oneBlock, 1), channelSamples(split, 1))).toBeLessThan(1e-6);
+	});
+
+	it("rejects a channel count that changes after dispatch resolves", async () => {
+		await expect(
+			runFaust(faust({ code: "process = _;", faustAddonPath: binaries.faustAddon }), [
+				makeBlock([ramp(8), ramp(8)], 0),
+				makeBlock([ramp(8)], 8),
+			]),
+		).rejects.toThrow("Faust resolved its dispatch against 2 channels; this block has 1 channels");
 	});
 });

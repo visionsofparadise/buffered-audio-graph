@@ -26,6 +26,7 @@ export class FaustStream extends UnbufferedTransformStream<FaustNode> {
 	private numOutputs = 0;
 	private sampleRate = 0;
 	private dispatch?: FaustDispatch;
+	private dispatchChannels = 0;
 
 	override _setup(context: StreamSetupContext): void {
 		const addon = loadFaustAddon(this.properties.faustAddonPath);
@@ -55,6 +56,7 @@ export class FaustStream extends UnbufferedTransformStream<FaustNode> {
 
 			dispatch = resolveFaustDispatch(this.numInputs, this.numOutputs, channels);
 			this.dispatch = dispatch;
+			this.dispatchChannels = channels;
 
 			const instanceCount = dispatch.mode === "single" ? 1 : channels;
 
@@ -71,6 +73,10 @@ export class FaustStream extends UnbufferedTransformStream<FaustNode> {
 				mode: dispatch.mode,
 				channels,
 			});
+		} else if (channels !== this.dispatchChannels) {
+			throw new Error(
+				`Faust resolved its dispatch against ${this.dispatchChannels} channels; this block has ${channels} channels`,
+			);
 		}
 
 		const outputs = Array.from({ length: dispatch.outputChannels }, () => new Float32Array(frames));
