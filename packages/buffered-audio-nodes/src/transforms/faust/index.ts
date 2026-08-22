@@ -106,13 +106,15 @@ export class FaustStream extends UnbufferedTransformStream<FaustNode> {
 	}
 
 	override _destroy(): void {
-		for (const instance of this.instances) {
-			instance.dispose();
+		try {
+			for (const instance of this.instances) {
+				instance.dispose();
+			}
+		} finally {
+			this.instances = [];
+			this.factory?.dispose();
+			this.factory = undefined;
 		}
-
-		this.instances = [];
-		this.factory?.dispose();
-		this.factory = undefined;
 	}
 }
 
