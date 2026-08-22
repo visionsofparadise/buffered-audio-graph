@@ -46,6 +46,7 @@ export {
 export { gain, GainNode, GainStream, type GainProperties } from "./transforms/gain";
 export { pan, PanNode, PanStream, type PanProperties } from "./transforms/pan";
 
+export { faust, FaustNode, FaustStream, type FaustProperties } from "./transforms/faust";
 export { ffmpeg, FfmpegNode, FfmpegStream, type FfmpegProperties } from "./transforms/ffmpeg";
 
 export {

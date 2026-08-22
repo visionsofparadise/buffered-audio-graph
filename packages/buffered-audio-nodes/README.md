@@ -145,6 +145,17 @@ Duplicate a mono signal into multiple identical output channels; requires exactl
 | ---------- | --------------- | ------- | -------------------- |
 | `channels` | number (2 to 8) | `2`     | Output channel count |
 
+### Faust
+
+Compile Faust DSP source and stream audio through JIT instances
+
+[Source](./src/transforms/faust/index.ts)
+
+| Parameter        | Type   | Default | Description                                                                                                        |
+| ---------------- | ------ | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `code`           | string | —       | Faust DSP source; import("stdfaust.lib") is available                                                              |
+| `faustAddonPath` | string | `""`    | Faust native addon — libfaust + LLVM JIT Download: [faust-addon](https://github.com/visionsofparadise/faust-addon) |
+
 ### FFmpeg
 
 Process audio through FFmpeg filters

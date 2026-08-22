@@ -46,3 +46,16 @@ export function createFftwAddonPathField() {
 		})
 		.describe("FFTW native addon — CPU FFT acceleration");
 }
+
+export function createFaustAddonPathField() {
+	return z
+		.string()
+		.default("")
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "faust-addon",
+			download: "https://github.com/visionsofparadise/faust-addon",
+		})
+		.describe("Faust native addon — libfaust + LLVM JIT");
+}
