@@ -1,6 +1,6 @@
 {
 	"name": "@buffered-audio/cli",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"type": "module",
 	"bin": {
 		"bag": "./dist/cli.js"
@@ -34,7 +34,7 @@
 		"vitest": "^3.0.0"
 	},
 	"dependencies": {
-		"@buffered-audio/core": "0.12.0",
+		"@buffered-audio/core": "0.12.1",
 		"commander": "^14.0.3",
 		"pacote": "^22.0.0",
 		"tsx": "^4.21.0"
