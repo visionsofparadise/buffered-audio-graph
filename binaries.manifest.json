@@ -1,5 +1,5 @@
 {
-	"version": 6,
+	"version": 7,
 	"bucket": "buffered-audio-binaries-345340320424",
 	"region": "us-east-1",
 	"assets": [
@@ -134,36 +134,36 @@
 			"platform": "darwin",
 			"arch": "arm64",
 			"filename": "faust-addon-darwin-arm64.node",
-			"sha256": "3141bbae76099f5411e80b6fe37f77248b0beb720603f347ad5e0b564aac402e",
-			"size": 121154608,
-			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.0"
+			"sha256": "580352bda3868896d2829d0b38735ab8398d864b9befcbc4907a092e13d1e2ad",
+			"size": 121154992,
+			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.2"
 		},
 		{
 			"key": "faust-addon",
 			"platform": "darwin",
 			"arch": "x64",
 			"filename": "faust-addon-darwin-x64.node",
-			"sha256": "d8f1f849aebde8b4e4733eee3ca35f4d08c158a214b040f0471e0ef258505629",
-			"size": 141503112,
-			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.0"
+			"sha256": "904c6e96d780d734738780842456653ef0ba1a94d5e24a4995206bdd8a635f66",
+			"size": 141503488,
+			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.2"
 		},
 		{
 			"key": "faust-addon",
 			"platform": "linux",
 			"arch": "x64",
 			"filename": "faust-addon-linux-x64.node",
-			"sha256": "47379877f1165194c5f77615f811b77753995bfee8f3048d52b173a12d55c18f",
-			"size": 121257136,
-			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.0"
+			"sha256": "5c49ae5a1e4ccad565b5adf3732f4ceea3533ad61483b4f596697961f1ba39a6",
+			"size": 121257224,
+			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.2"
 		},
 		{
 			"key": "faust-addon",
 			"platform": "win32",
 			"arch": "x64",
 			"filename": "faust-addon-win32-x64.node",
-			"sha256": "0e46d19ef89606187e7ab5beca6cd3d83d6bad80162f8e8e5989c2457cd809ef",
-			"size": 39109632,
-			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.0"
+			"sha256": "23345520943b8a2232de52f9fae199578984eec5695d15db409ae9b95d766160",
+			"size": 39110656,
+			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.2"
 		},
 		{
 			"key": "ffmpeg",
