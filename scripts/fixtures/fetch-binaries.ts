@@ -20,6 +20,7 @@ const KEY_TO_FIXTURE_FILENAME: Record<string, string> = {
 	Kim_Vocal_2: "Kim_Vocal_2.onnx",
 	htdemucs: "htdemucs.onnx",
 	dfn3: "dfn3.onnx",
+	"silero-vad": "silero-vad.onnx",
 };
 
 const RUNTIME_LIB_RENAME: Record<string, string> = {

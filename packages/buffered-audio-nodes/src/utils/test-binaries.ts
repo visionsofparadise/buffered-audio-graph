@@ -21,6 +21,7 @@ export const binaries = {
 	htdemucs: resolve(binariesDir, "htdemucs.onnx"),
 	htdemucsData: resolve(binariesDir, "htdemucs.onnx.data"),
 	dfn3: resolve(binariesDir, "dfn3.onnx"),
+	sileroVad: resolve(binariesDir, "silero-vad.onnx"),
 } as const;
 
 export const audio = {

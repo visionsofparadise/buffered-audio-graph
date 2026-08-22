@@ -1,5 +1,5 @@
 {
-	"version": 4,
+	"version": 5,
 	"bucket": "buffered-audio-binaries-345340320424",
 	"region": "us-east-1",
 	"assets": [
@@ -245,6 +245,15 @@
 			"sha256": "a0bbc5a86764be4d7e3998403b87f5c820c1d8ef29c529b68b482a089b63a6f1",
 			"size": 473088,
 			"source": "https://github.com/visionsofparadise/onnx-runtime-addon/releases/tag/v1.1.0"
+		},
+		{
+			"key": "silero-vad",
+			"platform": "all",
+			"arch": "all",
+			"filename": "silero-vad.onnx",
+			"sha256": "2b1d0684116297297e225c5cf49baa9088d109a4cc84c8efe2d8d85e3b709fdf",
+			"size": 1289607,
+			"source": "https://github.com/snakers4/silero-vad"
 		},
 		{
 			"key": "vkfft-addon",
