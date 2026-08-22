@@ -1,7 +1,7 @@
 import { UnbufferedTransformStream, TransformNode, type Block } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
-import { downmixToMono } from "./utils/mix";
+import { downmixToMono } from "../../utils/mix";
 
 const schema = z.object({});
 

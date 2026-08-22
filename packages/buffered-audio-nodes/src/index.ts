@@ -78,6 +78,7 @@ export {
 export { dtln, DtlnNode, DtlnStream, type DtlnProperties } from "./transforms/dtln";
 export { htdemucs, HtdemucsNode, HtdemucsStream, type HtdemucsProperties, type StemGains } from "./transforms/htdemucs";
 export { kimVocal2, KimVocal2Node, KimVocal2Stream, type KimVocal2Properties } from "./transforms/kim-vocal-2";
+export { sileroVad, SileroVadNode, SileroVadStream, type SileroVadProperties } from "./transforms/silero-vad";
 export { vst3, Vst3Node, Vst3Stream, type Vst3Properties } from "./transforms/vst3";
 
 export { chain, type Chain } from "./composites/chain";

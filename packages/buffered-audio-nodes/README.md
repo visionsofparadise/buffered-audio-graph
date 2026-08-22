@@ -305,6 +305,25 @@ Reverse audio playback direction
 
 [Source](./src/transforms/reverse/index.ts)
 
+### Silero VAD (Voice Gate)
+
+Attenuate non-speech regions using Silero VAD speech detection
+
+[Source](./src/transforms/silero-vad/index.ts)
+
+| Parameter            | Type               | Default | Description                                                                                               |
+| -------------------- | ------------------ | ------- | --------------------------------------------------------------------------------------------------------- |
+| `modelPath`          | string             | `""`    | Silero VAD model, 16 kHz sr-frozen (.onnx) Download: [silero-vad](https://github.com/snakers4/silero-vad) |
+| `ffmpegPath`         | string             | `""`    | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html)                 |
+| `onnxAddonPath`      | string             | `""`    | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
+| `threshold`          | number (0 to 1)    | `0.5`   | Speech probability above which the gate opens                                                             |
+| `minSpeechDuration`  | number (min 0)     | `0.25`  | Shortest speech region kept, in seconds                                                                   |
+| `minSilenceDuration` | number (min 0)     | `0.1`   | Silence required before the gate closes, in seconds                                                       |
+| `speechPad`          | number (min 0)     | `0.03`  | Padding kept around each speech region, in seconds                                                        |
+| `attack`             | number (min 0)     | `0.02`  | Fade-in before each speech region, in seconds                                                             |
+| `release`            | number (min 0)     | `0.05`  | Fade-out after each speech region, in seconds                                                             |
+| `attenuation`        | number (-120 to 0) | `-40`   | Gain applied outside speech regions, in dB                                                                |
+
 ### Spectrogram
 
 Generate spectrogram visualization data
@@ -514,6 +533,7 @@ Models are not bundled with the package. Each node's parameter table links to th
 | deepFilterNet3 | dfn3.onnx                          | [SpeechDenoiser](https://github.com/yuyun2000/SpeechDenoiser) |
 | kimVocal2      | Kim_Vocal_2.onnx                   | [uvr_models](https://huggingface.co/seanghay/uvr_models)      |
 | htdemucs       | htdemucs.onnx + htdemucs.onnx.data | [demucs](https://github.com/facebookresearch/demucs)          |
+| sileroVad      | silero-vad.onnx                    | [silero-vad](https://github.com/snakers4/silero-vad)          |
 
 ## License
 
