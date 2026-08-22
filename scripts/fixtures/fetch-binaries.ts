@@ -15,6 +15,7 @@ const KEY_TO_FIXTURE_FILENAME: Record<string, string> = {
 	"onnx-addon": "onnx_addon.node",
 	"vkfft-addon": "vkfft_addon.node",
 	"fftw-addon": "fftw_addon.node",
+	"faust-addon": "faust_addon.node",
 	"dtln-model_1": "model_1.onnx",
 	"dtln-model_2": "model_2.onnx",
 	Kim_Vocal_2: "Kim_Vocal_2.onnx",

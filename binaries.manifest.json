@@ -1,5 +1,5 @@
 {
-	"version": 5,
+	"version": 6,
 	"bucket": "buffered-audio-binaries-345340320424",
 	"region": "us-east-1",
 	"assets": [
@@ -182,6 +182,42 @@
 			"sha256": "97f4cfc0d9970970ba284bbe732812028d90fb07d6eed4dd03d025ebe12158ff",
 			"size": 107856896,
 			"source": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-04-18-13-04"
+		},
+		{
+			"key": "faust-addon",
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "faust-addon-darwin-arm64.node",
+			"sha256": "3141bbae76099f5411e80b6fe37f77248b0beb720603f347ad5e0b564aac402e",
+			"size": 121154608,
+			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.0"
+		},
+		{
+			"key": "faust-addon",
+			"platform": "darwin",
+			"arch": "x64",
+			"filename": "faust-addon-darwin-x64.node",
+			"sha256": "d8f1f849aebde8b4e4733eee3ca35f4d08c158a214b040f0471e0ef258505629",
+			"size": 141503112,
+			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.0"
+		},
+		{
+			"key": "faust-addon",
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "faust-addon-linux-x64.node",
+			"sha256": "47379877f1165194c5f77615f811b77753995bfee8f3048d52b173a12d55c18f",
+			"size": 121257136,
+			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.0"
+		},
+		{
+			"key": "faust-addon",
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "faust-addon-win32-x64.node",
+			"sha256": "0e46d19ef89606187e7ab5beca6cd3d83d6bad80162f8e8e5989c2457cd809ef",
+			"size": 39109632,
+			"source": "https://github.com/visionsofparadise/faust-addon/releases/tag/v1.0.0"
 		},
 		{
 			"key": "fftw-addon",
