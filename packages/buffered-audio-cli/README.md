@@ -37,3 +37,7 @@ Each distinct `(packageName, packageVersion)` pair pinned by the bag's nodes res
 4. **On-demand fetch** — `pacote` extracts `name@version` into the cache (install scripts disabled). Skipped under `--no-install`.
 
 Fetch is on by default. `--no-install` turns an unsatisfiable pin into an error naming the package, the pin, and the flag.
+
+## License
+
+[MIT](LICENSE)

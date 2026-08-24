@@ -114,4 +114,4 @@ import { interleave, deinterleaveBuffer, replaceChannel } from "@buffered-audio/
 
 ## License
 
-ISC
+[MIT](LICENSE)

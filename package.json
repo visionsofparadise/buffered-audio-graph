@@ -1,6 +1,7 @@
 {
 	"private": true,
 	"name": "engineering",
+	"license": "MIT",
 	"packageManager": "npm@10.9.3",
 	"type": "module",
 	"workspaces": [

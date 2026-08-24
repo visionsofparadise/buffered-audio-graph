@@ -362,6 +362,6 @@ const definition = validateGraphDefinition(JSON.parse(raw));
 
 ## License
 
-ISC
+[MIT](LICENSE)
 </content>
 </invoke>

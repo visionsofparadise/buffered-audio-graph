@@ -16,7 +16,7 @@
 		"access": "public"
 	},
 	"author": "Matt Cavender",
-	"license": "ISC",
+	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/visionsofparadise/buffered-audio-graph",
