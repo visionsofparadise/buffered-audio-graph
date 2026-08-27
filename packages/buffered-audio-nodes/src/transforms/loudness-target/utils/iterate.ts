@@ -16,6 +16,7 @@ import {
 	BOOST_LOWER_BOUND,
 	BOOST_UPPER_BOUND,
 	predictOutputLufs,
+	truePeakResidual,
 } from "./solve";
 import { buildBaseRateDetectionCache } from "./source-caches";
 import type { DetectionHistogram } from "./measurement";
@@ -261,13 +262,14 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 	try {
 		let residual = 0;
+		let tpCapEffective = tpCap;
 		let currentBoost = clampBoost(
 			bisectBForTargetLufs({
 				sourceLufs,
 				targetLufs,
 				anchors: { floorDb: anchorBase.floorDb, pivotDb: anchorBase.pivotDb, limitDb: currentLimit },
 				histogram,
-				tpCap,
+				tpCap: tpCapEffective,
 				neverExpand,
 				residual: 0,
 				tolerance,
@@ -277,7 +279,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		const attempts: Array<IterationAttempt> = [];
 		let winningAttempt: IterationAttempt | undefined;
 		let bestBoost = currentBoost;
-		let bestPeakGainDb = assignPeakGainDb(currentBoost, tpCap, neverExpand);
+		let bestPeakGainDb = assignPeakGainDb(currentBoost, tpCapEffective, neverExpand);
 		let winnerOutputLufs: number | null = null;
 		let winnerOutputTruePeakDb: number | null = null;
 		let winnerOutputLra: number | null = null;
@@ -288,7 +290,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		for (let attemptIdx = 0; attemptIdx < maxAttempts; attemptIdx++) {
 			const attemptBase = attemptIdx * attemptWork;
 			const tAttempt0 = Date.now();
-			const currentPeakGainDb = assignPeakGainDb(currentBoost, tpCap, neverExpand);
+			const currentPeakGainDb = assignPeakGainDb(currentBoost, tpCapEffective, neverExpand);
 			const anchors: Anchors = {
 				floorDb: anchorBase.floorDb,
 				pivotDb: anchorBase.pivotDb,
@@ -367,12 +369,14 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 			residual = measured.outputLufs - predictedLufs;
 
+			tpCapEffective = tpCap - truePeakResidual(measured.outputTruePeakDb, currentLimit, currentPeakGainDb);
+
 			const residualBoost = bisectBForTargetLufs({
 				sourceLufs,
 				targetLufs,
 				anchors: { floorDb: anchorBase.floorDb, pivotDb: anchorBase.pivotDb, limitDb: currentLimit },
 				histogram,
-				tpCap,
+				tpCap: tpCapEffective,
 				neverExpand,
 				residual,
 				tolerance,
@@ -389,10 +393,13 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 				) &&
 				Math.abs(winningAttempt.lufsErr) < tolerance;
 
+			const boostBoundExhausted =
+				(currentBoost === BOOST_UPPER_BOUND && measured.outputLufs < targetLufs) ||
+				(currentBoost === BOOST_LOWER_BOUND && measured.outputLufs > targetLufs);
+
 			if (
 				legalWinnerWithinTolerance ||
-				(currentBoost === BOOST_UPPER_BOUND && measured.outputLufs < targetLufs) ||
-				(currentBoost === BOOST_LOWER_BOUND && measured.outputLufs > targetLufs) ||
+				(boostBoundExhausted && holdsTruePeak(measured.outputTruePeakDb, effectiveTargetTp)) ||
 				attemptIdx === maxAttempts - 1
 			) {
 				break;

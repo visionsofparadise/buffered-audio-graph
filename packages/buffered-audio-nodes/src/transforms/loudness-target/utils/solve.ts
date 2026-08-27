@@ -49,6 +49,31 @@ export function assignPeakGainDb(boost: number, tpCap: number, neverExpand: bool
 	return neverExpand ? Math.min(boost, tpCap) : tpCap;
 }
 
+/**
+ * Signed true-peak counterpart of the LUFS `residual`: how far the
+ * meter's reading sits from what the curve predicted for the same
+ * attempt.
+ *
+ * The brick-wall maps every detected level at or above the limit anchor
+ * onto `limitDb + peakGainDb`, making that sum the curve's own
+ * prediction of output true peak. The meter disagrees by a
+ * source-specific amount, because the applied envelope is time-varying:
+ * the inter-sample content of `source × envelope` is not bounded by the
+ * detection envelope's own 4x maximum, and float32 envelope storage and
+ * LUT interpolation add their own dust. Subtracting this from the
+ * geometric cap closes the loop; leaving the assignment open-loop makes
+ * a constant offset repeat on every attempt, so the ceiling is
+ * unreachable at any `B` and the solve burns its whole budget.
+ *
+ * @param outputTruePeakDb - Measured true peak of the rendered attempt.
+ * @param limitDb - The attempt's limit anchor.
+ * @param peakGainDb - The gain the attempt assigned at that anchor.
+ * @returns Measured minus predicted true peak, in dB.
+ */
+export function truePeakResidual(outputTruePeakDb: number, limitDb: number, peakGainDb: number): number {
+	return outputTruePeakDb - (limitDb + peakGainDb);
+}
+
 export function bisectBForTargetLufs(args: {
 	sourceLufs: number;
 	targetLufs: number;

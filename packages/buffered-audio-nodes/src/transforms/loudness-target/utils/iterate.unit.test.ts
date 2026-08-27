@@ -352,7 +352,7 @@ describe("iterateForTargets", () => {
 	);
 
 	it(
-		"neverExpand false sets every attempt peakGainDb to effectiveTargetTp − limitDb",
+		"neverExpand false assigns peakGainDb from the ceiling, corrected by the measured offset",
 		async () => {
 			const source = makeSyntheticSource(0xfeed_face, 0.1, 0.4);
 			const metrics = measureSourceMetrics(source);
@@ -382,10 +382,21 @@ describe("iterateForTargets", () => {
 
 			expect(result.attempts.length).toBeGreaterThan(0);
 
-			const assignedPeakGainDb = targetTp - result.bestLimitDb;
+			// The geometric cap is the opening assignment: with
+			// neverExpand off it comes from the ceiling and never from
+			// B. Each later attempt carries the previous attempt's
+			// measured true-peak offset onto that cap, so the assignment
+			// stays ceiling-driven while tracking what the meter reports.
+			const geometricCap = targetTp - result.bestLimitDb;
 
-			for (const attempt of result.attempts) {
-				expect(attempt.peakGainDb).toBe(assignedPeakGainDb);
+			expect(result.attempts[0]?.peakGainDb).toBeCloseTo(geometricCap, 10);
+
+			for (let attemptIdx = 1; attemptIdx < result.attempts.length; attemptIdx++) {
+				const previous = result.attempts[attemptIdx - 1]!;
+				const current = result.attempts[attemptIdx]!;
+				const previousOffset = previous.outputTruePeakDb - (previous.limitDb + previous.peakGainDb);
+
+				expect(current.peakGainDb).toBeCloseTo(geometricCap - previousOffset, 10);
 			}
 		},
 		TEST_TIMEOUT_MS,
@@ -433,6 +444,63 @@ describe("iterateForTargets", () => {
 			expect(Math.abs((result.winnerOutputLufs ?? Infinity) - targetLufs)).toBeLessThan(tolerance);
 			expect(result.winnerOutputTruePeakDb).not.toBeNull();
 			expect(result.winnerOutputTruePeakDb ?? Infinity).toBeLessThanOrEqual(targetTp);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"a true-peak overshoot contracts across attempts until the ceiling is held",
+		async () => {
+			// The regression this guards: assigning peakGainDb from the
+			// geometric cap alone is open-loop on the true-peak axis, so
+			// the offset between the curve's predicted peak and the
+			// meter's repeats identically on every attempt. The ceiling
+			// is then unreachable at any B, no attempt is ever legal,
+			// and the solve burns its whole budget at converged: false.
+			// Feeding the measured offset back makes the overshoot a
+			// contraction that lands inside the grain.
+			const source = makeSyntheticSource(0x7ea_1105, 0.5, 0.4);
+			const metrics = measureSourceMetrics(source);
+			const buffer = await makeBufferFromChannels(source);
+			const histogram = await histogramOf(buffer, 1);
+			// A ceiling-bound geometry: the limit anchor sits below the
+			// true-peak target, so the curve drives peaks onto the
+			// ceiling and the assignment — not B — decides whether the
+			// output holds it.
+			const targetTp = metrics.truePeakDb - 1;
+			const result = await iterateForTargets({
+				buffer,
+				sampleRate: SAMPLE_RATE,
+				anchorBase: { floorDb: -50, pivotDb: -30 },
+				smoothingMs: 1,
+				targetLufs: Math.round((metrics.integratedLufs + 2) * 10) / 10,
+				targetTp,
+				limitAutoDb: metrics.truePeakDb - 2,
+				sourceLufs: metrics.integratedLufs,
+				sourcePeakDb: metrics.truePeakDb,
+				maxAttempts: 10,
+				tolerance: 0.5,
+				neverExpand: false,
+				histogram,
+			});
+
+			trackResultBuffers(result);
+
+			const peakErrs = result.attempts.map((attempt) => attempt.peakErr);
+
+			// The fixture must actually exercise a correction: the
+			// opening assignment overshoots the ceiling by far more than
+			// the grain.
+			expect(peakErrs[0] ?? 0).toBeGreaterThan(0.1);
+
+			// The overshoot is removed rather than repeated. Per-attempt
+			// monotonicity is not the claim — B is still moving over the
+			// early attempts, and a different B is a different envelope
+			// and so a different offset — but the sequence ends inside
+			// the grain, which open-loop it never does.
+			expect(Math.abs(peakErrs.at(-1) ?? Infinity)).toBeLessThanOrEqual(0.01);
+			expect(result.winnerOutputTruePeakDb).not.toBeNull();
+			expect(result.winnerOutputTruePeakDb ?? Infinity).toBeLessThanOrEqual(targetTp + 0.01);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -532,11 +600,9 @@ describe("iterateForTargets", () => {
 			expect(result.attempts.length).toBeGreaterThan(0);
 			expect(result.bestLimitDb).toBe(metrics.truePeakDb);
 
-			const assignedPeakGainDb = metrics.truePeakDb - result.bestLimitDb;
-
-			for (const attempt of result.attempts) {
-				expect(attempt.peakGainDb).toBe(assignedPeakGainDb);
-			}
+			// Omitted targetTp makes the ceiling the source's own true
+			// peak, so the opening assignment is a cap of exactly zero.
+			expect(result.attempts[0]?.peakGainDb).toBe(0);
 
 			expect(result.winnerOutputTruePeakDb).not.toBeNull();
 			expect(result.winnerOutputTruePeakDb ?? Infinity).toBeLessThanOrEqual(metrics.truePeakDb + 0.01);
