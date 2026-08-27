@@ -23,7 +23,7 @@ import type { DetectionHistogram } from "./measurement";
 
 const LIMIT_EPSILON_DB = 0.01;
 
-const TRUE_PEAK_HOLD_EPSILON_DB = 0.01;
+const CHECK_GRAIN_DB = 0.01;
 
 const DEFAULT_MAX_ATTEMPTS = 10;
 const DEFAULT_TOLERANCE = 0.5;
@@ -105,8 +105,26 @@ export interface IterateForTargetsArgs {
 	progress?: (done: number, total: number) => void;
 }
 
-function holdsTruePeak(outputTruePeakDb: number, effectiveTargetTp: number): boolean {
-	return outputTruePeakDb <= effectiveTargetTp + TRUE_PEAK_HOLD_EPSILON_DB;
+/**
+ * Round a dB error onto the node's 0.01 dB grain before it is judged
+ * against a target or a tolerance.
+ *
+ * Measurements, residuals, and winner ranking all stay at full float
+ * precision; the grain exists only so that a check reads an error at
+ * the resolution the node reports and a user sets targets in. Rounding
+ * the signed error rather than the two operands keeps the grain
+ * uniform when a target sits off the grid, which `targetTp` and
+ * `tolerance` both permit.
+ *
+ * @param errorDb - Signed error, in dB.
+ * @returns That error rounded to the nearest 0.01 dB.
+ */
+function grainedDb(errorDb: number): number {
+	return Math.round(errorDb / CHECK_GRAIN_DB) * CHECK_GRAIN_DB;
+}
+
+export function holdsTruePeak(outputTruePeakDb: number, effectiveTargetTp: number): boolean {
+	return grainedDb(outputTruePeakDb - effectiveTargetTp) <= 0;
 }
 
 function isLegalAttempt(
@@ -115,7 +133,7 @@ function isLegalAttempt(
 	targetLufs: number,
 	effectiveTargetTp: number,
 ): boolean {
-	return outputLufs <= targetLufs && holdsTruePeak(outputTruePeakDb, effectiveTargetTp);
+	return grainedDb(outputLufs - targetLufs) <= 0 && holdsTruePeak(outputTruePeakDb, effectiveTargetTp);
 }
 
 export function attemptBeatsWinner(
@@ -391,7 +409,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 					targetLufs,
 					effectiveTargetTp,
 				) &&
-				Math.abs(winningAttempt.lufsErr) < tolerance;
+				Math.abs(grainedDb(winningAttempt.lufsErr)) < tolerance;
 
 			const boostBoundExhausted =
 				(currentBoost === BOOST_UPPER_BOUND && measured.outputLufs < targetLufs) ||
@@ -411,7 +429,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 		const converged =
 			winningAttempt !== undefined &&
 			isLegalAttempt(winningAttempt.outputLufs, winningAttempt.outputTruePeakDb, targetLufs, effectiveTargetTp) &&
-			Math.abs(winningAttempt.lufsErr) < tolerance;
+			Math.abs(grainedDb(winningAttempt.lufsErr)) < tolerance;
 
 		return {
 			bestSmoothedEnvelopeBuffer: winningRef,

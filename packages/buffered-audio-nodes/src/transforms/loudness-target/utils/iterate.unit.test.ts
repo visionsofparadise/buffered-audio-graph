@@ -6,6 +6,7 @@ import { windowSamplesFromMs } from "./envelope";
 import {
 	attemptBeatsWinner,
 	clampLimit,
+	holdsTruePeak,
 	iterateForTargets as iterateForTargetsInTemporaryDirectory,
 	type IterateForTargetsArgs,
 	type IterationAttempt,
@@ -500,7 +501,7 @@ describe("iterateForTargets", () => {
 			// the grain, which open-loop it never does.
 			expect(Math.abs(peakErrs.at(-1) ?? Infinity)).toBeLessThanOrEqual(0.01);
 			expect(result.winnerOutputTruePeakDb).not.toBeNull();
-			expect(result.winnerOutputTruePeakDb ?? Infinity).toBeLessThanOrEqual(targetTp + 0.01);
+			expect(holdsTruePeak(result.winnerOutputTruePeakDb ?? Infinity, targetTp)).toBe(true);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -521,6 +522,23 @@ describe("iterateForTargets", () => {
 
 		expect(attemptBeatsWinner(legalFarther, illegalCloser, targetLufs, effectiveTargetTp)).toBe(true);
 		expect(attemptBeatsWinner(illegalCloser, legalFarther, targetLufs, effectiveTargetTp)).toBe(false);
+	});
+
+	it("the 0.01 dB grain rounds an error before checking it, rather than widening the ceiling", () => {
+		const effectiveTargetTp = -1;
+
+		// Inside half a grain: rounds to 0.00 and holds.
+		expect(holdsTruePeak(-0.999_61, effectiveTargetTp)).toBe(true);
+		expect(holdsTruePeak(-0.996, effectiveTargetTp)).toBe(true);
+
+		// Past half a grain: rounds to 0.01 and no longer holds. Under
+		// the superseded epsilon these sat inside a one-sided slack band
+		// of nearly a full centibel.
+		expect(holdsTruePeak(-0.994, effectiveTargetTp)).toBe(false);
+		expect(holdsTruePeak(-0.9905, effectiveTargetTp)).toBe(false);
+
+		// Under the ceiling holds at any depth.
+		expect(holdsTruePeak(-1.5, effectiveTargetTp)).toBe(true);
 	});
 
 	it("a 0.01 dB true-peak grain still holds the ceiling", () => {
@@ -605,7 +623,7 @@ describe("iterateForTargets", () => {
 			expect(result.attempts[0]?.peakGainDb).toBe(0);
 
 			expect(result.winnerOutputTruePeakDb).not.toBeNull();
-			expect(result.winnerOutputTruePeakDb ?? Infinity).toBeLessThanOrEqual(metrics.truePeakDb + 0.01);
+			expect(holdsTruePeak(result.winnerOutputTruePeakDb ?? Infinity, metrics.truePeakDb)).toBe(true);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -643,7 +661,7 @@ describe("iterateForTargets", () => {
 			expect(result.winnerOutputLufs).not.toBeNull();
 			expect(result.winnerOutputLufs ?? -Infinity).toBeGreaterThan(targetLufs);
 
-			const tpHolding = result.attempts.filter((attempt) => attempt.outputTruePeakDb <= targetTp + 0.01);
+			const tpHolding = result.attempts.filter((attempt) => holdsTruePeak(attempt.outputTruePeakDb, targetTp));
 			const lowestLufs = Math.min(...tpHolding.map((attempt) => attempt.outputLufs));
 
 			expect(result.winnerOutputLufs).toBe(lowestLufs);
