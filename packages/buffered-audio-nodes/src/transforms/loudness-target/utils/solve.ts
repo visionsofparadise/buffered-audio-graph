@@ -128,12 +128,6 @@ export function bisectBForTargetLufs(args: {
 			bestAbsErr = Math.abs(midErr);
 		}
 
-		if (Math.abs(midErr) < tolerance) {
-			bestB = mid;
-
-			break;
-		}
-
 		if (!Number.isFinite(midErr) || Math.sign(midErr) === Math.sign(workingLowerErr)) {
 			lower = mid;
 			workingLowerErr = midErr;

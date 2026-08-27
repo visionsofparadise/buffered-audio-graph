@@ -127,7 +127,7 @@ export function holdsTruePeak(outputTruePeakDb: number, effectiveTargetTp: numbe
 	return grainedDb(outputTruePeakDb - effectiveTargetTp) <= 0;
 }
 
-function isLegalAttempt(
+export function isLegalAttempt(
 	outputLufs: number,
 	outputTruePeakDb: number,
 	targetLufs: number,

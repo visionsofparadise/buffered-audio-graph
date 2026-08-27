@@ -255,6 +255,43 @@ describe("bisectBForTargetLufs", () => {
 		expect(Math.abs(predictedAtLanding - targetLufs)).toBeLessThan(tolerance);
 	});
 
+	it("lands on the predictor's root, not the first midpoint that falls inside tolerance", () => {
+		// The bracket's first midpoint is B = 0. Put the root just below
+		// it, so B = 0 predicts +0.4 dB — inside a 0.5 dB tolerance, but
+		// on the far side of the target, where `outputLufs <= targetLufs`
+		// makes the attempt illegal. Stopping there returned B = 0 for
+		// every attempt: the render never straddled the target, the
+		// residual never moved the landing, and the solve repeated one
+		// identical attempt until maxAttempts ran out.
+		const histogram = uniformDbRangeHistogram(-30, -6, 100_000);
+		const sourceLufs = -23;
+		const tolerance = 0.5;
+		const targetLufs = sourceLufs - 0.4;
+		const anchorsBase = { floorDb: null, pivotDb: -30, limitDb: -3 };
+		const tpCap = 40;
+		const landingB = bisectBForTargetLufs({
+			sourceLufs,
+			targetLufs,
+			anchors: anchorsBase,
+			histogram,
+			tpCap,
+			neverExpand: true,
+			residual: 0,
+			tolerance,
+		});
+
+		expect(landingB).not.toBe(0);
+		expect(landingB).toBeCloseTo(-0.4, 1);
+
+		const landedAnchors: Anchors = {
+			...anchorsBase,
+			B: landingB,
+			peakGainDb: assignPeakGainDb(landingB, tpCap, true),
+		};
+
+		expect(predictOutputLufs(sourceLufs, landedAnchors, histogram)).toBeCloseTo(targetLufs, 2);
+	});
+
 	it("returns 0 for non-finite sourceLufs", () => {
 		const histogram = uniformDbRangeHistogram(-30, -6, 100_000);
 		const landingB = bisectBForTargetLufs({

@@ -7,6 +7,7 @@ import {
 	attemptBeatsWinner,
 	clampLimit,
 	holdsTruePeak,
+	isLegalAttempt,
 	iterateForTargets as iterateForTargetsInTemporaryDirectory,
 	type IterateForTargetsArgs,
 	type IterationAttempt,
@@ -706,8 +707,19 @@ describe("iterateForTargets", () => {
 			);
 
 			expect(winner).toBeDefined();
-			expect(winner?.outputLufs ?? Infinity).toBeLessThanOrEqual(targetLufs);
-			expect(winner?.outputTruePeakDb ?? Infinity).toBeLessThanOrEqual(targetTp);
+
+			// Legality on the node's own terms. The solve lands within a
+			// thousandth of a dB of target, so which side of it the
+			// winner falls on is grain-level noise, which is exactly what
+			// the grain is for.
+			expect(
+				isLegalAttempt(
+					winner?.outputLufs ?? Infinity,
+					winner?.outputTruePeakDb ?? Infinity,
+					targetLufs,
+					targetTp,
+				),
+			).toBe(true);
 			expect(Math.abs(winner?.lufsErr ?? Infinity)).toBeLessThan(tolerance);
 			expect(Math.abs((winner?.peakGainDb ?? Infinity) - (winner?.boost ?? -Infinity))).toBeLessThan(1e-6);
 		},
