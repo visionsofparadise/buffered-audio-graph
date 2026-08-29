@@ -240,3 +240,55 @@ describe.each(VARIANTS)("SlidingWindow$name Stream (chunked)", (variant) => {
 		expect(result.length).toBe(0);
 	});
 });
+
+/**
+ * A strictly monotone run longer than 2 · halfWidth + 1 keeps the deque at
+ * its maximum occupancy in one direction (no tail pops) and drains it to a
+ * single entry in the other, so both variants together exercise the deque
+ * ring at full occupancy. Regression for the deque ring sized one slot
+ * short (2 · halfWidth + 1): the new index is written before the head is
+ * evicted, so a monotone run overwrote the head in place and the stream
+ * emitted the extreme of the wrong sample.
+ */
+describe.each(VARIANTS)("SlidingWindow$name Stream (strictly monotone runs)", (variant) => {
+	const halfWidths = [1, 12] as const;
+	const chunkSizes = [1, 7, 64] as const;
+
+	function makeRamp(length: number, ascending: boolean): Float32Array {
+		const input = new Float32Array(length);
+
+		for (let frameIdx = 0; frameIdx < length; frameIdx++) {
+			input[frameIdx] = ascending ? frameIdx + 1 : length - frameIdx;
+		}
+
+		return input;
+	}
+
+	for (const halfWidth of halfWidths) {
+		for (const chunkSize of chunkSizes) {
+			const length = 8 * (2 * halfWidth + 1);
+
+			it(`strictly decreasing ramp matches whole-array reference (halfWidth ${halfWidth}, chunk ${chunkSize})`, () => {
+				const input = makeRamp(length, false);
+				const reference = variant.wholeArray(input, halfWidth);
+				const streamed = runStreaming(input, halfWidth, chunkSize, variant);
+
+				expect(streamed.length).toBe(reference.length);
+				for (let frameIdx = 0; frameIdx < reference.length; frameIdx++) {
+					expect(streamed[frameIdx]).toBe(reference[frameIdx]);
+				}
+			});
+
+			it(`strictly increasing ramp matches whole-array reference (halfWidth ${halfWidth}, chunk ${chunkSize})`, () => {
+				const input = makeRamp(length, true);
+				const reference = variant.wholeArray(input, halfWidth);
+				const streamed = runStreaming(input, halfWidth, chunkSize, variant);
+
+				expect(streamed.length).toBe(reference.length);
+				for (let frameIdx = 0; frameIdx < reference.length; frameIdx++) {
+					expect(streamed[frameIdx]).toBe(reference[frameIdx]);
+				}
+			});
+		}
+	}
+});

@@ -59,10 +59,8 @@ class SlidingWindowExtremeStream {
 		this.halfWidth = halfWidth;
 		this.direction = direction;
 
-		const ringCapacity = 2 * halfWidth + 1;
-
-		this.lookAhead = new Float32Array(ringCapacity);
-		this.deque = new Int32Array(ringCapacity);
+		this.lookAhead = new Float32Array(2 * halfWidth + 1);
+		this.deque = new Int32Array(2 * halfWidth + 2);
 	}
 
 	push(chunk: Float32Array, isFinal: boolean): Float32Array {
