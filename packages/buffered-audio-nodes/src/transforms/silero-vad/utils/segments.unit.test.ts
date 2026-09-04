@@ -29,9 +29,7 @@ describe("probabilitiesToSegments", () => {
 	});
 
 	it("closes at silence start after hangover", () => {
-		expect(
-			segmentsOf([0.9, 0.9, 0.9, 0, 0, 0, 0], { minSilenceFrames: 20 }),
-		).toEqual([{ start: 0, end: 30 }]);
+		expect(segmentsOf([0.9, 0.9, 0.9, 0, 0, 0, 0], { minSilenceFrames: 20 })).toEqual([{ start: 0, end: 30 }]);
 	});
 
 	it("holds through the hysteresis band", () => {
@@ -43,9 +41,9 @@ describe("probabilitiesToSegments", () => {
 	});
 
 	it("continues a region when silence is shorter than min silence", () => {
-		expect(
-			segmentsOf([0.9, 0.9, 0.1, 0.9, 0.9, 0.1, 0.1, 0.1], { minSilenceFrames: 20 }),
-		).toEqual([{ start: 0, end: 50 }]);
+		expect(segmentsOf([0.9, 0.9, 0.1, 0.9, 0.9, 0.1, 0.1, 0.1], { minSilenceFrames: 20 })).toEqual([
+			{ start: 0, end: 50 },
+		]);
 	});
 
 	it("closes a trailing region at end-of-audio", () => {
@@ -61,9 +59,7 @@ describe("probabilitiesToSegments", () => {
 	});
 
 	it("floors negativeThreshold at 0.01", () => {
-		expect(
-			segmentsOf([0.2, 0.005, 0, 0], { threshold: 0.1, minSpeechFrames: 5 }),
-		).toEqual([{ start: 0, end: 10 }]);
+		expect(segmentsOf([0.2, 0.005, 0, 0], { threshold: 0.1, minSpeechFrames: 5 })).toEqual([{ start: 0, end: 10 }]);
 	});
 });
 
@@ -111,9 +107,7 @@ describe("padSegments", () => {
 
 describe("mapSegmentsToRate", () => {
 	it("scales by the rate ratio and rounds", () => {
-		expect(mapSegmentsToRate([{ start: 10, end: 20 }], 16000, 48000, 100)).toEqual([
-			{ start: 30, end: 60 },
-		]);
+		expect(mapSegmentsToRate([{ start: 10, end: 20 }], 16000, 48000, 100)).toEqual([{ start: 30, end: 60 }]);
 	});
 
 	it("clamps to [0, totalFrames]", () => {
@@ -136,8 +130,6 @@ describe("mapSegmentsToRate", () => {
 	});
 
 	it("is identity when rates match", () => {
-		expect(mapSegmentsToRate([{ start: 7, end: 21 }], 16000, 16000, 100)).toEqual([
-			{ start: 7, end: 21 },
-		]);
+		expect(mapSegmentsToRate([{ start: 7, end: 21 }], 16000, 16000, 100)).toEqual([{ start: 7, end: 21 }]);
 	});
 });

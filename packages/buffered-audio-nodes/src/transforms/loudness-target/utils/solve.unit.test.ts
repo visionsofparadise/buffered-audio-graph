@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { dbToLinear, linearToDb } from "@buffered-audio/utils";
 import { type Anchors, gainDbAt } from "./curve";
 import type { DetectionHistogram } from "./measurement";
-import { assignPeakGainDb, BOOST_LOWER_BOUND, BOOST_UPPER_BOUND, bisectBForTargetLufs, predictOutputLufs } from "./solve";
+import {
+	assignPeakGainDb,
+	BOOST_LOWER_BOUND,
+	BOOST_UPPER_BOUND,
+	bisectBForTargetLufs,
+	predictOutputLufs,
+} from "./solve";
 
 const baseAnchors = (overrides: Partial<Anchors> = {}): Anchors => ({
 	floorDb: null,
@@ -374,8 +380,8 @@ describe("bisectBForTargetLufs", () => {
 			peakGainDb: assignPeakGainDb(landingWithResidual, tpCap, neverExpand),
 		};
 
-		expect(
-			Math.abs(predictOutputLufs(sourceLufs, landedAnchors, histogram) + residual - targetLufs),
-		).toBeLessThan(tolerance);
+		expect(Math.abs(predictOutputLufs(sourceLufs, landedAnchors, histogram) + residual - targetLufs)).toBeLessThan(
+			tolerance,
+		);
 	});
 });

@@ -92,9 +92,7 @@ describe("runVadWindows", () => {
 
 		const previousTail = calls[0]?.input.subarray(INPUT_FRAMES - CONTEXT_FRAMES);
 
-		expect(Array.from(calls[1]?.input.subarray(0, CONTEXT_FRAMES) ?? [])).toEqual(
-			Array.from(previousTail ?? []),
-		);
+		expect(Array.from(calls[1]?.input.subarray(0, CONTEXT_FRAMES) ?? [])).toEqual(Array.from(previousTail ?? []));
 		expect(Array.from(calls[1]?.input.subarray(CONTEXT_FRAMES) ?? [])).toEqual(
 			Array.from(samples.subarray(WINDOW_FRAMES, WINDOW_FRAMES * 2)),
 		);
@@ -123,9 +121,7 @@ describe("runVadWindows", () => {
 
 		const trailingNew = calls[1]?.input.subarray(CONTEXT_FRAMES) ?? new Float32Array();
 
-		expect(Array.from(trailingNew.subarray(0, leftover))).toEqual(
-			Array.from(samples.subarray(WINDOW_FRAMES)),
-		);
+		expect(Array.from(trailingNew.subarray(0, leftover))).toEqual(Array.from(samples.subarray(WINDOW_FRAMES)));
 		expect(Array.from(trailingNew.subarray(leftover)).every((value) => value === 0)).toBe(true);
 	});
 

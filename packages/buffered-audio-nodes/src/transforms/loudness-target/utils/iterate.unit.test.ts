@@ -324,9 +324,7 @@ describe("iterateForTargets", () => {
 			expect(result.bestSmoothedEnvelopeBuffer.frames).toBe(FRAME_COUNT);
 
 			await result.bestSmoothedEnvelopeBuffer.reset();
-			const envelopeChunk = await result.bestSmoothedEnvelopeBuffer.read(
-				result.bestSmoothedEnvelopeBuffer.frames,
-			);
+			const envelopeChunk = await result.bestSmoothedEnvelopeBuffer.read(result.bestSmoothedEnvelopeBuffer.frames);
 			const envelope = envelopeChunk.samples[0] ?? new Float32Array(0);
 
 			expect(envelope.length).toBe(FRAME_COUNT);
@@ -713,12 +711,7 @@ describe("iterateForTargets", () => {
 			// winner falls on is grain-level noise, which is exactly what
 			// the grain is for.
 			expect(
-				isLegalAttempt(
-					winner?.outputLufs ?? Infinity,
-					winner?.outputTruePeakDb ?? Infinity,
-					targetLufs,
-					targetTp,
-				),
+				isLegalAttempt(winner?.outputLufs ?? Infinity, winner?.outputTruePeakDb ?? Infinity, targetLufs, targetTp),
 			).toBe(true);
 			expect(Math.abs(winner?.lufsErr ?? Infinity)).toBeLessThan(tolerance);
 			expect(Math.abs((winner?.peakGainDb ?? Infinity) - (winner?.boost ?? -Infinity))).toBeLessThan(1e-6);

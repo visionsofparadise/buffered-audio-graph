@@ -78,16 +78,8 @@ export class SileroVadStream extends OnnxTransformStream<SileroVadNode> {
 		const WINDOW_FRAMES = 512;
 		const CHUNK_FRAMES = 44100;
 		const originalRate = setupContext.sampleRate;
-		const {
-			threshold,
-			minSpeechDuration,
-			minSilenceDuration,
-			speechPad,
-			attack,
-			release,
-			attenuation,
-			ffmpegPath,
-		} = this.properties;
+		const { threshold, minSpeechDuration, minSilenceDuration, speechPad, attack, release, attenuation, ffmpegPath } =
+			this.properties;
 
 		await buffered.reset();
 

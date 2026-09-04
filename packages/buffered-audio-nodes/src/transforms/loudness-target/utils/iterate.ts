@@ -171,11 +171,7 @@ export function attemptBeatsWinner(
 	return Math.abs(candidate.lufsErr) < Math.abs(winner.lufsErr);
 }
 
-function nextSearchBoost(
-	attempts: ReadonlyArray<IterationAttempt>,
-	residualBoost: number,
-	targetLufs: number,
-): number {
+function nextSearchBoost(attempts: ReadonlyArray<IterationAttempt>, residualBoost: number, targetLufs: number): number {
 	let highestUnderBoost: number | undefined;
 	let lowestOverBoost: number | undefined;
 
@@ -189,11 +185,7 @@ function nextSearchBoost(
 		}
 	}
 
-	if (
-		highestUnderBoost !== undefined &&
-		lowestOverBoost !== undefined &&
-		highestUnderBoost < lowestOverBoost
-	) {
+	if (highestUnderBoost !== undefined && lowestOverBoost !== undefined && highestUnderBoost < lowestOverBoost) {
 		return 0.5 * (highestUnderBoost + lowestOverBoost);
 	}
 
@@ -403,12 +395,7 @@ export async function iterateForTargets(args: IterateForTargetsArgs): Promise<It
 
 			const legalWinnerWithinTolerance =
 				winningAttempt !== undefined &&
-				isLegalAttempt(
-					winningAttempt.outputLufs,
-					winningAttempt.outputTruePeakDb,
-					targetLufs,
-					effectiveTargetTp,
-				) &&
+				isLegalAttempt(winningAttempt.outputLufs, winningAttempt.outputTruePeakDb, targetLufs, effectiveTargetTp) &&
 				Math.abs(grainedDb(winningAttempt.lufsErr)) < tolerance;
 
 			const boostBoundExhausted =
