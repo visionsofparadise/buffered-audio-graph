@@ -33,10 +33,12 @@ jobs:
          - name: Check (every configured linter, repo-wide)
            run: npm run check
 
+         # .npmrc is excluded: the Enforce step above writes strict-allow-scripts
+         # into it, which is the runner-only half of the allowlist config.
          - name: Fail if check had to fix anything
            run: |
-              if [ -n "$(git status --porcelain)" ]; then
-                 git status --porcelain
-                 git diff
+              if [ -n "$(git status --porcelain -- . ":(exclude).npmrc")" ]; then
+                 git status --porcelain -- . ":(exclude).npmrc"
+                 git diff -- . ":(exclude).npmrc"
                  exit 1
               fi
