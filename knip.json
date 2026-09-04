@@ -50,6 +50,8 @@
 	},
 	"ignoreDependencies": [
 		"prettier",
+		"@commitlint/cli",
+		"check-dependency-version-consistency",
 		"eslint-formatter-unix",
 		"textlint-filter-rule-comments",
 		"textlint-rule-no-dead-link"

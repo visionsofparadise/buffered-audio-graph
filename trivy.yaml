@@ -11,6 +11,7 @@ scan:
       - "**/build"
       - "**/cdk.out"
       - "**/coverage"
+      - "**/.scratch"
       - "**/scratch"
       - "**/.smoke-profile"
       - "**/.git"

@@ -5,7 +5,8 @@
 		"lib": ["ES2020", "DOM", "DOM.Iterable"],
 		"jsx": "react-jsx",
 		"noEmit": true,
-		"declaration": false
+		"declaration": false,
+		"types": ["node", "vite/client"]
 	},
 	"include": ["src", "forge.env.d.ts"],
 	"exclude": [".vite", "node_modules", "out"]

@@ -15,7 +15,8 @@
 		"noUncheckedIndexedAccess": true,
 		"forceConsistentCasingInFileNames": true,
 		"noImplicitOverride": true,
-		"incremental": true
+		"incremental": true,
+		"types": ["node"]
 	},
 	"exclude": ["node_modules", "dist", "out", "build", "coverage", "**/.*"],
 	"include": ["vitest.shared.config.ts"]

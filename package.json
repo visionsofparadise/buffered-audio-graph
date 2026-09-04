@@ -9,8 +9,9 @@
 		"packages/*"
 	],
 	"scripts": {
+		"prepare": "node -e \"import('node:child_process').then(({execSync})=>{try{execSync('git rev-parse --is-inside-work-tree',{stdio:'ignore'});execSync('git config core.hooksPath .githooks')}catch{}})\" && node tools.mjs install",
 		"fix": "concurrently -m 1 --group \"prettier --write .\" \"turbo fix\" \"stylelint \\\"**/*.css\\\" --fix --allow-empty-input --cache\" \"markdownlint-cli2 --fix \\\"**/*.md\\\"\" \"textlint --fix \\\"**/*.md\\\"\"",
-		"check": "concurrently --group \"prettier --check .\" \"turbo check\" \"stylelint \\\"**/*.css\\\" -f unix --allow-empty-input --cache\" \"markdownlint-cli2 \\\"**/*.md\\\"\" \"textlint -f compact \\\"**/*.md\\\"\" \"knip --no-progress\" \"jscpd .\"",
+		"check": "concurrently --group \"prettier --check .\" \"turbo check\" \"stylelint \\\"**/*.css\\\" -f unix --allow-empty-input --cache\" \"markdownlint-cli2 \\\"**/*.md\\\"\" \"textlint -f compact \\\"**/*.md\\\"\" \"knip --no-progress\" \"jscpd .\" \"node tools.mjs run actionlint\"",
 		"start": "turbo start",
 		"unit": "turbo unit",
 		"build": "turbo build",
@@ -20,10 +21,13 @@
 		"fixtures:binaries": "tsx scripts/fixtures/fetch-binaries.ts"
 	},
 	"devDependencies": {
+		"@commitlint/cli": "^21.2.2",
+		"@commitlint/config-conventional": "^21.2.2",
 		"@eslint/compat": "^2.1.0",
 		"@eslint/js": "^9.0.0",
 		"@html-eslint/eslint-plugin": "^0.64.0",
 		"@stylistic/eslint-plugin": "^5.10.0",
+		"check-dependency-version-consistency": "^6.0.0",
 		"concurrently": "^10.0.4",
 		"eslint": "^9.0.0",
 		"eslint-config-prettier": "^10.1.8",

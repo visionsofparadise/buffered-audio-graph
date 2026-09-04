@@ -13,3 +13,4 @@ scratch/
 /apps/desktop/binaries/
 /apps/desktop/.smoke-profile/
 /.binaries-cache/
+.tools/
