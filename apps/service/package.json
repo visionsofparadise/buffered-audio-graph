@@ -5,11 +5,11 @@
 	"private": true,
 	"license": "MIT",
 	"scripts": {
-		"check": "eslint . --fix --cache && tsc --noEmit",
+		"fix": "eslint . --fix --cache",
+		"check": "concurrently --group \"eslint . --no-cache -f unix\" \"tsc --noEmit --pretty false\"",
 		"synth": "cdk synth",
 		"diff": "cdk diff",
-		"deploy": "cdk deploy --require-approval never",
-		"lint": "eslint . --fix --cache"
+		"deploy": "cdk deploy --require-approval never"
 	},
 	"dependencies": {
 		"aws-cdk-lib": "^2.262.1",

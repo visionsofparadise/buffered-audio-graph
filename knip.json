@@ -48,5 +48,10 @@
 			"ignoreDependencies": ["tsx"]
 		}
 	},
-	"ignoreDependencies": ["textlint-filter-rule-comments", "textlint-rule-no-dead-link"]
+	"ignoreDependencies": [
+		"prettier",
+		"eslint-formatter-unix",
+		"textlint-filter-rule-comments",
+		"textlint-rule-no-dead-link"
+	]
 }

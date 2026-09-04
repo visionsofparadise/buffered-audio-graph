@@ -9,10 +9,9 @@
 		"packages/*"
 	],
 	"scripts": {
+		"fix": "concurrently -m 1 --group \"prettier --write .\" \"turbo fix\" \"stylelint \\\"**/*.css\\\" --fix --allow-empty-input --cache\" \"markdownlint-cli2 --fix \\\"**/*.md\\\"\" \"textlint --fix \\\"**/*.md\\\"\"",
+		"check": "concurrently --group \"prettier --check .\" \"turbo check\" \"stylelint \\\"**/*.css\\\" -f unix --allow-empty-input --cache\" \"markdownlint-cli2 \\\"**/*.md\\\"\" \"textlint -f compact \\\"**/*.md\\\"\" \"knip --no-progress\" \"jscpd .\"",
 		"start": "turbo start",
-		"check": "prettier --write . && turbo check && stylelint \"**/*.css\" --fix --allow-empty-input && concurrently \"markdownlint-cli2 \\\"**/*.md\\\"\" \"textlint \\\"**/*.md\\\"\" \"knip --no-progress\" \"jscpd .\"",
-		"lint": "turbo lint",
-		"format": "prettier --write .",
 		"unit": "turbo unit",
 		"build": "turbo build",
 		"binaries:fetch": "tsx scripts/binaries/fetch.ts",
@@ -28,9 +27,10 @@
 		"concurrently": "^10.0.4",
 		"eslint": "^9.0.0",
 		"eslint-config-prettier": "^10.1.8",
+		"eslint-formatter-unix": "^9.0.1",
 		"eslint-import-resolver-typescript": "^4.4.5",
 		"eslint-plugin-barrel-files": "^2.1.0",
-		"eslint-plugin-comment-rules": "^0.1.6",
+		"eslint-plugin-comment-rules": "^0.1.7",
 		"eslint-plugin-import-x": "^4.0.0",
 		"eslint-plugin-jsx-a11y": "^6.10.2",
 		"eslint-plugin-react": "^7.37.0",
@@ -56,9 +56,9 @@
 		"nanoid@3": "3.3.18"
 	},
 	"allowScripts": {
-		"electron": true,
 		"electron-winstaller": true,
 		"esbuild": true,
-		"unrs-resolver": true
+		"unrs-resolver": true,
+		"electron": true
 	}
 }

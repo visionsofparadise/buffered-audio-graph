@@ -3,6 +3,7 @@ dist/
 .tsbuildinfo
 tsconfig.tsbuildinfo
 .eslintcache
+.stylelintcache
 .vite/
 out/
 .turbo/
