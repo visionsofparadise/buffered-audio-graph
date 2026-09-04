@@ -1,6 +1,6 @@
+import { toReadable, type Block, type StreamContext, type StreamSetupContext } from "@buffered-audio/core";
 import { downmixToMono } from "../../../utils/mix";
 import { ffmpeg, FfmpegStream } from "../../ffmpeg";
-import type { Block, StreamContext, StreamSetupContext } from "@buffered-audio/core";
 
 const VAD_SAMPLE_RATE = 16000;
 
@@ -10,7 +10,7 @@ export function createAnalysisStream(options: {
 	readonly streamContext: StreamContext;
 	readonly setupContext: StreamSetupContext;
 }): ReadableStream<Block> {
-	const monoStream = readableFromAsyncIterable(downmixBlocks(options.blocks));
+	const monoStream = toReadable(downmixBlocks(options.blocks));
 
 	if (options.setupContext.sampleRate === VAD_SAMPLE_RATE) return monoStream;
 
@@ -53,25 +53,4 @@ async function* downmixBlocks(blocks: AsyncIterable<Block>): AsyncGenerator<Bloc
 			bitDepth: block.bitDepth,
 		};
 	}
-}
-
-function readableFromAsyncIterable(blocks: AsyncIterable<Block>): ReadableStream<Block> {
-	const iterator = blocks[Symbol.asyncIterator]();
-
-	return new ReadableStream<Block>({
-		pull: async (controller) => {
-			const result = await iterator.next();
-
-			if (result.done) {
-				controller.close();
-
-				return;
-			}
-
-			controller.enqueue(result.value);
-		},
-		cancel: async () => {
-			await iterator.return?.();
-		},
-	});
 }
