@@ -21,7 +21,6 @@ interface GraphMutations {
 	insertNodeOnEdge: (edge: GraphEdge, packageName: string, nodeName: string) => void;
 	toggleBypass: (nodeId: string) => void;
 	resetNodeParameters: (nodeId: string) => void;
-	setGraphName: (name: string) => void;
 	setParameterAtPath: (nodeId: string, path: ReadonlyArray<string | number>, value: unknown) => void;
 	deleteParameterAtPath: (nodeId: string, path: ReadonlyArray<string | number>) => void;
 	addArrayRow: (nodeId: string, paramName: string, defaultItem: Record<string, unknown>) => void;
@@ -302,12 +301,6 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			});
 		}
 
-		function setGraphName(name: string): void {
-			mutate((mutable) => {
-				mutable.name = name;
-			});
-		}
-
 		function setParameterAtPath(nodeId: string, path: ReadonlyArray<string | number>, value: unknown): void {
 			if (path.length === 0) return;
 
@@ -370,7 +363,6 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 			insertNodeOnEdge,
 			toggleBypass,
 			resetNodeParameters,
-			setGraphName,
 			setParameterAtPath,
 			deleteParameterAtPath,
 			addArrayRow,
