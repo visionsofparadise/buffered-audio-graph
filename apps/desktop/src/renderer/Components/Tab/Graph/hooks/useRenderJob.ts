@@ -1,3 +1,4 @@
+import { identify } from "opshot";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AudioProgressPayload } from "../../../../../shared/utilities/emitToRenderer";
 import type { GraphContext } from "../../../../Models/Context";
@@ -80,7 +81,7 @@ export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 				setRenderError(error instanceof Error ? error.message : String(error));
 			}
 		},
-		[context],
+		[identify(context.graphDefinition), identify(context.app), context.main],
 	);
 
 	const abortRender = useCallback(async () => {

@@ -276,19 +276,27 @@ export const GraphCanvas = scope<Props>(({ context }: Props) => {
 
 		const unsubscribeDefinition = subscribe(context.graphDefinition, sync);
 		const unsubscribePositions = subscribe(context.positions, sync);
+		const unsubscribeApp = subscribe(context.app, sync);
 
 		return () => {
 			unsubscribeDefinition();
 			unsubscribePositions();
+			unsubscribeApp();
 		};
 	}, [
 		identify(context.graphDefinition),
 		identify(context.positions),
+		identify(context.app),
 		setNodes,
 		setEdges,
 		attachCallbacks,
 		attachEdgeData,
 	]);
+
+	const rememberedRenderParameters = useMemo(
+		() => ({ ...(context.app.rememberedParameters[context.bagId] ?? EMPTY_REMEMBERED_PARAMETERS) }),
+		[identify(context.app), context.bagId, renderParamsOpen],
+	);
 
 	const handleNodesChange = useCallback(
 		(changes: Array<NodeChange<Node<NodeContainerData>>>) => {
@@ -565,7 +573,7 @@ export const GraphCanvas = scope<Props>(({ context }: Props) => {
 			<RenderParametersModal
 				isOpen={renderParamsOpen}
 				names={renderParamNames}
-				initialValues={context.app.rememberedParameters[context.bagId] ?? EMPTY_REMEMBERED_PARAMETERS}
+				initialValues={rememberedRenderParameters}
 				onCancel={closeRenderParams}
 				onConfirm={confirmRenderParams}
 			/>
