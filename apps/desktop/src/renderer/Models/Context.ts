@@ -3,7 +3,7 @@ import type { Main } from "./Main";
 import type { MainEvents } from "./MainEvents";
 import type { ActiveCommands } from "./State/ActiveCommands";
 import type { AppState } from "./State/App";
-import type { GraphViewState, PositionsState } from "./State/Graph";
+import type { PositionsState } from "./State/Graph";
 import type { GraphDefinitionState } from "./State/GraphDefinition";
 import type { Logger } from "../../shared/Models/Logger";
 import type { QueryClient } from "@tanstack/react-query";
@@ -33,7 +33,6 @@ export interface AppContext {
 export interface GraphContext extends AppContext {
 	readonly graphDefinition: GraphDefinitionState;
 	readonly positions: PositionsState;
-	readonly graphView: GraphViewState;
 	readonly history: History;
 	readonly flushDefinition: () => void;
 	readonly bagPath: string;

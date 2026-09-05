@@ -1,16 +1,11 @@
 import { identify, subscribe } from "opshot";
 import { useEffect, useRef } from "react";
-import { serializeGraphState, type GraphViewState, type PositionsState } from "../Models/State/Graph";
+import { serializeGraphState, type PositionsState } from "../Models/State/Graph";
 import type { AppContext } from "../Models/Context";
 
 const STATE_DEBOUNCE_MS = 800;
 
-export function useGraphState(
-	positions: PositionsState,
-	graphView: GraphViewState,
-	bagId: string,
-	context: AppContext,
-): void {
+export function useGraphState(positions: PositionsState, bagId: string, context: AppContext): void {
 	const { main, userDataPath } = context;
 
 	const pendingDataRef = useRef<string | null>(null);
@@ -36,7 +31,7 @@ export function useGraphState(
 		};
 
 		const schedule = (): void => {
-			pendingDataRef.current = serializeGraphState(positions, graphView);
+			pendingDataRef.current = serializeGraphState(positions);
 
 			if (timerRef.current !== null) {
 				clearTimeout(timerRef.current);
@@ -55,7 +50,6 @@ export function useGraphState(
 		};
 
 		const unsubscribePositions = subscribe(positions, schedule);
-		const unsubscribeGraphView = subscribe(graphView, schedule);
 
 		const handleBeforeUnload = (): void => {
 			flush();
@@ -66,8 +60,7 @@ export function useGraphState(
 		return () => {
 			window.removeEventListener("beforeunload", handleBeforeUnload);
 			unsubscribePositions();
-			unsubscribeGraphView();
 			flush();
 		};
-	}, [identify(positions), identify(graphView), main]);
+	}, [identify(positions), main]);
 }

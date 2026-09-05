@@ -12,7 +12,7 @@ import { GraphCanvas } from "./Canvas";
 import type { AppContext, GraphContext } from "../../../Models/Context";
 import type { GraphMeta } from "../../../Models/History";
 import type { TabEntry } from "../../../Models/State/App";
-import type { GraphState, GraphViewState } from "../../../Models/State/Graph";
+import type { GraphState } from "../../../Models/State/Graph";
 import type { GraphDefinitionState } from "../../../Models/State/GraphDefinition";
 import type { GraphDefinition } from "@buffered-audio/core";
 
@@ -35,15 +35,11 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 
 	const graphDefinition = useMutableState(initialDefinition);
 	const positions = useMutableState({ positions: seededPositions });
-	const graphView = useMutableState<GraphViewState>({
-		inspectedNodeId: initialGraphState.inspectedNodeId,
-		viewport: initialGraphState.viewport,
-	});
 	const [history] = useState(() => createHistory([graphDefinition, positions]));
 
 	const { flushDefinition } = useGraphDefinition(graphDefinition, initialContent, tab.bagPath, context);
 
-	useGraphState(positions, graphView, tab.id, context);
+	useGraphState(positions, tab.id, context);
 
 	useEffect(() => {
 		context.tabNames.names[tab.id] = graphDefinition.name;
@@ -148,24 +144,13 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 			...context,
 			graphDefinition,
 			positions,
-			graphView,
 			history,
 			flushDefinition,
 			bagPath: tab.bagPath,
 			bagId: tab.id,
 			onSave,
 		}),
-		[
-			context,
-			identify(graphDefinition),
-			identify(positions),
-			identify(graphView),
-			history,
-			flushDefinition,
-			tab.bagPath,
-			tab.id,
-			onSave,
-		],
+		[context, identify(graphDefinition), identify(positions), history, flushDefinition, tab.bagPath, tab.id, onSave],
 	);
 
 	return (
