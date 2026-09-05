@@ -1,6 +1,5 @@
 import type { Main } from "../Main";
 import type { GraphDefinition } from "@buffered-audio/core";
-import type { Snapshot } from "opshot";
 
 export type GraphDefinitionState = GraphDefinition;
 
@@ -15,6 +14,6 @@ export async function loadGraphDefinition(
 	return { definition, content };
 }
 
-export function serializeGraphDefinition(definition: Snapshot<GraphDefinitionState>): string {
+export function serializeGraphDefinition(definition: GraphDefinitionState): string {
 	return JSON.stringify(definition, null, 2);
 }

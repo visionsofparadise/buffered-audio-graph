@@ -1,9 +1,9 @@
+import { identify } from "opshot";
 import { useEffect } from "react";
 import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
-import type { State } from "opshot";
 
-export function useBinaryDefaults(app: State<AppState>, main: Main): void {
+export function useBinaryDefaults(app: AppState, main: Main): void {
 	useEffect(() => {
 		let cancelled = false;
 
@@ -11,7 +11,7 @@ export function useBinaryDefaults(app: State<AppState>, main: Main): void {
 			if (cancelled) return;
 
 			const updates: Array<[string, string]> = [];
-			const { binaries } = app.op.unwrap();
+			const { binaries } = app;
 
 			for (const [key, bundledPath] of Object.entries(bundled)) {
 				const existing = (binaries as Readonly<Record<string, string>>)[key];
@@ -23,17 +23,15 @@ export function useBinaryDefaults(app: State<AppState>, main: Main): void {
 
 			if (updates.length === 0) return;
 
-			app.mutate((mutable) => {
-				for (const [key, bundledPath] of updates) {
-					if (mutable.binaries[key] !== undefined && mutable.binaries[key] !== "") continue;
+			for (const [key, bundledPath] of updates) {
+				if (app.binaries[key] !== undefined && app.binaries[key] !== "") continue;
 
-					mutable.binaries[key] = bundledPath;
-				}
-			});
+				app.binaries[key] = bundledPath;
+			}
 		});
 
 		return () => {
 			cancelled = true;
 		};
-	}, [app.op, main]);
+	}, [identify(app), main]);
 }

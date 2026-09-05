@@ -1,5 +1,5 @@
 import { FolderOpen, Plus } from "lucide-react";
-import { retrack } from "opshot/react";
+import { scope } from "opshot";
 import { cn } from "../../utils/cn";
 import { ProjectIcon } from "../UI/ProjectIcon";
 import { HomeGraphDecoration, type HomeGraphAnchor } from "./HomeGraphDecoration";
@@ -12,7 +12,7 @@ interface Props {
 	readonly context: AppContext;
 }
 
-export const HomeScreen = retrack<Props>(({ context }: Props) => {
+export const HomeScreen = scope<Props>(({ context }: Props) => {
 	const recentFiles: ReadonlyArray<RecentFile> = context.app.recentFiles.slice(0, 6);
 
 	const anchors: ReadonlyArray<HomeGraphAnchor> = recentFiles.map((recent) => ({

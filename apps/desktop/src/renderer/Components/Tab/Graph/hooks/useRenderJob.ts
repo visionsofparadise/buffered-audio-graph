@@ -63,7 +63,7 @@ export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 			setProcessingNodes(new Map());
 			setRenderError(null);
 
-			const definition = structuredClone(context.graphDefinition.op.unwrap()) as GraphDefinition;
+			const definition = JSON.parse(JSON.stringify(context.graphDefinition)) as GraphDefinition;
 
 			try {
 				await context.main.audioRenderGraph({ jobId, definition, parameters });

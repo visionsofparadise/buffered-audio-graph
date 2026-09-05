@@ -5,10 +5,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigg
 import { PackageNodeList } from "./PackageNodeList";
 import { EDGE_HIT_CURSOR } from "./utils/edgeHitCursor";
 import type { AppState } from "../../../Models/State/App";
-import type { Snapshot } from "opshot";
 
 interface EdgeContainerData {
-	readonly app: Snapshot<AppState>;
+	readonly app: AppState;
 	readonly onInsert: (packageName: string, nodeName: string) => void;
 	[key: string]: unknown;
 }

@@ -1,10 +1,9 @@
 import { Button } from "./UI/Button";
 import { statusText } from "./utils/statusText";
 import type { NodePackageState } from "../Models/State/App";
-import type { Snapshot } from "opshot";
 
 interface Props {
-	readonly packages: Snapshot<Array<NodePackageState>>;
+	readonly packages: Array<NodePackageState>;
 	readonly isLoading: boolean;
 	readonly onContinue: () => void;
 }

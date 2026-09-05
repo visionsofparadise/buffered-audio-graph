@@ -27,6 +27,6 @@ export function extractBinaries(context: AppContext): Array<BinaryInfo> {
 		.sort()
 		.map((name) => ({
 			name,
-			currentPath: (context.app.binaries as Record<string, string>)[name],
+			currentPath: context.app.binaries[name],
 		}));
 }

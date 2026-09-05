@@ -1,4 +1,4 @@
-import { retrack } from "opshot/react";
+import { identify, scope } from "opshot";
 import { useCallback, useState } from "react";
 import { usePackageManager } from "../../hooks/usePackageManager";
 import { Button } from "../UI/Button";
@@ -10,7 +10,7 @@ interface Props {
 	readonly context: AppContext;
 }
 
-export const PackagesSection = retrack<Props>(({ context }: Props) => {
+export const PackagesSection = scope<Props>(({ context }: Props) => {
 	const { app } = context;
 	const { addPackage, removePackage, updatePackage, clearDependencies } = usePackageManager(context);
 
@@ -45,11 +45,9 @@ export const PackagesSection = retrack<Props>(({ context }: Props) => {
 
 	const setInstallAutomatically = useCallback(
 		(value: boolean) => {
-			app.mutate((mutable) => {
-				mutable.installBagPackagesAutomatically = value;
-			});
+			app.installBagPackagesAutomatically = value;
 		},
-		[app],
+		[identify(app)],
 	);
 
 	return (

@@ -1,3 +1,4 @@
+import { batch, identify, subscribe } from "opshot";
 import { useCallback, useEffect, useRef } from "react";
 import { SUPPORTED_API_VERSIONS } from "../../shared/Models/ApiVersion";
 import {
@@ -9,7 +10,6 @@ import { ensureGraphPackagesInstalled } from "./packagePipeline";
 import type { FileChangedPayload } from "../../shared/utilities/emitToRenderer";
 import type { AppContext } from "../Models/Context";
 import type { GraphMeta } from "../Models/History";
-import type { State } from "opshot";
 
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -28,7 +28,7 @@ async function sha256Hex(content: string): Promise<string> {
 export { loadGraphDefinition };
 
 export function useGraphDefinition(
-	graphDefinition: State<GraphDefinitionState, GraphMeta, GraphMeta>,
+	graphDefinition: GraphDefinitionState,
 	initialContent: string,
 	bagPath: string,
 	context: AppContext,
@@ -72,8 +72,8 @@ export function useGraphDefinition(
 	}, [main]);
 
 	useEffect(() => {
-		const unsubscribe = graphDefinition.op.subscribe(() => {
-			const json = serializeGraphDefinition(graphDefinition.op.unwrap());
+		const unsubscribe = subscribe(graphDefinition, () => {
+			const json = serializeGraphDefinition(graphDefinition);
 
 			pendingJsonRef.current = json;
 
@@ -108,7 +108,7 @@ export function useGraphDefinition(
 			unsubscribe();
 			flushDefinition();
 		};
-	}, [graphDefinition.op, main, flushDefinition]);
+	}, [identify(graphDefinition), main, flushDefinition]);
 
 	useEffect(() => {
 		void main.watchFile(bagPath);
@@ -140,15 +140,15 @@ export function useGraphDefinition(
 
 					hashRef.current = newHash;
 
-					graphDefinition.mutate(
-						(mutable) => {
-							mutable.id = validated.id;
-							mutable.apiVersion = validated.apiVersion;
-							mutable.name = validated.name;
-							mutable.nodes = validated.nodes;
-							mutable.edges = validated.edges;
+					batch(
+						() => {
+							graphDefinition.id = validated.id;
+							graphDefinition.apiVersion = validated.apiVersion;
+							graphDefinition.name = validated.name;
+							graphDefinition.nodes = validated.nodes;
+							graphDefinition.edges = validated.edges;
 						},
-						{ external: true },
+						{ external: true } satisfies GraphMeta,
 					);
 
 					const { app, logger } = contextRef.current;
@@ -171,7 +171,7 @@ export function useGraphDefinition(
 		return () => {
 			mainEvents.off("file:changed", handler);
 		};
-	}, [bagPath, mainEvents, main, graphDefinition.op]);
+	}, [bagPath, mainEvents, main, identify(graphDefinition)]);
 
 	return { flushDefinition };
 }

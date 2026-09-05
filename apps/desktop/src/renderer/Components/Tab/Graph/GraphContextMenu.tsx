@@ -11,7 +11,6 @@ import {
 import { NodeMenuItems } from "./Node/Menu";
 import { PackageNodeList } from "./PackageNodeList";
 import type { AppState } from "../../../Models/State/App";
-import type { Snapshot } from "opshot";
 
 export type ContextMenuAction = "delete" | "render" | "undo" | "redo" | "bypass" | "reset";
 
@@ -23,7 +22,7 @@ export interface ContextMenuPosition {
 
 interface Props {
 	readonly position: ContextMenuPosition;
-	readonly app: Snapshot<AppState>;
+	readonly app: AppState;
 	readonly onAction: (action: ContextMenuAction) => void;
 	readonly onAddNode: (packageName: string, nodeName: string) => void;
 	readonly onClose: () => void;

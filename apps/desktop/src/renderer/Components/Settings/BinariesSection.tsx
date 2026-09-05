@@ -1,4 +1,4 @@
-import { retrack } from "opshot/react";
+import { identify, scope } from "opshot";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "../UI/Button";
 import { extractBinaries } from "./utils/extractBinaries";
@@ -8,7 +8,7 @@ interface Props {
 	readonly context: AppContext;
 }
 
-export const BinariesSection = retrack<Props>(({ context }: Props) => {
+export const BinariesSection = scope<Props>(({ context }: Props) => {
 	const { app, main } = context;
 
 	const binaries = extractBinaries(context);
@@ -39,12 +39,10 @@ export const BinariesSection = retrack<Props>(({ context }: Props) => {
 			const selectedPath = result?.[0];
 
 			if (selectedPath) {
-				app.mutate((mutable) => {
-					mutable.binaries[binaryName] = selectedPath;
-				});
+				app.binaries[binaryName] = selectedPath;
 			}
 		},
-		[main, app],
+		[main, identify(app)],
 	);
 
 	return (

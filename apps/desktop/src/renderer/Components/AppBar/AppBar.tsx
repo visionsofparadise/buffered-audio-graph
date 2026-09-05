@@ -1,5 +1,5 @@
 import { FilePlus, FolderOpen, Menu, Plus, Save, SaveAll, Settings, X } from "lucide-react";
-import { retrack } from "opshot/react";
+import { scope } from "opshot";
 import { cn } from "../../utils/cn";
 import { basename } from "../../utils/path";
 import { DropdownButton, type MenuItem } from "../UI/DropdownButton";
@@ -13,7 +13,7 @@ interface Props {
 	readonly chromeOnly?: boolean;
 }
 
-export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) => {
+export const AppBar = scope<Props>(({ context, chromeOnly = false }: Props) => {
 	const { app, activeCommands } = context;
 	const save = activeCommands.save;
 	const hasActiveGraphTab = app.activeTabId !== null;
@@ -60,33 +60,27 @@ export const AppBar = retrack<Props>(({ context, chromeOnly = false }: Props) =>
 	const visibleTabs = chromeOnly ? [] : tabs;
 
 	const selectTab = (id: string): void => {
-		app.mutate((mutable) => {
-			mutable.activeTabId = id;
-		});
+		app.activeTabId = id;
 	};
 
 	const closeTab = (id: string): void => {
-		app.mutate((mutable) => {
-			const index = mutable.tabs.findIndex((tab) => tab.id === id);
+		const index = app.tabs.findIndex((tab) => tab.id === id);
 
-			if (index === -1) return;
+		if (index !== -1) {
+			app.tabs.splice(index, 1);
 
-			mutable.tabs.splice(index, 1);
-
-			if (mutable.activeTabId === id) {
-				mutable.activeTabId = mutable.tabs[index]?.id ?? mutable.tabs[index - 1]?.id ?? null;
+			if (app.activeTabId === id) {
+				app.activeTabId = app.tabs[index]?.id ?? app.tabs[index - 1]?.id ?? null;
 			}
-		});
+		}
 
-		context.tabNames.mutate((mutable) => {
-			mutable.names = Object.fromEntries(Object.entries(mutable.names).filter(([tabId]) => tabId !== id));
-		});
+		context.tabNames.names = Object.fromEntries(
+			Object.entries(context.tabNames.names).filter(([tabId]) => tabId !== id),
+		);
 	};
 
 	const goHome = (): void => {
-		app.mutate((mutable) => {
-			mutable.activeTabId = null;
-		});
+		app.activeTabId = null;
 	};
 
 	return (

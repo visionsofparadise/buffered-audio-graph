@@ -1,8 +1,10 @@
+import { batch } from "opshot";
 import { useMemo, useRef } from "react";
 import { comparePackageVersions } from "../../../../hooks/packagePipeline";
 import { buildDefaultParameters } from "../Node/utils/buildParameters";
 import { lookupNode } from "../Node/utils/nodeLookup";
 import type { GraphContext } from "../../../../Models/Context";
+import type { GraphMeta } from "../../../../Models/History";
 import type { GraphDefinitionState } from "../../../../Models/State/GraphDefinition";
 import type { GraphEdge, GraphNode } from "@buffered-audio/core";
 
@@ -85,9 +87,10 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 
 	return useMemo<GraphMutations>(() => {
 		function mutate(callback: (mutable: GraphDefinitionState) => void, transactionKey?: string): void {
-			const { graphDefinition } = contextRef.current;
-
-			graphDefinition.mutate(callback, transactionKey ? { transactionKey } : undefined);
+			batch(
+				() => callback(contextRef.current.graphDefinition),
+				transactionKey === undefined ? undefined : ({ transactionKey } satisfies GraphMeta),
+			);
 		}
 
 		function mutateNode(nodeId: string, callback: (node: GraphNode) => void): void {
@@ -183,11 +186,11 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 				mutable.nodes = [...mutable.nodes, node];
 			}, transactionKey);
 
-			positions.mutate(
-				(mutable) => {
-					mutable.positions[id] = { x: position.x, y: position.y };
+			batch(
+				() => {
+					positions.positions[id] = { x: position.x, y: position.y };
 				},
-				{ transactionKey },
+				{ transactionKey } satisfies GraphMeta,
 			);
 		}
 
@@ -201,13 +204,13 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 
 			const { positions } = contextRef.current;
 
-			positions.mutate(
-				(mutable) => {
-					const { [nodeId]: _removedPosition, ...remainingPositions } = mutable.positions;
+			batch(
+				() => {
+					const { [nodeId]: _removedPosition, ...remainingPositions } = positions.positions;
 
-					mutable.positions = remainingPositions;
+					positions.positions = remainingPositions;
 				},
-				{ transactionKey },
+				{ transactionKey } satisfies GraphMeta,
 			);
 		}
 
@@ -264,11 +267,11 @@ export function useGraphMutations(context: GraphContext): GraphMutations {
 				];
 			}, transactionKey);
 
-			positions.mutate(
-				(mutable) => {
-					mutable.positions[id] = { x: position.x, y: position.y };
+			batch(
+				() => {
+					positions.positions[id] = { x: position.x, y: position.y };
 				},
-				{ transactionKey },
+				{ transactionKey } satisfies GraphMeta,
 			);
 		}
 

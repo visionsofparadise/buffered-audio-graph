@@ -1,341 +1,495 @@
-import { createGroup, createState } from "opshot";
+import { batch, createMutableState, flush, subscribe } from "opshot";
 import { describe, expect, it } from "vitest";
 
-import { createHistory, graphMeta } from "./History";
+import { createHistory } from "./History";
 
 const createFixture = () => {
-	const group = createGroup(graphMeta);
-	const definition = group.createState({
+	const definition = createMutableState({
 		name: "g",
 		nodes: new Array<{ id: string; parameters: Record<string, unknown> }>(),
 		edges: new Array<{ from: string; to: string }>(),
 	});
-	const positions = group.createState({ positions: {} as Record<string, { x: number; y: number }> });
-	const history = createHistory(group);
+	const positions = createMutableState({ positions: {} as Record<string, { x: number; y: number }> });
+	const history = createHistory([definition, positions]);
 
-	return { definition, positions, history };
+	const settle = () => {
+		flush(definition);
+		flush(positions);
+		flush(history);
+	};
+
+	return { definition, positions, history, settle };
 };
 
 describe("History", () => {
 	it("records one entry for a mutation", () => {
-		const { definition, history } = createFixture();
+		const { definition, history, settle } = createFixture();
 
-		definition.mutate((mutable) => {
-			mutable.name = "renamed";
-		});
+		definition.name = "renamed";
+		settle();
 
-		expect(history.op.unwrap().canUndo).toBe(true);
-		expect(history.op.unwrap().stack).toHaveLength(1);
-		expect(history.op.unwrap().stackLength).toBe(1);
+		expect(history.canUndo).toBe(true);
+		expect(history.stack).toHaveLength(1);
+		expect(history.stackLength).toBe(1);
 	});
 
 	it("undo restores the previous value and redo replays it", () => {
-		const { definition, history } = createFixture();
+		const { definition, history, settle } = createFixture();
 
-		definition.mutate((mutable) => {
-			mutable.name = "renamed";
-		});
+		definition.name = "renamed";
+		settle();
 
-		history.op.unwrap().undo();
+		history.undo();
+		settle();
 
-		expect(definition.op.unwrap().name).toBe("g");
+		expect(definition.name).toBe("g");
 
-		history.op.unwrap().redo();
+		history.redo();
+		settle();
 
-		expect(definition.op.unwrap().name).toBe("renamed");
+		expect(definition.name).toBe("renamed");
 	});
 
 	it("exact-restores the document across push, nested write, and splice", () => {
-		const { definition, history } = createFixture();
+		const { definition, history, settle } = createFixture();
 
-		definition.mutate((mutable) => {
-			mutable.nodes.push({ id: "gain-1", parameters: {} });
-		});
-		definition.mutate((mutable) => {
-			const node = mutable.nodes[0];
+		definition.nodes.push({ id: "gain-1", parameters: {} });
+		settle();
 
-			if (node) node.parameters.amount = 0.5;
-		});
-		definition.mutate((mutable) => {
-			mutable.nodes.splice(0, 1);
-		});
+		const node = definition.nodes[0];
 
-		history.op.unwrap().undo();
+		if (node) node.parameters.amount = 0.5;
 
-		expect(JSON.stringify(definition.op.unwrap().nodes)).toBe(
-			JSON.stringify([{ id: "gain-1", parameters: { amount: 0.5 } }]),
-		);
+		settle();
 
-		history.op.unwrap().undo();
+		definition.nodes.splice(0, 1);
+		settle();
 
-		expect(JSON.stringify(definition.op.unwrap().nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: {} }]));
+		history.undo();
+		settle();
 
-		history.op.unwrap().undo();
+		expect(JSON.stringify(definition.nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: { amount: 0.5 } }]));
 
-		expect(JSON.stringify(definition.op.unwrap())).toBe(JSON.stringify({ name: "g", nodes: [], edges: [] }));
+		history.undo();
+		settle();
 
-		history.op.unwrap().redo();
+		expect(JSON.stringify(definition.nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: {} }]));
 
-		expect(JSON.stringify(definition.op.unwrap().nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: {} }]));
+		history.undo();
+		settle();
 
-		history.op.unwrap().redo();
+		expect(JSON.stringify(definition)).toBe(JSON.stringify({ name: "g", nodes: [], edges: [] }));
 
-		expect(JSON.stringify(definition.op.unwrap().nodes)).toBe(
-			JSON.stringify([{ id: "gain-1", parameters: { amount: 0.5 } }]),
-		);
+		history.redo();
+		settle();
 
-		history.op.unwrap().redo();
+		expect(JSON.stringify(definition.nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: {} }]));
 
-		expect(JSON.stringify(definition.op.unwrap())).toBe(JSON.stringify({ name: "g", nodes: [], edges: [] }));
-		expect(history.op.unwrap().canRedo).toBe(false);
+		history.redo();
+		settle();
+
+		expect(JSON.stringify(definition.nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: { amount: 0.5 } }]));
+
+		history.redo();
+		settle();
+
+		expect(JSON.stringify(definition)).toBe(JSON.stringify({ name: "g", nodes: [], edges: [] }));
+		expect(history.canRedo).toBe(false);
 	});
 
-	it("coalesces definition and positions mutates under one transactionKey into one entry", () => {
-		const { definition, positions, history } = createFixture();
+	it("coalesces definition and positions writes under one transactionKey into one entry", () => {
+		const { definition, positions, history, settle } = createFixture();
 
 		const transactionKey = "add-node-1";
 
-		definition.mutate(
-			(mutable) => {
-				mutable.nodes.push({ id: "gain-1", parameters: {} });
-			},
-			{ transactionKey },
-		);
-		positions.mutate(
-			(mutable) => {
-				mutable.positions["gain-1"] = { x: 10, y: 20 };
+		batch(
+			() => {
+				definition.nodes.push({ id: "gain-1", parameters: {} });
 			},
 			{ transactionKey },
 		);
 
-		expect(history.op.unwrap().stack).toHaveLength(1);
+		batch(
+			() => {
+				positions.positions["gain-1"] = { x: 10, y: 20 };
+			},
+			{ transactionKey },
+		);
 
-		history.op.unwrap().undo();
+		settle();
 
-		expect(definition.op.unwrap().nodes).toHaveLength(0);
-		expect(positions.op.unwrap().positions["gain-1"]).toBeUndefined();
-		expect(history.op.unwrap().canUndo).toBe(false);
+		expect(history.stack).toHaveLength(1);
 
-		history.op.unwrap().redo();
+		history.undo();
+		settle();
 
-		expect(JSON.stringify(definition.op.unwrap().nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: {} }]));
-		expect(positions.op.unwrap().positions["gain-1"]).toEqual({ x: 10, y: 20 });
+		expect(definition.nodes).toHaveLength(0);
+		expect(positions.positions["gain-1"]).toBeUndefined();
+		expect(history.canUndo).toBe(false);
+
+		history.redo();
+		settle();
+
+		expect(JSON.stringify(definition.nodes)).toBe(JSON.stringify([{ id: "gain-1", parameters: {} }]));
+		expect(positions.positions["gain-1"]).toEqual({ x: 10, y: 20 });
 	});
 
 	it("concatenates same-key emissions into the top entry and opens a new entry for a different key", () => {
-		const { positions, history } = createFixture();
+		const { positions, history, settle } = createFixture();
 
-		positions.mutate(
-			(mutable) => {
-				mutable.positions["a"] = { x: 1, y: 1 };
-			},
-			{ transactionKey: "drag-1" },
-		);
-		positions.mutate(
-			(mutable) => {
-				mutable.positions["a"] = { x: 2, y: 2 };
+		batch(
+			() => {
+				positions.positions["a"] = { x: 1, y: 1 };
 			},
 			{ transactionKey: "drag-1" },
 		);
 
-		expect(history.op.unwrap().stack).toHaveLength(1);
+		settle();
 
-		positions.mutate(
-			(mutable) => {
-				mutable.positions["a"] = { x: 3, y: 3 };
+		batch(
+			() => {
+				positions.positions["a"] = { x: 2, y: 2 };
+			},
+			{ transactionKey: "drag-1" },
+		);
+
+		settle();
+
+		expect(history.stack).toHaveLength(1);
+
+		batch(
+			() => {
+				positions.positions["a"] = { x: 3, y: 3 };
 			},
 			{ transactionKey: "drag-2" },
 		);
 
-		expect(history.op.unwrap().stack).toHaveLength(2);
+		settle();
 
-		history.op.unwrap().undo();
+		expect(history.stack).toHaveLength(2);
 
-		expect(positions.op.unwrap().positions["a"]).toEqual({ x: 2, y: 2 });
+		history.undo();
+		settle();
 
-		history.op.unwrap().undo();
+		expect(positions.positions["a"]).toEqual({ x: 2, y: 2 });
 
-		expect(positions.op.unwrap().positions["a"]).toBeUndefined();
+		history.undo();
+		settle();
+
+		expect(positions.positions["a"]).toBeUndefined();
 	});
 
 	it("appends into the existing same-state batch when states interleave under one key", () => {
-		const { definition, positions, history } = createFixture();
+		const { definition, positions, history, settle } = createFixture();
 
 		const transactionKey = "insert-1";
 
-		definition.mutate(
-			(mutable) => {
-				mutable.nodes.push({ id: "a", parameters: {} });
-			},
-			{ transactionKey },
-		);
-		positions.mutate(
-			(mutable) => {
-				mutable.positions["a"] = { x: 1, y: 1 };
-			},
-			{ transactionKey },
-		);
-		definition.mutate(
-			(mutable) => {
-				mutable.nodes.push({ id: "b", parameters: {} });
+		batch(
+			() => {
+				definition.nodes.push({ id: "a", parameters: {} });
 			},
 			{ transactionKey },
 		);
 
-		const entry = history.op.unwrap().stack[0];
+		settle();
 
-		expect(history.op.unwrap().stack).toHaveLength(1);
+		batch(
+			() => {
+				positions.positions["a"] = { x: 1, y: 1 };
+			},
+			{ transactionKey },
+		);
+
+		settle();
+
+		batch(
+			() => {
+				definition.nodes.push({ id: "b", parameters: {} });
+			},
+			{ transactionKey },
+		);
+
+		settle();
+
+		const entry = history.stack[0];
+
+		expect(history.stack).toHaveLength(1);
 		expect(entry?.batches).toHaveLength(2);
 
-		history.op.unwrap().undo();
+		history.undo();
+		settle();
 
-		expect(definition.op.unwrap().nodes).toHaveLength(0);
-		expect(positions.op.unwrap().positions["a"]).toBeUndefined();
+		expect(definition.nodes).toHaveLength(0);
+		expect(positions.positions["a"]).toBeUndefined();
 	});
 
 	it("a new mutation after undo truncates forward history", () => {
-		const { definition, history } = createFixture();
+		const { definition, history, settle } = createFixture();
 
-		definition.mutate((mutable) => {
-			mutable.name = "one";
-		});
-		definition.mutate((mutable) => {
-			mutable.name = "two";
-		});
+		definition.name = "one";
+		settle();
 
-		history.op.unwrap().undo();
+		definition.name = "two";
+		settle();
 
-		definition.mutate((mutable) => {
-			mutable.name = "three";
-		});
+		history.undo();
+		settle();
 
-		expect(history.op.unwrap().canRedo).toBe(false);
-		expect(history.op.unwrap().stack).toHaveLength(2);
+		definition.name = "three";
+		settle();
 
-		history.op.unwrap().redo();
+		expect(history.canRedo).toBe(false);
+		expect(history.stack).toHaveLength(2);
 
-		expect(definition.op.unwrap().name).toBe("three");
+		history.redo();
+		settle();
+
+		expect(definition.name).toBe("three");
 	});
 
 	it("replays are not recorded", () => {
-		const { definition, history } = createFixture();
+		const { definition, history, settle } = createFixture();
 
-		definition.mutate((mutable) => {
-			mutable.name = "renamed";
-		});
+		definition.name = "renamed";
+		settle();
 
-		expect(history.op.unwrap().stack).toHaveLength(1);
+		expect(history.stack).toHaveLength(1);
 
-		history.op.unwrap().undo();
+		history.undo();
+		settle();
 
-		expect(history.op.unwrap().stack).toHaveLength(1);
+		expect(history.stack).toHaveLength(1);
 
-		history.op.unwrap().redo();
+		history.redo();
+		settle();
 
-		expect(history.op.unwrap().stack).toHaveLength(1);
+		expect(history.stack).toHaveLength(1);
 	});
 
-	it("an external mutate clears the stack and recording resumes from the post-external document", () => {
-		const { definition, history } = createFixture();
+	it("records only the user run when a replay run and a user run share one window", () => {
+		const { definition, history, settle } = createFixture();
 
-		definition.mutate((mutable) => {
-			mutable.name = "local";
-		});
+		batch(
+			() => {
+				definition.name = "replayed";
+			},
+			{ replay: true },
+		);
 
-		expect(history.op.unwrap().canUndo).toBe(true);
+		definition.edges.push({ from: "a", to: "b" });
+		settle();
 
-		definition.mutate(
-			(mutable) => {
-				mutable.name = "reconciled";
+		const entry = history.stack[0];
+
+		expect(history.stack).toHaveLength(1);
+		expect(entry?.batches).toHaveLength(1);
+		expect(entry?.batches[0]?.operations.map((operation) => operation.key)).toEqual(["0", "length"]);
+
+		history.undo();
+		settle();
+
+		expect(definition.edges).toHaveLength(0);
+		expect(definition.name).toBe("replayed");
+	});
+
+	it("an external batch clears the stack and recording resumes from the post-external document", () => {
+		const { definition, history, settle } = createFixture();
+
+		definition.name = "local";
+		settle();
+
+		expect(history.canUndo).toBe(true);
+
+		batch(
+			() => {
+				definition.name = "reconciled";
 			},
 			{ external: true },
 		);
 
-		expect(history.op.unwrap().canUndo).toBe(false);
-		expect(history.op.unwrap().canRedo).toBe(false);
-		expect(history.op.unwrap().stack).toHaveLength(0);
+		settle();
 
-		definition.mutate((mutable) => {
-			mutable.name = "after";
-		});
+		expect(history.canUndo).toBe(false);
+		expect(history.canRedo).toBe(false);
+		expect(history.stack).toHaveLength(0);
 
-		expect(history.op.unwrap().stack).toHaveLength(1);
+		definition.name = "after";
+		settle();
 
-		history.op.unwrap().undo();
+		expect(history.stack).toHaveLength(1);
 
-		expect(definition.op.unwrap().name).toBe("reconciled");
+		history.undo();
+		settle();
+
+		expect(definition.name).toBe("reconciled");
 	});
 
 	it("undo below the bottom and redo past the top are noops", () => {
-		const { definition, history } = createFixture();
+		const { definition, history, settle } = createFixture();
 
-		definition.mutate((mutable) => {
-			mutable.name = "renamed";
-		});
-
-		expect(() => {
-			history.op.unwrap().redo();
-		}).not.toThrow();
-		expect(definition.op.unwrap().name).toBe("renamed");
-
-		history.op.unwrap().undo();
+		definition.name = "renamed";
+		settle();
 
 		expect(() => {
-			history.op.unwrap().undo();
+			history.redo();
 		}).not.toThrow();
-		expect(definition.op.unwrap().name).toBe("g");
-		expect(history.op.unwrap().canUndo).toBe(false);
+
+		settle();
+
+		expect(definition.name).toBe("renamed");
+
+		history.undo();
+		settle();
+
+		expect(() => {
+			history.undo();
+		}).not.toThrow();
+
+		settle();
+
+		expect(definition.name).toBe("g");
+		expect(history.canUndo).toBe(false);
 	});
 
 	it("canUndo and canRedo are reactive across generations", () => {
-		const { definition, history } = createFixture();
+		const { definition, history, settle } = createFixture();
 
-		expect(history.op.unwrap().canUndo).toBe(false);
-		expect(history.op.unwrap().canRedo).toBe(false);
+		const heard = new Array<{ canUndo: boolean; canRedo: boolean }>();
 
-		definition.mutate((mutable) => {
-			mutable.name = "renamed";
+		subscribe(history, () => {
+			heard.push({ canUndo: history.canUndo, canRedo: history.canRedo });
 		});
 
-		expect(history.op.unwrap().canUndo).toBe(true);
-		expect(history.op.unwrap().canRedo).toBe(false);
+		expect(history.canUndo).toBe(false);
+		expect(history.canRedo).toBe(false);
 
-		history.op.unwrap().undo();
+		definition.name = "renamed";
+		settle();
 
-		expect(history.op.unwrap().canUndo).toBe(false);
-		expect(history.op.unwrap().canRedo).toBe(true);
+		expect(history.canUndo).toBe(true);
+		expect(history.canRedo).toBe(false);
+
+		history.undo();
+		settle();
+
+		expect(history.canUndo).toBe(false);
+		expect(history.canRedo).toBe(true);
+		expect(heard).toEqual([
+			{ canUndo: true, canRedo: false },
+			{ canUndo: false, canRedo: true },
+		]);
 	});
 
-	it("a state created outside the group is inaudible", () => {
-		const { history } = createFixture();
-		const standalone = createState({ x: 0 });
+	it("a state not handed to createHistory is inaudible", () => {
+		const { history, settle } = createFixture();
 
-		standalone.mutate((mutable) => {
-			mutable.x = 1;
-		});
+		const standalone = createMutableState({ count: 0 });
 
-		expect(history.op.unwrap().stack).toHaveLength(0);
-		expect(history.op.unwrap().canUndo).toBe(false);
+		standalone.count = 1;
+		flush(standalone);
+		settle();
+
+		expect(history.stack).toHaveLength(0);
+		expect(history.canUndo).toBe(false);
 	});
 
 	it("an external clear at the bottom of the stack flips canRedo through the tracked stack length", () => {
-		const { definition, history } = createFixture();
+		const { definition, history, settle } = createFixture();
 
-		definition.mutate((mutable) => {
-			mutable.name = "renamed";
-		});
+		definition.name = "renamed";
+		settle();
 
-		history.op.unwrap().undo();
+		history.undo();
+		settle();
 
-		expect(history.op.unwrap().canRedo).toBe(true);
+		expect(history.canRedo).toBe(true);
 
-		definition.mutate(
-			(mutable) => {
-				mutable.name = "reconciled";
+		batch(
+			() => {
+				definition.name = "reconciled";
 			},
 			{ external: true },
 		);
 
-		expect(history.op.unwrap().canRedo).toBe(false);
+		settle();
+
+		expect(history.canRedo).toBe(false);
+	});
+
+	it("replays a restored array that was written into after undo in both directions", () => {
+		const { definition, history, settle } = createFixture();
+
+		const nodeA = { id: "a", parameters: {} };
+		const nodeB = { id: "b", parameters: {} };
+		const nodeC = { id: "c", parameters: {} };
+
+		definition.nodes = [nodeA];
+		settle();
+
+		definition.nodes = [nodeA, nodeB];
+		settle();
+
+		history.undo();
+		settle();
+
+		definition.nodes.push(nodeC);
+		settle();
+
+		history.undo();
+		settle();
+
+		history.undo();
+		settle();
+
+		expect(definition.nodes).toEqual([]);
+
+		history.redo();
+		settle();
+
+		expect(definition.nodes).toEqual([{ id: "a", parameters: {} }]);
+
+		history.redo();
+		settle();
+
+		expect(definition.nodes).toEqual([
+			{ id: "a", parameters: {} },
+			{ id: "c", parameters: {} },
+		]);
+	});
+	it("records a pending write before undo runs", () => {
+		const { definition, history, settle } = createFixture();
+
+		definition.name = "one";
+		settle();
+
+		definition.name = "two";
+		history.undo();
+		settle();
+
+		expect(definition.name).toBe("one");
+		expect(history.stack).toHaveLength(2);
+		expect(history.canRedo).toBe(true);
+
+		history.redo();
+		settle();
+
+		expect(definition.name).toBe("two");
+	});
+
+	it("records a pending write before redo runs", () => {
+		const { definition, history, settle } = createFixture();
+
+		definition.name = "one";
+		settle();
+
+		history.undo();
+		settle();
+
+		definition.name = "two";
+		history.redo();
+		settle();
+
+		expect(definition.name).toBe("two");
+		expect(history.canRedo).toBe(false);
 	});
 });

@@ -1,4 +1,4 @@
-import { retrack } from "opshot/react";
+import { scope } from "opshot";
 import { useState } from "react";
 import { cn } from "../../utils/cn";
 import { Button } from "../UI/Button";
@@ -15,7 +15,7 @@ interface Props {
 	readonly context: AppContext;
 }
 
-export const Settings = retrack<Props>(({ isOpen, onClose, context }: Props) => {
+export const Settings = scope<Props>(({ isOpen, onClose, context }: Props) => {
 	const [activeSection, setActiveSection] = useState<SectionId>("packages");
 
 	return (

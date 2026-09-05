@@ -5,7 +5,7 @@ import type { NodeContainerData } from "../../Node/Container";
 import type { Edge, Node } from "@xyflow/react";
 
 export function buildReactFlowNodes(context: GraphContext): Array<Node<NodeContainerData>> {
-	const binaryDefaults = context.app.binaries as Record<string, string>;
+	const binaryDefaults = context.app.binaries;
 	const connectedInputs = new Set(context.graphDefinition.edges.map((edge) => edge.to));
 	const connectedOutputs = new Set(context.graphDefinition.edges.map((edge) => edge.from));
 

@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { comparePackageVersions } from "../../../hooks/packagePipeline";
 import {
 	DropdownMenuItem,
@@ -11,9 +11,8 @@ import {
 import { CATEGORY_ORDER } from "./utils/categoryOrder";
 import type { NodeCategory } from "./Node/Container";
 import type { AppState, NodePackageState } from "../../../Models/State/App";
-import type { Snapshot } from "opshot";
 
-type ReadyPackage = Snapshot<NodePackageState> & {
+type ReadyPackage = NodePackageState & {
 	readonly status: "ready";
 	readonly version: string;
 };
@@ -32,7 +31,7 @@ interface CategoryGroup {
 }
 
 interface Props {
-	readonly app: Snapshot<AppState>;
+	readonly app: AppState;
 	readonly onSelect: (packageName: string, nodeName: string) => void;
 }
 
@@ -77,60 +76,49 @@ export function PackageNodeList({ app, onSelect }: Props) {
 		return () => clearInterval(id);
 	}, []);
 
-	const latestReadyPackages = useMemo(
-		() =>
-			Array.from(
-				app.packages
-					.filter(
-						(nodePackage): nodePackage is ReadyPackage =>
-							nodePackage.status === "ready" && nodePackage.version !== null && nodePackage.origin === "catalog",
-					)
-					.reduce((packagesByName, nodePackage) => {
-						const current = packagesByName.get(nodePackage.name);
+	const latestReadyPackages = Array.from(
+		app.packages
+			.filter(
+				(nodePackage): nodePackage is ReadyPackage =>
+					nodePackage.status === "ready" && nodePackage.version !== null && nodePackage.origin === "catalog",
+			)
+			.reduce((packagesByName, nodePackage) => {
+				const current = packagesByName.get(nodePackage.name);
 
-						if (!current || comparePackageVersions(nodePackage.version, current.version) > 0) {
-							packagesByName.set(nodePackage.name, nodePackage);
-						}
+				if (!current || comparePackageVersions(nodePackage.version, current.version) > 0) {
+					packagesByName.set(nodePackage.name, nodePackage);
+				}
 
-						return packagesByName;
-					}, new Map<string, ReadyPackage>())
-					.values(),
-			),
-		[app.packages],
+				return packagesByName;
+			}, new Map<string, ReadyPackage>())
+			.values(),
 	);
 
 	const normalizedQuery = query.trim().toLowerCase();
 	const multiPackage = latestReadyPackages.length > 1;
 
-	const categories = useMemo<ReadonlyArray<CategoryGroup>>(() => {
-		const matches = (nodeName: string): boolean =>
-			normalizedQuery === "" || nodeName.toLowerCase().includes(normalizedQuery);
+	const matchesQuery = (nodeName: string): boolean =>
+		normalizedQuery === "" || nodeName.toLowerCase().includes(normalizedQuery);
 
-		return CATEGORY_ORDER.map(({ key, label }) => {
-			const packages = latestReadyPackages
-				.map((nodePackage) => ({
-					packageName: nodePackage.name,
-					nodes: nodePackage.nodes
-						.filter((node) => node.category === key && matches(node.nodeName))
-						.map((node) => ({
-							packageName: nodePackage.name,
-							nodeName: node.nodeName,
-							description: node.description,
-						})),
-				}))
-				.filter((entry) => entry.nodes.length > 0);
+	const categories: ReadonlyArray<CategoryGroup> = CATEGORY_ORDER.map(({ key, label }) => {
+		const packages = latestReadyPackages
+			.map((nodePackage) => ({
+				packageName: nodePackage.name,
+				nodes: nodePackage.nodes
+					.filter((node) => node.category === key && matchesQuery(node.nodeName))
+					.map((node) => ({
+						packageName: nodePackage.name,
+						nodeName: node.nodeName,
+						description: node.description,
+					})),
+			}))
+			.filter((entry) => entry.nodes.length > 0);
 
-			return { key, label, packages, total: packages.reduce((sum, entry) => sum + entry.nodes.length, 0) };
-		}).filter((category) => category.total > 0);
-	}, [latestReadyPackages, normalizedQuery]);
+		return { key, label, packages, total: packages.reduce((sum, entry) => sum + entry.nodes.length, 0) };
+	}).filter((category) => category.total > 0);
 
-	const searchFlat = useMemo<ReadonlyArray<CatalogNode>>(
-		() =>
-			normalizedQuery === ""
-				? []
-				: categories.flatMap((category) => category.packages.flatMap((entry) => entry.nodes)),
-		[normalizedQuery, categories],
-	);
+	const searchFlat: ReadonlyArray<CatalogNode> =
+		normalizedQuery === "" ? [] : categories.flatMap((category) => category.packages.flatMap((entry) => entry.nodes));
 
 	const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
 		const searchingNow = normalizedQuery !== "";

@@ -1,6 +1,5 @@
-import { useTrackedState } from "opshot/react";
+import { useMutableState } from "opshot";
 import { z } from "zod";
-import type { State } from "opshot";
 
 const TabEntrySchema = z.object({
 	id: z.string(),
@@ -191,6 +190,6 @@ export async function loadAppState(main: {
 	};
 }
 
-export function useAppState(initial: AppState): State<AppState> {
-	return useTrackedState(initial);
+export function useAppState(initial: AppState): AppState {
+	return useMutableState(initial);
 }

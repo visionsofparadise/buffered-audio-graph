@@ -1,15 +1,16 @@
 import { ReactFlowProvider } from "@xyflow/react";
-import { useGroup, useTrackedState } from "opshot/react";
+import { batch, identify, subscribe, useMutableState } from "opshot";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ensureGraphPackagesInstalled } from "../../../hooks/packagePipeline";
 import { useGraphDefinition } from "../../../hooks/useGraphDefinition";
 import { useGraphState } from "../../../hooks/useGraphState";
-import { createHistory, graphMeta } from "../../../Models/History";
+import { createHistory } from "../../../Models/History";
 import { computeAutoLayout } from "../../../utils/autoLayout";
 import { importBag } from "../../../utils/bagOperations";
 import { mergeImportedBag } from "../../../utils/importBag";
 import { GraphCanvas } from "./Canvas";
 import type { AppContext, GraphContext } from "../../../Models/Context";
+import type { GraphMeta } from "../../../Models/History";
 import type { TabEntry } from "../../../Models/State/App";
 import type { GraphState, GraphViewState } from "../../../Models/State/Graph";
 import type { GraphDefinitionState } from "../../../Models/State/GraphDefinition";
@@ -32,24 +33,21 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 			: initialGraphState.positions;
 	}, [initialGraphState, initialDefinition]);
 
-	const group = useGroup(graphMeta);
-	const graphDefinition = useTrackedState(initialDefinition, group);
-	const positions = useTrackedState({ positions: seededPositions }, group);
-	const graphView = useTrackedState<GraphViewState>({
+	const graphDefinition = useMutableState(initialDefinition);
+	const positions = useMutableState({ positions: seededPositions });
+	const graphView = useMutableState<GraphViewState>({
 		inspectedNodeId: initialGraphState.inspectedNodeId,
 		viewport: initialGraphState.viewport,
 	});
-	const [history] = useState(() => createHistory(group));
+	const [history] = useState(() => createHistory([graphDefinition, positions]));
 
 	const { flushDefinition } = useGraphDefinition(graphDefinition, initialContent, tab.bagPath, context);
 
 	useGraphState(positions, graphView, tab.id, context);
 
 	useEffect(() => {
-		context.tabNames.mutate((mutable) => {
-			mutable.names[tab.id] = graphDefinition.name;
-		});
-	}, [context.tabNames.op, tab.id, graphDefinition.name]);
+		context.tabNames.names[tab.id] = graphDefinition.name;
+	}, [identify(context.tabNames), tab.id, graphDefinition.name]);
 
 	const onSave = useCallback(() => {
 		flushDefinition();
@@ -59,9 +57,7 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 
 	useEffect(() => {
 		const rename = (name: string) => {
-			graphDefinition.mutate((mutable) => {
-				mutable.name = name;
-			});
+			graphDefinition.name = name;
 		};
 
 		const importBagCommand = async () => {
@@ -69,17 +65,16 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 
 			if (!imported) return;
 
-			const currentDefinition = graphDefinition.op.unwrap();
 			const previousDefinition = JSON.parse(
 				JSON.stringify({
-					id: currentDefinition.id,
-					apiVersion: currentDefinition.apiVersion,
-					name: currentDefinition.name,
-					nodes: currentDefinition.nodes,
-					edges: currentDefinition.edges,
+					id: graphDefinition.id,
+					apiVersion: graphDefinition.apiVersion,
+					name: graphDefinition.name,
+					nodes: graphDefinition.nodes,
+					edges: graphDefinition.edges,
 				}),
 			) as GraphDefinition;
-			const previousPositions = JSON.parse(JSON.stringify(positions.op.unwrap().positions)) as Record<
+			const previousPositions = JSON.parse(JSON.stringify(positions.positions)) as Record<
 				string,
 				{ x: number; y: number }
 			>;
@@ -102,22 +97,16 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 
 			const transactionKey = crypto.randomUUID();
 
-			graphDefinition.mutate(
-				(mutable) => {
-					mutable.nodes = merged.definition.nodes;
-					mutable.edges = merged.definition.edges;
+			batch(
+				() => {
+					graphDefinition.nodes = merged.definition.nodes;
+					graphDefinition.edges = merged.definition.edges;
+					positions.positions = merged.positions;
 				},
-				{ transactionKey },
+				{ transactionKey } satisfies GraphMeta,
 			);
 
-			positions.mutate(
-				(mutable) => {
-					mutable.positions = merged.positions;
-				},
-				{ transactionKey },
-			);
-
-			if (context.app.op.unwrap().installBagPackagesAutomatically) {
+			if (context.app.installBagPackagesAutomatically) {
 				try {
 					await ensureGraphPackagesInstalled(merged.definition, context.app, context.main);
 				} catch (error) {
@@ -128,42 +117,31 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 			}
 		};
 
-		activeCommands.mutate((mutable) => {
-			mutable.undo = () => history.undo();
-			mutable.redo = () => history.redo();
+		activeCommands.undo = () => history.undo();
+		activeCommands.redo = () => history.redo();
+		activeCommands.canUndo = history.canUndo;
+		activeCommands.canRedo = history.canRedo;
+		activeCommands.rename = rename;
+		activeCommands.importBag = importBagCommand;
+		activeCommands.save = onSave;
 
-			const { canUndo, canRedo } = history.op.unwrap();
-
-			mutable.canUndo = canUndo;
-			mutable.canRedo = canRedo;
-			mutable.rename = rename;
-			mutable.importBag = importBagCommand;
-			mutable.save = onSave;
-		});
-
-		const unsubscribe = history.op.subscribe(() => {
-			activeCommands.mutate((mutable) => {
-				const { canUndo, canRedo } = history.op.unwrap();
-
-				mutable.canUndo = canUndo;
-				mutable.canRedo = canRedo;
-			});
+		const unsubscribe = subscribe(history, () => {
+			activeCommands.canUndo = history.canUndo;
+			activeCommands.canRedo = history.canRedo;
 		});
 
 		return () => {
 			unsubscribe();
 
-			activeCommands.mutate((mutable) => {
-				mutable.undo = null;
-				mutable.redo = null;
-				mutable.canUndo = false;
-				mutable.canRedo = false;
-				mutable.rename = null;
-				mutable.importBag = null;
-				mutable.save = null;
-			});
+			activeCommands.undo = null;
+			activeCommands.redo = null;
+			activeCommands.canUndo = false;
+			activeCommands.canRedo = false;
+			activeCommands.rename = null;
+			activeCommands.importBag = null;
+			activeCommands.save = null;
 		};
-	}, [activeCommands.op, context.main, history, graphDefinition.op, positions.op, onSave]);
+	}, [identify(activeCommands), context.main, history, identify(graphDefinition), identify(positions), onSave]);
 
 	const graphContext: GraphContext = useMemo(
 		() => ({
@@ -177,7 +155,17 @@ export function GraphSession({ initialGraphState, initialDefinition, initialCont
 			bagId: tab.id,
 			onSave,
 		}),
-		[context, graphDefinition, positions, graphView, history, flushDefinition, tab.bagPath, tab.id, onSave],
+		[
+			context,
+			identify(graphDefinition),
+			identify(positions),
+			identify(graphView),
+			history,
+			flushDefinition,
+			tab.bagPath,
+			tab.id,
+			onSave,
+		],
 	);
 
 	return (

@@ -1,4 +1,4 @@
-import { useTrackedState } from "opshot/react";
+import { identify, useMutableState } from "opshot";
 import { useCallback } from "react";
 import { loadBag, newBag, openBag, saveBagDefinition } from "../utils/bagOperations";
 import { comparePackageVersions } from "./packagePipeline";
@@ -6,41 +6,34 @@ import type { Logger } from "../../shared/Models/Logger";
 import type { TabNamesState } from "../Models/Context";
 import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
-import type { State } from "opshot";
 
 interface UseAppCallbacksReturn {
-	readonly tabNames: State<TabNamesState>;
+	readonly tabNames: TabNamesState;
 	readonly openBagTab: () => Promise<void>;
 	readonly openBagByPath: (bagPath: string) => Promise<void>;
 	readonly newBagTab: () => Promise<void>;
 }
 
-export function useAppCallbacks(app: State<AppState>, main: Main, logger: Logger): UseAppCallbacksReturn {
-	const tabNames = useTrackedState<TabNamesState>({ names: {} });
+export function useAppCallbacks(app: AppState, main: Main, logger: Logger): UseAppCallbacksReturn {
+	const tabNames = useMutableState<TabNamesState>({ names: {} });
 
 	const addTab = useCallback(
 		(bagId: string, bagPath: string, name: string) => {
-			app.mutate((mutable) => {
-				if (mutable.tabs.some((tab) => tab.id === bagId)) {
-					mutable.activeTabId = bagId;
+			if (app.tabs.some((tab) => tab.id === bagId)) {
+				app.activeTabId = bagId;
+			} else {
+				app.tabs.push({ id: bagId, bagPath });
+				app.activeTabId = bagId;
 
-					return;
-				}
-
-				mutable.tabs.push({ id: bagId, bagPath });
-				mutable.activeTabId = bagId;
-
-				const existing = mutable.recentFiles.filter((rf) => rf.id !== bagId);
+				const existing = app.recentFiles.filter((rf) => rf.id !== bagId);
 
 				existing.unshift({ id: bagId, bagPath, name, lastOpened: Date.now() });
-				mutable.recentFiles = existing.slice(0, 20);
-			});
+				app.recentFiles = existing.slice(0, 20);
+			}
 
-			tabNames.mutate((mutable) => {
-				mutable.names[bagId] = name;
-			});
+			tabNames.names[bagId] = name;
 		},
-		[app, tabNames],
+		[identify(app), identify(tabNames)],
 	);
 
 	const openBagByPath = useCallback(
@@ -97,7 +90,7 @@ export function useAppCallbacks(app: State<AppState>, main: Main, logger: Logger
 		}
 
 		addTab(result.definition.id, result.bagPath, result.definition.name);
-	}, [addTab, app.packages, main, logger]);
+	}, [addTab, identify(app), main, logger]);
 
 	return {
 		tabNames,

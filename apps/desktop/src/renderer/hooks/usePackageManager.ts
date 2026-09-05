@@ -1,3 +1,4 @@
+import { identify } from "opshot";
 import { useCallback } from "react";
 import {
 	ensurePackageState,
@@ -39,7 +40,7 @@ export function usePackageManager(context: AppContext): PackageManager {
 				recordPackageError(app, index, error);
 			}
 		},
-		[app, main],
+		[identify(app), main],
 	);
 
 	const removePackage = useCallback(
@@ -63,11 +64,9 @@ export function usePackageManager(context: AppContext): PackageManager {
 
 			await main.deleteFile(packageInstallDirectory(userDataPath, entry.name, entry.version));
 
-			app.mutate((mutable) => {
-				mutable.packages.splice(index, 1);
-			});
+			app.packages.splice(index, 1);
 		},
-		[app, main, userDataPath],
+		[identify(app), main, userDataPath],
 	);
 
 	const updatePackage = useCallback(
@@ -113,7 +112,7 @@ export function usePackageManager(context: AppContext): PackageManager {
 				recordPackageError(app, index, error);
 			}
 		},
-		[app, main, userDataPath],
+		[identify(app), main, userDataPath],
 	);
 
 	const clearDependencies = useCallback(async (): Promise<void> => {
@@ -138,14 +137,12 @@ export function usePackageManager(context: AppContext): PackageManager {
 			}),
 		);
 
-		app.mutate((mutable) => {
-			for (let index = mutable.packages.length - 1; index >= 0; index -= 1) {
-				if (mutable.packages[index]?.origin === "dependency") {
-					mutable.packages.splice(index, 1);
-				}
+		for (let index = app.packages.length - 1; index >= 0; index -= 1) {
+			if (app.packages[index]?.origin === "dependency") {
+				app.packages.splice(index, 1);
 			}
-		});
-	}, [app, main, userDataPath]);
+		}
+	}, [identify(app), main, userDataPath]);
 
 	return { addPackage, removePackage, updatePackage, clearDependencies };
 }

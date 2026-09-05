@@ -2,7 +2,6 @@ import { packageNameFromSpec, packageSpecFromNameAndVersion } from "../../shared
 import type { Main } from "../Models/Main";
 import type { AppState, NodePackageState } from "../Models/State/App";
 import type { GraphDefinition } from "@buffered-audio/core";
-import type { Snapshot, State } from "opshot";
 
 export function comparePackageVersions(left: string, right: string): number {
 	return left.localeCompare(right, undefined, {
@@ -15,21 +14,15 @@ export function packageInstallDirectory(userDataPath: string, packageName: strin
 	return `${userDataPath}/packages/${encodeURIComponent(packageName)}/${version}`;
 }
 
-export function mutatePackageAt(
-	app: State<AppState>,
-	index: number,
-	callback: (entry: NodePackageState) => void,
-): void {
-	app.mutate((mutable) => {
-		const entry = mutable.packages[index];
+export function mutatePackageAt(app: AppState, index: number, callback: (entry: NodePackageState) => void): void {
+	const entry = app.packages[index];
 
-		if (entry) {
-			callback(entry);
-		}
-	});
+	if (entry) {
+		callback(entry);
+	}
 }
 
-export function recordPackageError(app: State<AppState>, index: number, error: unknown): void {
+export function recordPackageError(app: AppState, index: number, error: unknown): void {
 	mutatePackageAt(app, index, (target) => {
 		target.status = "error";
 		target.error = error instanceof Error ? error.message : String(error);
@@ -37,9 +30,9 @@ export function recordPackageError(app: State<AppState>, index: number, error: u
 }
 
 export function findPackageEntry(
-	app: State<AppState>,
+	app: AppState,
 	requestedSpec: string,
-): { readonly index: number; readonly entry: Snapshot<NodePackageState> } | undefined {
+): { readonly index: number; readonly entry: NodePackageState } | undefined {
 	const index = app.packages.findIndex((entry) => entry.requestedSpec === requestedSpec);
 
 	if (index === -1) return undefined;
@@ -50,17 +43,18 @@ export function findPackageEntry(
 }
 
 export function ensurePackageState(
-	app: State<AppState>,
+	app: AppState,
 	requestedSpec: string,
 	options?: { readonly isBuiltIn?: boolean; readonly origin?: NodePackageState["origin"] },
 ): { index: number; entry: NodePackageState } {
-	const packages = app.op.unwrap().packages;
+	const packages = app.packages;
 	const existingIndex = packages.findIndex((entry) => entry.requestedSpec === requestedSpec);
+	const existingEntry = packages[existingIndex];
 
-	if (existingIndex !== -1) {
+	if (existingEntry) {
 		return {
 			index: existingIndex,
-			entry: packages[existingIndex] as NodePackageState,
+			entry: existingEntry,
 		};
 	}
 
@@ -76,19 +70,15 @@ export function ensurePackageState(
 		origin: options?.origin ?? "catalog",
 	};
 
-	let newIndex = -1;
-
-	app.mutate((mutable) => {
-		newIndex = mutable.packages.push(newEntry) - 1;
-	});
+	const newIndex = app.packages.push(newEntry) - 1;
 
 	return { index: newIndex, entry: newEntry };
 }
 
 export async function runPackagePipeline(
-	entry: Snapshot<NodePackageState>,
+	entry: NodePackageState,
 	index: number,
-	app: State<AppState>,
+	app: AppState,
 	main: Main,
 ): Promise<void> {
 	mutatePackageAt(app, index, (target) => {
@@ -113,7 +103,7 @@ export async function runPackagePipeline(
 
 export async function ensureGraphPackagesInstalled(
 	graphDefinition: GraphDefinition,
-	app: State<AppState>,
+	app: AppState,
 	main: Main,
 ): Promise<void> {
 	const seen = new Set<string>();
@@ -131,11 +121,9 @@ export async function ensureGraphPackagesInstalled(
 	}
 
 	for (const { packageName, packageVersion } of pairs) {
-		const satisfied = app.op
-			.unwrap()
-			.packages.some(
-				(entry) => entry.status === "ready" && entry.name === packageName && entry.version === packageVersion,
-			);
+		const satisfied = app.packages.some(
+			(entry) => entry.status === "ready" && entry.name === packageName && entry.version === packageVersion,
+		);
 
 		if (satisfied) {
 			continue;

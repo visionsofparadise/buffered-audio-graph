@@ -5,13 +5,12 @@ import { Settings } from "./Settings";
 import { Tab } from "./Tab";
 import type { AppContext } from "../Models/Context";
 import type { NodePackageState } from "../Models/State/App";
-import type { Snapshot } from "opshot";
 
 export type LayoutContextInput = Omit<AppContext, "setSettingsOpen">;
 
 interface Props {
 	readonly context: LayoutContextInput;
-	readonly packages: Snapshot<Array<NodePackageState>>;
+	readonly packages: Array<NodePackageState>;
 	readonly isLoadingPackages: boolean;
 	readonly hasPassedLoading: boolean;
 	readonly onContinueLoading: () => void;

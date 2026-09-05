@@ -1,11 +1,11 @@
+import { identify, subscribe } from "opshot";
 import { useEffect } from "react";
 import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
-import type { State } from "opshot";
 
 const DEBOUNCE_MS = 500;
 
-export function useAutosave(app: State<AppState>, main: Main, userDataPath: string): void {
+export function useAutosave(app: AppState, main: Main, userDataPath: string): void {
 	useEffect(() => {
 		let timer: ReturnType<typeof setTimeout> | null = null;
 		let pendingData: string | null = null;
@@ -19,8 +19,8 @@ export function useAutosave(app: State<AppState>, main: Main, userDataPath: stri
 			}
 		}
 
-		const unsubscribe = app.op.subscribe(() => {
-			pendingData = JSON.stringify(app.op.unwrap(), null, 2);
+		const unsubscribe = subscribe(app, () => {
+			pendingData = JSON.stringify(app, null, 2);
 
 			if (timer !== null) clearTimeout(timer);
 
@@ -47,5 +47,5 @@ export function useAutosave(app: State<AppState>, main: Main, userDataPath: stri
 
 			flush();
 		};
-	}, [app.op, main, userDataPath]);
+	}, [identify(app), main, userDataPath]);
 }

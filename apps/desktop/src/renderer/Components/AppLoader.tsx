@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useTrackedState } from "opshot/react";
+import { identify, useMutableState } from "opshot";
 import { useEffect, useMemo, useState } from "react";
 import { useAppCallbacks } from "../hooks/useAppCallbacks";
 import { useAutosave } from "../hooks/useAutosave";
@@ -51,7 +51,7 @@ function AppRuntime({ initialState, windowId, userDataPath, queryClient, logger 
 
 	const callbacks = useAppCallbacks(app, main, logger);
 
-	const activeCommands = useTrackedState<ActiveCommands>({
+	const activeCommands = useMutableState<ActiveCommands>({
 		undo: null,
 		redo: null,
 		canUndo: false,
@@ -76,13 +76,13 @@ function AppRuntime({ initialState, windowId, userDataPath, queryClient, logger 
 			openBagByPath: callbacks.openBagByPath,
 			newBagTab: callbacks.newBagTab,
 			renameTab: (_tabId, newName) => {
-				activeCommands.op.unwrap().rename?.(newName);
+				activeCommands.rename?.(newName);
 			},
 			importBagIntoActiveTab: async () => {
-				await activeCommands.op.unwrap().importBag?.();
+				await activeCommands.importBag?.();
 			},
 		}),
-		[app, logger, mainEvents, queryClient, userDataPath, windowId, activeCommands, callbacks],
+		[identify(app), logger, mainEvents, queryClient, userDataPath, windowId, identify(activeCommands), callbacks],
 	);
 
 	return (

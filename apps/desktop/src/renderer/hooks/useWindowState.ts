@@ -1,12 +1,12 @@
+import { identify } from "opshot";
 import { useEffect } from "react";
 import type { Main } from "../Models/Main";
 import type { MainEvents } from "../Models/MainEvents";
 import type { AppState, WindowBounds } from "../Models/State/App";
-import type { State } from "opshot";
 
-export function useWindowState(app: State<AppState>, main: Main, mainEvents: MainEvents): void {
+export function useWindowState(app: AppState, main: Main, mainEvents: MainEvents): void {
 	useEffect(() => {
-		const { windowBounds } = app.op.unwrap();
+		const { windowBounds } = app;
 
 		if (windowBounds) {
 			const { x, y, width, height } = windowBounds;
@@ -27,9 +27,7 @@ export function useWindowState(app: State<AppState>, main: Main, mainEvents: Mai
 		}
 
 		const listener = (nextWindowBounds: WindowBounds): void => {
-			app.mutate((mutable) => {
-				mutable.windowBounds = nextWindowBounds;
-			});
+			app.windowBounds = nextWindowBounds;
 		};
 
 		mainEvents.on("windowBoundsChanged", listener);
@@ -37,5 +35,5 @@ export function useWindowState(app: State<AppState>, main: Main, mainEvents: Mai
 		return () => {
 			mainEvents.off("windowBoundsChanged", listener);
 		};
-	}, [app.op, main, mainEvents]);
+	}, [identify(app), main, mainEvents]);
 }

@@ -1,10 +1,10 @@
+import { identify } from "opshot";
 import { useEffect, useState } from "react";
 import { recordPackageError, runPackagePipeline } from "./packagePipeline";
 import type { Main } from "../Models/Main";
 import type { AppState } from "../Models/State/App";
-import type { State } from "opshot";
 
-export function usePackageLoader(app: State<AppState>, main: Main): { isLoading: boolean } {
+export function usePackageLoader(app: AppState, main: Main): { isLoading: boolean } {
 	const [isLoading, setIsLoading] = useState(() =>
 		app.packages.some((entry) => entry.origin === "catalog" && entry.status !== "ready" && entry.status !== "error"),
 	);
@@ -13,9 +13,8 @@ export function usePackageLoader(app: State<AppState>, main: Main): { isLoading:
 		let cancelled = false;
 
 		async function loadAll(): Promise<void> {
-			const indices = app.op
-				.unwrap()
-				.packages.map((entry, index) => ({ entry, index }))
+			const indices = app.packages
+				.map((entry, index) => ({ entry, index }))
 				.filter(({ entry }) => entry.origin === "catalog" && entry.status === "pending")
 				.sort((left, right) =>
 					left.entry.isBuiltIn === right.entry.isBuiltIn ? 0 : left.entry.isBuiltIn ? -1 : 1,
@@ -45,7 +44,7 @@ export function usePackageLoader(app: State<AppState>, main: Main): { isLoading:
 		return () => {
 			cancelled = true;
 		};
-	}, [app.op, main]);
+	}, [identify(app), main]);
 
 	return { isLoading };
 }

@@ -1,4 +1,4 @@
-import type { GraphMeta, History } from "./History";
+import type { History } from "./History";
 import type { Main } from "./Main";
 import type { MainEvents } from "./MainEvents";
 import type { ActiveCommands } from "./State/ActiveCommands";
@@ -7,22 +7,21 @@ import type { GraphViewState, PositionsState } from "./State/Graph";
 import type { GraphDefinitionState } from "./State/GraphDefinition";
 import type { Logger } from "../../shared/Models/Logger";
 import type { QueryClient } from "@tanstack/react-query";
-import type { State } from "opshot";
 
 export interface TabNamesState {
 	names: Record<string, string>;
 }
 
 export interface AppContext {
-	readonly app: State<AppState>;
-	readonly activeCommands: State<ActiveCommands>;
+	readonly app: AppState;
+	readonly activeCommands: ActiveCommands;
 	readonly logger: Logger;
 	readonly main: Main;
 	readonly mainEvents: MainEvents;
 	readonly queryClient: QueryClient;
 	readonly userDataPath: string;
 	readonly windowId: string;
-	readonly tabNames: State<TabNamesState>;
+	readonly tabNames: TabNamesState;
 	readonly openBagTab: () => Promise<void>;
 	readonly openBagByPath: (bagPath: string) => Promise<void>;
 	readonly newBagTab: () => Promise<void>;
@@ -32,9 +31,9 @@ export interface AppContext {
 }
 
 export interface GraphContext extends AppContext {
-	readonly graphDefinition: State<GraphDefinitionState, GraphMeta, GraphMeta>;
-	readonly positions: State<PositionsState, GraphMeta, GraphMeta>;
-	readonly graphView: State<GraphViewState>;
+	readonly graphDefinition: GraphDefinitionState;
+	readonly positions: PositionsState;
+	readonly graphView: GraphViewState;
 	readonly history: History;
 	readonly flushDefinition: () => void;
 	readonly bagPath: string;

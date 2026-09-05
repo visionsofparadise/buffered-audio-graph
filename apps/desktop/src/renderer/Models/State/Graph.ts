@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { Main } from "../Main";
-import type { Snapshot } from "opshot";
 
 const ViewportSchema = z.object({
 	x: z.number(),
@@ -42,7 +41,7 @@ export async function loadGraphState(main: Main, userDataPath: string, bagId: st
 	return GraphStateSchema.parse({});
 }
 
-export function serializeGraphState(positions: Snapshot<PositionsState>, view: Snapshot<GraphViewState>): string {
+export function serializeGraphState(positions: PositionsState, view: GraphViewState): string {
 	return JSON.stringify({
 		positions: positions.positions,
 		inspectedNodeId: view.inspectedNodeId,

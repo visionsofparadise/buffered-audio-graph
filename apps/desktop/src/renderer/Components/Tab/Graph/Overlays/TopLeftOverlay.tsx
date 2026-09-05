@@ -3,10 +3,9 @@ import { useState } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "../../../UI/DropdownMenu";
 import { PackageNodeList } from "../PackageNodeList";
 import type { AppState } from "../../../../Models/State/App";
-import type { Snapshot } from "opshot";
 
 interface Props {
-	readonly app: Snapshot<AppState>;
+	readonly app: AppState;
 	readonly onAddNode: (packageName: string, nodeName: string) => void;
 }
 

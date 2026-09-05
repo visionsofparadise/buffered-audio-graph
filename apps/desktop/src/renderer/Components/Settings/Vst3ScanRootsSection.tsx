@@ -1,5 +1,5 @@
 import { Plus, X } from "lucide-react";
-import { retrack } from "opshot/react";
+import { identify, scope } from "opshot";
 import { useCallback } from "react";
 import { Button } from "../UI/Button";
 import type { AppContext } from "../../Models/Context";
@@ -8,7 +8,7 @@ interface Props {
 	readonly context: AppContext;
 }
 
-export const Vst3ScanRootsSection = retrack<Props>(({ context }: Props) => {
+export const Vst3ScanRootsSection = scope<Props>(({ context }: Props) => {
 	const { app, main } = context;
 
 	const scanRoots = app.vst3ScanRoots;
@@ -23,28 +23,22 @@ export const Vst3ScanRootsSection = retrack<Props>(({ context }: Props) => {
 
 		if (!selectedPath) return;
 
-		if (scanRoots.includes(selectedPath)) return;
+		if (app.vst3ScanRoots.includes(selectedPath)) return;
 
-		app.mutate((mutable) => {
-			if (mutable.vst3ScanRoots.includes(selectedPath)) return;
+		app.vst3ScanRoots.push(selectedPath);
 
-			mutable.vst3ScanRoots.push(selectedPath);
-		});
-
-		void main.vst3ScanPlugins([...scanRoots, selectedPath]);
-	}, [main, app, scanRoots]);
+		void main.vst3ScanPlugins([...app.vst3ScanRoots]);
+	}, [main, identify(app)]);
 
 	const handleRemoveRoot = useCallback(
 		(root: string) => {
-			const nextRoots = scanRoots.filter((entry) => entry !== root);
+			const nextRoots = app.vst3ScanRoots.filter((entry) => entry !== root);
 
-			app.mutate((mutable) => {
-				mutable.vst3ScanRoots = mutable.vst3ScanRoots.filter((entry) => entry !== root);
-			});
+			app.vst3ScanRoots = nextRoots;
 
 			void main.vst3ScanPlugins([...nextRoots]);
 		},
-		[main, app, scanRoots],
+		[main, identify(app)],
 	);
 
 	return (

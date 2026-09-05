@@ -11,7 +11,7 @@ import {
 	type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { retrack } from "opshot/react";
+import { batch, identify, scope, subscribe } from "opshot";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { computeAutoLayout } from "../../../../utils/autoLayout";
 import { GraphContextMenu, type ContextMenuAction, type ContextMenuPosition } from "../GraphContextMenu";
@@ -27,6 +27,7 @@ import { EDGE_TYPES, EMPTY_REMEMBERED_PARAMETERS, NODE_TYPES } from "./utils/con
 import { minimapNodeColor } from "./utils/minimapColors";
 import { buildReactFlowEdges, buildReactFlowNodes } from "./utils/reactFlowBuilders";
 import type { GraphContext } from "../../../../Models/Context";
+import type { GraphMeta } from "../../../../Models/History";
 import type { NodeContainerData } from "../Node/Container";
 import type { GraphDefinition } from "@buffered-audio/core";
 
@@ -34,7 +35,7 @@ interface Props {
 	readonly context: GraphContext;
 }
 
-export const GraphCanvas = retrack<Props>(({ context }: Props) => {
+export const GraphCanvas = scope<Props>(({ context }: Props) => {
 	const { startRender, abortRender, clearRenderError, surfaceRenderError, activeJobId, processingNodes, renderError } =
 		useRenderJob(context);
 
@@ -56,7 +57,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 	const [renderParamNames, setRenderParamNames] = useState<Array<string>>([]);
 
 	const requestRender = useCallback(() => {
-		const definition = structuredClone(context.graphDefinition.op.unwrap()) as GraphDefinition;
+		const definition = JSON.parse(JSON.stringify(context.graphDefinition)) as GraphDefinition;
 
 		void context.main
 			.collectParameters(definition)
@@ -74,7 +75,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 				setRenderParamsOpen(false);
 				surfaceRenderError(error instanceof Error ? error.message : String(error));
 			});
-	}, [context.graphDefinition, context.main, startRender, surfaceRenderError]);
+	}, [identify(context.graphDefinition), context.main, startRender, surfaceRenderError]);
 
 	const closeRenderParams = useCallback(() => {
 		setRenderParamsOpen(false);
@@ -82,13 +83,11 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 
 	const confirmRenderParams = useCallback(
 		(values: Record<string, string>) => {
-			context.app.mutate((draft) => {
-				draft.rememberedParameters[context.bagId] = values;
-			});
+			context.app.rememberedParameters[context.bagId] = values;
 			setRenderParamsOpen(false);
 			void startRender(values);
 		},
-		[context.app, context.bagId, startRender],
+		[identify(context.app), context.bagId, startRender],
 	);
 
 	const { screenToFlowPosition, getNodes } = useReactFlow();
@@ -164,7 +163,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 
 			mutations.setParameterAtPath(nodeId, path, result[0]);
 		},
-		[context, mutations],
+		[identify(context.app), identify(context.graphDefinition), context.main, mutations],
 	);
 
 	const openFileOutput = useCallback(
@@ -194,7 +193,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 					},
 				},
 			})),
-		[context.app, mutations],
+		[identify(context.app), mutations],
 	);
 
 	const attachCallbacks = useCallback(
@@ -254,13 +253,42 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 					renderEpoch,
 				},
 			})),
-		[mutations, handleParameterBrowseAtPath, context, renderEpoch, openFileOutput, statFile],
+		[
+			mutations,
+			handleParameterBrowseAtPath,
+			identify(context.app),
+			identify(context.graphDefinition),
+			context.main,
+			context.mainEvents,
+			renderEpoch,
+			openFileOutput,
+			statFile,
+		],
 	);
 
 	useEffect(() => {
-		setNodes(attachCallbacks(buildReactFlowNodes(context)));
-		setEdges(attachEdgeData(buildReactFlowEdges(context)));
-	}, [context, setNodes, setEdges, attachCallbacks, attachEdgeData]);
+		const sync = (): void => {
+			setNodes(attachCallbacks(buildReactFlowNodes(context)));
+			setEdges(attachEdgeData(buildReactFlowEdges(context)));
+		};
+
+		sync();
+
+		const unsubscribeDefinition = subscribe(context.graphDefinition, sync);
+		const unsubscribePositions = subscribe(context.positions, sync);
+
+		return () => {
+			unsubscribeDefinition();
+			unsubscribePositions();
+		};
+	}, [
+		identify(context.graphDefinition),
+		identify(context.positions),
+		setNodes,
+		setEdges,
+		attachCallbacks,
+		attachEdgeData,
+	]);
 
 	const handleNodesChange = useCallback(
 		(changes: Array<NodeChange<Node<NodeContainerData>>>) => {
@@ -273,16 +301,16 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 					const nodeId = change.id;
 					const position = change.position;
 
-					context.positions.mutate(
-						(mutable) => {
-							mutable.positions[nodeId] = { x: position.x, y: position.y };
+					batch(
+						() => {
+							context.positions.positions[nodeId] = { x: position.x, y: position.y };
 						},
-						{ transactionKey },
+						{ transactionKey } satisfies GraphMeta,
 					);
 				}
 			}
 		},
-		[onNodesChange, context],
+		[onNodesChange, identify(context.positions)],
 	);
 
 	const handleConnect = useCallback(
@@ -317,10 +345,8 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 	const handleAutoOrganize = useCallback(() => {
 		const nextPositions = computeAutoLayout(context.graphDefinition.nodes, context.graphDefinition.edges);
 
-		context.positions.mutate((mutable) => {
-			mutable.positions = nextPositions;
-		});
-	}, [context]);
+		context.positions.positions = nextPositions;
+	}, [identify(context.graphDefinition), identify(context.positions)]);
 
 	const closeContextMenu = useCallback(() => {
 		setContextMenu(null);
@@ -383,7 +409,7 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 				}
 			}
 		},
-		[contextMenu, mutations, requestRender, context],
+		[contextMenu, mutations, requestRender, identify(context.history)],
 	);
 
 	const handleAddNodeFromContextMenu = useCallback(
@@ -447,16 +473,13 @@ export const GraphCanvas = retrack<Props>(({ context }: Props) => {
 		return () => {
 			document.removeEventListener("keydown", handleKeyDown);
 		};
-	}, [context, getNodes, mutations]);
+	}, [identify(context.history), getNodes, mutations]);
 
-	const renderReadiness = useMemo(() => {
-		const missing = unreadyRenderPairs(context.graphDefinition.nodes, context.app.packages);
-
-		return {
-			ready: missing.length === 0,
-			reason: missing.length > 0 ? `Packages not ready: ${missing.join(", ")}` : undefined,
-		};
-	}, [context.graphDefinition.nodes, context.app.packages]);
+	const missingRenderPairs = unreadyRenderPairs(context.graphDefinition.nodes, context.app.packages);
+	const renderReadiness = {
+		ready: missingRenderPairs.length === 0,
+		reason: missingRenderPairs.length > 0 ? `Packages not ready: ${missingRenderPairs.join(", ")}` : undefined,
+	};
 
 	const contextMenuNode =
 		contextMenu?.nodeId !== undefined ? nodes.find((node) => node.id === contextMenu.nodeId) : undefined;
