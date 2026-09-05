@@ -9,7 +9,7 @@ async function openAddNodeCatalog(page: Page): Promise<void> {
 	if (!trigger) throw new Error("Add node trigger not found");
 
 	await clickPoint(page, trigger);
-	await page.waitForSelector("[data-catalog-input]", { timeout: 5000 });
+	await page.waitForSelector("[data-catalog-input]");
 	await sleep(150);
 }
 

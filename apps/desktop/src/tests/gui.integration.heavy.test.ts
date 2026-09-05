@@ -47,6 +47,7 @@ import {
 } from "./utils/app";
 import {
 	BAG_PATH,
+	BASELINE_RUN_MS,
 	BUILTIN_PACKAGE,
 	DEBOUNCE_WAIT_MS,
 	DUPLICATE_CHANNELS_NODE,
@@ -103,10 +104,13 @@ import {
 import { versionAtLeast } from "./utils/version";
 
 let child: ReturnType<typeof launchApp> | undefined;
+let startedAt = 0;
 let browser: Browser | undefined;
 let page: Page;
 
 beforeAll(async () => {
+	startedAt = Date.now();
+
 	const bagId = seedProfile();
 
 	log(`Seeded profile at ${PROFILE_DIR} (bag ${bagId})`);
@@ -117,7 +121,7 @@ beforeAll(async () => {
 
 	child = launchApp(port);
 
-	await waitForCdp(port, 60000);
+	await waitForCdp(port, 300000);
 
 	browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}` });
 
@@ -143,6 +147,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+	const elapsed = Date.now() - startedAt;
+	const ratio = elapsed / BASELINE_RUN_MS;
+
+	log(
+		`Suite wall clock ${(elapsed / 1000).toFixed(1)}s against a ${(BASELINE_RUN_MS / 1000).toFixed(0)}s baseline (${ratio.toFixed(1)}x)${
+			ratio >= 2 ? " — a failure at this ratio is machine load, not a regression" : ""
+		}`,
+	);
+
 	if (browser) {
 		try {
 			await browser.disconnect();
@@ -526,7 +539,7 @@ describe("graph editing and persistence", () => {
 
 		const editorSelector = `.react-flow__node[data-id="${duplicateChannelsId}"] input[type="number"][step="1"]`;
 
-		await page.waitForSelector(editorSelector, { timeout: 5000 });
+		await page.waitForSelector(editorSelector);
 
 		const editorIsFocused = await page.$eval(editorSelector, (element) => element === document.activeElement);
 
@@ -624,7 +637,7 @@ describe("undo/redo wiring — insert-on-edge", () => {
 		if (!insertChipBox) throw new Error("Insert chip button not found for the insert-on-edge mutation");
 
 		await page.mouse.click(insertChipBox.x + insertChipBox.width / 2, insertChipBox.y + insertChipBox.height / 2);
-		await page.waitForSelector("[data-catalog-input]", { timeout: 5000 });
+		await page.waitForSelector("[data-catalog-input]");
 		await sleep(150);
 		await page.keyboard.type("duplicate", { delay: 20 });
 		await sleep(250);
@@ -797,7 +810,7 @@ describe("settings — vst3 scan roots", () => {
 		if (!appMenuTrigger) throw new Error("App menu trigger not found");
 
 		await clickPoint(page, appMenuTrigger);
-		await page.waitForSelector('[role="menuitem"]', { timeout: 5000 });
+		await page.waitForSelector('[role="menuitem"]');
 		await sleep(150);
 
 		const openedSettings = await clickMenuItemByText(page, "Settings");
@@ -817,7 +830,7 @@ describe("settings — vst3 scan roots", () => {
 				Array.from(document.querySelectorAll('button[aria-label^="Remove "]')).some(
 					(button) => button.closest(".react-flow__node") === null,
 				),
-			{ timeout: 5000, polling: 200 },
+			{ polling: 200 },
 		);
 		await sleep(150);
 

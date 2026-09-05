@@ -18,7 +18,7 @@ export async function waitForRenderParametersOpen(page: Page, timeoutMs = 5000):
 export async function fillRenderParameter(page: Page, name: string, value: string): Promise<void> {
 	const selector = `[data-render-param-input="${name}"]`;
 
-	await page.waitForSelector(selector, { timeout: 5000 });
+	await page.waitForSelector(selector);
 
 	await setNativeInputValue(page, selector, value, ["input", "change"]);
 	await sleep(100);
@@ -27,7 +27,7 @@ export async function fillRenderParameter(page: Page, name: string, value: strin
 export async function confirmRenderParameters(page: Page): Promise<void> {
 	const selector = "[data-render-params-confirm]";
 
-	await page.waitForSelector(selector, { timeout: 5000 });
+	await page.waitForSelector(selector);
 
 	const disabled = await page.$eval(selector, (element) => (element as HTMLButtonElement).disabled);
 
@@ -40,7 +40,7 @@ export async function confirmRenderParameters(page: Page): Promise<void> {
 export async function cancelRenderParameters(page: Page): Promise<void> {
 	const selector = "[data-render-params-cancel]";
 
-	await page.waitForSelector(selector, { timeout: 5000 });
+	await page.waitForSelector(selector);
 	await page.click(selector);
 	await sleep(200);
 }

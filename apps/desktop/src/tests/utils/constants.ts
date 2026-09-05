@@ -26,3 +26,5 @@ export const VST3_NODE = "VST3";
 export const OTT_MATCH = "OTT";
 
 export const DEBOUNCE_WAIT_MS = 1300;
+
+export const BASELINE_RUN_MS = 115_000;
