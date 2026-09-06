@@ -50,9 +50,11 @@ export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 
 	const activeJobIdRef = useRef<string | null>(null);
 
-	useEffect(() => {
-		activeJobIdRef.current = activeJobId;
-	}, [activeJobId]);
+	const setJob = useCallback((jobId: string | null): void => {
+		activeJobIdRef.current = jobId;
+
+		setActiveJobId(jobId);
+	}, []);
 
 	const startRender = useCallback(
 		async (parameters: Record<string, string>) => {
@@ -60,7 +62,7 @@ export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 
 			const jobId = mintJobId();
 
-			setActiveJobId(jobId);
+			setJob(jobId);
 			setProcessingNodes(new Map());
 			setRenderError(null);
 
@@ -71,36 +73,39 @@ export function useRenderJob(context: GraphContext): UseRenderJobReturn {
 
 				if (activeJobIdRef.current !== jobId) return;
 
-				setActiveJobId(null);
+				setJob(null);
 				setProcessingNodes(new Map());
 			} catch (error) {
 				if (activeJobIdRef.current !== jobId) return;
 
-				setActiveJobId(null);
+				setJob(null);
 				setProcessingNodes(new Map());
 				setRenderError(error instanceof Error ? error.message : String(error));
 			}
 		},
-		[identify(context.graphDefinition), identify(context.app), context.main],
+		[identify(context.graphDefinition), identify(context.app), context.main, setJob],
 	);
 
 	const abortRender = useCallback(async () => {
 		if (activeJobIdRef.current === null) return;
 
 		await context.main.audioAbortJob(activeJobIdRef.current);
-		setActiveJobId(null);
+		setJob(null);
 		setProcessingNodes(new Map());
-	}, [context.main]);
+	}, [context.main, setJob]);
 
 	const clearRenderError = useCallback(() => {
 		setRenderError(null);
 	}, []);
 
-	const surfaceRenderError = useCallback((message: string) => {
-		setActiveJobId(null);
-		setProcessingNodes(new Map());
-		setRenderError(message);
-	}, []);
+	const surfaceRenderError = useCallback(
+		(message: string) => {
+			setJob(null);
+			setProcessingNodes(new Map());
+			setRenderError(message);
+		},
+		[setJob],
+	);
 
 	useEffect(() => {
 		const handler = (payload: AudioProgressPayload): void => {
