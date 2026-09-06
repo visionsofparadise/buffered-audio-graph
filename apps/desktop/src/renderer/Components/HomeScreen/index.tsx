@@ -1,5 +1,5 @@
 import { FolderOpen, Plus } from "lucide-react";
-import { scope } from "opshot";
+import { scope } from "opshot/react";
 import { cn } from "../../utils/cn";
 import { ProjectIcon } from "../UI/ProjectIcon";
 import { HomeGraphDecoration, type HomeGraphAnchor } from "./HomeGraphDecoration";

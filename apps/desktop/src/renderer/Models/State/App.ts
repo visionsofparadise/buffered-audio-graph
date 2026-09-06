@@ -1,4 +1,4 @@
-import { useMutableState } from "opshot";
+import { useMutableState } from "opshot/react";
 import { z } from "zod";
 
 const TabEntrySchema = z.object({

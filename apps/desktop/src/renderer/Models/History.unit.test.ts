@@ -13,9 +13,7 @@ const createFixture = () => {
 	const history = createHistory([definition, positions]);
 
 	const settle = () => {
-		flush(definition);
-		flush(positions);
-		flush(history);
+		flush(definition, positions, history);
 	};
 
 	return { definition, positions, history, settle };

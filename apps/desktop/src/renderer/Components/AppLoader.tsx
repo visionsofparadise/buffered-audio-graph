@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { identify, useMutableState } from "opshot";
+import { identify } from "opshot";
+import { useMutableState } from "opshot/react";
 import { useEffect, useMemo, useState } from "react";
 import { useAppCallbacks } from "../hooks/useAppCallbacks";
 import { useAutosave } from "../hooks/useAutosave";

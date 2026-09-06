@@ -1,4 +1,5 @@
-import { identify, useMutableState } from "opshot";
+import { identify } from "opshot";
+import { useMutableState } from "opshot/react";
 import { useCallback } from "react";
 import { loadBag, newBag, openBag, saveBagDefinition } from "../utils/bagOperations";
 import { comparePackageVersions } from "./packagePipeline";

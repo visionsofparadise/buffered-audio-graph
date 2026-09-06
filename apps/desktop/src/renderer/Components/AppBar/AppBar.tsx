@@ -1,5 +1,5 @@
 import { FilePlus, FolderOpen, Menu, Plus, Save, SaveAll, Settings, X } from "lucide-react";
-import { scope } from "opshot";
+import { scope } from "opshot/react";
 import { cn } from "../../utils/cn";
 import { basename } from "../../utils/path";
 import { DropdownButton, type MenuItem } from "../UI/DropdownButton";

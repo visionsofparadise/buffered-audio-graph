@@ -1,4 +1,4 @@
-import { scope } from "opshot";
+import { scope } from "opshot/react";
 import { useState } from "react";
 import { cn } from "../../utils/cn";
 import { Button } from "../UI/Button";

@@ -1,4 +1,4 @@
-import { scope } from "opshot";
+import { scope } from "opshot/react";
 import { HomeScreen } from "../HomeScreen";
 import { Graph } from "./Graph";
 import type { AppContext } from "../../Models/Context";

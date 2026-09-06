@@ -1,5 +1,6 @@
 import { Plus, X } from "lucide-react";
-import { identify, scope } from "opshot";
+import { identify } from "opshot";
+import { scope } from "opshot/react";
 import { useCallback } from "react";
 import { Button } from "../UI/Button";
 import type { AppContext } from "../../Models/Context";

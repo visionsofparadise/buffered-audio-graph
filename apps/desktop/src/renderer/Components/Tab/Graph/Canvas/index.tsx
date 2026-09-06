@@ -11,7 +11,8 @@ import {
 	type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { batch, identify, scope, subscribe } from "opshot";
+import { batch, identify, subscribe } from "opshot";
+import { scope } from "opshot/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { computeAutoLayout } from "../../../../utils/autoLayout";
 import { GraphContextMenu, type ContextMenuAction, type ContextMenuPosition } from "../GraphContextMenu";

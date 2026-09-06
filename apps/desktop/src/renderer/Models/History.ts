@@ -6,9 +6,11 @@ export interface GraphMeta {
 	transactionKey?: string;
 }
 
+type GraphOperation = Operation<GraphMeta | undefined>;
+
 interface HistoryBatch {
 	state: object;
-	operations: Array<Operation>;
+	operations: Array<GraphOperation>;
 }
 
 interface HistoryEntry {
@@ -29,25 +31,11 @@ interface HistoryData {
 export type History = HistoryData;
 
 interface MetaRun {
-	meta: unknown;
-	operations: Array<Operation>;
+	meta: GraphMeta | undefined;
+	operations: Array<GraphOperation>;
 }
 
-const isOptionalBoolean = (value: unknown): boolean => value === undefined || typeof value === "boolean";
-
-function isGraphMeta(meta: unknown): meta is GraphMeta {
-	if (typeof meta !== "object" || meta === null) return false;
-
-	const candidate = meta as Record<string, unknown>;
-
-	return (
-		isOptionalBoolean(candidate.replay) &&
-		isOptionalBoolean(candidate.external) &&
-		(candidate.transactionKey === undefined || typeof candidate.transactionKey === "string")
-	);
-}
-
-const partitionByMeta = (operations: ReadonlyArray<Operation>): Array<MetaRun> => {
+const partitionByMeta = (operations: ReadonlyArray<GraphOperation>): Array<MetaRun> => {
 	const runs = new Array<MetaRun>();
 
 	let run: MetaRun | undefined;
@@ -69,7 +57,9 @@ const partitionByMeta = (operations: ReadonlyArray<Operation>): Array<MetaRun> =
 
 export function createHistory(states: ReadonlyArray<object>): History {
 	function settle(): void {
-		for (const state of states) flush(state);
+		const [first, ...rest] = states;
+
+		if (first) flush(first, ...rest);
 	}
 
 	function undo(): void {
@@ -83,8 +73,8 @@ export function createHistory(states: ReadonlyArray<object>): History {
 			batch(
 				() => {
 					for (const operation of [...historyBatch.operations].reverse()) {
-						if ("before" in operation) Reflect.set(operation.node, operation.key, operation.before);
-						else Reflect.deleteProperty(operation.node, operation.key);
+						if (operation.kind === "add") Reflect.deleteProperty(operation.node, operation.key);
+						else Reflect.set(operation.node, operation.key, operation.before);
 					}
 				},
 				{ replay: true } satisfies GraphMeta,
@@ -105,8 +95,8 @@ export function createHistory(states: ReadonlyArray<object>): History {
 			batch(
 				() => {
 					for (const operation of historyBatch.operations) {
-						if ("after" in operation) Reflect.set(operation.node, operation.key, operation.after);
-						else Reflect.deleteProperty(operation.node, operation.key);
+						if (operation.kind === "delete") Reflect.deleteProperty(operation.node, operation.key);
+						else Reflect.set(operation.node, operation.key, operation.after);
 					}
 				},
 				{ replay: true } satisfies GraphMeta,
@@ -131,9 +121,9 @@ export function createHistory(states: ReadonlyArray<object>): History {
 	});
 
 	for (const state of states) {
-		subscribe(state, (operations) => {
+		subscribe<GraphMeta | undefined>(state, (operations) => {
 			for (const run of partitionByMeta(operations)) {
-				const meta: GraphMeta = isGraphMeta(run.meta) ? run.meta : {};
+				const meta: GraphMeta = run.meta ?? {};
 
 				if (meta.replay) continue;
 

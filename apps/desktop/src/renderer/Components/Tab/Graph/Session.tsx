@@ -1,5 +1,6 @@
 import { ReactFlowProvider } from "@xyflow/react";
-import { batch, identify, subscribe, useMutableState } from "opshot";
+import { batch, identify, subscribe } from "opshot";
+import { useMutableState } from "opshot/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ensureGraphPackagesInstalled } from "../../../hooks/packagePipeline";
 import { useGraphDefinition } from "../../../hooks/useGraphDefinition";

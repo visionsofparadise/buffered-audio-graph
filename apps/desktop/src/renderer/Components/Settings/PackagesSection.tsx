@@ -1,4 +1,5 @@
-import { identify, scope } from "opshot";
+import { identify } from "opshot";
+import { scope } from "opshot/react";
 import { useCallback, useState } from "react";
 import { usePackageManager } from "../../hooks/usePackageManager";
 import { Button } from "../UI/Button";

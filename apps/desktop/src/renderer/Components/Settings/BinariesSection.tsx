@@ -1,4 +1,5 @@
-import { identify, scope } from "opshot";
+import { identify } from "opshot";
+import { scope } from "opshot/react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "../UI/Button";
 import { extractBinaries } from "./utils/extractBinaries";
