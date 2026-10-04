@@ -3,7 +3,8 @@
 	"workspaces": {
 		".": {
 			"entry": ["scripts/binaries/pull.ts", "scripts/binaries/install.ts", "scripts/fixtures/stage-binaries.ts"],
-			"project": ["scripts/**/*.ts"]
+			"project": ["scripts/**/*.ts"],
+			"ignoreBinaries": ["uvx"]
 		},
 		"packages/buffered-audio-nodes-core": {
 			"entry": ["src/index.ts", "src/testing/index.ts"],
