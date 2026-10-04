@@ -60,9 +60,10 @@
 		"nanoid@3": "3.3.18"
 	},
 	"allowScripts": {
-		"electron-winstaller": true,
-		"esbuild": true,
-		"unrs-resolver": true,
-		"electron": true
+		"electron@40.8.0": true,
+		"electron-winstaller@5.4.4": true,
+		"esbuild@0.28.2": true,
+		"esbuild@0.21.5": true,
+		"unrs-resolver@1.12.2": true
 	}
 }
