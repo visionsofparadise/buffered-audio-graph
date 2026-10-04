@@ -71,17 +71,9 @@ jobs:
               restore-keys: |
                  dvc-linux-x64-
 
-         - name: Pull binaries
+         - name: Pull and stage assets
            if: steps.check.outputs.skip == 'false'
-           run: npm run binaries:pull -- --target=linux-x64
-
-         - name: Pull audio test fixtures
-           if: steps.check.outputs.skip == 'false'
-           run: npm run fixtures:pull
-
-         - name: Stage binary + model test fixtures
-           if: steps.check.outputs.skip == 'false'
-           run: npm run fixtures:stage -- --target=linux-x64
+           run: npm run assets:pull -- --target=linux-x64
 
          - name: Run heavy integration tests
            if: steps.check.outputs.skip == 'false'

@@ -5,7 +5,6 @@ import {
 	filterAssetsForTarget,
 	formatTarget,
 	type ManifestAsset,
-	parseTargetArgs,
 	readManifest,
 	resolveRepoRoot,
 	type Target,
@@ -47,87 +46,18 @@ function resolveFixtureFilename(asset: ManifestAsset, target: Target): string | 
 
 interface CopyEntry {
 	sourcePath: string;
-	sourceFilename: string;
 	destFilename: string;
 }
 
-function resolveDefaultOutDir(): string {
-	return path.resolve(resolveRepoRoot(), "fixtures", "binaries");
-}
-
-function parseArgs(argv: ReadonlyArray<string>): {
-	target: Target;
-	dryRun: boolean;
-	outDir: string;
-} {
-	const passthrough: Array<string> = [];
-	let dryRun = false;
-	let outDirOverride: string | undefined;
-
-	for (let index = 0; index < argv.length; index += 1) {
-		const token = argv[index];
-
-		if (token === undefined) continue;
-
-		if (token === "--dry-run") {
-			dryRun = true;
-		} else if (token === "--out") {
-			const next = argv[index + 1];
-
-			if (next === undefined) throw new Error("--out requires a value");
-
-			outDirOverride = next;
-			index += 1;
-		} else if (token.startsWith("--out=")) {
-			outDirOverride = token.slice("--out=".length);
-		} else {
-			passthrough.push(token);
-		}
-	}
-
-	const target = parseTargetArgs(passthrough);
-	const outDir = outDirOverride !== undefined ? path.resolve(outDirOverride) : resolveDefaultOutDir();
-
-	return { target, dryRun, outDir };
-}
-
-async function main(): Promise<void> {
-	const { target, dryRun, outDir } = parseArgs(process.argv.slice(2));
-
+export async function stageFixtureBinaries(target: Target): Promise<void> {
+	const outDir = path.resolve(resolveRepoRoot(), "fixtures", "binaries");
 	const manifest = await readManifest();
-	const included = filterAssetsForTarget(manifest.assets, target);
-
 	const entries: Array<CopyEntry> = [];
 
-	for (const asset of included) {
+	for (const asset of filterAssetsForTarget(manifest.assets, target)) {
 		const destFilename = resolveFixtureFilename(asset, target);
 
-		if (destFilename === null) {
-			console.warn(`[fixtures:stage] skip     ${asset.filename} (not needed by tests)`);
-
-			continue;
-		}
-
-		entries.push({ sourcePath: assetPath(asset), sourceFilename: asset.filename, destFilename });
-	}
-
-	console.warn(`[fixtures:stage] target:  ${formatTarget(target)}`);
-	console.warn(`[fixtures:stage] out dir: ${outDir}`);
-	console.warn(`[fixtures:stage] assets:  ${entries.length}`);
-
-	for (const entry of entries) {
-		const arrow = entry.sourceFilename === entry.destFilename ? "==" : "->";
-
-		console.warn(`[fixtures:stage] ${arrow} ${entry.sourceFilename} ${arrow} ${entry.destFilename}`);
-	}
-
-	if (dryRun) {
-		const names = entries.map((entry) => entry.destFilename).sort((left, right) => left.localeCompare(right));
-
-		console.warn(`[fixtures:stage] dry-run — ${names.length} destination file(s):`);
-		console.warn(names.join("\n"));
-
-		return;
+		if (destFilename !== null) entries.push({ sourcePath: assetPath(asset), destFilename });
 	}
 
 	await fs.mkdir(outDir, { recursive: true });
@@ -140,14 +70,7 @@ async function main(): Promise<void> {
 		if (target.platform !== "win32" && (entry.destFilename === "ffmpeg" || entry.destFilename === "ffprobe")) {
 			await fs.chmod(destination, 0o755);
 		}
-
-		console.warn(`[fixtures:stage] copy   ${entry.destFilename}`);
 	}
 
-	console.warn(`[fixtures:stage] done — ${entries.length} asset(s) into ${outDir} for ${formatTarget(target)}`);
+	console.warn(`[assets:pull] staged ${entries.length} test binaries into ${outDir} for ${formatTarget(target)}`);
 }
-
-main().catch((error: unknown) => {
-	console.error(error);
-	process.exit(1);
-});

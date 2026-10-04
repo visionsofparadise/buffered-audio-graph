@@ -123,14 +123,8 @@ jobs:
               restore-keys: |
                  dvc-linux-x64-
 
-         - name: Pull binaries
-           run: npm run binaries:pull -- --target=linux-x64
-
-         - name: Pull audio test fixtures
-           run: npm run fixtures:pull
-
-         - name: Stage binary + model test fixtures
-           run: npm run fixtures:stage -- --target=linux-x64
+         - name: Pull and stage assets
+           run: npm run assets:pull -- --target=linux-x64
 
          - name: Build (topo-ordered)
            run: npx turbo build --filter=@buffered-audio/nodes

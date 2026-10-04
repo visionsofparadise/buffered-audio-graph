@@ -9,17 +9,15 @@
 		"packages/*"
 	],
 	"scripts": {
-		"prepare": "node -e \"import('node:child_process').then(({execSync})=>{try{execSync('git rev-parse --is-inside-work-tree',{stdio:'ignore'});execSync('git config core.hooksPath .githooks')}catch{}})\" && node tools.mjs install",
+		"prepare": "node -e \"import('node:child_process').then(({execSync})=>{try{execSync('git rev-parse --is-inside-work-tree',{stdio:'ignore'});execSync('git config core.hooksPath .githooks')}catch{}})\" && node tools.mjs install && tsx scripts/binaries/pull.ts --prepare",
 		"fix": "concurrently -m 1 --group \"prettier --write .\" \"turbo fix\" \"stylelint \\\"**/*.css\\\" --fix --allow-empty-input --cache\" \"markdownlint-cli2 --fix \\\"**/*.md\\\"\" \"textlint --fix \\\"**/*.md\\\"\"",
 		"check": "concurrently --group \"prettier --check .\" \"turbo check\" \"stylelint \\\"**/*.css\\\" -f unix --allow-empty-input --cache\" \"markdownlint-cli2 \\\"**/*.md\\\"\" \"textlint -f compact \\\"**/*.md\\\"\" \"knip --no-progress\" \"jscpd .\" \"node tools.mjs run actionlint\"",
 		"start": "turbo start",
 		"unit": "turbo unit",
 		"build": "turbo build",
 		"dvc": "uvx --from \"dvc[s3]==3.67.1\" dvc",
-		"binaries:pull": "tsx scripts/binaries/pull.ts",
-		"binaries:install": "tsx scripts/binaries/install.ts",
-		"fixtures:pull": "npm run dvc -- pull fixtures/audio.dvc",
-		"fixtures:stage": "tsx scripts/fixtures/stage-binaries.ts"
+		"assets:pull": "tsx scripts/binaries/pull.ts",
+		"binaries:install": "tsx scripts/binaries/install.ts"
 	},
 	"devDependencies": {
 		"@commitlint/cli": "^21.2.2",

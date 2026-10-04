@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { stageFixtureBinaries } from "../fixtures/stage-binaries";
 import { formatTarget, parseTargetArgs, resolveRepoRoot } from "./manifest";
 
 async function readDvcCommand(): Promise<Array<string>> {
@@ -19,25 +20,43 @@ function quoteForShell(arg: string): string {
 }
 
 async function main(): Promise<void> {
-	const target = parseTargetArgs(process.argv.slice(2));
+	const argv = process.argv.slice(2);
+	const isPrepare = argv.includes("--prepare");
+
+	if (isPrepare && process.env.CI !== undefined) {
+		console.warn("[assets:pull] CI: skipped in prepare; the workflow pulls its own target");
+
+		return;
+	}
+
+	const target = parseTargetArgs(argv.filter((arg) => arg !== "--prepare"));
 	const [cmd, ...dvcArgs] = await readDvcCommand();
 
 	if (cmd === undefined) throw new Error('package.json "dvc" script is empty');
 
-	const args = [...dvcArgs, "pull", "assets/binaries/all.dvc", `assets/binaries/${formatTarget(target)}.dvc`];
+	const args = [
+		...dvcArgs,
+		"pull",
+		"--remote",
+		"public",
+		"assets/binaries/all.dvc",
+		`assets/binaries/${formatTarget(target)}.dvc`,
+		"fixtures/audio.dvc",
+	];
 
-	console.warn(`[pull] target: ${formatTarget(target)}`);
+	console.warn(`[assets:pull] target: ${formatTarget(target)}`);
 
-	const useShell = process.platform === "win32";
-	const result = spawnSync(cmd, useShell ? args.map(quoteForShell) : args, {
-		cwd: resolveRepoRoot(),
-		stdio: "inherit",
-		shell: useShell,
-	});
+	const options = { cwd: resolveRepoRoot(), stdio: "inherit" } as const;
+	const result =
+		process.platform === "win32"
+			? spawnSync([cmd, ...args].map(quoteForShell).join(" "), { ...options, shell: true })
+			: spawnSync(cmd, args, options);
 
 	if (result.error !== undefined) throw result.error;
 
 	if (result.status !== 0) process.exit(result.status ?? 1);
+
+	await stageFixtureBinaries(target);
 }
 
 main().catch((error: unknown) => {

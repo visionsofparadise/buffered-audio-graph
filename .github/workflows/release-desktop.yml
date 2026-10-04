@@ -76,7 +76,7 @@ jobs:
                  dvc-${{ matrix.platform }}-${{ matrix.arch }}-
 
          - name: Pull binaries
-           run: npm run binaries:pull -- --target=${{ matrix.platform }}-${{ matrix.arch }}
+           run: npm run assets:pull -- --target=${{ matrix.platform }}-${{ matrix.arch }}
 
          - name: Install binaries
            run: npm run binaries:install -- --target=${{ matrix.platform }}-${{ matrix.arch }}
