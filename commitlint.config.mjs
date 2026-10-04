@@ -15,7 +15,7 @@ export default {
 		"footer-max-line-length": [0],
 		"decision-footers": [2, "always"],
 	},
-	// Footer token shapes are defined in AGENTS.md Git.
+	// Decision footers take the shapes `Supersedes: <sha>; <disposition>` and `Rejected: <alternative>; <reasoning>`.
 	plugins: [
 		{
 			rules: {
