@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --color-surface:#100F0D; --color-elevated:#1D1A16; --color-border:#3E3833;
+    --color-dimmed:#685F54; --color-text-secondary:#918979; --color-text-primary:#F5F0E6;
+    --color-accent-primary:#E56A4A; --color-accent-secondary:#47A5A5; --color-error:#E5484D;
+    --color-category-source:#45A8A0; --color-category-transform:#7B85C4; --color-category-target:#C98A6C;
+    --color-meter-green:#4A7A5A; --color-meter-yellow:#A59A4A;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{background:var(--color-surface);color:var(--color-text-primary);font-family:"Azeret Mono",ui-monospace,monospace;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-feature-settings:"kern" 1,"liga" 1;overflow:hidden}
+  button,input,select,textarea{font-family:inherit;font-size:inherit;line-height:inherit;font-weight:inherit;letter-spacing:inherit;color:inherit;background:transparent;border:0;margin:0;padding:0}
+  button{-webkit-appearance:none;appearance:none;cursor:pointer;text-align:inherit}
+  button:disabled{cursor:not-allowed}
+  input,textarea,select{-webkit-appearance:none;appearance:none}
+  a{color:var(--color-accent-secondary);text-decoration:none}
+  a:hover{color:var(--color-text-primary)}
+  ::selection{background:var(--color-text-primary);color:var(--color-surface)}
+  .bag-scroll{scrollbar-width:thin;scrollbar-color:var(--color-dimmed) var(--color-border)}
+  .bag-scroll::-webkit-scrollbar{width:6px;height:6px}
+  .bag-scroll::-webkit-scrollbar-track{background:var(--color-border)}
+  .bag-scroll::-webkit-scrollbar-thumb{background:var(--color-dimmed)}
+  .bag-tab-close{opacity:0;transition:opacity 0.12s}
+  .bag-tab:hover .bag-tab-close,.bag-tab-active .bag-tab-close{opacity:1}
+  .bag-edge-hit{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Cline x1='6' y1='6' x2='16' y2='16' stroke='%23E5484D' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='16' y1='6' x2='6' y2='16' stroke='%23E5484D' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") 11 11, pointer}
+</style>
+</helmet>
+
+<div ref="{{ rootRef }}" style="display:flex;flex-direction:column;height:100vh;width:100%;background:var(--color-surface);color:var(--color-text-primary);overflow:hidden">
+
+  <div style="display:flex;height:28px;flex-shrink:0;align-items:center;justify-content:space-between;background:var(--color-elevated)">
+    <span style="padding-left:12px;font-size:10px;font-weight:400;letter-spacing:0.06em;text-transform:uppercase;color:var(--color-text-secondary)">DEMO VIEW</span>
+    <div style="display:flex;height:100%">
+      <button type="button" onClick="{{ onAppClick }}" style="{{ appTabStyle }}" style-hover="color:var(--color-text-primary) !important">App</button>
+      <button type="button" onClick="{{ onShowcaseClick }}" style="{{ showcaseTabStyle }}" style-hover="color:var(--color-text-primary) !important">Showcase</button>
+    </div>
+  </div>
+
+  <sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;height:48px;flex-shrink:0;align-items:center;background:var(--color-elevated);position:relative;z-index:40">
+      <button type="button" onClick="{{ toggleAppMenu }}" aria-label="App menu" style="{{ menuBtnStyle }}" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="2">
+        <div onClick="{{ tab.onSelect }}" class="bag-tab {{ tab.activeClass }}" style="{{ tab.style }}">
+          {{ tab.icon }}
+          <sc-if value="{{ tab.active }}" hint-placeholder-val="{{ false }}">
+            <input type="text" value="{{ tab.name }}" onInput="{{ tab.onRename }}" onClick="{{ stop }}" onPointerDown="{{ stop }}" aria-label="Project name" style="{{ tab.nameInputStyle }}" />
+          </sc-if>
+          <sc-if value="{{ tab.inactive }}" hint-placeholder-val="{{ true }}">
+            <span style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tab.name }}</span>
+          </sc-if>
+          <button type="button" onClick="{{ tab.onClose }}" aria-label="Close tab" class="bag-tab-close" style="{{ tab.closeStyle }}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </sc-for>
+      <button type="button" onClick="{{ goHome }}" aria-label="Home" style="{{ homeBtnStyle }}" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <div style="flex:1"></div>
+      <div aria-hidden="true" style="height:100%;width:138px"></div>
+
+      <sc-if value="{{ appMenuOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:48px;left:0;z-index:50;min-width:176px;display:flex;flex-direction:column;background:var(--color-elevated);border-radius:2px;padding:4px 0">
+          <sc-for list="{{ appMenuItems }}" as="mi" hint-placeholder-count="10">
+            <sc-if value="{{ mi.isSep }}"><div style="height:1px;margin:4px 8px;background:var(--color-border)"></div></sc-if>
+            <sc-if value="{{ mi.isAction }}">
+              <div onClick="{{ closeAppMenu }}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;font-family:'Azeret Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-primary);cursor:pointer" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important">{{ mi.label }}</div>
+            </sc-if>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <div style="display:flex;min-height:0;flex:1;flex-direction:column;overflow:hidden">
+
+    <!-- GRAPH -->
+    <sc-if value="{{ isGraph }}" hint-placeholder-val="{{ true }}">
+      <div ref="{{ canvasRef }}" onPointerDown="{{ canvasDown }}" style="{{ canvasStyle }}">
+        <div style="{{ worldStyle }}">
+          <svg width="1" height="1" style="position:absolute;top:0;left:0;overflow:visible;pointer-events:none">
+            <sc-for list="{{ edges }}" as="e" hint-placeholder-count="8">
+              <path d="{{ e.d }}" fill="none" stroke="{{ e.stroke }}" stroke-width="{{ e.width }}"></path>
+              <path d="{{ e.d }}" fill="none" stroke="transparent" stroke-width="20" class="bag-edge-hit" style="pointer-events:stroke" onClick="{{ e.onDelete }}" onPointerEnter="{{ e.onEnter }}" onPointerLeave="{{ e.onLeave }}"></path>
+            </sc-for>
+          </svg>
+
+          <sc-for list="{{ nodes }}" as="node" hint-placeholder-count="6">
+            <div ref="{{ node.ref }}" onPointerDown="{{ node.onPointerDown }}" style="{{ node.wrapperStyle }}">
+              <div style="{{ node.panelStyle }}">
+                <div style="{{ node.headerStyle }}">
+                  <span style="font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;line-height:1.15;color:var(--color-surface)">{{ node.name }}</span>
+                  <div style="display:flex;flex-shrink:0;align-items:center;gap:6px">
+                    <button type="button" onClick="{{ node.onBypass }}" aria-label="Bypass" style="{{ node.powerStyle }}" style-hover="background:color-mix(in srgb,var(--color-surface) 20%,transparent) !important">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 2v10"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg>
+                    </button>
+                    <button type="button" onClick="{{ node.onMenu }}" aria-label="Node menu" style="{{ node.dotsStyle }}" style-hover="background:color-mix(in srgb,var(--color-surface) 20%,transparent) !important">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <sc-if value="{{ node.hasParams }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;flex-direction:column;gap:16px;padding:16px">
+                    <sc-for list="{{ node.params }}" as="p" hint-placeholder-count="1">
+
+                      <sc-if value="{{ p.isKnob }}">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                          <span style="{{ p.labelStyle }}">{{ p.label }}</span>
+                          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+                            <span style="width:48px;text-align:center;font-size:10px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--color-text-secondary)">{{ p.valueText }}</span>
+                            <svg width="32" height="32" viewBox="0 0 32 32" onPointerDown="{{ p.onKnobDown }}" style="display:block;cursor:pointer;touch-action:none">
+                              <path d="{{ p.k.track }}" fill="none" stroke="var(--color-border)" stroke-width="3" stroke-linecap="round"></path>
+                              <path d="{{ p.k.value }}" fill="none" stroke="var(--color-accent-primary)" stroke-width="3" stroke-linecap="round"></path>
+                            </svg>
+                            <sc-if value="{{ p.hasUnit }}"><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-secondary)">{{ p.unit }}</span></sc-if>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ p.isFile }}">
+                        <div style="display:flex;flex-direction:column;gap:4px">
+                          <span style="{{ p.labelStyle }}">{{ p.label }}</span>
+                          <div style="display:flex;align-items:center;gap:4px">
+                            <div style="display:flex;flex:1;min-width:0;align-items:center;padding:4px 8px;background:var(--color-surface);border-radius:2px">
+                              <span style="{{ p.valueStyle }}">{{ p.display }}</span>
+                            </div>
+                            <button type="button" aria-label="Browse" style="display:inline-flex;aspect-ratio:1;align-items:center;justify-content:center;padding:6px;color:var(--color-text-secondary)" style-hover="color:var(--color-text-primary) !important">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ p.isButtonSel }}">
+                        <div style="display:flex;flex-direction:column;gap:4px">
+                          <span style="{{ p.labelStyle }}">{{ p.label }}</span>
+                          <div style="display:flex;flex-wrap:wrap;gap:4px">
+                            <sc-for list="{{ p.options }}" as="opt" hint-placeholder-count="4">
+                              <button type="button" onClick="{{ opt.onSelect }}" style="{{ opt.style }}">{{ opt.label }}</button>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ p.isObjectArray }}">
+                        <div style="display:flex;flex-direction:column;gap:4px">
+                          <span style="{{ p.labelStyle }}">{{ p.label }}</span>
+                          <div style="display:flex;flex-direction:column;gap:12px">
+                            <sc-for list="{{ p.stages }}" as="stage" hint-placeholder-count="2">
+                              <div style="{{ stage.wrap }}">
+                                <div style="display:flex;align-items:center;justify-content:space-between">
+                                  <span style="font-family:'Azeret Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-secondary)">{{ stage.title }}</span>
+                                  <button type="button" onClick="{{ stage.onRemoveStage }}" aria-label="Remove stage" style="display:inline-flex;align-items:center;justify-content:center;padding:6px;color:var(--color-text-secondary)" style-hover="color:var(--color-error) !important">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                  </button>
+                                </div>
+                                <div style="display:flex;flex-direction:column;gap:4px">
+                                  <span style="font-family:'Azeret Mono',monospace;font-size:12px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em;line-height:1.3;color:var(--color-text-secondary)">Plugin</span>
+                                  <sc-if value="{{ stage.pluginSelected }}" hint-placeholder-val="{{ true }}">
+                                    <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;padding:7px 8px 7px 10px;background:var(--color-surface);border-radius:2px">
+                                      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--color-text-primary)">{{ stage.pluginName }}</span>
+                                      <div style="display:flex;flex-shrink:0;align-items:center;gap:2px">
+                                        <button type="button" onClick="{{ stage.onOpenPlugin }}" aria-label="Open plugin" style="display:inline-flex;align-items:center;justify-content:center;padding:5px;color:var(--color-text-secondary)" style-hover="color:var(--color-text-primary) !important">
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                                        </button>
+                                        <button type="button" onClick="{{ stage.onRemovePlugin }}" aria-label="Remove plugin" style="display:inline-flex;align-items:center;justify-content:center;padding:5px;color:var(--color-text-secondary)" style-hover="color:var(--color-error) !important">
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </sc-if>
+                                  <sc-if value="{{ stage.pluginNotSelected }}" hint-placeholder-val="{{ false }}">
+                                    <button type="button" onClick="{{ stage.onSelectPlugin }}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--color-surface);border-radius:2px;color:var(--color-dimmed);font-size:13px" style-hover="color:var(--color-text-primary) !important">
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Select plugin…
+                                    </button>
+                                  </sc-if>
+                                </div>
+                                <div style="display:flex;flex-direction:column;gap:4px">
+                                  <span style="{{ stage.presetField.labelStyle }}">{{ stage.presetField.label }}</span>
+                                  <div style="display:flex;align-items:center;gap:4px">
+                                    <div style="display:flex;flex:1;min-width:0;align-items:center;padding:4px 8px;background:var(--color-surface);border-radius:2px">
+                                      <span style="{{ stage.presetField.valueStyle }}">{{ stage.presetField.display }}</span>
+                                    </div>
+                                    <button type="button" aria-label="Browse" style="display:inline-flex;aspect-ratio:1;align-items:center;justify-content:center;padding:6px;color:var(--color-text-secondary)" style-hover="color:var(--color-text-primary) !important">
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </sc-for>
+                            <button type="button" style="align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:4px;font-family:'Azeret Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-secondary)" style-hover="color:var(--color-text-primary) !important">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>{{ p.addLabel }}
+                            </button>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <sc-for list="{{ node.inputs }}" as="port" hint-placeholder-count="1"><div style="{{ port.style }}"></div></sc-for>
+              <sc-for list="{{ node.outputs }}" as="port" hint-placeholder-count="1"><div style="{{ port.style }}"></div></sc-for>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- EDGE INSERT BUTTONS -->
+        <sc-for list="{{ edges }}" as="e" hint-placeholder-count="8">
+          <div style="{{ e.btnStyle }}" onPointerEnter="{{ e.onEnter }}" onPointerLeave="{{ e.onLeave }}" onPointerDown="{{ stop }}">
+            <button type="button" onClick="{{ e.onInsert }}" aria-label="Insert node" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:var(--color-elevated);color:var(--color-text-primary);border-radius:2px;box-shadow:0 2px 8px rgba(0,0,0,0.45);cursor:pointer" style-hover="background:var(--color-accent-primary) !important;color:var(--color-surface) !important">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+        </sc-for>
+
+        <!-- ADD NODE -->
+        <div onPointerDown="{{ stop }}" style="position:absolute;left:12px;top:12px;z-index:10">
+          <button type="button" onClick="{{ onAddNodeClick }}" style="{{ addNodeBtnStyle }}" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>ADD NODE
+          </button>
+          <sc-if value="{{ addMenuOpen }}" hint-placeholder-val="{{ false }}">
+            <div class="bag-scroll" style="position:absolute;top:52px;left:0;width:320px;max-height:calc((100vh - 200px) * 0.8);overflow-y:auto;display:flex;flex-direction:column;background:var(--color-elevated);border-radius:2px;padding:4px 0">
+              <sc-for list="{{ nodeCatalog }}" as="grp" hint-placeholder-count="3">
+                <sc-if value="{{ grp.notFirst }}"><div style="height:1px;margin:4px 8px;background:var(--color-border)"></div></sc-if>
+                <div style="padding:6px 12px;font-family:'Azeret Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-secondary)">{{ grp.label }}</div>
+                <sc-for list="{{ grp.nodes }}" as="item" hint-placeholder-count="4">
+                  <div onClick="{{ item.onAdd }}" style="display:flex;flex-direction:column;gap:2px;padding:8px 12px;cursor:pointer;color:var(--color-text-primary)" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important">
+                    <span style="font-family:'Azeret Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:0.06em">{{ item.label }}</span>
+                    <span style="font-size:12px;line-height:1.35;opacity:0.6;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">{{ item.description }}</span>
+                  </div>
+                </sc-for>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- TOOLBAR -->
+        <div onPointerDown="{{ stop }}" style="position:absolute;right:12px;top:12px;z-index:10;display:flex;align-items:center;gap:8px">
+          <button type="button" onClick="{{ onAutoOrganize }}" aria-label="Auto-organize" style="display:inline-flex;aspect-ratio:1;align-items:center;justify-content:center;padding:10px;color:var(--color-text-primary)" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></button>
+          <button type="button" onClick="{{ onUndo }}" aria-label="Undo" style="display:inline-flex;aspect-ratio:1;align-items:center;justify-content:center;padding:10px;color:var(--color-text-primary)" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+          <button type="button" aria-label="Redo" disabled style="display:inline-flex;aspect-ratio:1;align-items:center;justify-content:center;padding:10px;color:var(--color-dimmed);cursor:not-allowed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+          <button type="button" onClick="{{ onRender }}" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;font-family:'Azeret Mono',monospace;font-size:15px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-accent-primary)" style-hover="background:var(--color-accent-primary) !important;color:var(--color-surface) !important"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>RENDER</button>
+        </div>
+
+        <!-- MINIMAP -->
+        <sc-if value="{{ showMinimap }}" hint-placeholder-val="{{ true }}">
+          <div onPointerDown="{{ stop }}" style="position:absolute;left:12px;bottom:12px;z-index:10;width:160px;height:100px;background:var(--color-elevated);border-radius:2px;box-shadow:0 8px 24px rgba(0,0,0,0.4);overflow:hidden">
+            <sc-for list="{{ minimapNodes }}" as="mm" hint-placeholder-count="6"><div style="{{ mm.style }}"></div></sc-for>
+          </div>
+        </sc-if>
+
+        <!-- RENDER TOAST -->
+        <div onPointerDown="{{ stop }}" style="position:absolute;right:12px;bottom:12px;z-index:10;width:288px;display:flex;flex-direction:column;gap:8px;background:var(--color-elevated);border-radius:2px;box-shadow:0 8px 24px rgba(0,0,0,0.4);padding:12px 16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-secondary)">Render</span>
+            <button type="button" aria-label="Cancel render" style="display:inline-flex;align-items:center;justify-content:center;padding:6px;color:var(--color-text-secondary)" style-hover="color:var(--color-text-primary) !important"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+          <span style="font-size:13px;color:var(--color-text-primary)">podcast-final.wav</span>
+          <div style="height:4px;width:100%;overflow:hidden;border-radius:2px;background:var(--color-surface)"><div style="height:100%;background:var(--color-accent-primary);transition:width 0.2s;width:{{ toastPercent }}"></div></div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-secondary)">In progress</span>
+            <span style="font-size:10px;font-variant-numeric:tabular-nums;color:var(--color-text-secondary)">{{ toastPercentText }}</span>
+          </div>
+        </div>
+
+        <sc-if value="{{ hasContextMenu }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ contextMenu.style }}">
+            <sc-for list="{{ contextMenu.items }}" as="ci" hint-placeholder-count="7">
+              <sc-if value="{{ ci.isSep }}"><div style="height:1px;margin:4px 8px;background:var(--color-border)"></div></sc-if>
+              <sc-if value="{{ ci.isAction }}"><div onClick="{{ ci.onClick }}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;font-family:'Azeret Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-primary);cursor:pointer" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important">{{ ci.label }}</div></sc-if>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- INSERT NODE MENU -->
+        <sc-if value="{{ hasInsertMenu }}" hint-placeholder-val="{{ false }}">
+          <div class="bag-scroll" style="{{ insertMenu.style }}" onPointerDown="{{ stop }}">
+            <div style="padding:6px 12px 4px;font-family:'Azeret Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-dimmed)">Insert node here</div>
+            <sc-for list="{{ insertMenu.groups }}" as="grp" hint-placeholder-count="3">
+              <div style="height:1px;margin:4px 8px;background:var(--color-border)"></div>
+              <div style="padding:6px 12px;font-family:'Azeret Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-secondary)">{{ grp.label }}</div>
+              <sc-for list="{{ grp.nodes }}" as="item" hint-placeholder-count="4">
+                <div onClick="{{ item.onAdd }}" style="display:flex;flex-direction:column;gap:2px;padding:8px 12px;cursor:pointer;color:var(--color-text-primary)" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important">
+                  <span style="font-family:'Azeret Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:0.06em">{{ item.label }}</span>
+                  <span style="font-size:12px;line-height:1.35;opacity:0.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ item.description }}</span>
+                </div>
+              </sc-for>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- HOME -->
+    <sc-if value="{{ isHome }}" hint-placeholder-val="{{ false }}">
+      <div style="position:relative;display:flex;flex-direction:column;height:100%;overflow:hidden;background:var(--color-surface);padding:24px">
+        <div style="position:absolute;right:16px;top:24px;z-index:0;display:flex;align-items:flex-start;gap:14px;pointer-events:none">
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-dimmed);writing-mode:vertical-rl">Buffered Audio Graph Manager</span>
+          <div style="display:flex;flex-direction:column;gap:2px;width:30px">
+            <sc-for list="{{ homeBarcode }}" as="bar" hint-placeholder-count="48"><div style="{{ bar.style }}"></div></sc-for>
+          </div>
+        </div>
+        <h1 style="margin:0;font-family:'Azeret Mono',monospace;font-size:56px;font-weight:400;text-transform:uppercase;letter-spacing:0.08em;line-height:1;color:var(--color-text-primary)">BAGMAN</h1>
+        <div style="position:relative;z-index:10;min-height:0;flex:1">
+          <div ref="{{ homeRef }}" style="position:absolute;inset:0"></div>
+        </div>
+        <span style="position:absolute;bottom:24px;left:24px;z-index:20;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-dimmed);pointer-events:none">&copy; ZCROSS</span>
+        <div style="position:absolute;right:24px;bottom:24px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:12px">
+          <button type="button" onClick="{{ onNewGraph }}" style="display:flex;width:fit-content;align-items:center;gap:8px;padding:8px 16px;font-size:13px;white-space:nowrap;color:var(--color-accent-primary)" style-hover="background:var(--color-accent-primary) !important;color:var(--color-surface) !important"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New graph</button>
+          <button type="button" onClick="{{ onOpenGraph }}" style="display:flex;width:fit-content;align-items:center;gap:8px;padding:8px 16px;font-size:13px;white-space:nowrap;color:var(--color-text-primary)" style-hover="background:var(--color-text-primary) !important;color:var(--color-surface) !important"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>Open graph</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- SHOWCASE -->
+    <sc-if value="{{ isShowcase }}" hint-placeholder-val="{{ false }}">
+      <div class="bag-scroll" style="min-height:0;flex:1;overflow:auto">
+        <dc-import name="Showcase" hint-size="100%,100%"></dc-import>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#DB5836&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#C7452B&quot;,&quot;#DB5836&quot;,&quot;#E56A4A&quot;,&quot;#EE8064&quot;,&quot;#F2957E&quot;],&quot;section&quot;:&quot;Theme&quot;},&quot;showMinimap&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Graph&quot;},&quot;canvasDots&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Graph&quot;}}">
+class Component extends DCLogic {
+  _nodeEls = {};
+  _drag = null;
+  state = {
+    view: "app",
+    activeTabId: "tab-1",
+    tabs: [
+      { id: "tab-1", name: "Podcast Episode 042" },
+      { id: "tab-2", name: "Album Pre-Master" },
+    ],
+    nodes: this.buildNodes(),
+    edges: this.buildEdges(),
+    selectedNodeId: "gain",
+    transform: { x: 0, y: 0, z: 1 },
+    heights: {},
+    appMenuOpen: false,
+    addMenuOpen: false,
+    contextMenu: null,
+    hoveredEdgeId: null,
+    insertMenu: null,
+    toast: 0.12,
+    sc: { knob32: 0.4, knob40: 0.65, knob56: 0.85, faderA: 0.7, faderB: 0.45, tgA: true, tgB: false, bsA: "Stereo", bsB: "LUFS" },
+  };
+
+  buildNodes() {
+    const p = (o) => ({ ...o, initial: o.value });
+    return [
+      { id: "read-1", x: 0, y: 0, width: 240, category: "source", name: "Read",
+        params: [p({ name: "path", type: "file", value: "podcast-raw.wav", complete: true, mode: "open" })],
+        inputs: [], outputs: [{ id: "out" }], connectedInputs: [], connectedOutputs: ["out"] },
+      { id: "read-2", x: 0, y: 220, width: 240, category: "source", name: "Read",
+        params: [p({ name: "path", type: "file", value: "", complete: false, mode: "open" })],
+        inputs: [], outputs: [{ id: "out" }], connectedInputs: [], connectedOutputs: ["out"] },
+      { id: "gain", x: 280, y: 110, width: 240, category: "transform", name: "Gain",
+        params: [p({ name: "gain", type: "knob", value: -3, complete: true, min: -60, max: 24, step: 0.1, unit: "dB" })],
+        inputs: [{ id: "in", required: true }], outputs: [{ id: "out" }], connectedInputs: ["in"], connectedOutputs: ["out"] },
+      { id: "deepfilter", x: 560, y: 110, width: 240, category: "transform", name: "DeepFilterNet3 (Denoiser)",
+        params: [p({ name: "attenuation", type: "knob", value: 30, complete: true, min: 0, max: 100, step: 1, unit: "dB" })],
+        inputs: [{ id: "in", required: true }], outputs: [{ id: "out" }], connectedInputs: ["in"], connectedOutputs: ["out"] },
+      { id: "loudness-normalize", x: 840, y: 0, width: 240, category: "transform", name: "Loudness Normalize",
+        params: [p({ name: "target", type: "knob", value: -16, complete: true, min: -50, max: 0, step: 0.1, unit: "LUFS" })],
+        inputs: [{ id: "in", required: true }], outputs: [{ id: "out" }], connectedInputs: ["in"], connectedOutputs: ["out"] },
+      { id: "normalize", x: 1120, y: 0, width: 240, category: "transform", name: "Normalize", bypassed: true,
+        params: [p({ name: "ceiling", type: "knob", value: 1, complete: true, min: 0, max: 1, step: 0.01 })],
+        inputs: [{ id: "in", required: true }], outputs: [{ id: "out" }], connectedInputs: ["in"], connectedOutputs: ["out"] },
+      { id: "snapshot-tap", x: 840, y: 264, width: 240, category: "target", name: "Write",
+        params: [
+          p({ name: "path", type: "file", value: "after-denoise.wav", complete: true, mode: "save" }),
+          p({ name: "bitDepth", type: "buttonSelection", value: "24", complete: true, options: ["16", "24", "32", "32f"] }),
+        ],
+        inputs: [{ id: "in", required: true }], outputs: [], connectedInputs: ["in"], connectedOutputs: [] },
+      { id: "vst3", x: 1400, y: 0, width: 300, category: "transform", name: "VST3",
+        params: [p({ name: "stages", type: "objectArray", complete: true, itemNoun: "Stage", value: [
+          { pluginPath: { type: "file", value: "C:/Program Files/Common Files/VST3/FabFilter Pro-Q 3.vst3", complete: true, accept: ".vst3" },
+            pluginName: { type: "input", value: "", complete: true },
+            presetPath: { type: "file", value: "presets/vocal-eq.vstpreset", complete: true, accept: ".vstpreset" } },
+          { pluginPath: { type: "file", value: "C:/Program Files/Common Files/VST3/WaveShell1-VST3 14.0.vst3", complete: true, accept: ".vst3" },
+            pluginName: { type: "input", value: "Renaissance Compressor", complete: true },
+            presetPath: { type: "file", value: "", complete: true, accept: ".vstpreset" } },
+        ] })],
+        inputs: [{ id: "in", required: true }], outputs: [{ id: "out" }], connectedInputs: ["in"], connectedOutputs: ["out"] },
+      { id: "write-final", x: 1960, y: 0, width: 240, category: "target", name: "Write",
+        params: [
+          p({ name: "path", type: "file", value: "podcast-clean.wav", complete: true, mode: "save" }),
+          p({ name: "bitDepth", type: "buttonSelection", value: "24", complete: true, options: ["16", "24", "32", "32f"] }),
+        ],
+        inputs: [{ id: "in", required: true }], outputs: [], connectedInputs: ["in"], connectedOutputs: [] },
+    ];
+  }
+
+  buildEdges() {
+    return [
+      ["read-1", "gain"], ["read-2", "gain"], ["gain", "deepfilter"],
+      ["deepfilter", "loudness-normalize"], ["deepfilter", "snapshot-tap"],
+      ["loudness-normalize", "normalize"], ["normalize", "vst3"], ["vst3", "write-final"],
+    ].map(([s, t]) => ({ id: s + "-" + t, source: s, target: t }));
+  }
+
+  RECENTS = [
+    { id: "recent-1", name: "Podcast Episode 042 — Master", time: "Just now" },
+    { id: "recent-2", name: "Interview Cleanup", time: "2 hours ago" },
+    { id: "recent-3", name: "Album Pre-Master Chain", time: "Yesterday" },
+    { id: "recent-4", name: "Field Recording Denoise", time: "3 days ago" },
+    { id: "recent-5", name: "Voiceover Stem Split", time: "2 weeks ago" },
+  ];
+
+  APP_MENU = [
+    { label: "New graph" }, { label: "Open graph" }, { label: "Save" }, { label: "Save As" },
+    { sep: true }, { label: "Manage Binaries" }, { label: "Manage Packages" },
+    { sep: true }, { label: "Preferences" }, { label: "Quit" },
+  ];
+
+  CTX_MENU = [
+    { label: "Add Node" }, { label: "Delete Node" }, { sep: true },
+    { label: "Bypass / Enable" }, { label: "Reset" }, { sep: true }, { label: "Render" },
+  ];
+
+  NODE_CATALOG = [
+    { label: "Sources", nodes: [
+      { label: "Read", description: "Read audio from a file" },
+    ] },
+    { label: "Transforms", nodes: [
+      { label: "Crest Reduce", description: "Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage." },
+      { label: "Cut", description: "Remove a region of audio" },
+      { label: "De-Bleed Adaptive", description: "Adaptive (MEF FDAF Kalman + MWF + MSAD) reference-based microphone bleed reduction." },
+      { label: "DeepFilterNet3 (Denoiser)", description: "Remove background noise from speech using DeepFilterNet3 (48 kHz full-band CRN)" },
+      { label: "Dither", description: "Add shaped noise to reduce quantization distortion" },
+      { label: "Downmix Mono", description: "Mix all input channels to a single mono channel by averaging" },
+      { label: "DTLN (Denoiser)", description: "Remove background noise from speech using DTLN neural network" },
+      { label: "Duplicate Channels", description: "Duplicate a mono signal into multiple identical output channels" },
+      { label: "FFmpeg", description: "Process audio through FFmpeg filters" },
+      { label: "Gain", description: "Adjust signal level by a fixed amount in dB" },
+      { label: "HTDemucs (Stem Separator)", description: "Rebalance stem volumes using HTDemucs source separation" },
+      { label: "Kim Vocal 2 (Stem Separator)", description: "Isolate dialogue from background using MDX-Net vocal separation" },
+      { label: "Loudness Normalize", description: "Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS." },
+      { label: "Loudness Target", description: "Peak-aware content-adaptive curve fitting (LUFS, true-peak, LRA) via a single combined gain envelope." },
+      { label: "Normalize", description: "Adjust peak or loudness level to a target ceiling" },
+      { label: "Pad", description: "Add silence to start or end of audio" },
+      { label: "Pan", description: "Position mono signal in stereo field or adjust stereo balance" },
+      { label: "Phase", description: "Invert or rotate signal phase" },
+      { label: "Reverse", description: "Reverse audio playback direction" },
+      { label: "Splice", description: "Replace a region of audio with processed content" },
+      { label: "Trim", description: "Remove silence from start and end" },
+      { label: "True Peak Normalize", description: "Measure source true peak and apply a single linear gain to hit a target dBTP" },
+      { label: "VST3", description: "Host a chain of VST3 effect plugins via Pedalboard (whole-file offline mode)" },
+    ] },
+    { label: "Targets", nodes: [
+      { label: "Loudness Stats", description: "Measure integrated loudness, true peak, and loudness range per EBU R128." },
+      { label: "Spectrogram", description: "Generate spectrogram visualization data" },
+      { label: "Waveform", description: "Generate waveform visualization data" },
+      { label: "Write", description: "Write audio to a file" },
+    ] },
+  ];
+
+  // ---- lifecycle ----
+  componentDidMount() {
+    window.addEventListener("pointermove", this._onMove);
+    window.addEventListener("pointerup", this._onUp);
+    this._toastTimer = setInterval(() => {
+      this.setState((s) => ({ toast: s.toast + 0.02 >= 1 ? 0 : s.toast + 0.02 }));
+    }, 250);
+    this.applyAccent();
+    this._fitted = false;
+    this._wasHome = this.isHome();
+    this._tryFit();
+    if (this.isHome()) this.buildHome();
+  }
+  componentWillUnmount() {
+    window.removeEventListener("pointermove", this._onMove);
+    window.removeEventListener("pointerup", this._onUp);
+    clearInterval(this._toastTimer);
+    this.stopHome();
+  }
+  componentDidUpdate() {
+    this.applyAccent();
+    this.measure();
+    const nowHome = this.isHome();
+    if (nowHome && !this._wasHome) this.buildHome();
+    if (!nowHome && this._wasHome) this.stopHome();
+    this._wasHome = nowHome;
+  }
+
+  isApp() { return this.state.view === "app"; }
+  isHome() { return this.state.view === "app" && this.state.activeTabId === "home"; }
+  isGraph() { return this.state.view === "app" && this.state.activeTabId !== "home"; }
+
+  _tryFit = () => {
+    if (this._fitted) return;
+    if (!this._canvas || !this._canvas.clientWidth || !this._canvas.clientHeight) { requestAnimationFrame(this._tryFit); return; }
+    this.measure();
+    this.fitView();
+    if (!this._fitted) requestAnimationFrame(this._tryFit);
+  };
+
+  measure() {
+    if (!this._nodeEls) return;
+    const h = {};
+    let changed = false;
+    for (const id in this._nodeEls) {
+      const el = this._nodeEls[id];
+      if (el) { h[id] = el.offsetHeight; if (this.state.heights[id] !== h[id]) changed = true; }
+    }
+    if (changed) this.setState({ heights: { ...this.state.heights, ...h } });
+  }
+
+  fitView() {
+    if (!this._canvas) return;
+    const W = this._canvas.clientWidth, H = this._canvas.clientHeight;
+    if (W <= 0 || H <= 0) return;
+    const ns = this.state.nodes;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    ns.forEach((n) => {
+      const hh = this.state.heights[n.id] || 150;
+      minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x + n.width);
+      minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y + hh);
+    });
+    const gw = maxX - minX, gh = maxY - minY;
+    if (gw <= 0 || gh <= 0) return;
+    const z = Math.max(0.1, Math.min((W * 0.84) / gw, (H * 0.8) / gh, 1.05));
+    this._fitted = true;
+    const x = (W - gw * z) / 2 - minX * z;
+    const y = (H - gh * z) / 2 - minY * z;
+    this.setState({ transform: { x, y, z } });
+  }
+
+  // ---- pointer / drag ----
+  canvasRef = (el) => {
+    if (el && el !== this._canvas) {
+      this._canvas = el;
+      el.addEventListener("wheel", this._onWheel, { passive: false });
+      el.addEventListener("contextmenu", this._onContext);
+    }
+  };
+  _onWheel = (e) => {
+    if (e.target && e.target.closest && e.target.closest(".bag-scroll")) return;
+    e.preventDefault();
+    const t = this.state.transform;
+    const rect = this._canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const nz = Math.min(2.2, Math.max(0.2, t.z * (1 - e.deltaY * 0.0015)));
+    const k = nz / t.z;
+    this.setState({ transform: { x: mx - (mx - t.x) * k, y: my - (my - t.y) * k, z: nz } });
+  };
+  _onContext = (e) => {
+    e.preventDefault();
+    const rect = this._canvas.getBoundingClientRect();
+    this.setState({ contextMenu: { x: e.clientX - rect.left, y: e.clientY - rect.top }, addMenuOpen: false, appMenuOpen: false });
+  };
+  canvasDown = (e) => {
+    if (e.button !== 0) return;
+    this._drag = { mode: "pan", sx: e.clientX, sy: e.clientY, ox: this.state.transform.x, oy: this.state.transform.y };
+    this.setState({ addMenuOpen: false, appMenuOpen: false, contextMenu: null, insertMenu: null, hoveredEdgeId: null, selectedNodeId: null });
+  };
+  nodeDown = (id, e) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const n = this.state.nodes.find((x) => x.id === id);
+    this._drag = { mode: "node", id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y };
+    this.setState({ selectedNodeId: id, contextMenu: null, addMenuOpen: false });
+  };
+  knobDown = (nodeId, name, norm, e) => {
+    e.stopPropagation();
+    this._drag = { mode: "knob", nodeId, name, sy: e.clientY, startNorm: norm };
+  };
+  _onMove = (e) => {
+    const d = this._drag;
+    if (!d) return;
+    if (d.mode === "pan") {
+      this.setState({ transform: { ...this.state.transform, x: d.ox + (e.clientX - d.sx), y: d.oy + (e.clientY - d.sy) } });
+    } else if (d.mode === "node") {
+      const z = this.state.transform.z;
+      const nodes = this.state.nodes.map((n) => n.id === d.id ? { ...n, x: d.ox + (e.clientX - d.sx) / z, y: d.oy + (e.clientY - d.sy) / z } : n);
+      this.setState({ nodes });
+    } else if (d.mode === "knob") {
+      const delta = (d.sy - e.clientY) / 150;
+      const norm = Math.max(0, Math.min(1, d.startNorm + delta));
+      const nodes = this.state.nodes.map((n) => {
+        if (n.id !== d.nodeId) return n;
+        return { ...n, params: n.params.map((p) => {
+          if (p.name !== d.name) return p;
+          let v = p.min + norm * (p.max - p.min);
+          v = Math.round(v / p.step) * p.step;
+          return { ...p, value: v };
+        }) };
+      });
+      this.setState({ nodes });
+    }
+  };
+  _onUp = () => { this._drag = null; };
+
+  toggleBypass = (id, e) => {
+    if (e) e.stopPropagation();
+    this.setState({ nodes: this.state.nodes.map((n) => n.id === id ? { ...n, bypassed: !n.bypassed } : n) });
+  };
+  resetNode = (id, e) => {
+    if (e) e.stopPropagation();
+    this.setState({ nodes: this.state.nodes.map((n) => n.id === id ? { ...n, params: n.params.map((p) => ({ ...p, value: p.initial })) } : n) });
+  };
+  setBitDepth = (id, name, val) => {
+    this.setState({ nodes: this.state.nodes.map((n) => n.id === id ? { ...n, params: n.params.map((p) => p.name === name ? { ...p, value: val } : p) } : n) });
+  };
+
+  // ---- node menu / context actions ----
+  openNodeMenu = (id, e) => {
+    e.stopPropagation();
+    const rect = this._canvas.getBoundingClientRect();
+    const br = e.currentTarget.getBoundingClientRect();
+    let x = br.right - rect.left - 176;
+    x = Math.max(8, Math.min(x, rect.width - 184));
+    const y = br.bottom - rect.top + 6;
+    this.setState({ contextMenu: { x, y, nodeId: id }, selectedNodeId: id, addMenuOpen: false, appMenuOpen: false, insertMenu: null });
+  };
+  deleteNode = (id) => this.setState({ nodes: this.state.nodes.filter((n) => n.id !== id), edges: this.state.edges.filter((e) => e.source !== id && e.target !== id), selectedNodeId: null });
+  ctxAction = (label, nodeId) => {
+    if (label === "Add Node") { this.setState({ contextMenu: null, addMenuOpen: true }); return; }
+    if (nodeId) {
+      if (label === "Reset") this.resetNode(nodeId);
+      else if (label === "Bypass / Enable") this.toggleBypass(nodeId);
+      else if (label === "Delete Node") this.deleteNode(nodeId);
+    }
+    this.setState({ contextMenu: null });
+  };
+
+  // ---- vst3 plugin stages ----
+  setStagePlugin = (nodeId, paramName, idx, path) => {
+    this.setState({ nodes: this.state.nodes.map((n) => n.id !== nodeId ? n : { ...n, params: n.params.map((p) => p.name !== paramName ? p : { ...p, value: p.value.map((st, i) => i !== idx ? st : { ...st, pluginPath: { ...st.pluginPath, value: path }, pluginName: { ...st.pluginName, value: "" } }) }) }) });
+  };
+  removeStage = (nodeId, paramName, idx) => {
+    this.setState({ nodes: this.state.nodes.map((n) => n.id !== nodeId ? n : { ...n, params: n.params.map((p) => p.name !== paramName ? p : { ...p, value: p.value.filter((_, i) => i !== idx) }) }) });
+  };
+
+  // ---- edge hover / insert ----
+  setEdgeHover = (id) => { clearTimeout(this._edgeTimer); if (this.state.hoveredEdgeId !== id) this.setState({ hoveredEdgeId: id }); };
+  clearEdgeHover = () => { clearTimeout(this._edgeTimer); this._edgeTimer = setTimeout(() => this.setState({ hoveredEdgeId: null }), 140); };
+  deleteEdge = (id) => this.setState({ edges: this.state.edges.filter((e) => e.id !== id), hoveredEdgeId: null });
+  openInsertMenu = (edgeId, sx, sy, e) => {
+    e.stopPropagation();
+    const rect = this._canvas.getBoundingClientRect();
+    const x = Math.max(160, Math.min(sx, rect.width - 160));
+    const y = Math.max(12, Math.min(sy + 18, rect.height - 140));
+    this.setState({ insertMenu: { edgeId, x, y }, addMenuOpen: false, appMenuOpen: false, contextMenu: null, hoveredEdgeId: null });
+  };
+  buildCatalog(onPick) {
+    return this.NODE_CATALOG.map((g, gi) => ({ key: gi, label: g.label, notFirst: gi > 0, nodes: g.nodes.map((n) => ({ key: n.label, label: n.label, description: n.description, onAdd: () => onPick(n) })) }));
+  }
+
+  // ---- tabs / nav ----
+  renameTab = (id, name) => this.setState({ tabs: this.state.tabs.map((t) => t.id === id ? { ...t, name } : t) });
+  selectTab = (id) => this.setState({ activeTabId: id });
+  closeTab = (id, e) => {
+    e.stopPropagation();
+    const cur = this.state.tabs;
+    const idx = cur.findIndex((t) => t.id === id);
+    const next = cur.filter((t) => t.id !== id);
+    let active = this.state.activeTabId;
+    if (active === id) active = (next[idx - 1] && next[idx - 1].id) || (next[idx] && next[idx].id) || "home";
+    this.setState({ tabs: next, activeTabId: active });
+  };
+  goHome = () => this.setState({ activeTabId: "home" });
+  newGraph = () => { const id = "tab-" + Date.now(); this.setState({ tabs: [...this.state.tabs, { id, name: "Untitled" }], activeTabId: id }); };
+  openGraph = () => { const id = "tab-" + Date.now(); this.setState({ tabs: [...this.state.tabs, { id, name: "Opened graph" }], activeTabId: id }); };
+  openRecent = (name) => { const id = "tab-" + Date.now(); this.setState({ tabs: [...this.state.tabs, { id, name }], activeTabId: id }); };
+
+  // ---- home graph (imperative) ----
+  homeRef = (el) => { this._homeEl = el; if (el && this.isHome()) this.buildHome(); };
+  stopHome() { if (this._homeRaf) cancelAnimationFrame(this._homeRaf); this._homeRaf = null; if (this._homeEl) this._homeEl.innerHTML = ""; }
+  buildHome() {
+    const el = this._homeEl;
+    if (!el) return;
+    this.stopHome();
+    const NS = "http://www.w3.org/2000/svg";
+    const VIEW_W = 1200, VIEW_H = 700, CX = 600, CY = 350, VSQ = 0.6;
+    const anchors = this.RECENTS;
+    const rand = this.mulberry32(Math.floor(Math.random() * 0x7fffffff));
+    const pts = [];
+    const push = (bx, by, amp, anc) => pts.push({ baseX: bx, baseY: by, phaseX: rand() * 6.28, phaseY: rand() * 6.28, speed: 0.32 + rand() * 0.4, amp, anc });
+    for (let i = 0; i < 30; i++) { const r = 130 * Math.sqrt(rand()), a = rand() * 6.28; push(CX + Math.cos(a) * r, CY + Math.sin(a) * r * VSQ, 6 + rand() * 5, false); }
+    const ranges = [];
+    for (let o = 0; o < 3; o++) {
+      const ba = (o / 3) * 6.28 + (rand() - 0.5) * 0.5, dd = 270 + rand() * 40;
+      const cx2 = CX + Math.cos(ba) * dd, cy2 = CY + Math.sin(ba) * dd * VSQ;
+      const cr = 50 + rand() * 25, cc = 5 + Math.floor(rand() * 4), start = pts.length;
+      for (let k = 0; k < cc; k++) { const ir = cr * Math.sqrt(rand()), ia = rand() * 6.28; push(cx2 + Math.cos(ia) * ir, cy2 + Math.sin(ia) * ir, 8 + rand() * 7, false); }
+      ranges.push([start, pts.length]);
+    }
+    const aStart = pts.length;
+    for (let i = 0; i < anchors.length; i++) {
+      const base = (i / Math.max(1, anchors.length)) * 6.28 + Math.PI / Math.max(1, anchors.length) + (rand() - 0.5) * 0.4;
+      const dd = 400 + rand() * 50;
+      const rx = Math.max(130, Math.min(VIEW_W - 130, CX + Math.cos(base) * dd));
+      const ry = Math.max(60, Math.min(VIEW_H - 60, CY + Math.sin(base) * dd * VSQ));
+      push(rx, ry, 0, true);
+    }
+    const edges = [], seen = new Set();
+    const D = (a, b) => Math.hypot(a.baseX - b.baseX, a.baseY - b.baseY);
+    const add = (a, b) => { if (a === b) return; const k = Math.min(a, b) + "-" + Math.max(a, b); if (seen.has(k)) return; seen.add(k); edges.push([a, b]); };
+    const kNear = (s, e, n) => { for (let i = s; i < e; i++) { const c = []; for (let j = s; j < e; j++) if (i !== j) c.push([j, D(pts[i], pts[j])]); c.sort((x, y) => x[1] - y[1]); for (let q = 0; q < n && q < c.length; q++) add(i, c[q][0]); } };
+    kNear(0, 30, 4);
+    ranges.forEach((r) => kNear(r[0], r[1], 3));
+    ranges.forEach((r) => { const pr = []; for (let i = r[0]; i < r[1]; i++) for (let m = 0; m < 30; m++) pr.push([i, m, D(pts[i], pts[m])]); pr.sort((a, b) => a[2] - b[2]); for (let q = 0; q < 3 && q < pr.length; q++) add(pr[q][0], pr[q][1]); });
+    for (let i = aStart; i < pts.length; i++) { let bo = 0, bd = Infinity; for (let j = 0; j < aStart; j++) { const dd = D(pts[i], pts[j]); if (dd < bd) { bd = dd; bo = j; } } add(i, bo); }
+    const anns = [];
+    for (let i = 0; i < anchors.length; i++) { const pi = aStart + i, pt = pts[pi]; const dx = pt.baseX - CX, dy = pt.baseY - CY, L = Math.hypot(dx, dy) || 1; anns.push({ i, pi, ox: (dx / L) * 50, oy: (dy / L) * 50, end: (dx / L) * 50 < 0 }); }
+
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`);
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svg.style.cssText = "position:absolute;inset:0;height:100%;width:100%";
+    const edgeEls = edges.map(([a, b]) => { const l = document.createElementNS(NS, "line"); l.setAttribute("x1", pts[a].baseX); l.setAttribute("y1", pts[a].baseY); l.setAttribute("x2", pts[b].baseX); l.setAttribute("y2", pts[b].baseY); l.setAttribute("stroke", "var(--color-border)"); l.setAttribute("stroke-width", "1"); svg.appendChild(l); return l; });
+    const tethers = anns.map((an) => { const pt = pts[an.pi]; const l = document.createElementNS(NS, "line"); l.setAttribute("x1", pt.baseX); l.setAttribute("y1", pt.baseY); l.setAttribute("x2", pt.baseX + an.ox); l.setAttribute("y2", pt.baseY + an.oy); l.setAttribute("stroke", "var(--color-border)"); l.setAttribute("stroke-width", "1"); svg.appendChild(l); return l; });
+    const circEls = pts.map((p) => { const c = document.createElementNS(NS, "circle"); c.setAttribute("cx", p.baseX); c.setAttribute("cy", p.baseY); c.setAttribute("r", p.anc ? 4.5 : 2.4); c.setAttribute("fill", "var(--color-text-secondary)"); svg.appendChild(c); return c; });
+    anns.forEach((an) => {
+      const pt = pts[an.pi], anchor = anchors[an.i];
+      const ring = document.createElementNS(NS, "circle");
+      ring.setAttribute("cx", pt.baseX); ring.setAttribute("cy", pt.baseY); ring.setAttribute("r", 10); ring.setAttribute("fill", "none"); ring.setAttribute("stroke", "var(--color-text-primary)"); ring.setAttribute("stroke-width", "1"); ring.style.display = "none"; svg.appendChild(ring);
+      const g = document.createElementNS(NS, "g");
+      const hit = document.createElementNS(NS, "circle");
+      hit.setAttribute("cx", pt.baseX); hit.setAttribute("cy", pt.baseY); hit.setAttribute("r", 18); hit.setAttribute("fill", "transparent"); hit.style.cursor = "pointer"; g.appendChild(hit);
+      const fo = document.createElementNS(NS, "foreignObject");
+      const lx = pt.baseX + an.ox, ly = pt.baseY + an.oy;
+      fo.setAttribute("x", an.end ? lx - 280 : lx); fo.setAttribute("y", ly - 22); fo.setAttribute("width", 280); fo.setAttribute("height", 44); fo.style.overflow = "visible";
+      const div = document.createElement("div");
+      div.style.cssText = `display:flex;height:100%;align-items:center;gap:12px;cursor:pointer;flex-direction:${an.end ? "row-reverse" : "row"}`;
+      const icon = document.createElement("span");
+      icon.style.cssText = "display:inline-flex;flex-shrink:0;color:var(--color-text-secondary)";
+      icon.innerHTML = this.projectIconHTML(anchor.name, 18);
+      const txt = document.createElement("div");
+      txt.style.cssText = `display:flex;flex-direction:column;gap:2px;align-items:${an.end ? "flex-end" : "flex-start"}`;
+      const nm = document.createElement("span");
+      nm.textContent = anchor.name; nm.style.cssText = "white-space:nowrap;line-height:1.15;font-size:14px;color:var(--color-text-secondary)";
+      const tm = document.createElement("span");
+      tm.textContent = anchor.time; tm.style.cssText = "white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-dimmed)";
+      txt.appendChild(nm); txt.appendChild(tm); div.appendChild(icon); div.appendChild(txt); fo.appendChild(div); g.appendChild(fo); svg.appendChild(g);
+      const enter = () => { ring.style.display = ""; tethers[an.i].setAttribute("stroke", "var(--color-text-primary)"); icon.style.color = "var(--color-text-primary)"; nm.style.color = "var(--color-text-primary)"; };
+      const leave = () => { ring.style.display = "none"; tethers[an.i].setAttribute("stroke", "var(--color-border)"); icon.style.color = "var(--color-text-secondary)"; nm.style.color = "var(--color-text-secondary)"; };
+      const click = () => this.openRecent(anchor.name);
+      [hit, div].forEach((t) => { t.addEventListener("mouseenter", enter); t.addEventListener("mouseleave", leave); t.addEventListener("click", click); });
+    });
+    el.innerHTML = ""; el.appendChild(svg);
+    const start = performance.now();
+    const tick = (now) => {
+      const time = (now - start) / 1000;
+      const pos = pts.map((p) => p.anc ? { x: p.baseX, y: p.baseY } : { x: p.baseX + Math.sin(time * p.speed + p.phaseX) * p.amp, y: p.baseY + Math.cos(time * p.speed * 1.1 + p.phaseY) * p.amp });
+      pos.forEach((pp, i) => { circEls[i].setAttribute("cx", pp.x.toFixed(2)); circEls[i].setAttribute("cy", pp.y.toFixed(2)); });
+      edges.forEach(([a, b], i) => { edgeEls[i].setAttribute("x1", pos[a].x.toFixed(2)); edgeEls[i].setAttribute("y1", pos[a].y.toFixed(2)); edgeEls[i].setAttribute("x2", pos[b].x.toFixed(2)); edgeEls[i].setAttribute("y2", pos[b].y.toFixed(2)); });
+      this._homeRaf = requestAnimationFrame(tick);
+    };
+    this._homeRaf = requestAnimationFrame(tick);
+  }
+  mulberry32(seed) { let s = seed; return () => { s = (s + 0x6d2b79f5) | 0; let v = s; v = Math.imul(v ^ (v >>> 15), v | 1); v ^= v + Math.imul(v ^ (v >>> 7), v | 61); return ((v ^ (v >>> 14)) >>> 0) / 4294967296; }; }
+
+  // ---- home barcode (long vertical strip, deterministic, accent bars woven in) ----
+  buildBarcode() {
+    const th = [3,2,5,2,3,2,4,2,2,5,3,2,4,2,3,2,5,2,2,3,4,2,3,5,2,3,2,4,2,3,5,2,3,2,2,4,3,2,5,2,3,2,4,2,3,2,5,3,2,4,2,2,3,5,2,3,2,4,2,3,2,5];
+    const accent = new Set([6, 25, 44, 55]);
+    return th.map((t, i) => ({ key: i, style: `flex-shrink:0;width:100%;height:${t}px;background:${accent.has(i) ? "var(--color-accent-primary)" : "var(--color-border)"}` }));
+  }
+
+  // ---- project icons (13 geometric marks, assigned by djb2 hash of name) ----
+  hashDjb2(input) { let h = 5381; for (let i = 0; i < input.length; i++) { h = ((h << 5) + h + input.charCodeAt(i)) | 0; } return Math.abs(h); }
+  projectIconHTML(name, size) {
+    const idx = this.hashDjb2(name || "") % 13;
+    const c = "currentColor";
+    const a = "var(--color-accent-primary)";
+    const svg = (inner) => `<svg width="${size}" height="${size}" viewBox="0 0 32 32" fill="none" stroke-width="1" style="display:block">${inner}</svg>`;
+    switch (idx) {
+      case 0: return `<div style="position:relative;width:${size}px;height:${size}px;background:${c}"><div style="position:absolute;top:0;right:0;width:${(size / 3).toFixed(1)}px;height:${(size / 3).toFixed(1)}px;background:${a}"></div></div>`;
+      case 1: { const ws = [2,1,3,1,2,1,1,3,1,2,1,3,1,1,2]; return `<span style="display:flex;align-items:flex-end;gap:1px;height:${size}px">${ws.map((w) => `<span style="display:block;width:${w}px;height:${size}px;background:${w === 3 ? a : c}"></span>`).join("")}</span>`; }
+      case 2: return svg(`<rect x="0.5" y="0.5" width="31" height="31" stroke="${c}"/><rect x="6.5" y="6.5" width="19" height="19" stroke="${c}"/><rect x="12.5" y="12.5" width="7" height="7" stroke="${a}"/>`);
+      case 3: return svg(`<circle cx="16" cy="16" r="14.5" stroke="${c}"/><circle cx="16" cy="16" r="3" fill="${a}"/>`);
+      case 4: { let d = ""; for (let i = 0; i < 25; i++) { const isC = i === 12; const frame = (i % 5 === 0 || i < 5 || i >= 20 || i % 5 === 4); const op = isC || frame ? 1 : 0.4; d += `<div style="width:3px;height:3px;border-radius:50%;background:${isC ? a : c};opacity:${op}"></div>`; } return `<div style="display:grid;width:${size}px;height:${size}px;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(5,1fr);place-items:center">${d}</div>`; }
+      case 5: { let d = ""; for (let i = 0; i < 8; i++) { const w = 60 + ((i * 37) % 41); const first = i === 0; const op = first ? 1 : (i % 2 === 0 ? 1 : 0.4); d += `<div style="width:${w}%;height:${first ? 2 : 1}px;background:${first ? a : c};opacity:${op}"></div>`; } return `<div style="display:flex;flex-direction:column;justify-content:space-between;width:${size}px;height:${size}px">${d}</div>`; }
+      case 6: { let l = ""; for (let i = 0; i < 8; i++) { const acc = i === 4; const op = acc ? 1 : (i % 2 === 0 ? 1 : 0.4); l += `<line x1="${i*5}" y1="0" x2="0" y2="${i*5}" stroke="${acc ? a : c}" stroke-width="${acc ? 2 : 1}" opacity="${op}"/>`; } for (let i = 0; i < 8; i++) { const op = i % 2 === 0 ? 1 : 0.4; l += `<line x1="32" y1="${i*5+2}" x2="${i*5+2}" y2="32" stroke="${c}" opacity="${op}"/>`; } return svg(l); }
+      case 7: { let l = ""; for (let i = 0; i < 6; i++) { l += `<line x1="0" y1="${i*7}" x2="32" y2="${i*7}" stroke="${c}" opacity="0.6"/>`; } for (let i = 0; i < 6; i++) { const acc = i === 3; l += `<line x1="${i*7}" y1="0" x2="${i*7}" y2="32" stroke="${acc ? a : c}" stroke-width="${acc ? 2 : 1}" opacity="${acc ? 1 : 0.6}"/>`; } return svg(l); }
+      case 8: { let d = ""; for (let i = 0; i < 16; i++) { const on = (Math.floor(i / 4) + (i % 4)) % 2 === 0; const acc = i === 10; d += `<div style="background:${acc ? a : (on ? c : "transparent")}"></div>`; } return `<div style="display:grid;width:${size}px;height:${size}px;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr)">${d}</div>`; }
+      case 9: return svg(`<rect x="0" y="0" width="8" height="8" fill="${c}"/><rect x="24" y="0" width="8" height="8" fill="${c}"/><rect x="0" y="24" width="8" height="8" fill="${c}"/><rect x="24" y="24" width="8" height="8" fill="${c}"/><rect x="12" y="12" width="8" height="8" fill="${a}"/>`);
+      case 10: return svg(`<circle cx="16" cy="16" r="14.5" stroke="${c}"/><circle cx="16" cy="16" r="10" stroke="${c}" opacity="0.6"/><circle cx="16" cy="16" r="5.5" stroke="${a}"/>`);
+      case 11: return svg(`<rect x="0.5" y="0.5" width="31" height="31" stroke="${c}"/><rect x="0" y="16" width="16" height="16" fill="${a}"/>`);
+      default: return svg(`<rect x="0" y="0" width="8" height="32" fill="${c}" opacity="0.25"/><rect x="8" y="8" width="8" height="24" fill="${c}" opacity="0.45"/><rect x="16" y="16" width="8" height="16" fill="${c}" opacity="0.65"/><rect x="24" y="24" width="8" height="8" fill="${a}"/>`);
+    }
+  }
+
+  // ---- helpers ----
+  fmt(v, step) { const d = (String(step).split(".")[1] || "").length; return v.toFixed(d); }
+  humanize(n) { return n.replace(/([A-Z])/g, " $1").trim(); }
+  polar(a, cx, cy, r) { const rad = (a * Math.PI) / 180; return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }; }
+  arc(start, sweep, cx, cy, r) { if (sweep <= 0) return ""; const sp = this.polar(start, cx, cy, r), ep = this.polar(start + sweep, cx, cy, r), la = sweep > 180 ? 1 : 0; return `M ${sp.x} ${sp.y} A ${r} ${r} 0 ${la} 1 ${ep.x} ${ep.y}`; }
+  bezier(sx, sy, tx, ty) { const dx = Math.max(30, Math.abs(tx - sx) * 0.5); return `M ${sx} ${sy} C ${sx + dx} ${sy}, ${tx - dx} ${ty}, ${tx} ${ty}`; }
+
+  labelStyle(complete) { return `font-family:'Azeret Mono',monospace;font-size:12px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em;line-height:1.3;color:${complete ? "var(--color-text-secondary)" : "var(--color-error)"}`; }
+
+  buildField(fn, fp) {
+    const complete = fp.complete !== false;
+    const base = { label: this.humanize(fn), labelStyle: this.labelStyle(complete), isFile: fp.type === "file", isInput: fp.type === "input" };
+    if (fp.type === "file") { base.display = fp.value || (fp.accept ? fp.accept + " file" : "Choose file…"); base.valueStyle = this.fileValStyle(!!fp.value); }
+    else { base.inputValue = fp.value || ""; }
+    return base;
+  }
+  fileValStyle(has) { return `flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:${has ? "var(--color-text-primary)" : "var(--color-dimmed)"}`; }
+
+  buildParam(node, p) {
+    const complete = p.complete !== false;
+    const v = { key: node.id + "-" + p.name, label: this.humanize(p.name), labelStyle: this.labelStyle(complete),
+      isKnob: false, isFile: false, isInput: false, isButtonSel: false, isObjectArray: false };
+    if (p.type === "knob" || p.type === "fader") {
+      const norm = (p.value - p.min) / (p.max - p.min);
+      v.isKnob = true; v.valueText = this.fmt(p.value, p.step); v.hasUnit = !!p.unit; v.unit = p.unit || "";
+      v.k = { size: 32, track: this.arc(135, 270, 16, 16, 14), value: this.arc(135, 270 * norm, 16, 16, 14) };
+      v.onKnobDown = (e) => this.knobDown(node.id, p.name, norm, e);
+    } else if (p.type === "file") {
+      v.isFile = true; v.display = p.value || (p.accept ? p.accept + " file" : "Choose file…"); v.valueStyle = this.fileValStyle(!!p.value);
+    } else if (p.type === "input") {
+      v.isInput = true; v.inputValue = p.value || "";
+    } else if (p.type === "buttonSelection") {
+      v.isButtonSel = true; v.options = p.options.map((o) => ({ label: o, active: o === p.value, onSelect: () => this.setBitDepth(node.id, p.name, o), style: this.bsStyle(o === p.value) }));
+    } else if (p.type === "objectArray") {
+      v.isObjectArray = true; v.addLabel = "Add " + p.itemNoun;
+      v.stages = p.value.map((fields, i) => {
+        const pp = fields.pluginPath, pn = fields.pluginName, pr = fields.presetPath;
+        const selected = !!(pp && pp.value);
+        const fromPath = selected ? pp.value.split(/[\\/]/).pop().replace(/\.vst3$/i, "") : "";
+        const pluginName = (pn && pn.value) ? pn.value : fromPath;
+        return {
+          key: i, title: p.itemNoun + " " + (i + 1), notFirst: i > 0,
+          wrap: "display:flex;flex-direction:column;gap:10px",
+          pluginSelected: selected, pluginNotSelected: !selected, pluginName,
+          onOpenPlugin: () => {},
+          onRemovePlugin: () => this.setStagePlugin(node.id, p.name, i, ""),
+          onSelectPlugin: () => this.setStagePlugin(node.id, p.name, i, "C:/Program Files/Common Files/VST3/New Plugin.vst3"),
+          onRemoveStage: () => this.removeStage(node.id, p.name, i),
+          presetField: this.buildField("presetPath", pr),
+        };
+      });
+    }
+    return v;
+  }
+  bsStyle(active) { return `flex:auto;text-align:center;border-radius:2px;padding:4px 8px;font-family:'Azeret Mono',monospace;font-size:10px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em;${active ? "background:var(--color-text-primary);color:var(--color-surface)" : "color:var(--color-text-secondary)"}`; }
+
+  portColor(kind, port, node) {
+    if (kind === "in") {
+      if (node.connectedInputs.includes(port.id)) return "var(--color-text-primary)";
+      if (port.required) return "var(--color-error)";
+      return "var(--color-text-secondary)";
+    }
+    return node.connectedOutputs.includes(port.id) ? "var(--color-text-primary)" : "var(--color-text-secondary)";
+  }
+  portStyle(side, color) { return `position:absolute;top:50%;${side}:-5px;transform:translateY(-50%);width:10px;height:10px;background:${color};clip-path:polygon(0 0,100% 50%,0 100%)`; }
+
+  computeNodes() {
+    return this.state.nodes.map((n) => {
+      const sel = this.state.selectedNodeId === n.id;
+      const headerColor = `var(--color-category-${n.category})`;
+      return {
+        key: n.id,
+        ref: (el) => { if (el) this._nodeEls[n.id] = el; },
+        onPointerDown: (e) => this.nodeDown(n.id, e),
+        wrapperStyle: `position:absolute;left:${n.x}px;top:${n.y}px;width:${n.width}px`,
+        panelStyle: `position:relative;display:flex;flex-direction:column;background:var(--color-elevated);border-radius:2px;overflow:hidden;box-shadow:${sel ? "0 0 0 2px var(--color-accent-primary)," : ""}0 2px 8px rgba(0,0,0,0.3);${n.bypassed ? "opacity:0.6;" : ""}`,
+        headerStyle: `display:flex;min-height:36px;align-items:center;justify-content:space-between;gap:8px;padding:8px 16px;background:${headerColor}`,
+        name: n.name,
+        powerStyle: `display:inline-flex;align-items:center;justify-content:center;padding:6px;border-radius:0;color:var(--color-surface);${!n.bypassed ? "background:color-mix(in srgb,var(--color-surface) 25%,transparent);" : ""}`,
+        dotsStyle: "display:inline-flex;align-items:center;justify-content:center;padding:6px;border-radius:0;color:var(--color-surface)",
+        onBypass: (e) => this.toggleBypass(n.id, e),
+        onMenu: (e) => this.openNodeMenu(n.id, e),
+        hasParams: n.params.length > 0,
+        params: n.params.map((p) => this.buildParam(n, p)),
+        inputs: n.inputs.map((port) => ({ style: this.portStyle("left", this.portColor("in", port, n)) })),
+        outputs: n.outputs.map((port) => ({ style: this.portStyle("right", this.portColor("out", port, n)) })),
+      };
+    });
+  }
+  computeEdges() {
+    const H = (id) => this.state.heights[id] || 150;
+    const byId = {};
+    this.state.nodes.forEach((n) => (byId[n.id] = n));
+    const tr = this.state.transform;
+    return this.state.edges.map((e) => {
+      const s = byId[e.source], t = byId[e.target];
+      if (!s || !t) return { id: e.id, d: "", stroke: "var(--color-border)", width: 1, btnStyle: "display:none", onEnter: () => {}, onLeave: () => {}, onInsert: () => {}, onDelete: () => {} };
+      const sx = s.x + s.width, sy = s.y + H(s.id) / 2, tx = t.x, ty = t.y + H(t.id) / 2;
+      const mx = (sx + tx) / 2, my = (sy + ty) / 2;
+      const smx = tr.x + mx * tr.z, smy = tr.y + my * tr.z;
+      const hovered = this.state.hoveredEdgeId === e.id;
+      return {
+        id: e.id, d: this.bezier(sx, sy, tx, ty),
+        stroke: hovered ? "color-mix(in srgb, var(--color-error) 65%, var(--color-border))" : "var(--color-border)",
+        width: hovered ? 2 : 1,
+        onEnter: () => this.setEdgeHover(e.id),
+        onLeave: this.clearEdgeHover,
+        onDelete: () => this.deleteEdge(e.id),
+        btnStyle: `position:absolute;left:${smx.toFixed(1)}px;top:${smy.toFixed(1)}px;transform:translate(-50%,-50%);z-index:15;${hovered ? "" : "display:none;"}`,
+        onInsert: (ev) => this.openInsertMenu(e.id, smx, smy, ev),
+      };
+    });
+  }
+  computeMinimap() {
+    const H = (id) => this.state.heights[id] || 150;
+    const ns = this.state.nodes;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    ns.forEach((n) => { minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x + n.width); minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y + H(n.id)); });
+    const pad = 10, W = 160 - pad * 2, Hh = 100 - pad * 2;
+    const sc = Math.min(W / (maxX - minX), Hh / (maxY - minY));
+    const offX = pad + (W - (maxX - minX) * sc) / 2, offY = pad + (Hh - (maxY - minY) * sc) / 2;
+    return ns.map((n) => ({ key: n.id, style: `position:absolute;left:${(offX + (n.x - minX) * sc).toFixed(1)}px;top:${(offY + (n.y - minY) * sc).toFixed(1)}px;width:${Math.max(2, n.width * sc).toFixed(1)}px;height:${Math.max(2, H(n.id) * sc).toFixed(1)}px;background:var(--color-category-${n.category})` }));
+  }
+
+  accentColor() { return this.props.accent ?? "#E56A4A"; }
+  applyAccent() { if (this._root) this._root.style.setProperty("--color-accent-primary", this.accentColor()); }
+  rootRef = (el) => { this._root = el; this.applyAccent(); };
+
+  tabStyle(active) { return `display:flex;height:100%;align-items:center;gap:8px;padding:0 16px;font-size:13px;cursor:pointer;${active ? "background:var(--color-text-primary);color:var(--color-surface)" : "color:var(--color-text-secondary)"}`; }
+  viewSwitchStyle(active) { return `display:flex;height:100%;align-items:center;padding:0 16px;font-family:'Azeret Mono',monospace;font-size:10px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;${active ? "background:var(--color-text-primary);color:var(--color-surface)" : "color:var(--color-text-secondary)"}`; }
+
+  renderVals() {
+    const showMinimap = this.props.showMinimap ?? true;
+    const isApp = this.isApp();
+    return {
+      rootRef: this.rootRef,
+      stop: (e) => e.stopPropagation(),
+      homeBarcode: this.buildBarcode(),
+      isApp, isGraph: this.isGraph(), isHome: this.isHome(), isShowcase: this.state.view === "showcase",
+      onAppClick: () => this.setState({ view: "app" }),
+      onShowcaseClick: () => this.setState({ view: "showcase" }),
+      appTabStyle: this.viewSwitchStyle(this.state.view === "app"),
+      showcaseTabStyle: this.viewSwitchStyle(this.state.view === "showcase"),
+
+      appMenuOpen: this.state.appMenuOpen,
+      toggleAppMenu: () => this.setState({ appMenuOpen: !this.state.appMenuOpen }),
+      closeAppMenu: () => this.setState({ appMenuOpen: false }),
+      menuBtnStyle: `display:inline-flex;height:100%;aspect-ratio:1;align-items:center;justify-content:center;color:var(--color-text-secondary);${this.state.appMenuOpen ? "background:var(--color-text-primary);color:var(--color-surface)" : ""}`,
+      appMenuItems: this.APP_MENU.map((m, i) => ({ key: i, isSep: !!m.sep, isAction: !m.sep, label: m.label || "" })),
+
+      tabs: this.state.tabs.map((t) => {
+        const active = t.id === this.state.activeTabId;
+        return { key: t.id, name: t.name, active, inactive: !active, style: this.tabStyle(active),
+          activeClass: active ? "bag-tab-active" : "",
+          icon: React.createElement("span", { style: { display: "inline-flex", flexShrink: 0, marginRight: "4px" }, dangerouslySetInnerHTML: { __html: this.projectIconHTML(t.name, 16) } }),
+          onSelect: () => this.selectTab(t.id),
+          onClose: (e) => this.closeTab(t.id, e),
+          onRename: (e) => this.renameTab(t.id, e.target.value),
+          nameInputStyle: `min-width:0;width:${Math.min(220, Math.max(48, t.name.length * 8 + 16))}px;background:transparent;border:none;outline:none;padding:0;color:var(--color-surface);font-family:'Azeret Mono',monospace;font-size:13px;cursor:text`,
+          closeStyle: `display:inline-flex;align-items:center;justify-content:center;padding:4px;color:${active ? "var(--color-surface)" : "var(--color-text-secondary)"}` };
+      }),
+      goHome: this.goHome,
+      homeBtnStyle: `display:inline-flex;height:100%;aspect-ratio:1;align-items:center;justify-content:center;color:var(--color-text-secondary);${this.isHome() ? "background:var(--color-text-primary);color:var(--color-surface)" : ""}`,
+
+      canvasRef: this.canvasRef,
+      canvasDown: this.canvasDown,
+      canvasStyle: `position:relative;height:100%;width:100%;overflow:hidden;background:var(--color-surface)${(this.props.canvasDots ?? false) ? ";background-image:radial-gradient(var(--color-border) 1px,transparent 1px);background-size:24px 24px;background-position:" + this.state.transform.x + "px " + this.state.transform.y + "px" : ""};cursor:grab;touch-action:none`,
+      worldStyle: `position:absolute;top:0;left:0;transform:translate(${this.state.transform.x}px,${this.state.transform.y}px) scale(${this.state.transform.z});transform-origin:0 0`,
+      nodes: this.computeNodes(),
+      edges: this.computeEdges(),
+
+      addMenuOpen: this.state.addMenuOpen,
+      onAddNodeClick: (e) => { e.stopPropagation(); this.setState({ addMenuOpen: !this.state.addMenuOpen, appMenuOpen: false, contextMenu: null }); },
+      addNodeBtnStyle: `display:inline-flex;align-items:center;gap:8px;padding:12px 24px;font-family:'Azeret Mono',monospace;font-size:15px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-primary);${this.state.addMenuOpen ? "background:var(--color-text-primary);color:var(--color-surface)" : ""}`,
+      nodeCatalog: this.buildCatalog(() => this.setState({ addMenuOpen: false })),
+
+      onAutoOrganize: () => {}, onUndo: () => {}, onRedo: () => {}, onRender: () => {},
+
+      showMinimap,
+      minimapNodes: this.computeMinimap(),
+
+      toastPercent: Math.round(this.state.toast * 100) + "%",
+      toastPercentText: Math.round(this.state.toast * 100) + "%",
+
+      contextMenu: this.state.contextMenu ? {
+        style: `position:absolute;left:${this.state.contextMenu.x}px;top:${this.state.contextMenu.y}px;z-index:50;min-width:176px;display:flex;flex-direction:column;background:var(--color-elevated);border-radius:2px;padding:4px 0`,
+        items: this.CTX_MENU.map((m, i) => ({ key: i, isSep: !!m.sep, isAction: !m.sep, label: m.label || "", onClick: () => this.ctxAction(m.label, this.state.contextMenu && this.state.contextMenu.nodeId) })),
+      } : null,
+      hasContextMenu: !!this.state.contextMenu,
+
+      insertMenu: this.state.insertMenu ? {
+        style: `position:absolute;left:${this.state.insertMenu.x}px;top:${this.state.insertMenu.y}px;z-index:50;width:300px;max-height:calc((100vh - 220px) * 0.8);overflow-y:auto;transform:translateX(-50%);display:flex;flex-direction:column;background:var(--color-elevated);border-radius:2px;padding:4px 0`,
+        groups: this.buildCatalog(() => this.setState({ insertMenu: null })),
+      } : null,
+      hasInsertMenu: !!this.state.insertMenu,
+
+      homeRef: this.homeRef,
+      onNewGraph: this.newGraph,
+      onOpenGraph: this.openGraph,
+
+      // showcase interactions
+      sc: this.state.sc,
+      scKnob: (which) => (e) => { const start = e.clientY, sv = this.state.sc[which]; const mv = (ev) => { const d = (start - ev.clientY) / 150; this.setState({ sc: { ...this.state.sc, [which]: Math.max(0, Math.min(1, sv + d)) } }); }; const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); }; window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); },
+      scToggle: (which) => () => this.setState({ sc: { ...this.state.sc, [which]: !this.state.sc[which] } }),
+      scSetBs: (which, v) => () => this.setState({ sc: { ...this.state.sc, [which]: v } }),
+    };
+  }
+}
+</script>
+</body>
+</html>

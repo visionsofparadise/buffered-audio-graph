@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  @keyframes bag-meter{0%,100%{transform:scaleY(0.5)}50%{transform:scaleY(0.95)}}
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;font-family:'Azeret Mono',ui-monospace,monospace;color:var(--color-text-primary)">
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Buttons</h2>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <sc-for list="{{ buttonRows }}" as="row" hint-placeholder-count="4">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+          <sc-for list="{{ row.btns }}" as="b" hint-placeholder-count="3">
+            <button type="button" style="{{ b.style }}" style-hover="{{ b.hover }}">{{ b.label }}</button>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Icon Buttons</h2>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+      <sc-for list="{{ iconButtons }}" as="b" hint-placeholder-count="6">
+        <button type="button" aria-label="icon" style="{{ b.style }}" style-hover="{{ b.hover }}">
+          <svg width="{{ b.sz }}" height="{{ b.sz }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ b.icon }}"></path></svg>
+        </button>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Inputs</h2>
+    <div style="display:grid;max-width:28rem;grid-template-columns:1fr 1fr;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px"><label style="{{ label }}">Filename</label><input type="text" value="clean-take-04" style="{{ inputStyle }}"></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><label style="{{ label }}">Threshold (dB)</label><input type="text" value="-24.5" style="{{ inputStyle }}font-variant-numeric:tabular-nums"></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><input type="text" placeholder="No label" style="{{ inputStyle }}"></div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Selects</h2>
+    <div style="max-width:20rem;display:flex;flex-direction:column;gap:4px">
+      <span style="{{ label }}">Waveform</span>
+      <div style="display:inline-flex;align-items:center;justify-content:space-between;gap:8px;border-radius:2px;background:var(--color-elevated);color:var(--color-text-primary);padding:4px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em">
+        <span>Triangle</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Toggles</h2>
+    <div style="display:flex;align-items:center;gap:12px">
+      <sc-for list="{{ toggles }}" as="t" hint-placeholder-count="2">
+        <button type="button" onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Knobs</h2>
+    <div style="display:flex;align-items:flex-end;gap:24px">
+      <sc-for list="{{ knobs }}" as="k" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <span style="width:36px;text-align:center;font-size:10px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--color-text-secondary)">{{ k.pct }}</span>
+          <svg width="{{ k.size }}" height="{{ k.size }}" viewBox="{{ k.vb }}" onPointerDown="{{ k.onDown }}" style="display:block;cursor:ns-resize;touch-action:none">
+            <path d="{{ k.track }}" fill="none" stroke="var(--color-border)" stroke-width="3" stroke-linecap="round"></path>
+            <path d="{{ k.value }}" fill="none" stroke="var(--color-text-primary)" stroke-width="3" stroke-linecap="round"></path>
+          </svg>
+          <span style="{{ label }}">{{ k.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Faders</h2>
+    <div style="display:flex;align-items:flex-end;gap:24px">
+      <sc-for list="{{ faders }}" as="f" hint-placeholder-count="2">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <div onPointerDown="{{ f.onDown }}" style="position:relative;display:flex;justify-content:center;width:24px;height:80px;cursor:ns-resize;touch-action:none">
+            <div style="position:absolute;left:50%;transform:translateX(-0.5px);width:1px;height:100%;background:var(--color-surface)"></div>
+            <div style="position:absolute;width:12px;height:4px;left:50%;background:var(--color-text-primary);bottom:{{ f.pct }};transform:translate(-50%,50%)"></div>
+          </div>
+          <sc-if value="{{ f.hasLabel }}"><span style="{{ label }}">{{ f.label }}</span></sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Meters</h2>
+    <div style="display:flex;align-items:flex-end;gap:12px">
+      <sc-for list="{{ meters }}" as="m" hint-placeholder-count="6">
+        <div style="position:relative;overflow:hidden;background:var(--color-surface);width:4px;height:80px">
+          <div style="{{ m.style }}"></div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Button Selections</h2>
+    <div style="display:grid;max-width:28rem;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <span style="{{ label }}">2 columns</span>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px">
+          <sc-for list="{{ bsA }}" as="o" hint-placeholder-count="4"><button type="button" onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <span style="{{ label }}">4 columns</span>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
+          <sc-for list="{{ bsB }}" as="o" hint-placeholder-count="4"><button type="button" onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--color-border);padding:20px 24px">
+    <h2 style="margin:0;{{ h2 }}">Color Tokens</h2>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+      <sc-for list="{{ tokens }}" as="c" hint-placeholder-count="8">
+        <div style="display:flex;align-items:center;gap:12px;border-radius:2px;background:var(--color-elevated);padding:8px">
+          <span style="width:32px;height:32px;flex-shrink:0;border-radius:2px;background:{{ c.hex }}"></span>
+          <div style="display:flex;min-width:0;flex-direction:column">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-primary)">{{ c.token }}</span>
+            <span style="font-size:10px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--color-text-secondary)">{{ c.hex }}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;padding:20px 24px 48px">
+    <h2 style="margin:0;{{ h2 }}">Typography</h2>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="{{ label }}">type-display</span><span style="font-size:32px;font-weight:400;text-transform:uppercase;letter-spacing:0.08em;line-height:1;color:var(--color-text-primary)">DISPLAY HEADING</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="{{ label }}">type-label</span><span style="font-size:10px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-primary)">UPPERCASE LABEL</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="{{ label }}">type-value</span><span style="font-weight:500;font-variant-numeric:tabular-nums;color:var(--color-text-primary)">&minus;24.5 dB &middot; 44 100 Hz &middot; 00:01:32.450</span></div>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { knob32: 0.4, knob40: 0.65, knob56: 0.85, faderA: 0.7, faderB: 0.45, tgA: true, tgB: false, bsA: "Stereo", bsB: "LUFS" };
+
+  polar(a, cx, cy, r) { const rad = (a * Math.PI) / 180; return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }; }
+  arc(start, sweep, cx, cy, r) { if (sweep <= 0) return ""; const sp = this.polar(start, cx, cy, r), ep = this.polar(start + sweep, cx, cy, r), la = sweep > 180 ? 1 : 0; return `M ${sp.x} ${sp.y} A ${r} ${r} 0 ${la} 1 ${ep.x} ${ep.y}`; }
+
+  drag(which, e) {
+    const start = e.clientY, sv = this.state[which];
+    const mv = (ev) => { const d = (start - ev.clientY) / 150; this.setState({ [which]: Math.max(0, Math.min(1, sv + d)) }); };
+    const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  }
+  faderDrag(which, e) {
+    const start = e.clientY, sv = this.state[which];
+    const mv = (ev) => { const d = (start - ev.clientY) / 80; this.setState({ [which]: Math.max(0, Math.min(1, sv + d)) }); };
+    const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  }
+
+  btnStyle(variant, size) {
+    const sizes = { sm: "padding:4px 10px;font-size:10px", md: "padding:10px 16px;font-size:13px", lg: "padding:12px 24px;font-size:15px" };
+    const variants = { default: "background:var(--color-text-primary);color:var(--color-surface)", outline: "background:var(--color-elevated);color:var(--color-text-primary)", ghost: "color:var(--color-text-secondary)", disabled: "color:var(--color-dimmed);cursor:not-allowed" };
+    return `display:inline-flex;align-items:center;justify-content:center;border-radius:0;text-transform:uppercase;letter-spacing:0.06em;font-family:'Azeret Mono',monospace;${sizes[size]};${variants[variant]}`;
+  }
+  iconStyle(variant, size) {
+    const pads = { sm: "6px", md: "10px", lg: "12px" };
+    const variants = { default: "background:var(--color-text-primary);color:var(--color-surface)", outline: "background:var(--color-elevated);color:var(--color-text-primary)", ghost: "color:var(--color-text-secondary)", disabled: "color:var(--color-dimmed);cursor:not-allowed" };
+    return `display:inline-flex;aspect-ratio:1;align-items:center;justify-content:center;border-radius:0;padding:${pads[size]};${variants[variant]}`;
+  }
+  bsStyle(active) { return `flex:auto;text-align:center;border-radius:2px;padding:4px 8px;font-family:'Azeret Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;${active ? "background:var(--color-text-primary);color:var(--color-surface)" : "color:var(--color-text-secondary)"}`; }
+  knobView(v, size) { const r = (size - 4) / 2, c = size / 2; return { size, vb: `0 0 ${size} ${size}`, pct: Math.round(v * 100), track: this.arc(135, 270, c, c, r), value: this.arc(135, 270 * v, c, c, r) }; }
+
+  renderVals() {
+    const s = this.state;
+    const ghostHover = "color:var(--color-text-primary)";
+    const invHover = "background:var(--color-text-primary);color:var(--color-surface)";
+    const iconPaths = {
+      play: "M6 3 20 12 6 21Z", save: "M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7 M7 3v4a1 1 0 0 0 1 1h7",
+      bell: "M10.3 21a2 2 0 0 0 3.4 0 M4 17h16a1 1 0 0 0 .7-1.7C19.4 14 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.4 6-2.7 7.3A1 1 0 0 0 4 17",
+      trash: "M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6",
+      settings: "M12 2v3 M12 19v3 M5 5l2 2 M17 17l2 2 M2 12h3 M19 12h3 M5 19l2-2 M17 7l2-2",
+    };
+    return {
+      h2: "font-size:10px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-secondary)",
+      label: "font-size:10px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-secondary)",
+      inputStyle: "background:var(--color-surface);color:var(--color-text-primary);border:1px solid var(--color-border);border-radius:2px;padding:4px 8px;font-family:'Azeret Mono',monospace;font-size:13px;outline:none;",
+
+      buttonRows: ["lg", "md", "sm"].map((size, i) => ({ key: size, btns: [
+        { key: "d", label: "Default", style: this.btnStyle("default", size), hover: "" },
+        { key: "o", label: "Outline", style: this.btnStyle("outline", size), hover: "" },
+        { key: "g", label: "Ghost", style: this.btnStyle("ghost", size), hover: ghostHover },
+      ] })).concat([{ key: "dis", btns: [
+        { key: "d", label: "Disabled", style: this.btnStyle("disabled", "md"), hover: "" },
+        { key: "o", label: "Disabled", style: this.btnStyle("disabled", "md"), hover: "" },
+        { key: "g", label: "Disabled", style: this.btnStyle("disabled", "md"), hover: "" },
+      ] }]),
+
+      iconButtons: [
+        { key: "1", icon: iconPaths.play, sz: 20, style: this.iconStyle("default", "lg"), hover: "" },
+        { key: "2", icon: iconPaths.save, sz: 20, style: this.iconStyle("outline", "lg"), hover: "" },
+        { key: "3", icon: iconPaths.bell, sz: 20, style: this.iconStyle("ghost", "lg"), hover: ghostHover },
+        { key: "4", icon: iconPaths.trash, sz: 14, style: this.iconStyle("default", "sm"), hover: "" },
+        { key: "5", icon: iconPaths.trash, sz: 14, style: this.iconStyle("outline", "sm"), hover: "" },
+        { key: "6", icon: iconPaths.trash, sz: 14, style: this.iconStyle("ghost", "sm"), hover: ghostHover },
+        { key: "7", icon: iconPaths.settings, sz: 16, style: this.iconStyle("disabled", "md"), hover: "" },
+      ],
+
+      toggles: [
+        { key: "a", label: s.tgA ? "Enabled" : "Enabled", onClick: () => this.setState({ tgA: !s.tgA }), style: this.toggleStyle(s.tgA) },
+        { key: "b", label: "Linked", onClick: () => this.setState({ tgB: !s.tgB }), style: this.toggleStyle(s.tgB) },
+      ],
+
+      knobs: [
+        { key: "1", ...this.knobView(s.knob32, 32), label: "32px", onDown: (e) => this.drag("knob32", e) },
+        { key: "2", ...this.knobView(s.knob40, 40), label: "40px", onDown: (e) => this.drag("knob40", e) },
+        { key: "3", ...this.knobView(s.knob56, 56), label: "56px", onDown: (e) => this.drag("knob56", e) },
+      ],
+
+      faders: [
+        { key: "a", pct: (s.faderA * 100).toFixed(1) + "%", hasLabel: false, label: "", onDown: (e) => this.faderDrag("faderA", e) },
+        { key: "b", pct: (s.faderB * 100).toFixed(1) + "%", hasLabel: true, label: "Gain", onDown: (e) => this.faderDrag("faderB", e) },
+      ],
+
+      meters: [
+        { key: "1", style: this.meterStyle(0.15, false) },
+        { key: "2", style: this.meterStyle(0.45, false) },
+        { key: "3", style: this.meterStyle(0.7, false) },
+        { key: "4", style: this.meterStyle(0.9, false) },
+        { key: "5", style: this.meterStyle(0.6, true) },
+        { key: "6", style: this.meterStyle(0.6, true) },
+      ],
+
+      bsA: ["Mono", "Stereo", "Mid/Side", "Multi"].map((o) => ({ key: o, label: o, onClick: () => this.setState({ bsA: o }), style: this.bsStyle(o === s.bsA) })),
+      bsB: ["Peak", "RMS", "LUFS", "True"].map((o) => ({ key: o, label: o, onClick: () => this.setState({ bsB: o }), style: this.bsStyle(o === s.bsB) })),
+
+      tokens: [
+        ["surface", "#100F0D"], ["elevated", "#1D1A16"], ["border", "#3E3833"], ["dimmed", "#685F54"],
+        ["text-secondary", "#918979"], ["text-primary", "#F5F0E6"], ["accent-primary", "#E05A47"], ["accent-secondary", "#47A5A5"],
+        ["category-source", "#45A8A0"], ["category-transform", "#7B85C4"], ["category-target", "#C98A6C"], ["meter-green", "#4A7A5A"], ["meter-yellow", "#A59A4A"],
+      ].map(([token, hex]) => ({ key: token, token, hex })),
+    };
+  }
+  toggleStyle(on) { return `display:inline-flex;align-items:center;justify-content:center;border-radius:2px;padding:4px 8px;font-family:'Azeret Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;${on ? "background:var(--color-text-primary);color:var(--color-surface)" : "background:var(--color-elevated);color:var(--color-text-secondary)"}`; }
+  meterStyle(level, animated) { return `position:absolute;inset:0;transform-origin:bottom;transform:scaleY(${level});background:linear-gradient(to top,var(--color-meter-green),var(--color-meter-yellow));${animated ? "animation:bag-meter 1.1s ease-in-out infinite" : ""}`; }
+}
+</script>
+</body>
+</html>
