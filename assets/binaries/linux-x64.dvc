@@ -1,0 +1,6 @@
+outs:
+- md5: 74f4b95533da305c18b0c4cbea503f99.dir
+  size: 771405840
+  nfiles: 11
+  hash: md5
+  path: linux-x64

@@ -1,11 +1,13 @@
 import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
-import { fetchForTarget } from "./fetch";
 import {
+	assetPath,
+	filterAssetsForTarget,
 	formatTarget,
 	type Manifest,
 	type ManifestAsset,
 	parseTargetArgs,
+	readManifest,
 	resolveRepoRoot,
 	type Target,
 } from "./manifest";
@@ -69,7 +71,8 @@ export async function installForTarget(target: Target): Promise<{
 	destinationDir: string;
 	schemaKeyMap: Record<string, string>;
 }> {
-	const { manifest, included, cachePaths } = await fetchForTarget(target);
+	const manifest = await readManifest();
+	const included = filterAssetsForTarget(manifest.assets, target);
 	const destinationDir = resolveDesktopBinariesDir();
 
 	const removed = await clearTopLevelRegularFiles(destinationDir);
@@ -77,15 +80,9 @@ export async function installForTarget(target: Target): Promise<{
 	console.warn(`[install] cleared ${removed} file(s) from ${destinationDir}`);
 
 	for (const asset of included) {
-		const cachePath = cachePaths.get(asset.filename);
-
-		if (cachePath === undefined) {
-			throw new Error(`Internal error: cache path missing for ${asset.filename} after fetch`);
-		}
-
 		const destination = path.join(destinationDir, asset.filename);
 
-		await installAsset(cachePath, destination, asset, target);
+		await installAsset(assetPath(asset), destination, asset, target);
 		console.warn(`[install] copy   ${asset.filename}`);
 	}
 

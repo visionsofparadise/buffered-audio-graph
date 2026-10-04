@@ -66,14 +66,19 @@ jobs:
 
          - run: npm ci
 
+         - uses: astral-sh/setup-uv@v6
+
          - uses: actions/cache@v4
            with:
-              path: .binaries-cache
-              key: binaries-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('binaries.manifest.json') }}
+              path: .dvc/cache
+              key: dvc-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('assets/binaries/*.dvc', 'fixtures/*.dvc') }}
               restore-keys: |
-                 binaries-${{ matrix.platform }}-${{ matrix.arch }}-
+                 dvc-${{ matrix.platform }}-${{ matrix.arch }}-
 
-         - name: Fetch and install binaries
+         - name: Pull binaries
+           run: npm run binaries:pull -- --target=${{ matrix.platform }}-${{ matrix.arch }}
+
+         - name: Install binaries
            run: npm run binaries:install -- --target=${{ matrix.platform }}-${{ matrix.arch }}
 
          - run: npm run make --workspace desktop

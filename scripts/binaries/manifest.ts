@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { s3AssetUrl } from "../utils/download";
 
 type Platform = "all" | "win32" | "linux" | "darwin";
 type Arch = "all" | "x64" | "arm64";
@@ -11,15 +10,11 @@ export interface ManifestAsset {
 	platform: Platform;
 	arch: Arch;
 	filename: string;
-	sha256: string;
-	size: number;
 	source: string;
 }
 
 export interface Manifest {
-	version: number;
-	bucket: string;
-	region: string;
+	version: 8;
 	assets: Array<ManifestAsset>;
 }
 
@@ -129,6 +124,10 @@ export function filterAssetsForTarget(assets: ReadonlyArray<ManifestAsset>, targ
 	);
 }
 
-export function assetUrl(manifest: Manifest, asset: ManifestAsset): string {
-	return s3AssetUrl(manifest.bucket, manifest.region, asset.sha256);
+function assetGroup(asset: ManifestAsset): string {
+	return asset.platform === "all" ? "all" : `${asset.platform}-${asset.arch}`;
+}
+
+export function assetPath(asset: ManifestAsset): string {
+	return path.join(resolveRepoRoot(), "assets", "binaries", assetGroup(asset), asset.filename);
 }

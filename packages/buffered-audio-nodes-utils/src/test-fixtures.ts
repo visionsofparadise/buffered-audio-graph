@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const fixturesDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../fixtures");
+const fixturesDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../fixtures");
 
 export const fixtures = {
 	vkfftAddon: resolve(fixturesDir, "binaries/vkfft_addon.node"),

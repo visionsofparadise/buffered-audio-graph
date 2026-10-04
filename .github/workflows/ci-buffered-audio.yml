@@ -92,7 +92,7 @@ jobs:
    heavy:
       # Real binaries/models + minutes-long DSP. The automatic pre-publish gate
       # lives in the publish workflows; this job is a manual-dispatch debug button
-      # only (no scheduled/PR runs). Both S3 buckets are public unauthenticated GETs.
+      # only (no scheduled/PR runs). The DVC remote is a public unauthenticated HTTP read.
       if: github.event_name == 'workflow_dispatch'
       runs-on: ubuntu-latest
       timeout-minutes: 120
@@ -113,19 +113,24 @@ jobs:
          - name: Install dependencies
            run: npm ci
 
-         - name: Cache binaries (content-addressed sha256 cache)
+         - uses: astral-sh/setup-uv@v6
+
+         - name: Cache DVC objects
            uses: actions/cache@v4
            with:
-              path: .binaries-cache
-              key: binaries-linux-x64-${{ hashFiles('binaries.manifest.json') }}
+              path: .dvc/cache
+              key: dvc-linux-x64-${{ hashFiles('assets/binaries/*.dvc', 'fixtures/*.dvc') }}
               restore-keys: |
-                 binaries-linux-x64-
+                 dvc-linux-x64-
 
-         - name: Fetch audio test fixtures
-           run: npm run fixtures:audio
+         - name: Pull binaries
+           run: npm run binaries:pull -- --target=linux-x64
 
-         - name: Fetch binary + model test fixtures
-           run: npm run fixtures:binaries -- --target linux-x64
+         - name: Pull audio test fixtures
+           run: npm run fixtures:pull
+
+         - name: Stage binary + model test fixtures
+           run: npm run fixtures:stage -- --target=linux-x64
 
          - name: Build (topo-ordered)
            run: npx turbo build --filter=@buffered-audio/nodes

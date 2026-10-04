@@ -1,0 +1,6 @@
+outs:
+- md5: b046cc8580cd5d2550de33f050c9f427.dir
+  size: 141503488
+  nfiles: 1
+  hash: md5
+  path: darwin-x64

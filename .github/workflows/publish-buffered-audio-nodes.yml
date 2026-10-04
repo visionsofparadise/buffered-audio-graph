@@ -59,22 +59,29 @@ jobs:
            if: steps.check.outputs.skip == 'false'
            run: npx turbo run integration --filter=@buffered-audio/nodes
 
-         - name: Cache binaries (content-addressed sha256 cache)
+         - if: steps.check.outputs.skip == 'false'
+           uses: astral-sh/setup-uv@v6
+
+         - name: Cache DVC objects
            if: steps.check.outputs.skip == 'false'
            uses: actions/cache@v4
            with:
-              path: .binaries-cache
-              key: binaries-linux-x64-${{ hashFiles('binaries.manifest.json') }}
+              path: .dvc/cache
+              key: dvc-linux-x64-${{ hashFiles('assets/binaries/*.dvc', 'fixtures/*.dvc') }}
               restore-keys: |
-                 binaries-linux-x64-
+                 dvc-linux-x64-
 
-         - name: Fetch audio test fixtures
+         - name: Pull binaries
            if: steps.check.outputs.skip == 'false'
-           run: npm run fixtures:audio
+           run: npm run binaries:pull -- --target=linux-x64
 
-         - name: Fetch binary + model test fixtures
+         - name: Pull audio test fixtures
            if: steps.check.outputs.skip == 'false'
-           run: npm run fixtures:binaries -- --target linux-x64
+           run: npm run fixtures:pull
+
+         - name: Stage binary + model test fixtures
+           if: steps.check.outputs.skip == 'false'
+           run: npm run fixtures:stage -- --target=linux-x64
 
          - name: Run heavy integration tests
            if: steps.check.outputs.skip == 'false'

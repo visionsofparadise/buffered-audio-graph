@@ -2,12 +2,7 @@
 	"$schema": "https://unpkg.com/knip@6/schema.json",
 	"workspaces": {
 		".": {
-			"entry": [
-				"scripts/binaries/fetch.ts",
-				"scripts/binaries/install.ts",
-				"scripts/fixtures/fetch-audio.ts",
-				"scripts/fixtures/fetch-binaries.ts"
-			],
+			"entry": ["scripts/binaries/pull.ts", "scripts/binaries/install.ts", "scripts/fixtures/stage-binaries.ts"],
 			"project": ["scripts/**/*.ts"]
 		},
 		"packages/buffered-audio-nodes-core": {

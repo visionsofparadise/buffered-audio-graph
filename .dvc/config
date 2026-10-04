@@ -1,0 +1,4 @@
+[core]
+    remote = public
+['remote "public"']
+    url = https://zcross-dvc-public.s3.us-east-1.amazonaws.com/buffered-audio-graph

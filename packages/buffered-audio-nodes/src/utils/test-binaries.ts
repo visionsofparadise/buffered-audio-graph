@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const repoRoot = resolve(packageRoot, "../..");
-const fixturesDir = resolve(repoRoot, "../fixtures");
+const fixturesDir = resolve(repoRoot, "fixtures");
 const binariesDir = resolve(fixturesDir, "binaries");
 
 const exe = process.platform === "win32" ? ".exe" : "";

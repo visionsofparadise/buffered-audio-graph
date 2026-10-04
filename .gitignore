@@ -12,5 +12,6 @@ benchmarks.log
 scratch/
 /apps/desktop/binaries/
 /apps/desktop/.smoke-profile/
-/.binaries-cache/
+/fixtures/binaries/
+.scratch/
 .tools/

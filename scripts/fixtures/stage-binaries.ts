@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { fetchForTarget } from "../binaries/fetch";
 import {
+	assetPath,
 	filterAssetsForTarget,
 	formatTarget,
 	type ManifestAsset,
@@ -46,12 +46,13 @@ function resolveFixtureFilename(asset: ManifestAsset, target: Target): string | 
 }
 
 interface CopyEntry {
+	sourcePath: string;
 	sourceFilename: string;
 	destFilename: string;
 }
 
 function resolveDefaultOutDir(): string {
-	return path.resolve(resolveRepoRoot(), "..", "fixtures", "binaries");
+	return path.resolve(resolveRepoRoot(), "fixtures", "binaries");
 }
 
 function parseArgs(argv: ReadonlyArray<string>): {
@@ -102,56 +103,48 @@ async function main(): Promise<void> {
 		const destFilename = resolveFixtureFilename(asset, target);
 
 		if (destFilename === null) {
-			console.warn(`[fixtures:binaries] skip     ${asset.filename} (not needed by tests)`);
+			console.warn(`[fixtures:stage] skip     ${asset.filename} (not needed by tests)`);
 
 			continue;
 		}
 
-		entries.push({ sourceFilename: asset.filename, destFilename });
+		entries.push({ sourcePath: assetPath(asset), sourceFilename: asset.filename, destFilename });
 	}
 
-	console.warn(`[fixtures:binaries] target:  ${formatTarget(target)}`);
-	console.warn(`[fixtures:binaries] out dir: ${outDir}`);
-	console.warn(`[fixtures:binaries] assets:  ${entries.length}`);
+	console.warn(`[fixtures:stage] target:  ${formatTarget(target)}`);
+	console.warn(`[fixtures:stage] out dir: ${outDir}`);
+	console.warn(`[fixtures:stage] assets:  ${entries.length}`);
 
 	for (const entry of entries) {
 		const arrow = entry.sourceFilename === entry.destFilename ? "==" : "->";
 
-		console.warn(`[fixtures:binaries] ${arrow} ${entry.sourceFilename} ${arrow} ${entry.destFilename}`);
+		console.warn(`[fixtures:stage] ${arrow} ${entry.sourceFilename} ${arrow} ${entry.destFilename}`);
 	}
 
 	if (dryRun) {
 		const names = entries.map((entry) => entry.destFilename).sort((left, right) => left.localeCompare(right));
 
-		console.warn(`[fixtures:binaries] dry-run — ${names.length} destination file(s):`);
+		console.warn(`[fixtures:stage] dry-run — ${names.length} destination file(s):`);
 		console.warn(names.join("\n"));
 
 		return;
 	}
 
-	const { cachePaths } = await fetchForTarget(target);
-
 	await fs.mkdir(outDir, { recursive: true });
 
 	for (const entry of entries) {
-		const cachePath = cachePaths.get(entry.sourceFilename);
-
-		if (cachePath === undefined) {
-			throw new Error(`Internal error: cache path missing for ${entry.sourceFilename} after fetch`);
-		}
-
 		const destination = path.join(outDir, entry.destFilename);
 
-		await fs.copyFile(cachePath, destination);
+		await fs.copyFile(entry.sourcePath, destination);
 
 		if (target.platform !== "win32" && (entry.destFilename === "ffmpeg" || entry.destFilename === "ffprobe")) {
 			await fs.chmod(destination, 0o755);
 		}
 
-		console.warn(`[fixtures:binaries] copy   ${entry.destFilename}`);
+		console.warn(`[fixtures:stage] copy   ${entry.destFilename}`);
 	}
 
-	console.warn(`[fixtures:binaries] done — ${entries.length} asset(s) into ${outDir} for ${formatTarget(target)}`);
+	console.warn(`[fixtures:stage] done — ${entries.length} asset(s) into ${outDir} for ${formatTarget(target)}`);
 }
 
 main().catch((error: unknown) => {
