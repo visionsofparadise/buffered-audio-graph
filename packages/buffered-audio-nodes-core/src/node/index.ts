@@ -38,7 +38,7 @@ export function appendChild<P extends BufferedAudioNodeProperties>(
 ): void {
 	const head = "head" in child ? child.head : child;
 
-	node.properties = { ...node.properties, children: [...(node.properties.children ?? []), head] } as P;
+	node.properties = { ...node.properties, children: [...(node.properties.children ?? []), head] };
 }
 
 export abstract class BufferedAudioNode<P extends BufferedAudioNodeProperties = BufferedAudioNodeProperties> {
