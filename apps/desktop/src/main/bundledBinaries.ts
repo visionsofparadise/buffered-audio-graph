@@ -25,9 +25,14 @@ export async function listBundledBinaryFiles(): Promise<Record<string, string>> 
 	const map: Record<string, string> = {};
 
 	for (const entry of entries) {
-		if (!entry.isFile()) continue;
+		if (entry.isFile()) map[entry.name] = path.join(directory, entry.name);
 
-		map[entry.name] = path.join(directory, entry.name);
+		if (!entry.isDirectory()) continue;
+
+		const folder = path.join(directory, entry.name);
+
+		for (const inner of await fs.readdir(folder, { withFileTypes: true }))
+			if (inner.isFile()) map[`${entry.name}/${inner.name}`] = path.join(folder, inner.name);
 	}
 
 	return map;

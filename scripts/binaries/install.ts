@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import {
@@ -45,7 +46,32 @@ async function clearTopLevelRegularFiles(directory: string): Promise<number> {
 	return removed;
 }
 
+/**
+ * @returns the system tar. On Windows that is its own bsdtar, which reads .zip as well as .tar.gz; a Git or MSYS tar earlier on the PATH reads tar only.
+ */
+function systemTar(): string {
+	return process.platform === "win32"
+		? path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
+		: "tar";
+}
+
+async function extractAsset(source: string, destinationDir: string, entry: string): Promise<void> {
+	const folder = entry.split("/")[0];
+
+	if (folder === undefined || folder === entry) throw new Error(`Archive entry "${entry}" must sit inside a folder`);
+
+	await fs.rm(path.join(destinationDir, folder), { recursive: true, force: true });
+	execFileSync(systemTar(), ["-xf", source, "-C", destinationDir], { stdio: "inherit" });
+	await fs.stat(path.join(destinationDir, entry));
+}
+
 async function installAsset(source: string, destination: string, asset: ManifestAsset, target: Target): Promise<void> {
+	if (asset.entry !== undefined) {
+		await extractAsset(source, path.dirname(destination), asset.entry);
+
+		return;
+	}
+
 	await fs.copyFile(source, destination);
 
 	if (target.platform !== "win32" && (asset.key === "ffmpeg" || asset.key === "ffprobe")) {
@@ -59,7 +85,7 @@ function buildSchemaKeyMap(included: ReadonlyArray<ManifestAsset>): Record<strin
 	for (const asset of included) {
 		if (asset.key === null) continue;
 
-		map[asset.key] = asset.filename;
+		map[asset.key] = asset.entry ?? asset.filename;
 	}
 
 	return map;
@@ -83,7 +109,7 @@ export async function installForTarget(target: Target): Promise<{
 		const destination = path.join(destinationDir, asset.filename);
 
 		await installAsset(assetPath(asset), destination, asset, target);
-		console.warn(`[install] copy   ${asset.filename}`);
+		console.warn(`[install] ${asset.entry === undefined ? "copy   " : "extract"} ${asset.filename}`);
 	}
 
 	const schemaKeyMap = buildSchemaKeyMap(included);

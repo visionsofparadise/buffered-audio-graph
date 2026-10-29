@@ -250,22 +250,25 @@
 			"key": "vst-host",
 			"platform": "darwin",
 			"arch": "arm64",
-			"filename": "vst-host-darwin-arm64",
-			"source": "https://github.com/visionsofparadise/vst-host/releases/tag/v0.2.0"
+			"filename": "vst-host-darwin-arm64.tar.gz",
+			"entry": "vst-host-darwin-arm64/vst-host",
+			"source": "https://github.com/visionsofparadise/vst-host/releases/download/v0.3.0/vst-host-darwin-arm64.tar.gz"
 		},
 		{
 			"key": "vst-host",
 			"platform": "linux",
 			"arch": "x64",
-			"filename": "vst-host-linux-x64",
-			"source": "https://github.com/visionsofparadise/vst-host/releases/tag/v0.2.0"
+			"filename": "vst-host-linux-x64.tar.gz",
+			"entry": "vst-host-linux-x64/vst-host",
+			"source": "https://github.com/visionsofparadise/vst-host/releases/download/v0.3.0/vst-host-linux-x64.tar.gz"
 		},
 		{
 			"key": "vst-host",
 			"platform": "win32",
 			"arch": "x64",
-			"filename": "vst-host-win32-x64.exe",
-			"source": "https://github.com/visionsofparadise/vst-host/releases/tag/v0.2.0"
+			"filename": "vst-host-win32-x64.zip",
+			"entry": "vst-host-win32-x64/vst-host.exe",
+			"source": "https://github.com/visionsofparadise/vst-host/releases/download/v0.3.0/vst-host-win32-x64.zip"
 		}
 	]
 }

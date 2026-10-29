@@ -10,6 +10,10 @@ export interface ManifestAsset {
 	platform: Platform;
 	arch: Arch;
 	filename: string;
+	/**
+	 * Marks an archive asset: `filename` is a release archive (.zip or .tar.gz) kept as published, which install extracts, and `entry` is the executable's path inside it, which the install manifest maps the key to. A folder build (vst-host) ships this way, its executable beside its libraries and its symlinks kept.
+	 */
+	entry?: string;
 	source: string;
 }
 
