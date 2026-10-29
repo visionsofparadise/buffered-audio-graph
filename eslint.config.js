@@ -26,6 +26,7 @@ export default tseslint.config(
 			"**/__fixtures__/**",
 			"**/*.test.ts",
 			"**/*.test.tsx",
+			"apps/desktop/designs/**",
 		],
 	},
 

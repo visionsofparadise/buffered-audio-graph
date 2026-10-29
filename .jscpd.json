@@ -16,6 +16,7 @@
 		"**/package.json",
 		"**/crest-reduce/utils/lattice.ts",
 		"**/mixed-radix-fft.ts",
+		"apps/desktop/designs/**",
 		"apps/service/cdk.out/**",
 		"package-lock.json",
 		"pnpm-lock.yaml",
