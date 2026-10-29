@@ -60,13 +60,9 @@ export async function waitForCdp(port: number, timeoutMs: number): Promise<void>
 	const deadline = Date.now() + timeoutMs;
 
 	while (Date.now() < deadline) {
-		try {
-			const status = await httpGetStatus(`http://127.0.0.1:${port}/json/version`);
+		const status = await httpGetStatus(`http://127.0.0.1:${port}/json/version`).catch(() => null);
 
-			if (status === 200) return;
-		} catch (error) {
-			void error;
-		}
+		if (status === 200) return;
 
 		await sleep(500);
 	}
@@ -119,8 +115,8 @@ export function killProcessTree(child: ChildProcess): void {
 	} else {
 		try {
 			process.kill(-pid, "SIGKILL");
-		} catch (error) {
-			void error;
+		} catch {
+			return;
 		}
 	}
 }

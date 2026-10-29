@@ -160,8 +160,8 @@ export function useGraphDefinition(
 							});
 						});
 					}
-				} catch (error) {
-					void error;
+				} catch {
+					return;
 				}
 			})();
 		};

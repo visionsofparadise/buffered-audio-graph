@@ -15,7 +15,7 @@ export type Main = {
 	send: (channel: string, ...args: Array<unknown>) => void;
 };
 
-export const main = (window as Window & typeof globalThis & { main: Main }).main;
+export const main = window.main;
 
 declare global {
 	interface Window {

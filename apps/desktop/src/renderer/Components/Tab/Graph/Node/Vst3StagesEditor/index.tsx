@@ -134,8 +134,8 @@ export function Vst3StagesEditor({
 				const rowId = rowIdsRef.current[rowIndex];
 
 				if (rowId !== undefined) launchRowByIdRef.current.set(result.launchId, rowId);
-			} catch (error) {
-				void error;
+			} catch {
+				return;
 			}
 		},
 		[main],
