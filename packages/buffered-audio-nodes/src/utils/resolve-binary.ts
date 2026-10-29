@@ -20,14 +20,10 @@ export async function resolveBinary(name: string, providedPath?: string): Promis
 		return envPath;
 	}
 
-	try {
-		const { stdout } = await execFileAsync(process.platform === "win32" ? "where" : "which", [name]);
-		const resolved = stdout.trim().split("\n")[0]?.trim();
+	const found = await execFileAsync(process.platform === "win32" ? "where" : "which", [name]).catch(() => null);
+	const resolved = found?.stdout.trim().split("\n")[0]?.trim();
 
-		if (resolved) return resolved;
-	} catch (error) {
-		void error;
-	}
+	if (resolved) return resolved;
 
 	throw new Error(
 		`Binary "${name}" not found. Provide a path via the unit's binaryPath property or set the ${envVar} environment variable.`,

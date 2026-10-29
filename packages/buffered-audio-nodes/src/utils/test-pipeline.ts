@@ -47,10 +47,6 @@ export async function runTransform(
 			context: inputResult.context,
 		};
 	} finally {
-		try {
-			await unlink(tempPath);
-		} catch (error) {
-			void error;
-		}
+		await unlink(tempPath).catch(() => undefined);
 	}
 }

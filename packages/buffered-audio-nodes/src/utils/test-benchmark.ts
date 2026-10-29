@@ -41,11 +41,7 @@ export async function runBenchmark(
 			realTimeMultiplier: timing?.realTimeMultiplier ?? 0,
 		};
 	} finally {
-		try {
-			await unlink(tempPath);
-		} catch (error) {
-			void error;
-		}
+		await unlink(tempPath).catch(() => undefined);
 	}
 }
 
