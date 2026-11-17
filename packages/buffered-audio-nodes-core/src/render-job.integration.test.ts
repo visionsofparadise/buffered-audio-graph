@@ -643,6 +643,55 @@ describe("RenderJob execution", () => {
 		const stream = job.streams.get(failing)?.[0] as FailingTargetStream;
 		expect(stream.destroyCount).toBe(1);
 	});
+
+	it("tears an upstream transform down only after its in-flight call returns, before render settles", async () => {
+		const log: Array<string> = [];
+		let calls = 0;
+		let inCall = false;
+
+		class SlowTransformStream extends UnbufferedTransformStream {
+			override async *_transform(block: Block): AsyncGenerator<Block> {
+				calls += 1;
+				inCall = true;
+
+				if (calls === 2) {
+					await new Promise((resolve) => setTimeout(resolve, 300));
+					log.push("long call ends");
+				}
+
+				inCall = false;
+
+				yield block;
+			}
+
+			override _destroy(): void {
+				log.push(`slow: _destroy (inCall=${String(inCall)})`);
+			}
+		}
+
+		class SlowTransform extends TransformNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "slow-transform";
+			static override readonly schema = z.object({});
+			static override readonly Stream = SlowTransformStream;
+		}
+
+		const source = new MockSource([createBlock(1, 0, 100), createBlock(2, 100, 100), createBlock(3, 200, 100)]);
+		const slow = new SlowTransform();
+		const passthrough = new MockTransform();
+		const failing = new FailingTarget();
+
+		source.to(slow);
+		slow.to(passthrough);
+		passthrough.to(failing);
+
+		await source
+			.createRenderJob({ highWaterMark: 1 })
+			.render()
+			.catch(() => log.push("render rejected"));
+
+		expect(log).toEqual(["long call ends", "slow: _destroy (inCall=false)", "render rejected"]);
+	});
 });
 
 describe("render leaf-must-be-a-target validation", () => {

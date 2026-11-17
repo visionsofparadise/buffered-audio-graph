@@ -50,8 +50,10 @@ export abstract class InstrumentedTransformStream<
 	protected async *readInput(input: ReadableStream<Block>): AsyncGenerator<Block> {
 		const reader = input.getReader();
 		const signal = this.streamSignal;
+		let cancelling: Promise<void> | undefined;
 		const cancelOnAbort = (): void => {
-			reader.cancel().catch(() => undefined);
+			cancelling = reader.cancel();
+			cancelling.catch(() => undefined);
 		};
 		let ended = false;
 
@@ -83,7 +85,7 @@ export abstract class InstrumentedTransformStream<
 		} finally {
 			signal.removeEventListener("abort", cancelOnAbort);
 
-			if (!ended) await reader.cancel();
+			if (!ended) await (cancelling ?? reader.cancel());
 		}
 	}
 
