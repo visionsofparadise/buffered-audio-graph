@@ -36,6 +36,10 @@ export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, R
 			}
 
 			await Promise.all(jobs.map((job) => job.render()));
+		} catch (error) {
+			if (signal.aborted) return undefined;
+
+			throw error;
 		} finally {
 			jobManager.completeJob(jobId);
 		}
