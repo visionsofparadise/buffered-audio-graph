@@ -60,6 +60,9 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 		if (this.ffmpegProcess) return;
 
 		const probe = await this.probe(this.properties.ffprobePath, this.properties.path);
+
+		if (this.isDestroyed || this.stopRequested()) return;
+
 		const selectedChannels = this.properties.channels;
 
 		this.outputChannels = selectedChannels ? selectedChannels.length : probe.channels;
