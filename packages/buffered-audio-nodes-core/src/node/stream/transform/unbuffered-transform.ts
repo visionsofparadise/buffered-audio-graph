@@ -45,6 +45,8 @@ export abstract class UnbufferedTransformStream<
 
 	private async *emitted(blocks: AsyncIterable<Block>, emitGate: ProgressGate): AsyncGenerator<Block> {
 		for await (const block of blocks) {
+			if (this.stopRequested()) return;
+
 			yield block;
 
 			this.framesEmitted += block.samples[0]?.length ?? 0;

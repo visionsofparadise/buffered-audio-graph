@@ -20,7 +20,7 @@ export abstract class InstrumentedTransformStream<
 	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.sourceTotalFrames;
 		this.temporaryDirectory = context.temporaryDirectory;
-		this.renderSignal = context.signal;
+		this.recordRenderSignal(context);
 
 		await this._setup(context);
 
@@ -33,6 +33,10 @@ export abstract class InstrumentedTransformStream<
 
 	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
 		return toReadable(this.blocks(input), { onCancel: () => this.cancelController.abort() });
+	}
+
+	protected recordRenderSignal(context: StreamSetupContext): void {
+		this.renderSignal = context.signal;
 	}
 
 	protected get streamSignal(): AbortSignal {

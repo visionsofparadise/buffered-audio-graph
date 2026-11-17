@@ -319,6 +319,45 @@ describe("BufferedTransformStream cancellation", () => {
 	});
 });
 
+describe("BufferedTransformStream render abort", () => {
+	it("feeds no chunk of a whole-file _transform that finishes after the render aborted", async () => {
+		let release: (() => void) | undefined;
+		const parked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		class WholeFileStream extends BufferedTransformStream {
+			started = false;
+
+			override async *_transform(): AsyncIterable<Block> {
+				this.started = true;
+
+				await parked;
+
+				for (let index = 0; index < 3; index += 1) yield createBlock(index, index * 10, 10);
+			}
+		}
+
+		const { context } = createTestStreamContext();
+		const stream = new WholeFileStream(nodeWith({ blockSize: WHOLE_FILE }), context);
+		const controller = new AbortController();
+		const reader = (
+			await stream.setup(
+				readableFrom([createBlock(1, 0, 30)]),
+				createTestSetupContext({ signal: controller.signal }),
+			)
+		).getReader();
+		const pending = reader.read();
+
+		await vi.waitFor(() => expect(stream.started).toBe(true));
+
+		controller.abort(new Error("render failed"));
+		release?.();
+
+		await expect(pending).rejects.toThrow("render failed");
+	});
+});
+
 describe("BufferedTransformStream progress shape", () => {
 	it("emits buffer/emit progress with monotonic framesDone, completions at true totals, createdAt present", async () => {
 		const { context, events } = createTestStreamContext();

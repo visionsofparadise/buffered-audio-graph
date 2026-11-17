@@ -118,6 +118,8 @@ export abstract class BufferedTransformStream<
 
 		yield* this.chunked(timed, emitGate);
 
+		if (this.stopRequested()) return;
+
 		if (this.blockSize === WHOLE_FILE) this.emitProgress("process", batchFrames, batchFrames);
 
 		await buffer.clear();
@@ -129,9 +131,14 @@ export abstract class BufferedTransformStream<
 			const cap = this.outputChunkSize;
 
 			if (frames > cap) {
-				for (let start = 0; start < frames; start += cap)
+				for (let start = 0; start < frames; start += cap) {
+					if (this.stopRequested()) return;
+
 					yield sliceBlock(block, start, Math.min(cap, frames - start));
+				}
 			} else {
+				if (this.stopRequested()) return;
+
 				yield block;
 			}
 
