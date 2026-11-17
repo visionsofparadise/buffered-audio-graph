@@ -20,6 +20,8 @@ export abstract class UnbufferedTransformStream<
 				if (bufferGate(this.framesBuffered, Date.now()))
 					this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
+				if (this.stopRequested()) return;
+
 				const output = this._transform(block);
 				const timed = this.timed(output);
 
@@ -39,7 +41,7 @@ export abstract class UnbufferedTransformStream<
 
 			this.emitCompletion();
 		} finally {
-			await this.destroy();
+			await this.finishPipeline();
 		}
 	}
 

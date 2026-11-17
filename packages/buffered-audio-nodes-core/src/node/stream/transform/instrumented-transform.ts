@@ -13,6 +13,9 @@ export abstract class InstrumentedTransformStream<
 	protected sourceTotalFrames?: number;
 	protected temporaryDirectory!: string;
 
+	private pipeline?: AsyncGenerator<Block>;
+	private pipelineFinishing = false;
+
 	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.sourceTotalFrames;
 		this.temporaryDirectory = context.temporaryDirectory;
@@ -34,7 +37,23 @@ export abstract class InstrumentedTransformStream<
 	}
 
 	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		return toReadable(this.blocks(input), { onCancel: () => this.abortStream() });
+		const pipeline = this.blocks(input);
+
+		this.pipeline = pipeline;
+
+		return toReadable(pipeline, { onCancel: () => this.abortStream() });
+	}
+
+	protected override async unwind(): Promise<void> {
+		if (!this.pipeline || this.pipelineFinishing) return;
+
+		await this.pipeline.return(undefined);
+	}
+
+	protected async finishPipeline(): Promise<void> {
+		this.pipelineFinishing = true;
+
+		if (!this.isDestroyed) await this.destroy();
 	}
 
 	protected async *readInput(input: ReadableStream<Block>): AsyncGenerator<Block> {

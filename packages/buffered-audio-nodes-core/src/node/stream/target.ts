@@ -41,6 +41,8 @@ export abstract class BufferedTargetStream<
 
 		return new WritableStream<Block>({
 			write: async (chunk) => {
+				if (this.stopRequested()) return;
+
 				if (!this.hasStarted) {
 					this.hasStarted = true;
 					this.emitStarted();
@@ -57,14 +59,17 @@ export abstract class BufferedTargetStream<
 					this.emitProgress("write", this.framesWritten, this.sourceTotalFrames);
 			},
 			close: async () => {
-				const start = performance.now();
+				if (!this.stopRequested()) {
+					const start = performance.now();
 
-				await this.trackHook(this._close());
+					await this.trackHook(this._close());
 
-				this.processingMs += performance.now() - start;
+					this.processingMs += performance.now() - start;
 
-				this.emitProgress("write", this.framesWritten, this.sourceTotalFrames);
-				this.emitFinished({ framesDone: this.framesWritten, processingMs: this.processingMs });
+					this.emitProgress("write", this.framesWritten, this.sourceTotalFrames);
+					this.emitFinished({ framesDone: this.framesWritten, processingMs: this.processingMs });
+				}
+
 				await this.destroy();
 			},
 			abort: async () => {

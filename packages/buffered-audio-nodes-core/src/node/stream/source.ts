@@ -56,6 +56,13 @@ export abstract class BufferedSourceStream<
 						return;
 					}
 
+					if (this.isDestroyed) {
+						done = true;
+						controller.error(new DOMException("The stream was destroyed", "AbortError"));
+
+						return;
+					}
+
 					try {
 						if (!this.hasStarted) {
 							this.hasStarted = true;

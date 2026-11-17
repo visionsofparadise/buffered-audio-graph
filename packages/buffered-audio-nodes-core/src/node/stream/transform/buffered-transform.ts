@@ -67,10 +67,13 @@ export abstract class BufferedTransformStream<
 						this.blockSize === WHOLE_FILE
 							? blockFrames
 							: Math.min(this.blockSize - buffer.frames, blockFrames - offset);
+
+					if (this.stopRequested()) return;
+
 					const start = performance.now();
 					const prepared = await this.trackHook(this._prepare(sliceBlock(block, offset, frames)));
 
-					await buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
+					await this.trackHook(buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth));
 
 					this.processingMs += performance.now() - start;
 					offset += frames;
@@ -102,12 +105,14 @@ export abstract class BufferedTransformStream<
 
 			this.emitCompletion();
 		} finally {
-			await this.destroy();
+			await this.finishPipeline();
 		}
 	}
 
 	private async *batch(buffer: BlockBuffer, emitGate: ProgressGate): AsyncGenerator<Block> {
-		await buffer.flushWrites();
+		await this.trackHook(buffer.flushWrites());
+
+		if (this.stopRequested()) return;
 
 		const batchFrames = buffer.frames;
 
@@ -122,7 +127,7 @@ export abstract class BufferedTransformStream<
 
 		if (this.blockSize === WHOLE_FILE) this.emitProgress("process", batchFrames, batchFrames);
 
-		await buffer.clear();
+		await this.trackHook(buffer.clear());
 	}
 
 	private async *chunked(blocks: AsyncIterable<Block>, emitGate: ProgressGate): AsyncGenerator<Block> {

@@ -113,7 +113,7 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 	protected stopRequested(): boolean {
 		if (this.renderSignal?.aborted) throw this.renderSignal.reason;
 
-		return this.cancelController.signal.aborted;
+		return this.isDestroyed || this.cancelController.signal.aborted;
 	}
 
 	protected trackHook<T>(call: Promise<T> | T): Promise<T> {
@@ -151,6 +151,8 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 
 		try {
 			for (;;) {
+				if (this.stopRequested()) return;
+
 				const start = performance.now();
 				const result = await this.trackHook(iterator.next());
 
@@ -161,7 +163,7 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 				yield result.value;
 			}
 		} finally {
-			await iterator.return();
+			await this.trackHook(iterator.return());
 		}
 	}
 
@@ -174,9 +176,25 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 	private async tearDown(): Promise<void> {
 		this.cancelController.abort();
 
+		let unwindError: unknown;
+		let unwindFailed = false;
+
+		try {
+			await this.unwind();
+		} catch (error) {
+			unwindError = error;
+			unwindFailed = true;
+		}
+
 		while (this.hookCalls.size > 0) await Promise.allSettled([...this.hookCalls]);
 
 		await this._destroy();
+
+		if (unwindFailed) throw unwindError;
+	}
+
+	protected unwind(): Promise<void> | void {
+		return;
 	}
 
 	_destroy(): Promise<void> | void {

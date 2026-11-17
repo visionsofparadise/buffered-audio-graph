@@ -22,6 +22,7 @@ export function teeReadable<T>(
 
 	let serving = false;
 	let finished = false;
+	let upstreamCancel: Promise<void> | undefined;
 
 	const settleDemand = (branch: TeeBranch): void => {
 		branch.demandResolvers.shift()?.();
@@ -32,6 +33,31 @@ export function teeReadable<T>(
 	};
 
 	const liveBranches = (): Array<TeeBranch> => branches.filter((branch) => !branch.cancelled);
+
+	const cancelUpstream = (reason: unknown): Promise<void> => {
+		upstreamCancel ??= reader.cancel(reason);
+
+		return upstreamCancel;
+	};
+
+	function finish(): void {
+		finished = true;
+		signal?.removeEventListener("abort", abortBranches);
+	}
+
+	function abortBranches(): void {
+		if (finished || !signal) return;
+
+		finish();
+
+		for (const branch of liveBranches()) {
+			branch.cancelled = true;
+			branch.controller.error(signal.reason);
+			settleAllDemand(branch);
+		}
+
+		cancelUpstream(signal.reason).catch(() => undefined);
+	}
 
 	const serve = async (): Promise<void> => {
 		if (serving) return;
@@ -51,7 +77,7 @@ export function teeReadable<T>(
 				try {
 					result = await reader.read();
 				} catch (error) {
-					finished = true;
+					finish();
 
 					for (const branch of liveBranches()) {
 						branch.controller.error(error);
@@ -68,7 +94,7 @@ export function teeReadable<T>(
 					settleDemand(branch);
 				}
 
-				if (result.done) finished = true;
+				if (result.done) finish();
 			}
 		} finally {
 			serving = false;
@@ -96,9 +122,15 @@ export function teeReadable<T>(
 				settleAllDemand(branch);
 
 				if (branches.every((entry) => entry.cancelled)) {
-					finished = true;
+					finish();
 
-					await reader.cancel(reason);
+					await cancelUpstream(reason);
+
+					return;
+				}
+
+				if (upstreamCancel) {
+					await upstreamCancel;
 
 					return;
 				}
@@ -108,24 +140,8 @@ export function teeReadable<T>(
 		});
 	});
 
-	if (signal) {
-		const abortBranches = (): void => {
-			if (finished) return;
-
-			finished = true;
-
-			for (const branch of liveBranches()) {
-				branch.cancelled = true;
-				branch.controller.error(signal.reason);
-				settleAllDemand(branch);
-			}
-
-			reader.cancel(signal.reason).catch(() => undefined);
-		};
-
-		if (signal.aborted) abortBranches();
-		else signal.addEventListener("abort", abortBranches, { once: true });
-	}
+	if (signal?.aborted) abortBranches();
+	else signal?.addEventListener("abort", abortBranches, { once: true });
 
 	return streams.map((stream, offset) => [stream, items[offset] as T]);
 }

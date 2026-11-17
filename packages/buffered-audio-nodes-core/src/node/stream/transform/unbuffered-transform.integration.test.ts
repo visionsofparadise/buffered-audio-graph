@@ -322,6 +322,47 @@ describe("UnbufferedTransformStream cancellation", () => {
 		expect(finished).not.toHaveBeenCalled();
 	});
 
+	it("resolves a cancel that reaches a composed upstream only after that upstream's teardown", async () => {
+		const log: Array<string> = [];
+
+		class SlowStream extends UnbufferedTransformStream {
+			private calls = 0;
+
+			override async *_transform(block: Block): AsyncGenerator<Block> {
+				this.calls += 1;
+
+				if (this.calls === 2) {
+					await new Promise((resolve) => setTimeout(resolve, 200));
+					log.push("upstream call ends");
+				}
+
+				yield block;
+			}
+
+			override _destroy(): void {
+				log.push("upstream _destroy");
+			}
+		}
+
+		const { context } = createTestStreamContext();
+		const upstream = new SlowStream(nodeWith({}), context);
+		const downstream = new GainStream(nodeWith({}), context);
+
+		upstream._setup(createTestSetupContext());
+		downstream._setup(createTestSetupContext());
+
+		// Driven like silero-vad's analysis reader: no render job, only a reader that cancels.
+		const input = openInput([createBlock(1, 0, 10), createBlock(2, 10, 10), createBlock(3, 20, 10)]);
+		const reader = downstream._pipe(upstream._pipe(input.readable)).getReader();
+
+		await reader.read();
+		await parkOnInput();
+		await reader.cancel();
+		log.push("cancel resolved");
+
+		expect(log).toEqual(["upstream call ends", "upstream _destroy", "cancel resolved"]);
+	});
+
 	it("cancels its input when _transform throws", async () => {
 		class ThrowingStream extends UnbufferedTransformStream {
 			override _transform(): Iterable<Block> {
