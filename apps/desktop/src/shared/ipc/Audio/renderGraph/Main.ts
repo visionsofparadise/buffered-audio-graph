@@ -1,4 +1,4 @@
-import { createRenderJobs, isAbortReason } from "@buffered-audio/core";
+import { createRenderJobs, isAbortReason, preferredFailure } from "@buffered-audio/core";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { emitToRenderer, type AudioProgressPayload } from "../../../utilities/emitToRenderer";
 import {
@@ -35,9 +35,18 @@ export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, R
 				});
 			}
 
-			const results = await Promise.allSettled(jobs.map((job) => job.render()));
-			const failures = results.filter((result) => result.status === "rejected");
-			const failure = failures.find((result) => !isAbortReason(result.reason, signal)) ?? failures[0];
+			const results = await Promise.allSettled(
+				jobs.map(async (job) => {
+					try {
+						await job.render();
+					} catch (error) {
+						for (const sibling of jobs) sibling.abort();
+
+						throw error;
+					}
+				}),
+			);
+			const failure = preferredFailure(results, signal);
 
 			if (failure && !(signal.aborted && isAbortReason(failure.reason, signal))) throw failure.reason;
 		} finally {
