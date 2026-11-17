@@ -1,4 +1,6 @@
 import { EventEmitter, getEventListeners } from "node:events";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Block } from "@buffered-audio/core";
@@ -6,6 +8,7 @@ import {
 	createBlock,
 	createTestSetupContext,
 	createTestStreamContext,
+	drainBlocks,
 	readableFrom,
 } from "@buffered-audio/core/testing";
 import { ffmpeg, FfmpegStream } from ".";
@@ -80,12 +83,15 @@ function inputBlocks(count: number): Array<Block> {
 	return blocks;
 }
 
-function createBridge(input: ReadableStream<Block>): { readable: ReadableStream<Block>; stream: FfmpegStream } {
+function createBridge(
+	input: ReadableStream<Block>,
+	options?: { readonly ffmpegPath?: string; readonly signal?: AbortSignal },
+): { readable: ReadableStream<Block>; stream: FfmpegStream } {
 	const { context } = createTestStreamContext();
-	const node = ffmpeg({ ffmpegPath: "ffmpeg", args: ["-af", "anull"] });
+	const node = ffmpeg({ ffmpegPath: options?.ffmpegPath ?? "ffmpeg", args: ["-af", "anull"] });
 	const stream = new FfmpegStream(node, context);
 
-	stream._setup(createTestSetupContext());
+	stream._setup(createTestSetupContext({ signal: options?.signal }));
 
 	return { readable: stream._pipe(input), stream };
 }
@@ -457,8 +463,8 @@ describe("FfmpegStream bridge", () => {
 		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
 	});
 
-	it("errors with the signal when the child is killed", async () => {
-		const { child, stdin, stdout, stderr, exit } = createMockChild();
+	it("errors with the signal when the child is killed, and does not kill it again", async () => {
+		const { child, stdin, stdout, stderr, exit, kill } = createMockChild();
 
 		childProcessMocks.spawn.mockReturnValue(child);
 		vi.spyOn(stdin, "write").mockReturnValue(true);
@@ -476,6 +482,7 @@ describe("FfmpegStream bridge", () => {
 		exit(null, "SIGKILL");
 
 		await expect(reader.read()).rejects.toThrow("ffmpeg exited with signal SIGKILL: Killed");
+		expect(kill).not.toHaveBeenCalled();
 	});
 
 	it("keeps listener counts flat across repeated parked passes", async () => {
@@ -534,22 +541,48 @@ describe("FfmpegStream bridge", () => {
 		const { child, stdin, stdout } = createMockChild();
 
 		childProcessMocks.spawn.mockReturnValue(child);
-		vi.spyOn(stdin, "write").mockReturnValue(true);
 
-		stdout.push(pcmBytes(0.25, BLOCK_FRAMES));
-
-		const { readable } = createBridge(readableFrom(inputBlocks(4)));
+		const writeSpy = vi.spyOn(stdin, "write").mockReturnValue(true);
+		const input = manualInput();
+		const { readable } = createBridge(input.readable);
 		const reader = readable.getReader();
 
-		await reader.read();
+		input.push(createBlock(0.5, 0, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE }));
+		await tick();
 
 		stdin.emit("error", Object.assign(new Error("write EOF"), { code: "EOF" }));
+
 		stdout.push(pcmBytes(0.5, BLOCK_FRAMES));
 
+		// The child still runs, so a stored stdin error would throw on this block before writing it.
+		input.push(createBlock(0.5, BLOCK_FRAMES, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE }));
+
 		expect((await reader.read()).value?.samples[0]?.[0]).toBeCloseTo(0.5, 5);
+		expect(writeSpy).toHaveBeenCalledTimes(2);
 
 		await reader.cancel();
 	});
+
+	it("never spawns once the render signal that _setup recorded has aborted", async () => {
+		const controller = new AbortController();
+		const { readable } = createBridge(readableFrom(inputBlocks(2)), { signal: controller.signal });
+
+		controller.abort(new Error("render failed"));
+
+		await expect(readable.getReader().read()).rejects.toThrow("render failed");
+		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
+	});
+
+	it("rejects promptly when the binary does not exist", async () => {
+		const { spawn } = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+
+		childProcessMocks.spawn.mockImplementation(spawn);
+
+		const missing = join(tmpdir(), `missing-ffmpeg-${String(process.pid)}`, "ffmpeg");
+		const { readable } = createBridge(readableFrom(inputBlocks(2)), { ffmpegPath: missing });
+
+		await expect(drainBlocks(readable)).rejects.toThrow(/^ffmpeg failed to start: .*ENOENT/);
+	}, 5000);
 
 	it("propagates a non-EPIPE stdin error to the next transform", async () => {
 		const { child, stdin, stdout } = createMockChild();

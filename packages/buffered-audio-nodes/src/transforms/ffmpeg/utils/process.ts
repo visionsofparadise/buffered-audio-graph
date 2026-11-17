@@ -3,9 +3,15 @@ import type { Block } from "@buffered-audio/core";
 
 const STDERR_CAP_BYTES = 64 * 1024;
 
+export interface FfmpegExitResult {
+	readonly code: number | null;
+	readonly signal: NodeJS.Signals | null;
+	readonly error?: Error;
+}
+
 export interface FfmpegChildHandle {
 	readonly child: ChildProcessWithoutNullStreams;
-	readonly exitPromise: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+	readonly exitPromise: Promise<FfmpegExitResult>;
 }
 
 export interface SpawnFfmpegOptions {
@@ -21,8 +27,10 @@ export function spawnFfmpegChild(options: SpawnFfmpegOptions): FfmpegChildHandle
 	child.stderr.on("data", options.onStderr);
 	child.stdin.on("error", options.onStdinError);
 
-	const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+	const exitPromise = new Promise<FfmpegExitResult>((resolve) => {
 		child.once("exit", (code, signal) => resolve({ code, signal }));
+		child.once("close", (code: number | null, signal: NodeJS.Signals | null) => resolve({ code, signal }));
+		child.once("error", (error) => resolve({ code: null, signal: null, error }));
 	});
 
 	return { child, exitPromise };

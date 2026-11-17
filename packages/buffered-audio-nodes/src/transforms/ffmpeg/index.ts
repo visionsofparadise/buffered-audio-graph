@@ -9,8 +9,15 @@ import { interleave } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { createFfmpegPathField } from "../../utils/binary-fields";
-import { waitForChildWritable } from "../cli/utils/process";
-import { appendStderr, buildInputArgs, buildOutputArgs, parseStdoutFrames, spawnFfmpegChild } from "./utils/process";
+import { unlessAborted, waitForChildWritable } from "../cli/utils/process";
+import {
+	appendStderr,
+	buildInputArgs,
+	buildOutputArgs,
+	parseStdoutFrames,
+	spawnFfmpegChild,
+	type FfmpegExitResult,
+} from "./utils/process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
 const schema = z.object({
@@ -32,11 +39,6 @@ export interface FfmpegProperties extends TransformNodeProperties {
 
 const TEARDOWN_KILL_GRACE_MS = 2000;
 
-interface ExitResult {
-	readonly code: number | null;
-	readonly signal: NodeJS.Signals | null;
-}
-
 export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends UnbufferedTransformStream<
 	FfmpegNode<P>
 > {
@@ -47,7 +49,8 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	private outputOffset = 0;
 	private stderr = "";
 	private stdinError?: Error;
-	private exitPromise?: Promise<ExitResult>;
+	private exitPromise?: Promise<FfmpegExitResult>;
+	private childSettled = false;
 	private stdoutEnded = false;
 	private stdoutWait?: Promise<void>;
 	private stdoutNotify?: () => void;
@@ -57,6 +60,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 	override _setup(context: StreamSetupContext): void {
 		this.streamContext = context;
+		this.recordRenderSignal(context);
 
 		if (this.properties.outputSampleRate !== undefined) context.sampleRate = this.properties.outputSampleRate;
 	}
@@ -100,6 +104,14 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 			this.stdoutEnded = true;
 			this.wakeStdout();
 		});
+
+		const settleChild = (): void => {
+			this.childSettled = true;
+			this.wakeStdout();
+		};
+
+		child.once("close", settleChild);
+		child.once("error", settleChild);
 
 		this.child = child;
 		this.exitPromise = exitPromise;
@@ -200,18 +212,22 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	}
 
 	private async throwIfFailed(): Promise<void> {
-		const { code, signal } = await (this.exitPromise ?? Promise.resolve({ code: 0, signal: null }));
+		if (!this.exitPromise) return;
 
-		if (code === 0) return;
+		const exit = await unlessAborted(this.exitPromise, this.streamSignal);
 
-		const exit = code === null ? `exited with signal ${signal ?? "unknown"}` : `exited ${code}`;
+		if (!exit || exit.code === 0) return;
+
+		if (exit.error) throw new Error(`ffmpeg failed to start: ${exit.error.message}`);
+
+		const status = exit.code === null ? `exited with signal ${exit.signal ?? "unknown"}` : `exited ${exit.code}`;
 		const detail = this.stderr ? `: ${this.stderr.slice(0, 1024)}` : "";
 
-		throw new Error(`ffmpeg ${exit}${detail}`);
+		throw new Error(`ffmpeg ${status}${detail}`);
 	}
 
 	private async checkChild(child: ChildProcessWithoutNullStreams): Promise<boolean> {
-		if (child.exitCode !== null || child.signalCode !== null) {
+		if (child.exitCode !== null || child.signalCode !== null || this.childSettled) {
 			await this.throwIfFailed();
 
 			return true;
@@ -280,7 +296,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		for (;;) {
 			yield* this.readAvailableStdout();
 
-			if (this.stdoutEnded || this.aborted()) break;
+			if (this.stdoutEnded || this.childSettled || this.aborted()) break;
 
 			await this.waitForStdoutReadableOrEnd();
 		}
@@ -310,7 +326,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		if (!child) return;
 
-		if (child.exitCode === null && !child.killed) {
+		if (child.exitCode === null && child.signalCode === null && !child.killed) {
 			child.kill("SIGTERM");
 
 			await new Promise<void>((resolve) => {
