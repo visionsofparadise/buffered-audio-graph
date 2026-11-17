@@ -68,7 +68,7 @@ export abstract class BufferedTransformStream<
 							? blockFrames
 							: Math.min(this.blockSize - buffer.frames, blockFrames - offset);
 					const start = performance.now();
-					const prepared = await this._prepare(sliceBlock(block, offset, frames));
+					const prepared = await this.trackHook(this._prepare(sliceBlock(block, offset, frames)));
 
 					await buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth);
 
@@ -153,11 +153,11 @@ export abstract class BufferedTransformStream<
 		try {
 			await super.destroy();
 		} finally {
-			if (this.buffer) {
-				await this.buffer.close();
+			const buffer = this.buffer;
 
-				this.buffer = undefined;
-			}
+			this.buffer = undefined;
+
+			if (buffer) await buffer.close();
 		}
 	}
 

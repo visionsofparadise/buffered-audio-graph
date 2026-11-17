@@ -4,7 +4,7 @@ import { BufferedSourceStream, type RenderTiming } from "./node/stream/source";
 import { BufferedTargetStream } from "./node/stream/target";
 import { BufferedTransformStream } from "./node/stream/transform/buffered-transform";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
-import { isAbortReason } from "./utils/abort-reason";
+import { preferredFailure } from "./utils/abort-reason";
 import { assertFirstBlockSampleRate } from "./utils/assert-first-block-sample-rate";
 import { createRenderTemporaryDirectory, scavengeRenderTemporaryDirectories } from "./utils/render-temporary-directory";
 import { teeReadable } from "./utils/tee-readable";
@@ -177,9 +177,7 @@ export class RenderJob {
 					context,
 				);
 
-				const results = await Promise.allSettled(promises.map(async (promise) => this.abortOnFailure(promise)));
-				const failures = results.filter((result) => result.status === "rejected");
-				const failure = failures.find((result) => !isAbortReason(result.reason, signal)) ?? failures[0];
+				const failure = preferredFailure(await Promise.allSettled(promises), signal);
 
 				if (failure) throw failure.reason;
 			} finally {
@@ -223,9 +221,9 @@ export class RenderJob {
 		if (errors.length > 1) throw new AggregateError(errors, "Render and cleanup failed");
 	}
 
-	private async abortOnFailure(promise: Promise<void>): Promise<void> {
+	private async abortOnFailure<T>(promise: Promise<T>): Promise<T> {
 		try {
-			await promise;
+			return await promise;
 		} catch (error) {
 			this.abortController.abort();
 
@@ -238,11 +236,22 @@ export class RenderJob {
 		readable: ReadableStream<Block>,
 		context: StreamSetupContext,
 	): Promise<Array<Promise<void>>> {
-		const pairs = teeReadable(readable, children);
+		const pairs = teeReadable(readable, children, context.signal);
+		const results = await Promise.allSettled(
+			pairs.map(([branch, child]) => this.setup(child, branch, { ...context })),
+		);
+		const promises = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+		const failure = preferredFailure(results, context.signal);
 
-		const nested = await Promise.all(pairs.map(([branch, child]) => this.setup(child, branch, { ...context })));
+		if (failure) {
+			this.abortController.abort();
 
-		return nested.flat();
+			await Promise.allSettled(promises);
+
+			throw failure.reason;
+		}
+
+		return promises;
 	}
 
 	private async setup(
@@ -253,12 +262,16 @@ export class RenderJob {
 		const { stream } = plan;
 
 		if (stream instanceof BufferedTargetStream) {
-			return [stream.setup(input, context)];
+			const promise = this.abortOnFailure(stream.setup(input, context));
+
+			promise.catch(() => undefined);
+
+			return [promise];
 		}
 
 		if (stream instanceof BufferedTransformStream || stream instanceof UnbufferedTransformStream) {
 			const nodeName = (plan.node.constructor as typeof BufferedAudioNode).nodeName;
-			const output = await stream.setup(input, context);
+			const output = await this.abortOnFailure(stream.setup(input, context));
 
 			return this.setupChildren(
 				plan.children,

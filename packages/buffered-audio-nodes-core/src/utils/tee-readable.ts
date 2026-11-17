@@ -9,6 +9,7 @@ interface TeeBranch {
 export function teeReadable<T>(
 	readable: ReadableStream<Block>,
 	items: ReadonlyArray<T>,
+	signal?: AbortSignal,
 ): Array<[ReadableStream<Block>, T]> {
 	if (items.length === 0) return [];
 
@@ -106,6 +107,25 @@ export function teeReadable<T>(
 			},
 		});
 	});
+
+	if (signal) {
+		const abortBranches = (): void => {
+			if (finished) return;
+
+			finished = true;
+
+			for (const branch of liveBranches()) {
+				branch.cancelled = true;
+				branch.controller.error(signal.reason);
+				settleAllDemand(branch);
+			}
+
+			reader.cancel(signal.reason).catch(() => undefined);
+		};
+
+		if (signal.aborted) abortBranches();
+		else signal.addEventListener("abort", abortBranches, { once: true });
+	}
 
 	return streams.map((stream, offset) => [stream, items[offset] as T]);
 }

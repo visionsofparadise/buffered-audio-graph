@@ -13,16 +13,18 @@ export abstract class InstrumentedTransformStream<
 	protected sourceTotalFrames?: number;
 	protected temporaryDirectory!: string;
 
-	private readonly cancelController = new AbortController();
-	private renderSignal?: AbortSignal;
-	private combinedSignal?: AbortSignal;
-
 	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.sourceTotalFrames;
 		this.temporaryDirectory = context.temporaryDirectory;
 		this.recordRenderSignal(context);
 
-		await this._setup(context);
+		try {
+			await this.trackHook(this._setup(context));
+		} catch (error) {
+			await input.cancel(error).catch(() => undefined);
+
+			throw error;
+		}
 
 		return this._pipe(input);
 	}
@@ -32,23 +34,7 @@ export abstract class InstrumentedTransformStream<
 	}
 
 	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		return toReadable(this.blocks(input), { onCancel: () => this.cancelController.abort() });
-	}
-
-	protected recordRenderSignal(context: StreamSetupContext): void {
-		this.renderSignal = context.signal;
-	}
-
-	protected get streamSignal(): AbortSignal {
-		if (!this.renderSignal) return this.cancelController.signal;
-
-		return (this.combinedSignal ??= AbortSignal.any([this.cancelController.signal, this.renderSignal]));
-	}
-
-	protected stopRequested(): boolean {
-		if (this.renderSignal?.aborted) throw this.renderSignal.reason;
-
-		return this.cancelController.signal.aborted;
+		return toReadable(this.blocks(input), { onCancel: () => this.abortStream() });
 	}
 
 	protected async *readInput(input: ReadableStream<Block>): AsyncGenerator<Block> {

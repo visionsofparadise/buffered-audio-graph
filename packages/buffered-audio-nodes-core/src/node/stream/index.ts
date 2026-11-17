@@ -72,7 +72,12 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 	readonly node: N;
 	protected readonly events: RenderEvents;
 	protected processingMs = 0;
-	private destroyed = false;
+
+	private readonly cancelController = new AbortController();
+	private readonly hookCalls = new Set<Promise<unknown>>();
+	private renderSignal?: AbortSignal;
+	private combinedSignal?: AbortSignal;
+	private teardown?: Promise<void>;
 
 	constructor(node: N, context: StreamContext) {
 		this.node = node;
@@ -88,7 +93,39 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 	}
 
 	protected get isDestroyed(): boolean {
-		return this.destroyed;
+		return this.teardown !== undefined;
+	}
+
+	protected recordRenderSignal(context: StreamSetupContext): void {
+		this.renderSignal = context.signal;
+	}
+
+	protected get streamSignal(): AbortSignal {
+		if (!this.renderSignal) return this.cancelController.signal;
+
+		return (this.combinedSignal ??= AbortSignal.any([this.cancelController.signal, this.renderSignal]));
+	}
+
+	protected abortStream(): void {
+		this.cancelController.abort();
+	}
+
+	protected stopRequested(): boolean {
+		if (this.renderSignal?.aborted) throw this.renderSignal.reason;
+
+		return this.cancelController.signal.aborted;
+	}
+
+	protected trackHook<T>(call: Promise<T> | T): Promise<T> {
+		const promise = Promise.resolve(call);
+		const settle = (): void => {
+			this.hookCalls.delete(promise);
+		};
+
+		this.hookCalls.add(promise);
+		promise.then(settle, settle);
+
+		return promise;
 	}
 
 	protected emitStarted(): void {
@@ -115,7 +152,7 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 		try {
 			for (;;) {
 				const start = performance.now();
-				const result = await iterator.next();
+				const result = await this.trackHook(iterator.next());
 
 				this.processingMs += performance.now() - start;
 
@@ -128,10 +165,16 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 		}
 	}
 
-	async destroy(): Promise<void> {
-		if (this.destroyed) return;
+	destroy(): Promise<void> {
+		this.teardown ??= Promise.resolve().then(async () => this.tearDown());
 
-		this.destroyed = true;
+		return this.teardown;
+	}
+
+	private async tearDown(): Promise<void> {
+		this.cancelController.abort();
+
+		while (this.hookCalls.size > 0) await Promise.allSettled([...this.hookCalls]);
 
 		await this._destroy();
 	}

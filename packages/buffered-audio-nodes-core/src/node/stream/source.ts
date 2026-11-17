@@ -28,7 +28,9 @@ export abstract class BufferedSourceStream<
 	abstract _read(): Promise<Block | undefined>;
 
 	setup(context: StreamSetupContext): Promise<ReadableStream<Block>> {
-		return Promise.resolve(this._setup(context));
+		this.recordRenderSignal(context);
+
+		return this.trackHook(this._setup(context));
 	}
 
 	_setup(context: StreamSetupContext): Promise<ReadableStream<Block>> | ReadableStream<Block> {
@@ -61,7 +63,7 @@ export abstract class BufferedSourceStream<
 						}
 
 						const start = performance.now();
-						const chunk = await this._read();
+						const chunk = await this.trackHook(this._read());
 
 						this.processingMs += performance.now() - start;
 

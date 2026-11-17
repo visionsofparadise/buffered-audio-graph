@@ -721,6 +721,185 @@ describe("RenderJob execution", () => {
 		await expect(source.createRenderJob().render()).rejects.toThrow("write failed");
 	});
 
+	it("tears a source down only after its in-flight read returns when the render aborts", async () => {
+		const log: Array<string> = [];
+
+		class SlowReadSourceStream extends BufferedSourceStream {
+			private reads = 0;
+
+			override async getMetadata(): Promise<SourceMetadata> {
+				return { sampleRate: 44100, channels: 1 };
+			}
+
+			override async _read(): Promise<Block | undefined> {
+				this.reads += 1;
+
+				if (this.reads === 2) {
+					await new Promise((resolve) => setTimeout(resolve, 300));
+					log.push("read 2 ends");
+				}
+
+				return this.reads > 4 ? undefined : createBlock(this.reads, (this.reads - 1) * 100, 100);
+			}
+
+			override _destroy(): void {
+				log.push("source: _destroy");
+			}
+		}
+
+		class SlowReadSource extends SourceNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "slow-read-source";
+			static override readonly schema = z.object({});
+			static override readonly Stream = SlowReadSourceStream;
+		}
+
+		const source = new SlowReadSource({});
+		const passthrough = new MockTransform();
+		const controller = new AbortController();
+
+		source.to(passthrough);
+		passthrough.to(new MockTarget());
+
+		const render = source
+			.createRenderJob({ highWaterMark: 1, signal: controller.signal })
+			.render()
+			.then(
+				() => log.push("render resolved"),
+				() => log.push("render rejected"),
+			);
+
+		setTimeout(() => controller.abort(), 100);
+		await render;
+
+		expect(log).toEqual(["read 2 ends", "source: _destroy", "render rejected"]);
+	});
+
+	it("tears a target down only after its in-flight write returns when a sibling's setup fails", async () => {
+		const log: Array<string> = [];
+
+		class SlowWriteTargetStream extends BufferedTargetStream {
+			override async _write(): Promise<void> {
+				await new Promise((resolve) => setTimeout(resolve, 500));
+				log.push("write ends");
+			}
+
+			override _close(): void {}
+
+			override _destroy(): void {
+				log.push("slow target: _destroy");
+			}
+		}
+
+		class SlowWriteTarget extends TargetNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "slow-write-target";
+			static override readonly schema = z.object({});
+			static override readonly Stream = SlowWriteTargetStream;
+		}
+
+		class FailingSetupTransformStream extends UnbufferedTransformStream {
+			override async _setup(): Promise<void> {
+				await new Promise((resolve) => setTimeout(resolve, 200));
+
+				throw new Error("transform setup failed");
+			}
+
+			override *_transform(block: Block): Iterable<Block> {
+				yield block;
+			}
+		}
+
+		class FailingSetupTransform extends TransformNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "failing-setup-transform";
+			static override readonly schema = z.object({});
+			static override readonly Stream = FailingSetupTransformStream;
+		}
+
+		const source = new MockSource([createBlock(1, 0, 100), createBlock(2, 100, 100), createBlock(3, 200, 100)]);
+		const failingSetup = new FailingSetupTransform();
+
+		source.to(new SlowWriteTarget());
+		source.to(failingSetup);
+		failingSetup.to(new MockTarget());
+
+		await source
+			.createRenderJob({ highWaterMark: 1 })
+			.render()
+			.catch((error: unknown) => log.push(`render rejected: ${(error as Error).message}`));
+
+		expect(log).toEqual(["write ends", "slow target: _destroy", "render rejected: transform setup failed"]);
+	});
+
+	it("rejects promptly when a fanned-out target's setup fails before it reads its branch", async () => {
+		class EarlyFailingTargetStream extends BufferedTargetStream {
+			override async _setup(): Promise<void> {
+				await Promise.resolve();
+
+				throw new Error("target setup failed");
+			}
+
+			override _write(): void {}
+
+			override _close(): void {}
+		}
+
+		class EarlyFailingTarget extends TargetNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "early-failing-target";
+			static override readonly schema = z.object({});
+			static override readonly Stream = EarlyFailingTargetStream;
+		}
+
+		const blocks = Array.from({ length: 8 }, (_, index) => createBlock(index, index * 100, 100));
+		const source = new MockSource(blocks);
+
+		source.to(new EarlyFailingTarget());
+		source.to(new MockTarget());
+
+		await expect(source.createRenderJob({ highWaterMark: 1 }).render()).rejects.toThrow("target setup failed");
+	}, 2000);
+
+	it("reports an upstream _destroy error raised while a cancel tore the stream down", async () => {
+		class ThrowingDestroyTransformStream extends UnbufferedTransformStream {
+			override *_transform(block: Block): Iterable<Block> {
+				yield block;
+			}
+
+			override _destroy(): void {
+				throw new Error("destroy failed");
+			}
+		}
+
+		class ThrowingDestroyTransform extends TransformNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "throwing-destroy-transform";
+			static override readonly schema = z.object({});
+			static override readonly Stream = ThrowingDestroyTransformStream;
+		}
+
+		const source = new MockSource([createBlock(1, 0, 100), createBlock(2, 100, 100)]);
+		const transform = new ThrowingDestroyTransform();
+
+		source.to(transform);
+		transform.to(new FailingTarget());
+
+		const error = await source
+			.createRenderJob()
+			.render()
+			.then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+
+		expect(error).toBeInstanceOf(AggregateError);
+		expect((error as AggregateError).errors.map((entry: Error) => entry.message)).toEqual([
+			"write failed",
+			"destroy failed",
+		]);
+	});
+
 	it("waits for every fan-out branch to settle before tearing down after an abort", async () => {
 		const log: Array<string> = [];
 		const slow = createSlowTransform(log, 500);

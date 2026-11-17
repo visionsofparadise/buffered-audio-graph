@@ -15,10 +15,17 @@ export abstract class BufferedTargetStream<
 	abstract _write(chunk: Block): Promise<void> | void;
 	abstract _close(): Promise<void> | void;
 
-	setup(readable: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
+	async setup(readable: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
 		this.sourceTotalFrames = context.sourceTotalFrames;
+		this.recordRenderSignal(context);
 
-		return Promise.resolve(this._setup(readable, context));
+		try {
+			await this._setup(readable, context);
+		} catch (error) {
+			await readable.cancel(error).catch(() => undefined);
+
+			throw error;
+		}
 	}
 
 	_setup(input: ReadableStream<Block>, _context: StreamSetupContext): Promise<void> | void {
@@ -41,7 +48,7 @@ export abstract class BufferedTargetStream<
 
 				const start = performance.now();
 
-				await this._write(chunk);
+				await this.trackHook(this._write(chunk));
 
 				this.processingMs += performance.now() - start;
 				this.framesWritten += chunk.samples[0]?.length ?? 0;
@@ -52,7 +59,7 @@ export abstract class BufferedTargetStream<
 			close: async () => {
 				const start = performance.now();
 
-				await this._close();
+				await this.trackHook(this._close());
 
 				this.processingMs += performance.now() - start;
 
