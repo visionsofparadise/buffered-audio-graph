@@ -264,7 +264,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		const canWrite = stdin.write(data);
 
 		if (!canWrite) {
-			return waitForDrain(proc, stdin);
+			return waitForDrain(proc, stdin, "ffmpeg");
 		}
 
 		return Promise.resolve();

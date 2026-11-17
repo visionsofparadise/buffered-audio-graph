@@ -1,4 +1,9 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
+import { isAbortReason, type Block } from "@buffered-audio/core";
 import {
 	createTestSetupContext,
 	createTestStreamContext,
@@ -115,4 +120,140 @@ describe("Vst3PassthroughStream", () => {
 			}
 		}
 	});
+});
+
+const stubBinary = fileURLToPath(new URL("./__fixtures__/stub-binary.mjs", import.meta.url));
+
+const delay = (milliseconds: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function settleWithin<T>(promise: Promise<T>, label: string, milliseconds = 5_000): Promise<T> {
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<never>((_resolve, reject) => {
+				timeout = setTimeout(
+					() => reject(new Error(`${label} did not settle within ${milliseconds}ms`)),
+					milliseconds,
+				);
+			}),
+		]);
+	} finally {
+		if (timeout) clearTimeout(timeout);
+	}
+}
+
+async function waitForPid(path: string, milliseconds = 5_000): Promise<number> {
+	const deadline = Date.now() + milliseconds;
+
+	for (;;) {
+		try {
+			return Number.parseInt(await readFile(path, "utf8"), 10);
+		} catch (error) {
+			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+		}
+
+		if (Date.now() >= deadline) throw new Error(`PID file was not written within ${milliseconds}ms`);
+
+		await delay(20);
+	}
+}
+
+async function waitForProcessAbsence(pid: number, milliseconds = 5_000): Promise<void> {
+	const deadline = Date.now() + milliseconds;
+
+	for (;;) {
+		try {
+			process.kill(pid, 0);
+		} catch (error) {
+			if (error instanceof Error && "code" in error && error.code === "ESRCH") return;
+
+			throw error;
+		}
+
+		if (Date.now() >= deadline) throw new Error(`Process ${pid} remained alive after ${milliseconds}ms`);
+
+		await delay(20);
+	}
+}
+
+function hangingHostStream(pidPath: string): Vst3Stream {
+	return new Vst3Stream(
+		vst3({
+			vstHostPath: process.execPath,
+			stages: [{ pluginPath: "/ignored-by-stub.vst3" }],
+			extraArgs: [stubBinary, "--hang-after-ready", "--pid-file", pidPath],
+		}),
+		createTestStreamContext().context,
+	);
+}
+
+function singleBlock(frames: number): ReadableStream<Block> {
+	const samples = Float32Array.from({ length: frames }, (_, index) => Math.sin(index / 100));
+
+	return readableFrom([{ samples: [samples], offset: 0, sampleRate: 48_000, bitDepth: 32 }]);
+}
+
+describe("Vst3Stream cancellation", () => {
+	it("wakes a host hanging after READY when the output is cancelled", async () => {
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "vst3-cancel-active-"));
+		const pidPath = join(temporaryDirectory, "host.pid");
+		const stream = hangingHostStream(pidPath);
+
+		try {
+			const output = await stream.setup(
+				singleBlock(1024),
+				createTestSetupContext({ temporaryDirectory, sampleRate: 48_000, highWaterMark: 1 }),
+			);
+			const reader = output.getReader();
+
+			reader.read().catch(() => undefined);
+
+			const pid = await waitForPid(pidPath);
+
+			await settleWithin(reader.cancel(), "downstream cancel");
+			await waitForProcessAbsence(pid);
+		} finally {
+			await settleWithin(stream.destroy(), "stream cleanup").catch(() => undefined);
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	}, 30_000);
+
+	it("surfaces the abort, not the closed pipe, when a render aborts while stdin waits to drain", async () => {
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "vst3-abort-drain-"));
+		const pidPath = join(temporaryDirectory, "host.pid");
+		const stream = hangingHostStream(pidPath);
+		const controller = new AbortController();
+
+		try {
+			// Far more than a pipe buffer, so the write parks on drain once the stub stops reading.
+			const output = await stream.setup(
+				singleBlock(2_000_000),
+				createTestSetupContext({
+					temporaryDirectory,
+					sampleRate: 48_000,
+					highWaterMark: 1,
+					signal: controller.signal,
+				}),
+			);
+			const reading = output.getReader().read();
+
+			reading.catch(() => undefined);
+
+			await waitForPid(pidPath);
+
+			controller.abort();
+
+			const error = await settleWithin(reading, "aborted read").then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+
+			expect(isAbortReason(error, controller.signal)).toBe(true);
+		} finally {
+			await settleWithin(stream.destroy(), "stream cleanup").catch(() => undefined);
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	}, 30_000);
 });

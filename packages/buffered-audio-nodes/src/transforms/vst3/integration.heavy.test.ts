@@ -451,43 +451,6 @@ describe("Vst3Stream cancellation", () => {
 	}, 30_000);
 });
 
-describe("Vst3Stream downstream cancel", () => {
-	it("wakes a host hanging after READY when the output is cancelled", async () => {
-		const temporaryDirectory = await mkdtemp(join(tmpdir(), "vst3-cancel-active-"));
-		const pidPath = join(temporaryDirectory, "host.pid");
-		const stream = new Vst3Stream(
-			vst3({
-				vstHostPath: process.execPath,
-				stages: [{ pluginPath: "/ignored-by-stub.vst3" }],
-				extraArgs: [stubBinary, "--hang-after-ready", "--pid-file", pidPath],
-			}),
-			renderContext(),
-		);
-		const samples = Float32Array.from({ length: 1024 }, (_, index) => Math.sin(index / 100));
-		const input = new ReadableStream<Block>({
-			start(controller) {
-				controller.enqueue({ samples: [samples], offset: 0, sampleRate: 48_000, bitDepth: 32 });
-				controller.close();
-			},
-		});
-
-		try {
-			const output = await stream.setup(input, buildContext(48_000, temporaryDirectory));
-			const reader = output.getReader();
-
-			reader.read().catch(() => undefined);
-
-			const pid = await waitForPid(pidPath);
-
-			await settleWithin(reader.cancel(), "downstream cancel");
-			await waitForProcessAbsence(pid);
-		} finally {
-			await settleWithin(stream.destroy(), "stream cleanup").catch(() => undefined);
-			await rm(temporaryDirectory, { recursive: true, force: true });
-		}
-	}, 30_000);
-});
-
 describe("Vst3Stream init-crash retry", () => {
 	it("re-spawns past a non-deterministic init crash and processes cleanly", async () => {
 		// Crashes (exit 3221225477 before READY) on the first 2 spawns, succeeds on the 3rd; retry is transparent.

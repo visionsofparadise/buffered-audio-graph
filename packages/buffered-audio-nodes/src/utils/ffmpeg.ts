@@ -1,6 +1,6 @@
 import type { ChildProcess } from "node:child_process";
 
-export function waitForDrain(proc: ChildProcess, stdin: NodeJS.WritableStream): Promise<void> {
+export function waitForDrain(proc: ChildProcess, stdin: NodeJS.WritableStream, label: string): Promise<void> {
 	return new Promise<void>((resolve, reject) => {
 		const cleanup = (): void => {
 			stdin.removeListener("drain", onDrain);
@@ -17,7 +17,7 @@ export function waitForDrain(proc: ChildProcess, stdin: NodeJS.WritableStream): 
 		};
 		const onClose = (code: number | null): void => {
 			cleanup();
-			reject(new Error(`ffmpeg exited with code ${code} while writing stdin`));
+			reject(new Error(`${label} exited with code ${code} while writing stdin`));
 		};
 
 		stdin.once("drain", onDrain);

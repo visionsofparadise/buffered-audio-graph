@@ -315,7 +315,13 @@ export async function processStreamingThroughVstHost(
 			const canWrite = handle.stdin.write(interleavedBuffer);
 
 			if (!canWrite) {
-				await waitForDrain(handle.proc, handle.stdin);
+				try {
+					await waitForDrain(handle.proc, handle.stdin, "vst-host");
+				} catch (error) {
+					signal?.throwIfAborted();
+
+					throw error;
+				}
 			}
 
 			inputFramesDone = Math.min(inputFrames, inputFramesDone + chunkFrames);
