@@ -87,6 +87,10 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 		return this.node.properties;
 	}
 
+	protected get isDestroyed(): boolean {
+		return this.destroyed;
+	}
+
 	protected emitStarted(): void {
 		this.events.emit("started", this.identity, { createdAt: Date.now() });
 	}

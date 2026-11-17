@@ -12,7 +12,7 @@ export abstract class UnbufferedTransformStream<
 		const emitGate = createProgressGate(this.sourceTotalFrames);
 
 		try {
-			for await (const block of input) {
+			for await (const block of this.readInput(input)) {
 				this.markStarted();
 
 				this.framesBuffered += block.samples[0]?.length ?? 0;
@@ -24,7 +24,11 @@ export abstract class UnbufferedTransformStream<
 				const timed = this.timed(output);
 
 				yield* this.emitted(timed, emitGate);
+
+				if (this.stopRequested()) return;
 			}
+
+			if (this.stopRequested()) return;
 
 			const flushed = this._flush();
 			const timed = this.timed(flushed);

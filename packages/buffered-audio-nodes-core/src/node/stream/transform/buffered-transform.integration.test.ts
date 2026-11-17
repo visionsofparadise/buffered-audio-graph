@@ -1,7 +1,7 @@
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { BufferedAudioNode } from "../..";
 import { createBlock } from "../../../testing/blocks";
 import { createTestSetupContext, createTestStreamContext } from "../../../testing/contexts";
@@ -262,6 +262,60 @@ describe("BufferedTransformStream pull-paced serving", () => {
 
 		expect(finallyRan).toBe(true);
 		expect(stream.destroyCount).toBe(1);
+	});
+});
+
+describe("BufferedTransformStream cancellation", () => {
+	it("resolves a cancel mid-_transform once that call returns, and fires nothing further", async () => {
+		let release: (() => void) | undefined;
+		const parked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		class ParkedStream extends BufferedTransformStream {
+			firings = 0;
+			flushCalls = 0;
+
+			// eslint-disable-next-line require-yield
+			override async *_transform(): AsyncIterable<Block> {
+				this.firings += 1;
+
+				await parked;
+			}
+
+			override _flush(): Iterable<Block> {
+				this.flushCalls += 1;
+
+				return [];
+			}
+		}
+
+		const { context, events } = createTestStreamContext();
+		const finished = vi.fn();
+
+		events.on("finished", finished);
+
+		const stream = new ParkedStream(nodeWith({ blockSize: 4 }), context);
+		const input = Array.from({ length: 8 }, (_, index) => createBlock(1, index * 4, 4));
+		const reader = (await stream.setup(readableFrom(input), createTestSetupContext())).getReader();
+
+		await vi.waitFor(() => expect(stream.firings).toBe(1));
+
+		let cancelled = false;
+		const cancel = reader.cancel().then(() => {
+			cancelled = true;
+		});
+
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		expect(cancelled).toBe(false);
+
+		release?.();
+		await cancel;
+
+		expect(stream.firings).toBe(1);
+		expect(stream.flushCalls).toBe(0);
+		expect(finished).not.toHaveBeenCalled();
 	});
 });
 

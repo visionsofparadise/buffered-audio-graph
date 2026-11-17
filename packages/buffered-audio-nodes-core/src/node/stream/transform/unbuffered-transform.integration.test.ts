@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { BufferedAudioNode } from "../..";
 import { createBlock } from "../../../testing/blocks";
 import { createTestSetupContext, createTestStreamContext } from "../../../testing/contexts";
@@ -187,6 +187,117 @@ describe("UnbufferedTransformStream pull-paced serving", () => {
 
 		expect(finallyRan).toBe(true);
 		expect(stream.destroyCount).toBe(1);
+	});
+});
+
+function openInput(blocks: Array<Block>): {
+	readonly readable: ReadableStream<Block>;
+	readonly cancelled: () => boolean;
+} {
+	let cancelled = false;
+	const readable = new ReadableStream<Block>({
+		start: (controller) => {
+			for (const block of blocks) controller.enqueue(block);
+		},
+		cancel: () => {
+			cancelled = true;
+		},
+	});
+
+	return { readable, cancelled: () => cancelled };
+}
+
+// Lets the output's prefetch pull advance the generator onto its next input read before the test cancels.
+function parkOnInput(): Promise<void> {
+	return new Promise((resolve) => setImmediate(resolve));
+}
+
+class LifecycleStream extends GainStream {
+	flushCalls = 0;
+	destroyCount = 0;
+
+	override _flush(): Iterable<Block> {
+		this.flushCalls += 1;
+
+		return [];
+	}
+
+	override _destroy(): void {
+		this.destroyCount += 1;
+	}
+}
+
+describe("UnbufferedTransformStream cancellation", () => {
+	it("resolves a cancel while parked on an input that never closes, skipping _flush and completion", async () => {
+		const { context, events } = createTestStreamContext();
+		const finished = vi.fn();
+
+		events.on("finished", finished);
+
+		const stream = new LifecycleStream(nodeWith({}), context);
+		const input = openInput([createBlock(1, 0, 10)]);
+		const reader = (await stream.setup(input.readable, createTestSetupContext())).getReader();
+
+		expect((await reader.read()).value?.samples[0]?.[0]).toBe(2);
+
+		await parkOnInput();
+		await reader.cancel();
+
+		expect(input.cancelled()).toBe(true);
+		expect(stream.flushCalls).toBe(0);
+		expect(stream.destroyCount).toBe(1);
+		expect(finished).not.toHaveBeenCalled();
+	});
+
+	it("cancels a stream driven through _setup() and _pipe() without setup()", async () => {
+		const { context } = createTestStreamContext();
+		const stream = new LifecycleStream(nodeWith({}), context);
+		const input = openInput([createBlock(1, 0, 10)]);
+
+		stream._setup(createTestSetupContext());
+
+		const reader = stream._pipe(input.readable).getReader();
+
+		await reader.read();
+		await parkOnInput();
+		await reader.cancel();
+
+		expect(input.cancelled()).toBe(true);
+		expect(stream.destroyCount).toBe(1);
+	});
+
+	it("errors with the render signal's reason when the render aborts", async () => {
+		const { context } = createTestStreamContext();
+		const stream = new LifecycleStream(nodeWith({}), context);
+		const input = openInput([]);
+		const controller = new AbortController();
+		const reader = (
+			await stream.setup(input.readable, createTestSetupContext({ signal: controller.signal }))
+		).getReader();
+		const pending = reader.read();
+
+		controller.abort(new Error("render failed"));
+
+		await expect(pending).rejects.toThrow("render failed");
+		expect(input.cancelled()).toBe(true);
+		expect(stream.flushCalls).toBe(0);
+		expect(stream.destroyCount).toBe(1);
+	});
+
+	it("cancels its input when _transform throws", async () => {
+		class ThrowingStream extends UnbufferedTransformStream {
+			override _transform(): Iterable<Block> {
+				throw new Error("transform failed");
+			}
+		}
+
+		const { context } = createTestStreamContext();
+		const stream = new ThrowingStream(nodeWith({}), context);
+		const input = openInput([createBlock(1, 0, 10)]);
+		const reader = (await stream.setup(input.readable, createTestSetupContext())).getReader();
+
+		await expect(reader.read()).rejects.toThrow("transform failed");
+		expect(input.cancelled()).toBe(true);
 	});
 });
 

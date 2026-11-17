@@ -55,7 +55,7 @@ export abstract class BufferedTransformStream<
 		const emitGate = createProgressGate(this.sourceTotalFrames);
 
 		try {
-			for await (const block of input) {
+			for await (const block of this.readInput(input)) {
 				this.markStarted();
 
 				this.inferredChunkSize ??= block.samples[0]?.length ?? 0;
@@ -79,12 +79,19 @@ export abstract class BufferedTransformStream<
 					if (bufferGate(this.framesBuffered, Date.now()))
 						this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
-					if (this.blockSize !== WHOLE_FILE && buffer.frames >= this.blockSize)
+					if (this.blockSize !== WHOLE_FILE && buffer.frames >= this.blockSize) {
 						yield* this.batch(buffer, emitGate);
+
+						if (this.stopRequested()) return;
+					}
 				}
 			}
 
+			if (this.stopRequested()) return;
+
 			if (buffer.frames > 0) yield* this.batch(buffer, emitGate);
+
+			if (this.stopRequested()) return;
 
 			const flushed = this._flush();
 			const timed = this.timed(flushed);
