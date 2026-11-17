@@ -87,6 +87,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 
 	override async _setup(context: StreamSetupContext): Promise<void> {
 		this.streamContext = context;
+		this.recordRenderSignal(context);
 
 		this.stagesJsonPath = await writeStagesJson(this.properties.stages, context.temporaryDirectory);
 	}
@@ -115,7 +116,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 		];
 
 		const handle = await spawnVstHostReady(this.properties.vstHostPath, args, {
-			signal: this.streamContext.signal,
+			signal: this.streamSignal,
 			onRetry: (failedAttempt, error) => {
 				this.log("vst-host init crash, retrying", { attempt: failedAttempt, error: error.message }, "warn");
 			},
@@ -145,7 +146,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 				channelCount: channels,
 				sampleRate,
 				bitDepth: bd,
-				signal: this.streamContext.signal,
+				signal: this.streamSignal,
 				onInputProgress: (progress) => {
 					if (inputGate(progress.framesDone, Date.now())) {
 						this.log("vst-host input", {
