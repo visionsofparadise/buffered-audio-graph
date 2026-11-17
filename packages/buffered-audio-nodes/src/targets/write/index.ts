@@ -9,8 +9,8 @@ import {
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
+import { isChildGone, settledOrAborted, waitForChildWritable } from "../../transforms/cli/utils/process";
 import { createFfmpegPathField } from "../../utils/binary-fields";
-import { waitForDrain } from "../../utils/ffmpeg";
 import { getBytesPerSample, writeSample, buildWavHeader, buildRf64Header } from "./utils/wav";
 
 function bitDepthToPcmFormat(bitDepth: WavBitDepth): string {
@@ -255,19 +255,25 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		return args;
 	}
 
-	private writeToStdin(data: Buffer): Promise<void> {
+	private async writeToStdin(data: Buffer): Promise<void> {
 		const stdin = this.ffmpegStdin;
 		const proc = this.ffmpegProcess;
 
-		if (!stdin || !proc) return Promise.resolve();
+		if (!stdin || !proc) return;
 
-		const canWrite = stdin.write(data);
+		if (stdin.write(data)) return;
 
-		if (!canWrite) {
-			return waitForDrain(proc, stdin, "ffmpeg");
+		const signal = this.streamSignal;
+
+		await waitForChildWritable(proc, stdin, signal);
+
+		signal.throwIfAborted();
+
+		if (isChildGone(proc, stdin)) {
+			await settledOrAborted(this.ffmpegDone ?? Promise.resolve(), signal);
+
+			throw new Error("ffmpeg exited before its input ended");
 		}
-
-		return Promise.resolve();
 	}
 }
 

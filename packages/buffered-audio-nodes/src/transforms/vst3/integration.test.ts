@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, it, expect } from "vitest";
-import { isAbortReason, type Block } from "@buffered-audio/core";
+import { describe, it, expect, vi } from "vitest";
+import { BlockBuffer, isAbortReason, type Block } from "@buffered-audio/core";
 import {
 	createTestSetupContext,
 	createTestStreamContext,
@@ -11,6 +11,7 @@ import {
 	readableFrom,
 } from "@buffered-audio/core/testing";
 import { schema, vst3, Vst3Node, Vst3PassthroughStream, Vst3Stream } from ".";
+import { processStreamingThroughVstHost, spawnVstHostReady } from "./utils/process";
 
 describe("Vst3Node schema", () => {
 	it("accepts a valid configuration", () => {
@@ -253,6 +254,107 @@ describe("Vst3Stream cancellation", () => {
 			expect(isAbortReason(error, controller.signal)).toBe(true);
 		} finally {
 			await settleWithin(stream.destroy(), "stream cleanup").catch(() => undefined);
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	}, 30_000);
+});
+
+describe("processStreamingThroughVstHost settling", () => {
+	async function streamWithSlowSecondRead(
+		temporaryDirectory: string,
+		duringRead: (controller: AbortController, handle: Awaited<ReturnType<typeof spawnVstHostReady>>) => Promise<void>,
+	): Promise<unknown> {
+		const stagesPath = join(temporaryDirectory, "stages.json");
+
+		await writeFile(stagesPath, JSON.stringify([{ pluginPath: "x" }]));
+
+		const frames = 4 * 48_000;
+		const buffer = new BlockBuffer(temporaryDirectory);
+
+		await buffer.write([Float32Array.from({ length: frames }, (_, index) => Math.sin(index / 100))], 48_000, 32);
+		await buffer.flushWrites();
+
+		const handle = await spawnVstHostReady(process.execPath, [
+			stubBinary,
+			"--stages-json",
+			stagesPath,
+			"--sample-rate",
+			"48000",
+			"--channels",
+			"1",
+		]);
+		const read = buffer.read.bind(buffer);
+		let reads = 0;
+		let enteredSecondRead: (() => void) | undefined;
+		const secondRead = new Promise<void>((resolve) => {
+			enteredSecondRead = resolve;
+		});
+
+		vi.spyOn(buffer, "read").mockImplementation(async (count) => {
+			reads += 1;
+
+			if (reads === 2) {
+				enteredSecondRead?.();
+				await delay(500);
+			}
+
+			return read(count);
+		});
+
+		const controller = new AbortController();
+		const processing = processStreamingThroughVstHost(handle, buffer, {
+			channelCount: 1,
+			sampleRate: 48_000,
+			bitDepth: 32,
+			signal: controller.signal,
+		});
+
+		processing.catch(() => undefined);
+
+		try {
+			await secondRead;
+			await duringRead(controller, handle);
+
+			return await settleWithin(processing, "streaming pass").then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+		} finally {
+			handle.proc.kill();
+			await buffer.close();
+		}
+	}
+
+	it("settles with the abort when the render aborts during a slow buffer read", async () => {
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "vst3-abort-read-"));
+
+		try {
+			let signal: AbortSignal | undefined;
+			const error = await streamWithSlowSecondRead(temporaryDirectory, async (controller) => {
+				signal = controller.signal;
+				controller.abort();
+			});
+
+			expect(isAbortReason(error, signal)).toBe(true);
+		} finally {
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	}, 30_000);
+
+	it("settles with the abort when the host crashes during a slow buffer read and the render then aborts", async () => {
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "vst3-crash-read-"));
+
+		try {
+			let signal: AbortSignal | undefined;
+			const error = await streamWithSlowSecondRead(temporaryDirectory, async (controller, handle) => {
+				signal = controller.signal;
+				handle.proc.kill();
+				await handle.exited;
+				controller.abort();
+			});
+
+			expect(isAbortReason(error, signal)).toBe(true);
+		} finally {
 			await rm(temporaryDirectory, { recursive: true, force: true });
 		}
 	}, 30_000);

@@ -272,7 +272,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		const ok = child.stdin.write(interleavedBuffer);
 
 		if (!ok) {
-			this.pendingDrain = waitForChildWritable(child, this.streamSignal).then(() => {
+			this.pendingDrain = waitForChildWritable(child, child.stdin, this.streamSignal).then(() => {
 				this.pendingDrain = undefined;
 			});
 		}

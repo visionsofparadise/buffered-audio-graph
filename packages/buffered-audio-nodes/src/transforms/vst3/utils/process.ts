@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { deinterleaveBuffer, interleave } from "@buffered-audio/utils";
-import { waitForDrain } from "../../../utils/ffmpeg";
+import { isChildGone, settledOrAborted, waitForChildWritable } from "../../cli/utils/process";
 import type { BlockBuffer } from "@buffered-audio/core";
 
 const CHUNK_FRAMES = 48000;
@@ -315,12 +315,16 @@ export async function processStreamingThroughVstHost(
 			const canWrite = handle.stdin.write(interleavedBuffer);
 
 			if (!canWrite) {
-				try {
-					await waitForDrain(handle.proc, handle.stdin, "vst-host");
-				} catch (error) {
-					signal?.throwIfAborted();
+				await waitForChildWritable(handle.proc, handle.stdin, signal ?? new AbortController().signal);
 
-					throw error;
+				signal?.throwIfAborted();
+
+				if (isChildGone(handle.proc, handle.stdin)) {
+					const exit = await settledOrAborted(handle.exited, signal);
+
+					throw new Error(
+						`vst-host exited with code ${exit.code ?? "null"}${exit.signal ? ` (signal ${exit.signal})` : ""} while writing stdin: ${handle.getStderrTail()}`,
+					);
 				}
 			}
 
@@ -385,10 +389,10 @@ export async function processStreamingThroughVstHost(
 
 		handle.stdout.on("data", onData);
 
-		await stdoutEnd;
+		await settledOrAborted(stdoutEnd, signal);
 		await writeChain;
 
-		const exit = await handle.exited;
+		const exit = await settledOrAborted(handle.exited, signal);
 
 		signal?.throwIfAborted();
 

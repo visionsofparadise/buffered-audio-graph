@@ -1,10 +1,15 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 
-export function waitForChildWritable(child: ChildProcessWithoutNullStreams, signal: AbortSignal): Promise<void> {
-	const { stdin } = child;
+export type ChildStdin = NodeJS.WritableStream & { readonly destroyed?: boolean; readonly writableEnded?: boolean };
 
-	if (child.exitCode !== null || child.signalCode !== null || stdin.destroyed || stdin.writableEnded || signal.aborted)
-		return Promise.resolve();
+export function isChildGone(child: ChildProcess, stdin: ChildStdin): boolean {
+	return (
+		child.exitCode !== null || child.signalCode !== null || stdin.destroyed === true || stdin.writableEnded === true
+	);
+}
+
+export function waitForChildWritable(child: ChildProcess, stdin: ChildStdin, signal: AbortSignal): Promise<void> {
+	if (isChildGone(child, stdin) || signal.aborted) return Promise.resolve();
 
 	return new Promise<void>((resolve) => {
 		const settle = (): void => {
@@ -24,6 +29,16 @@ export function waitForChildWritable(child: ChildProcessWithoutNullStreams, sign
 		child.once("error", settle);
 		signal.addEventListener("abort", settle, { once: true });
 	});
+}
+
+export async function settledOrAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+	if (!signal) return promise;
+
+	await unlessAborted(promise, signal);
+
+	signal.throwIfAborted();
+
+	return promise;
 }
 
 export function unlessAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T | undefined> {
