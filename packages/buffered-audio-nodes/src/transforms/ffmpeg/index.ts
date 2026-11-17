@@ -9,6 +9,7 @@ import { interleave } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { createFfmpegPathField } from "../../utils/binary-fields";
+import { waitForChildWritable } from "../cli/utils/process";
 import { appendStderr, buildInputArgs, buildOutputArgs, parseStdoutFrames, spawnFfmpegChild } from "./utils/process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
@@ -31,6 +32,11 @@ export interface FfmpegProperties extends TransformNodeProperties {
 
 const TEARDOWN_KILL_GRACE_MS = 2000;
 
+interface ExitResult {
+	readonly code: number | null;
+	readonly signal: NodeJS.Signals | null;
+}
+
 export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends UnbufferedTransformStream<
 	FfmpegNode<P>
 > {
@@ -41,7 +47,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	private outputOffset = 0;
 	private stderr = "";
 	private stdinError?: Error;
-	private exitPromise?: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+	private exitPromise?: Promise<ExitResult>;
 	private stdoutEnded = false;
 	private stdoutWait?: Promise<void>;
 	private stdoutNotify?: () => void;
@@ -139,8 +145,9 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 	private waitForStdoutReadableOrEnd(): Promise<void> {
 		const stdout = this.child?.stdout;
+		const signal = this.streamSignal;
 
-		if (!stdout || this.stdoutEnded) return Promise.resolve();
+		if (!stdout || this.stdoutEnded || signal.aborted) return Promise.resolve();
 
 		if (stdout.readableLength > 0) return Promise.resolve();
 
@@ -153,7 +160,14 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		if (this.stdoutWait) return this.stdoutWait;
 
 		const wait = new Promise<void>((resolve) => {
-			this.stdoutNotify = resolve;
+			const onAbort = (): void => this.wakeStdout();
+
+			signal.addEventListener("abort", onAbort, { once: true });
+
+			this.stdoutNotify = () => {
+				signal.removeEventListener("abort", onAbort);
+				resolve();
+			};
 		});
 
 		this.stdoutWait = wait;
@@ -179,15 +193,41 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		}
 	}
 
-	override async *_transform(block: Block): AsyncGenerator<Block> {
+	private aborted(): boolean {
+		return this.streamSignal.aborted;
+	}
+
+	private async throwIfFailed(): Promise<void> {
+		const { code } = await (this.exitPromise ?? Promise.resolve({ code: 0, signal: null }));
+
+		if (code !== null && code !== 0) {
+			const detail = this.stderr ? `: ${this.stderr.slice(0, 1024)}` : "";
+
+			throw new Error(`ffmpeg exited ${code}${detail}`);
+		}
+	}
+
+	private async checkChild(child: ChildProcessWithoutNullStreams): Promise<boolean> {
+		if (child.exitCode !== null || child.signalCode !== null) {
+			await this.throwIfFailed();
+
+			return true;
+		}
+
 		if (this.stdinError) throw this.stdinError;
 
+		return false;
+	}
+
+	override async *_transform(block: Block): AsyncGenerator<Block> {
 		const channels = block.samples.length;
 		const frames = block.samples[0]?.length ?? 0;
 
 		if (frames === 0) return;
 
 		if (!this.child) {
+			if (this.isDestroyed || this.aborted()) return;
+
 			this.spawnChild(block.sampleRate, channels);
 		}
 
@@ -195,21 +235,29 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		if (!child) throw new Error("FfmpegStream.child not initialized");
 
+		if (await this.checkChild(child)) {
+			yield* this.readAvailableStdout();
+
+			return;
+		}
+
 		const interleaved = interleave(block.samples, frames, channels);
 		const interleavedBuffer = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
 
 		const ok = child.stdin.write(interleavedBuffer);
 
 		if (!ok) {
-			this.pendingDrain = new Promise<void>((resolve) => {
-				child.stdin.once("drain", () => {
-					this.pendingDrain = undefined;
-					resolve();
-				});
+			this.pendingDrain = waitForChildWritable(child, this.streamSignal).then(() => {
+				this.pendingDrain = undefined;
 			});
 		}
 
 		yield* this.serveWhileParked();
+
+		if (this.aborted()) return;
+
+		await this.checkChild(child);
+
 		yield* this.readAvailableStdout();
 	}
 
@@ -220,17 +268,21 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		yield* this.serveWhileParked();
 
+		if (this.aborted()) return;
+
 		child.stdin.end();
 
-		if (this.stdinError) throw this.stdinError;
+		await this.checkChild(child);
 
 		for (;;) {
 			yield* this.readAvailableStdout();
 
-			if (this.stdoutEnded) break;
+			if (this.stdoutEnded || this.aborted()) break;
 
 			await this.waitForStdoutReadableOrEnd();
 		}
+
+		if (this.aborted()) return;
 
 		if (this.stdoutStash.length >= this.inputChannels * 4) {
 			const outRate = this.properties.outputSampleRate ?? this.inputSampleRate;
@@ -247,13 +299,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 			if (block) yield block;
 		}
 
-		const exitResult = await (this.exitPromise ?? Promise.resolve({ code: 0, signal: null }));
-
-		if (exitResult.code !== null && exitResult.code !== 0) {
-			const detail = this.stderr ? `: ${this.stderr.slice(0, 1024)}` : "";
-
-			throw new Error(`ffmpeg exited ${exitResult.code}${detail}`);
-		}
+		await this.throwIfFailed();
 	}
 
 	override async _destroy(): Promise<void> {

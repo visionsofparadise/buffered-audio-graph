@@ -54,6 +54,7 @@ function createMockChild(): {
 		stdout: { value: stdout },
 		stderr: { value: stderr },
 		exitCode: { get: () => exitCode },
+		signalCode: { value: null },
 		killed: { get: () => killed },
 		kill: { value: kill },
 	});
@@ -77,14 +78,14 @@ function inputBlocks(count: number): Array<Block> {
 	return blocks;
 }
 
-function createBridge(input: ReadableStream<Block>): { readable: ReadableStream<Block> } {
+function createBridge(input: ReadableStream<Block>): { readable: ReadableStream<Block>; stream: FfmpegStream } {
 	const { context } = createTestStreamContext();
 	const node = ffmpeg({ ffmpegPath: "ffmpeg", args: ["-af", "anull"] });
 	const stream = new FfmpegStream(node, context);
 
 	stream._setup(createTestSetupContext());
 
-	return { readable: stream._pipe(input) };
+	return { readable: stream._pipe(input), stream };
 }
 
 function manualInput(): {
@@ -276,7 +277,9 @@ describe("FfmpegStream bridge", () => {
 		expect(first.value?.samples[0]?.length).toBe(PIPE_FRAMES);
 		expect(first.value?.samples[0]?.[0]).toBeCloseTo(0.25, 5);
 
-		await reader.cancel();
+		// The re-pull after the served block parks on the drain race again; the cancel has to wake it.
+		await tick();
+		await expect(reader.cancel()).resolves.toBeUndefined();
 	});
 
 	it("streams the tail incrementally before the child exits", async () => {
@@ -388,6 +391,68 @@ describe("FfmpegStream bridge", () => {
 		await reader.cancel();
 
 		expect(kill).toHaveBeenCalledWith("SIGTERM");
+	});
+
+	it("errors with the exit error carrying stderr when the child exits non-zero while a write is parked", async () => {
+		const { child, stdin, stderr, exit } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+
+		const writeSpy = vi.spyOn(stdin, "write").mockReturnValue(false);
+		const { readable } = createBridge(readableFrom(inputBlocks(2)));
+		const reader = readable.getReader();
+		const pending = reader.read();
+
+		await tick();
+
+		expect(writeSpy).toHaveBeenCalledTimes(1);
+
+		stderr.write(Buffer.from("Conversion failed"));
+		await tick();
+		// A dead child's stdin fails with EOF on Windows; the exit error still wins.
+		stdin.emit("error", Object.assign(new Error("write EOF"), { code: "EOF" }));
+		exit(1);
+
+		await expect(pending).rejects.toThrow("ffmpeg exited 1: Conversion failed");
+	});
+
+	it("does not hang on the next block after the child exits with stdin destroyed", async () => {
+		const { child, stdin, stdout, exit } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+
+		const writeSpy = vi.spyOn(stdin, "write").mockReturnValue(true);
+		const input = manualInput();
+		const { readable } = createBridge(input.readable);
+		const reader = readable.getReader();
+
+		input.push(createBlock(0.5, 0, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE }));
+		await tick();
+
+		writeSpy.mockReturnValue(false);
+		stdin.destroy();
+		stdout.push(null);
+		exit(0);
+
+		input.push(createBlock(0.5, BLOCK_FRAMES, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE }));
+		input.close();
+
+		const end = served(await raceParked(reader.read()));
+
+		expect(end.done).toBe(true);
+		// After a clean exit the next block is dropped unwritten.
+		expect(writeSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("never spawns a stream destroyed before its first block", async () => {
+		const { readable, stream } = createBridge(readableFrom(inputBlocks(2)));
+
+		await stream.destroy();
+
+		const reader = readable.getReader();
+
+		expect((await reader.read()).done).toBe(true);
+		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
 	});
 
 	it("propagates a non-EPIPE stdin error to the next transform", async () => {
