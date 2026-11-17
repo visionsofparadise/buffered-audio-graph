@@ -128,7 +128,7 @@ class RenderJob {
 }
 ```
 
-Construction resolves bypass and composites: a bypassed node contributes no stream and its children are visited in its place, and cycles throw. A node reached by fan-in appears in `streams` with one entry per path. `abort()` aborts an internal controller chained with `options.signal`; `timing` holds `{ totalMs, audioDurationMs, realTimeMultiplier }` once the render resolves.
+Construction resolves bypass and composites: a bypassed node contributes no stream and its children are visited in its place, and cycles throw. A node reached by fan-in appears in `streams` with one entry per path. `abort()` aborts an internal controller chained with `options.signal`; `timing` holds `{ totalMs, audioDurationMs, realTimeMultiplier }` once the render resolves. A render abort, whether from `abort()`, `options.signal` or a failed branch, reaches every stream as `context.signal`. The source and transform streams then error their outputs with the signal's reason, so targets fail instead of finalizing truncated output, and an aborted `render()` rejects instead of resolving.
 
 `RenderOptions` are the caller-facing knobs: `{ chunkSize?, highWaterMark?, memoryLimit?, signal?, executionProviders? }`.
 
@@ -174,6 +174,8 @@ The executor constructs one stream per node per render via `new node.Stream(node
 
 - `getMetadata(): Promise<SourceMetadata>` — return `{ sampleRate, channels, durationFrames? }`. The job calls this first to compute backpressure and progress denominators.
 - `_read(): Promise<Block | undefined>` — produce the next block, or `undefined` to signal end of stream. The framework owns the controller (enqueue, close, frame counting) and calls `_read()` repeatedly on pull.
+
+Once `context.signal` aborts, the next pull destroys the source and errors its output with the signal's reason rather than ending it.
 
 ### Target Streams
 

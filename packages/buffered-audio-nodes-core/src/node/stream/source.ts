@@ -49,7 +49,7 @@ export abstract class BufferedSourceStream<
 					if (signal?.aborted) {
 						done = true;
 						await this.destroy();
-						controller.close();
+						controller.error(signal.reason);
 
 						return;
 					}

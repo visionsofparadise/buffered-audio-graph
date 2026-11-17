@@ -175,6 +175,14 @@ class CountingSourceStream extends BufferedSourceStream {
 	}
 }
 
+async function drainReader(reader: ReadableStreamDefaultReader<Block>): Promise<void> {
+	for (;;) {
+		const { done } = await reader.read();
+
+		if (done) return;
+	}
+}
+
 class CountingTargetStream extends BufferedTargetStream {
 	destroyCount = 0;
 
@@ -215,6 +223,20 @@ describe("source stream-scoped destroy", () => {
 		const stream = new CountingSourceStream([createBlock(1, 0, 100)], 0);
 
 		await expect(drainBlocks(await stream._setup(createTestSetupContext()))).rejects.toThrow("read boom");
+		expect(stream.destroyCount).toBe(1);
+	});
+
+	it("a render abort errors the output with the signal's reason instead of ending it", async () => {
+		const stream = new CountingSourceStream([createBlock(1, 0, 100), createBlock(2, 100, 100)]);
+		const controller = new AbortController();
+		const reader = (
+			await stream._setup(createTestSetupContext({ highWaterMark: 1, signal: controller.signal }))
+		).getReader();
+
+		await reader.read();
+		controller.abort(new Error("render failed"));
+
+		await expect(drainReader(reader)).rejects.toThrow("render failed");
 		expect(stream.destroyCount).toBe(1);
 	});
 
