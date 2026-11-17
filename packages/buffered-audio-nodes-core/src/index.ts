@@ -52,4 +52,5 @@ export { unpack } from "./graph/unpack";
 export { windowedIterate, type WindowedIterateOptions } from "./node/stream/transform/utils/windowed-iterate";
 export { collectPackageEntryCandidates, type PackageEntryManifest, type PackageExports } from "./utils/package-entry";
 export { teeReadable } from "./utils/tee-readable";
+export { isAbortReason } from "./utils/abort-reason";
 export { toReadable, type ToReadableOptions } from "./utils/to-readable";

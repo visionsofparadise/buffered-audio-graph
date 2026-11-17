@@ -15,6 +15,40 @@ import { createRenderTemporaryDirectory, scavengeRenderTemporaryDirectories } fr
 vi.mock("node:fs/promises", { spy: true });
 vi.mock("./utils/render-temporary-directory", { spy: true });
 
+function createSlowTransform(log: Array<string>, longCallMs: number): TransformNode {
+	let calls = 0;
+	let inCall = false;
+
+	class SlowTransformStream extends UnbufferedTransformStream {
+		override async *_transform(block: Block): AsyncGenerator<Block> {
+			calls += 1;
+			inCall = true;
+
+			if (calls === 2) {
+				await new Promise((resolve) => setTimeout(resolve, longCallMs));
+				log.push("long call ends");
+			}
+
+			inCall = false;
+
+			yield block;
+		}
+
+		override _destroy(): void {
+			log.push(`slow: _destroy (inCall=${String(inCall)})`);
+		}
+	}
+
+	class SlowTransform extends TransformNode {
+		static override readonly packageName = "test";
+		static override readonly nodeName = "slow-transform";
+		static override readonly schema = z.object({});
+		static override readonly Stream = SlowTransformStream;
+	}
+
+	return new SlowTransform();
+}
+
 function createBlock(value: number, offset: number, frames: number, sampleRate = 44100): Block {
 	return { samples: [new Float32Array(frames).fill(value)], offset, sampleRate, bitDepth: 32 };
 }
@@ -646,38 +680,8 @@ describe("RenderJob execution", () => {
 
 	it("tears an upstream transform down only after its in-flight call returns, before render settles", async () => {
 		const log: Array<string> = [];
-		let calls = 0;
-		let inCall = false;
-
-		class SlowTransformStream extends UnbufferedTransformStream {
-			override async *_transform(block: Block): AsyncGenerator<Block> {
-				calls += 1;
-				inCall = true;
-
-				if (calls === 2) {
-					await new Promise((resolve) => setTimeout(resolve, 300));
-					log.push("long call ends");
-				}
-
-				inCall = false;
-
-				yield block;
-			}
-
-			override _destroy(): void {
-				log.push(`slow: _destroy (inCall=${String(inCall)})`);
-			}
-		}
-
-		class SlowTransform extends TransformNode {
-			static override readonly packageName = "test";
-			static override readonly nodeName = "slow-transform";
-			static override readonly schema = z.object({});
-			static override readonly Stream = SlowTransformStream;
-		}
-
+		const slow = createSlowTransform(log, 300);
 		const source = new MockSource([createBlock(1, 0, 100), createBlock(2, 100, 100), createBlock(3, 200, 100)]);
-		const slow = new SlowTransform();
 		const passthrough = new MockTransform();
 		const failing = new FailingTarget();
 
@@ -689,6 +693,57 @@ describe("RenderJob execution", () => {
 			.createRenderJob({ highWaterMark: 1 })
 			.render()
 			.catch(() => log.push("render rejected"));
+
+		expect(log).toEqual(["long call ends", "slow: _destroy (inCall=false)", "render rejected"]);
+	});
+
+	it("reports a branch's own failure ahead of the abort it causes in a sibling branch", async () => {
+		class AbortRejectingTargetStream extends AbortWaitingTargetStream {
+			override async _write(): Promise<void> {
+				await super._write();
+
+				throw new DOMException("This operation was aborted", "AbortError");
+			}
+		}
+
+		class AbortRejectingTarget extends TargetNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "abort-rejecting-target";
+			static override readonly schema = z.object({});
+			static override readonly Stream = AbortRejectingTargetStream;
+		}
+
+		const source = new MockSource([createBlock(1, 0, 100)]);
+
+		source.to(new AbortRejectingTarget());
+		source.to(new FailingTarget());
+
+		await expect(source.createRenderJob().render()).rejects.toThrow("write failed");
+	});
+
+	it("waits for every fan-out branch to settle before tearing down after an abort", async () => {
+		const log: Array<string> = [];
+		const slow = createSlowTransform(log, 500);
+		const blocks = Array.from({ length: 8 }, (_, index) => createBlock(index, index * 100, 100));
+		const source = new MockSource(blocks);
+		const passthrough = new MockTransform();
+		const controller = new AbortController();
+
+		source.to(slow);
+		source.to(passthrough);
+		slow.to(new MockTarget());
+		passthrough.to(new MockTarget());
+
+		const render = source
+			.createRenderJob({ highWaterMark: 1, signal: controller.signal })
+			.render()
+			.then(
+				() => log.push("render resolved"),
+				() => log.push("render rejected"),
+			);
+
+		setTimeout(() => controller.abort(), 150);
+		await render;
 
 		expect(log).toEqual(["long call ends", "slow: _destroy (inCall=false)", "render rejected"]);
 	});

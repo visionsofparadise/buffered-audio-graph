@@ -4,6 +4,7 @@ import { BufferedSourceStream, type RenderTiming } from "./node/stream/source";
 import { BufferedTargetStream } from "./node/stream/target";
 import { BufferedTransformStream } from "./node/stream/transform/buffered-transform";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
+import { isAbortReason } from "./utils/abort-reason";
 import { assertFirstBlockSampleRate } from "./utils/assert-first-block-sample-rate";
 import { createRenderTemporaryDirectory, scavengeRenderTemporaryDirectories } from "./utils/render-temporary-directory";
 import { teeReadable } from "./utils/tee-readable";
@@ -153,6 +154,7 @@ export class RenderJob {
 			const bytesPerChunk = meta.channels * chunkSize * 4;
 			const computedHighWaterMark = Math.max(1, Math.floor(memoryLimit / (stages * bytesPerChunk)));
 
+			const signal = this.signal();
 			const context: StreamSetupContext = {
 				executionProviders: this.options?.executionProviders ?? defaultProviders,
 				memoryLimit,
@@ -161,7 +163,7 @@ export class RenderJob {
 				sampleRate: meta.sampleRate,
 				sourceTotalFrames: meta.durationFrames,
 				highWaterMark: this.options?.highWaterMark ?? computedHighWaterMark,
-				signal: this.signal(),
+				signal,
 			};
 
 			const start = performance.now();
@@ -175,7 +177,11 @@ export class RenderJob {
 					context,
 				);
 
-				await Promise.all(promises);
+				const results = await Promise.allSettled(promises.map(async (promise) => this.abortOnFailure(promise)));
+				const failures = results.filter((result) => result.status === "rejected");
+				const failure = failures.find((result) => !isAbortReason(result.reason, signal)) ?? failures[0];
+
+				if (failure) throw failure.reason;
 			} finally {
 				const totalMs = performance.now() - start;
 				const audioDurationMs =
@@ -215,6 +221,16 @@ export class RenderJob {
 		if (errors.length === 1) throw errors[0];
 
 		if (errors.length > 1) throw new AggregateError(errors, "Render and cleanup failed");
+	}
+
+	private async abortOnFailure(promise: Promise<void>): Promise<void> {
+		try {
+			await promise;
+		} catch (error) {
+			this.abortController.abort();
+
+			throw error;
+		}
 	}
 
 	private async setupChildren(
@@ -264,7 +280,7 @@ export class RenderJob {
 		return count;
 	}
 
-	private signal(): AbortSignal | undefined {
+	private signal(): AbortSignal {
 		if (!this.options?.signal) return this.abortController.signal;
 
 		return AbortSignal.any([this.options.signal, this.abortController.signal]);
