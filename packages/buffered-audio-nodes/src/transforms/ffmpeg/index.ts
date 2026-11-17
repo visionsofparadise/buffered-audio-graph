@@ -99,11 +99,8 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 			},
 		});
 
-		child.stdout.on("readable", () => this.wakeStdout());
-		child.stdout.on("end", () => {
-			this.stdoutEnded = true;
-			this.wakeStdout();
-		});
+		child.stdout.on("readable", this.onStdoutReadable);
+		child.stdout.on("end", this.onStdoutEnd);
 
 		const settleChild = (): void => {
 			this.childSettled = true;
@@ -116,6 +113,15 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		this.child = child;
 		this.exitPromise = exitPromise;
 	}
+
+	private readonly onStdoutReadable = (): void => {
+		this.wakeStdout();
+	};
+
+	private readonly onStdoutEnd = (): void => {
+		this.stdoutEnded = true;
+		this.wakeStdout();
+	};
 
 	private wakeStdout(): void {
 		const notify = this.stdoutNotify;
@@ -326,29 +332,36 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 
 		if (!child) return;
 
-		if (child.exitCode === null && child.signalCode === null && !child.killed) {
-			child.kill("SIGTERM");
+		const running = child.exitCode === null && child.signalCode === null && !child.killed;
+		const exited = running ? this.waitForTeardownExit(child) : Promise.resolve();
 
-			await new Promise<void>((resolve) => {
-				if (child.exitCode !== null) {
-					resolve();
+		if (running) child.kill("SIGTERM");
 
-					return;
-				}
+		child.stdout.off("readable", this.onStdoutReadable);
+		child.stdout.off("end", this.onStdoutEnd);
+		child.stdout.destroy();
 
-				const timer = setTimeout(() => {
-					child.kill("SIGKILL");
-					resolve();
-				}, TEARDOWN_KILL_GRACE_MS);
-
-				child.once("close", () => {
-					clearTimeout(timer);
-					resolve();
-				});
-			});
-		}
+		await exited;
 
 		this.child = undefined;
+	}
+
+	private waitForTeardownExit(child: ChildProcessWithoutNullStreams): Promise<void> {
+		return new Promise<void>((resolve) => {
+			const settle = (): void => {
+				clearTimeout(timer);
+				child.off("exit", settle);
+				child.off("close", settle);
+				resolve();
+			};
+			const timer = setTimeout(() => {
+				child.kill("SIGKILL");
+				settle();
+			}, TEARDOWN_KILL_GRACE_MS);
+
+			child.once("exit", settle);
+			child.once("close", settle);
+		});
 	}
 }
 

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Block } from "@buffered-audio/core";
+import type { Block, RenderEvents } from "@buffered-audio/core";
 import {
 	createBlock,
 	createTestSetupContext,
@@ -11,6 +11,7 @@ import {
 	drainBlocks,
 	readableFrom,
 } from "@buffered-audio/core/testing";
+import { binaries, hasBinaryFixtures } from "../../utils/test-binaries";
 import { ffmpeg, FfmpegStream } from ".";
 
 const childProcessMocks = vi.hoisted(() => ({
@@ -86,14 +87,14 @@ function inputBlocks(count: number): Array<Block> {
 function createBridge(
 	input: ReadableStream<Block>,
 	options?: { readonly ffmpegPath?: string; readonly signal?: AbortSignal },
-): { readable: ReadableStream<Block>; stream: FfmpegStream } {
-	const { context } = createTestStreamContext();
+): { readable: ReadableStream<Block>; stream: FfmpegStream; events: RenderEvents } {
+	const { context, events } = createTestStreamContext();
 	const node = ffmpeg({ ffmpegPath: options?.ffmpegPath ?? "ffmpeg", args: ["-af", "anull"] });
 	const stream = new FfmpegStream(node, context);
 
 	stream._setup(createTestSetupContext({ signal: options?.signal }));
 
-	return { readable: stream._pipe(input), stream };
+	return { readable: stream._pipe(input), stream, events };
 }
 
 function manualInput(): {
@@ -417,12 +418,94 @@ describe("FfmpegStream bridge", () => {
 
 		stderr.write(Buffer.from("Conversion failed"));
 		await tick();
-		// A stdin error stored while the child ran does not mask its exit.
-		stdin.emit("error", Object.assign(new Error("write ECONNRESET"), { code: "ECONNRESET" }));
+		// Only the exit can wake the parked write here.
 		exit(1);
 
 		await expect(pending).rejects.toThrow("ffmpeg exited 1: Conversion failed");
 	});
+
+	it("throws the exit error ahead of a stdin error stored while the child ran", async () => {
+		const { child, stdin, stdout, exit } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+		vi.spyOn(stdin, "write").mockReturnValue(true);
+
+		const input = manualInput();
+		const { readable } = createBridge(input.readable);
+		const reader = readable.getReader();
+
+		input.push(createBlock(0.5, 0, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE }));
+		await tick();
+
+		stdin.emit("error", Object.assign(new Error("write ECONNRESET"), { code: "ECONNRESET" }));
+		stdout.push(null);
+		exit(1);
+
+		input.push(createBlock(0.5, BLOCK_FRAMES, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE }));
+
+		await expect(reader.read()).rejects.toThrow("ffmpeg exited 1");
+	});
+
+	it("moves on at once when a write parks on a stdin that is already destroyed", async () => {
+		const { child, stdin } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+
+		const writeSpy = vi.spyOn(stdin, "write").mockReturnValue(false);
+		const input = manualInput();
+		const { readable } = createBridge(input.readable);
+		const reader = readable.getReader();
+
+		stdin.destroy();
+		await tick();
+
+		input.push(createBlock(0.5, 0, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE }));
+		input.push(createBlock(0.5, BLOCK_FRAMES, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE }));
+		await ticks(5);
+
+		// The child still runs, and no 'drain' or 'close' can follow on a stdin destroyed before the write parked.
+		expect(writeSpy).toHaveBeenCalledTimes(2);
+
+		await reader.cancel();
+	});
+
+	it("never spawns when the render aborts while the first block is being delivered", async () => {
+		const controller = new AbortController();
+		const { readable, events } = createBridge(readableFrom(inputBlocks(2)), { signal: controller.signal });
+
+		events.on("started", () => controller.abort(new Error("render failed")));
+
+		await expect(readable.getReader().read()).rejects.toThrow("render failed");
+		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
+	});
+
+	it.skipIf(!hasBinaryFixtures("ffmpeg"))(
+		"cancels a real ffmpeg child mid-stream well under a second",
+		async () => {
+			const { spawn } = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+
+			childProcessMocks.spawn.mockImplementation(spawn);
+
+			let offset = 0;
+			const endless = new ReadableStream<Block>({
+				pull: (controller) => {
+					controller.enqueue(createBlock(0.25, offset, 4096, { channels: 1, sampleRate: SAMPLE_RATE }));
+					offset += 4096;
+				},
+			});
+			const { readable } = createBridge(endless, { ffmpegPath: binaries.ffmpeg });
+			const reader = readable.getReader();
+
+			expect((await reader.read()).done).toBe(false);
+
+			const started = performance.now();
+
+			await reader.cancel();
+
+			expect(performance.now() - started).toBeLessThan(1000);
+		},
+		20_000,
+	);
 
 	it("does not hang on the next block after the child exits with stdin destroyed", async () => {
 		const { child, stdin, stdout, exit } = createMockChild();
