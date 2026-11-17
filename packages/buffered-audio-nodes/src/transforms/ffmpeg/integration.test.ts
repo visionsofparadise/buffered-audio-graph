@@ -1,4 +1,4 @@
-import { EventEmitter } from "node:events";
+import { EventEmitter, getEventListeners } from "node:events";
 import { PassThrough, Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Block } from "@buffered-audio/core";
@@ -28,7 +28,7 @@ function createMockChild(): {
 	readonly stdout: Readable;
 	readonly stderr: PassThrough;
 	readonly kill: ReturnType<typeof vi.fn>;
-	readonly exit: (code: number) => void;
+	readonly exit: (code: number | null, signal?: NodeJS.Signals) => void;
 } {
 	const child = new EventEmitter();
 	const stdin = new PassThrough();
@@ -36,15 +36,17 @@ function createMockChild(): {
 	const stdout = new Readable({ read: () => undefined, highWaterMark: 16384 });
 	const stderr = new PassThrough();
 	let exitCode: number | null = null;
+	let signalCode: NodeJS.Signals | null = null;
 	let killed = false;
-	const settleExit = (code: number): void => {
+	const settleExit = (code: number | null, signal: NodeJS.Signals | null = null): void => {
 		exitCode = code;
-		child.emit("exit", code, null);
-		child.emit("close", code, null);
+		signalCode = signal;
+		child.emit("exit", code, signal);
+		child.emit("close", code, signal);
 	};
-	const kill = vi.fn(() => {
+	const kill = vi.fn((signal: NodeJS.Signals = "SIGTERM") => {
 		killed = true;
-		queueMicrotask(() => settleExit(0));
+		queueMicrotask(() => settleExit(null, signal));
 
 		return true;
 	});
@@ -54,7 +56,7 @@ function createMockChild(): {
 		stdout: { value: stdout },
 		stderr: { value: stderr },
 		exitCode: { get: () => exitCode },
-		signalCode: { value: null },
+		signalCode: { get: () => signalCode },
 		killed: { get: () => killed },
 		kill: { value: kill },
 	});
@@ -409,8 +411,8 @@ describe("FfmpegStream bridge", () => {
 
 		stderr.write(Buffer.from("Conversion failed"));
 		await tick();
-		// A dead child's stdin fails with EOF on Windows; the exit error still wins.
-		stdin.emit("error", Object.assign(new Error("write EOF"), { code: "EOF" }));
+		// A stdin error stored while the child ran does not mask its exit.
+		stdin.emit("error", Object.assign(new Error("write ECONNRESET"), { code: "ECONNRESET" }));
 		exit(1);
 
 		await expect(pending).rejects.toThrow("ffmpeg exited 1: Conversion failed");
@@ -453,6 +455,100 @@ describe("FfmpegStream bridge", () => {
 
 		expect((await reader.read()).done).toBe(true);
 		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
+	});
+
+	it("errors with the signal when the child is killed", async () => {
+		const { child, stdin, stdout, stderr, exit } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+		vi.spyOn(stdin, "write").mockReturnValue(true);
+
+		const { readable } = createBridge(readableFrom(inputBlocks(1)));
+		const reader = readable.getReader();
+
+		await tick();
+
+		stderr.write(Buffer.from("Killed"));
+		await tick();
+
+		stdout.push(null);
+		await tick();
+		exit(null, "SIGKILL");
+
+		await expect(reader.read()).rejects.toThrow("ffmpeg exited with signal SIGKILL: Killed");
+	});
+
+	it("keeps listener counts flat across repeated parked passes", async () => {
+		const { child, stdin, stdout } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+		vi.spyOn(stdin, "write").mockReturnValue(false);
+
+		const { readable, stream } = createBridge(readableFrom(inputBlocks(2)));
+		const signal = (stream as unknown as { readonly streamSignal: AbortSignal }).streamSignal;
+		const counts = (): Array<number> => [
+			stdin.listenerCount("drain"),
+			stdin.listenerCount("close"),
+			stdin.listenerCount("error"),
+			child.listenerCount("exit"),
+			getEventListeners(signal, "abort").length,
+		];
+		const reader = readable.getReader();
+
+		stdout.push(pcmBytes(0.1, BLOCK_FRAMES));
+		await reader.read();
+		await tick();
+
+		const parked = counts();
+
+		// One drain wait serves the parked write across every pass.
+		expect(stdin.listenerCount("drain")).toBe(1);
+
+		for (let pass = 0; pass < 5; pass++) {
+			stdout.push(pcmBytes(0.2, BLOCK_FRAMES));
+			await reader.read();
+			await tick();
+		}
+
+		expect(counts()).toEqual(parked);
+
+		await reader.cancel();
+	});
+
+	it("resolves a cancel while _flush waits for stdout to end", async () => {
+		const { child, stdin, kill } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+		vi.spyOn(stdin, "write").mockReturnValue(true);
+
+		const endSpy = vi.spyOn(stdin, "end");
+		const { readable } = createBridge(readableFrom(inputBlocks(1)));
+		const reader = readable.getReader();
+
+		await vi.waitFor(() => expect(endSpy).toHaveBeenCalled());
+		await expect(reader.cancel()).resolves.toBeUndefined();
+		expect(kill).toHaveBeenCalledWith("SIGTERM");
+	});
+
+	it("ignores an EOF stdin error, which Windows reports for a closed pipe", async () => {
+		const { child, stdin, stdout } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+		vi.spyOn(stdin, "write").mockReturnValue(true);
+
+		stdout.push(pcmBytes(0.25, BLOCK_FRAMES));
+
+		const { readable } = createBridge(readableFrom(inputBlocks(4)));
+		const reader = readable.getReader();
+
+		await reader.read();
+
+		stdin.emit("error", Object.assign(new Error("write EOF"), { code: "EOF" }));
+		stdout.push(pcmBytes(0.5, BLOCK_FRAMES));
+
+		expect((await reader.read()).value?.samples[0]?.[0]).toBeCloseTo(0.5, 5);
+
+		await reader.cancel();
 	});
 
 	it("propagates a non-EPIPE stdin error to the next transform", async () => {

@@ -89,7 +89,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 				this.stderr = appendStderr(this.stderr, chunk);
 			},
 			onStdinError: (error) => {
-				if (error.code === "EPIPE") return;
+				if (error.code === "EPIPE" || error.code === "EOF") return;
 
 				this.stdinError ??= new Error(`ffmpeg stdin error: ${error.message}`);
 			},
@@ -179,6 +179,8 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		for (;;) {
 			yield* this.readAvailableStdout();
 
+			if (this.aborted()) return;
+
 			const drain = this.pendingDrain;
 
 			if (drain === undefined) return;
@@ -198,13 +200,14 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 	}
 
 	private async throwIfFailed(): Promise<void> {
-		const { code } = await (this.exitPromise ?? Promise.resolve({ code: 0, signal: null }));
+		const { code, signal } = await (this.exitPromise ?? Promise.resolve({ code: 0, signal: null }));
 
-		if (code !== null && code !== 0) {
-			const detail = this.stderr ? `: ${this.stderr.slice(0, 1024)}` : "";
+		if (code === 0) return;
 
-			throw new Error(`ffmpeg exited ${code}${detail}`);
-		}
+		const exit = code === null ? `exited with signal ${signal ?? "unknown"}` : `exited ${code}`;
+		const detail = this.stderr ? `: ${this.stderr.slice(0, 1024)}` : "";
+
+		throw new Error(`ffmpeg ${exit}${detail}`);
 	}
 
 	private async checkChild(child: ChildProcessWithoutNullStreams): Promise<boolean> {
