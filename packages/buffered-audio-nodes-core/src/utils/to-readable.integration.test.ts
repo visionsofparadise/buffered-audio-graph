@@ -2,9 +2,36 @@ import { describe, expect, it, vi } from "vitest";
 import { toReadable } from "./to-readable";
 
 describe("toReadable cancel", () => {
-	it("runs onCancel before return() while next() is pending, so the hook can settle the pending call", async () => {
-		const calls: Array<string> = [];
+	it("runs onCancel before return()", async () => {
+		const order: Array<string> = [];
+		let settleNext: ((result: IteratorResult<number>) => void) | undefined;
+		const iterator: AsyncIterator<number> = {
+			next: () =>
+				new Promise((resolve) => {
+					settleNext = resolve;
+				}),
+			return: () => {
+				order.push("return");
+
+				return Promise.resolve({ done: true, value: undefined });
+			},
+		};
+
+		const reader = toReadable(iterator, {
+			onCancel: () => {
+				order.push("onCancel");
+			},
+		}).getReader();
+
+		await vi.waitFor(() => expect(settleNext).toBeDefined());
+		await reader.cancel();
+
+		expect(order).toEqual(["onCancel", "return"]);
+	});
+
+	it("lets onCancel settle a pending next() that return() queues behind", async () => {
 		let release: (() => void) | undefined;
+		let finallyRan = false;
 
 		async function* parked(): AsyncGenerator<number> {
 			try {
@@ -14,24 +41,19 @@ describe("toReadable cancel", () => {
 
 				yield 1;
 			} finally {
-				calls.push("return");
+				finallyRan = true;
 			}
 		}
 
-		const reader = toReadable(parked(), {
-			onCancel: () => {
-				calls.push("onCancel");
-				release?.();
-			},
-		}).getReader();
+		const reader = toReadable(parked(), { onCancel: () => release?.() }).getReader();
 		const pending = reader.read();
 
 		await vi.waitFor(() => expect(release).toBeDefined());
 
-		// return() queues behind the pending next(), so the cancel resolves only because onCancel releases it.
+		// An async generator queues return() behind the pending next(), so this cancel resolves only because onCancel releases it.
 		await reader.cancel();
 
-		expect(calls).toEqual(["onCancel", "return"]);
+		expect(finallyRan).toBe(true);
 		expect((await pending).done).toBe(true);
 	});
 });
