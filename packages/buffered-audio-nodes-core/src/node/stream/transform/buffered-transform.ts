@@ -98,6 +98,8 @@ export abstract class BufferedTransformStream<
 
 			yield* this.chunked(timed, emitGate);
 
+			if (this.stopRequested()) return;
+
 			this.emitCompletion();
 		} finally {
 			await this.destroy();

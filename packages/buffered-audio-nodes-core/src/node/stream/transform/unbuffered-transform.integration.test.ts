@@ -284,6 +284,44 @@ describe("UnbufferedTransformStream cancellation", () => {
 		expect(stream.destroyCount).toBe(1);
 	});
 
+	it("errors instead of completing when the render aborts during _flush", async () => {
+		let release: (() => void) | undefined;
+		const parked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		class ParkedFlushStream extends GainStream {
+			flushing = false;
+
+			// eslint-disable-next-line require-yield
+			override async *_flush(): AsyncIterable<Block> {
+				this.flushing = true;
+
+				await parked;
+			}
+		}
+
+		const { context, events } = createTestStreamContext();
+		const finished = vi.fn();
+
+		events.on("finished", finished);
+
+		const stream = new ParkedFlushStream(nodeWith({}), context);
+		const controller = new AbortController();
+		const reader = (
+			await stream.setup(readableFrom([]), createTestSetupContext({ signal: controller.signal }))
+		).getReader();
+		const pending = reader.read();
+
+		await vi.waitFor(() => expect(stream.flushing).toBe(true));
+
+		controller.abort(new Error("render failed"));
+		release?.();
+
+		await expect(pending).rejects.toThrow("render failed");
+		expect(finished).not.toHaveBeenCalled();
+	});
+
 	it("cancels its input when _transform throws", async () => {
 		class ThrowingStream extends UnbufferedTransformStream {
 			override _transform(): Iterable<Block> {

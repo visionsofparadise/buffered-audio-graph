@@ -35,6 +35,8 @@ export abstract class UnbufferedTransformStream<
 
 			yield* this.emitted(timed, emitGate);
 
+			if (this.stopRequested()) return;
+
 			this.emitCompletion();
 		} finally {
 			await this.destroy();
