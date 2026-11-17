@@ -535,14 +535,31 @@ describe("FfmpegStream bridge", () => {
 		expect(writeSpy).toHaveBeenCalledTimes(1);
 	});
 
-	it("never spawns a stream destroyed before its first block", async () => {
-		const { readable, stream } = createBridge(readableFrom(inputBlocks(2)));
+	it("never spawns from a _transform called once the stream's signal has aborted", async () => {
+		const controller = new AbortController();
+		const { stream } = createBridge(readableFrom([]), { signal: controller.signal });
+		const block = createBlock(0.5, 0, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE });
 
-		await stream.destroy();
+		controller.abort(new Error("render failed"));
 
-		const reader = readable.getReader();
+		const first = await stream._transform(block).next();
 
-		expect((await reader.read()).done).toBe(true);
+		expect(first.done).toBe(true);
+		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
+	});
+
+	it("never spawns from a _transform called once teardown has begun", async () => {
+		const { stream } = createBridge(readableFrom([]));
+		const block = createBlock(0.5, 0, BLOCK_FRAMES, { channels: 1, sampleRate: SAMPLE_RATE });
+
+		// The bases never call a hook after destroy(), so only a direct caller reaches this guard. Calling in the same
+		// tick as destroy() reaches it before the stream's own signal aborts, which isolates the isDestroyed check.
+		const destroying = stream.destroy();
+		const first = await stream._transform(block).next();
+
+		await destroying;
+
+		expect(first.done).toBe(true);
 		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
 	});
 
