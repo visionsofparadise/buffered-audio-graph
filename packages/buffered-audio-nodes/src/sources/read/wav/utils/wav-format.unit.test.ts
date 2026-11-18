@@ -103,6 +103,30 @@ describe("parseWavHeader", () => {
 
 		expect(() => parseWavHeader(bytes)).toThrow('Not a WAV stream (first bytes "RIFF")');
 	});
+
+	it.each([
+		{ name: "IEEE float at 24 bits", audioFormat: 3, bits: 24 },
+		{ name: "IEEE float at 16 bits", audioFormat: 3, bits: 16 },
+		{ name: "A-law", audioFormat: 6, bits: 8 },
+		{ name: "µ-law", audioFormat: 7, bits: 8 },
+		{ name: "PCM at 12 bits", audioFormat: 1, bits: 12 },
+	])("rejects $name as an unsupported format", ({ audioFormat, bits }) => {
+		const bytes = riff("RIFF", [chunk("fmt ", fmtBody(audioFormat, 1, 8000, bits)), dataHeader(0)]);
+
+		expect(() => parseWavHeader(bytes)).toThrow(`Unsupported WAV format: format code ${audioFormat} at ${bits} bits`);
+	});
+
+	it("rejects WAVE_FORMAT_EXTENSIBLE whose SubFormat resolves to an unsupported format", () => {
+		const fmt = Buffer.concat([fmtBody(0xfffe, 1, 8000, 8), Buffer.alloc(24)]);
+
+		fmt.writeUInt16LE(22, 16);
+		fmt.writeUInt16LE(8, 18);
+		fmt.writeUInt16LE(7, 24);
+
+		expect(() => parseWavHeader(riff("RIFF", [chunk("fmt ", fmt), dataHeader(0)]))).toThrow(
+			"Unsupported WAV format: format code 7 at 8 bits",
+		);
+	});
 });
 
 describe("readSample", () => {

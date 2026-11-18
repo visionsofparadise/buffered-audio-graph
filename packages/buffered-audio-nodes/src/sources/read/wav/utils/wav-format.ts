@@ -39,6 +39,7 @@ export function readSample(data: Buffer, offset: number, bitsPerSample: number, 
 
 const WAVE_FORMAT_EXTENSIBLE = 0xfffe;
 const HEADER_READ_SIZE = 4096;
+const SUPPORTED_BITS: Partial<Record<number, ReadonlyArray<number>>> = { 1: [8, 16, 24, 32], 3: [32, 64] };
 
 class NotWavError extends Error {}
 
@@ -46,11 +47,18 @@ function readFmtChunk(fmtData: Buffer): WavFormat {
 	const declaredFormat = fmtData.readUInt16LE(0);
 	const audioFormat =
 		declaredFormat === WAVE_FORMAT_EXTENSIBLE && fmtData.length >= 26 ? fmtData.readUInt16LE(24) : declaredFormat;
+	const bitsPerSample = fmtData.readUInt16LE(14);
+
+	if (!SUPPORTED_BITS[audioFormat]?.includes(bitsPerSample)) {
+		throw new Error(
+			`Unsupported WAV format: format code ${audioFormat} at ${bitsPerSample} bits (supported: PCM 8, 16, 24 or 32 bits, IEEE float 32 or 64 bits)`,
+		);
+	}
 
 	return {
 		sampleRate: fmtData.readUInt32LE(4),
 		channels: fmtData.readUInt16LE(2),
-		bitsPerSample: fmtData.readUInt16LE(14),
+		bitsPerSample,
 		audioFormat,
 		blockAlign: fmtData.readUInt16LE(12),
 		dataOffset: 0,
