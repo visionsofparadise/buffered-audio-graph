@@ -33,6 +33,8 @@ function createMockChild(): {
 	readonly stderr: PassThrough;
 	readonly kill: ReturnType<typeof vi.fn>;
 	readonly exit: (code: number | null, signal?: NodeJS.Signals) => void;
+	readonly exitOnly: (code: number) => void;
+	readonly close: () => void;
 } {
 	const child = new EventEmitter();
 	const stdin = new PassThrough();
@@ -65,7 +67,16 @@ function createMockChild(): {
 		kill: { value: kill },
 	});
 
-	return { child, stdin, stdout, stderr, kill, exit: settleExit };
+	// Emits 'exit' alone: a real child's 'close' follows once its stdio pipes have drained, which can be after 'exit'.
+	const exitOnly = (code: number): void => {
+		exitCode = code;
+		child.emit("exit", code, null);
+	};
+	const close = (): void => {
+		child.emit("close", exitCode, signalCode);
+	};
+
+	return { child, stdin, stdout, stderr, kill, exit: settleExit, exitOnly, close };
 }
 
 function pcmBytes(value: number, frames: number): Buffer {
@@ -381,6 +392,28 @@ describe("FfmpegStream bridge", () => {
 		exit(1);
 
 		await expect(reader.read()).rejects.toThrow("ffmpeg exited 1: Invalid argument");
+	});
+
+	it("includes stderr that arrives between the child's exit and close", async () => {
+		const { child, stdin, stdout, stderr, exitOnly, close } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+		vi.spyOn(stdin, "write").mockReturnValue(true);
+
+		const { readable } = createBridge(readableFrom(inputBlocks(1)));
+		const pending = readable.getReader().read();
+
+		await tick();
+
+		stdout.push(null);
+		exitOnly(1);
+		await tick();
+
+		stderr.write(Buffer.from("late detail"));
+		await tick();
+		close();
+
+		await expect(pending).rejects.toThrow("ffmpeg exited 1: late detail");
 	});
 
 	it("terminates the child when the consumer cancels mid-stream", async () => {

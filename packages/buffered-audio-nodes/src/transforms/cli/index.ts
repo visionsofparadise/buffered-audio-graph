@@ -26,7 +26,7 @@ import type { WavFormat } from "../../sources/read/wav/utils/wav-format";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import type { Readable } from "node:stream";
 
-const DECODE_FAILURE_EXIT_WAIT_MS = 2000;
+const CHILD_CLOSE_WAIT_MS = 2000;
 
 export type CliStreamFormat = "wav" | "f32le" | "f64le";
 
@@ -244,11 +244,15 @@ export abstract class CliTransformStream<
 		}
 	}
 
-	private async failDecode(error: unknown, stdout: Readable): Promise<never> {
-		stdout.off("readable", this.onStdoutReadable);
-		stdout.resume();
+	private async waitForChildClose(stdout: Readable | undefined): Promise<void> {
+		stdout?.off("readable", this.onStdoutReadable);
+		stdout?.resume();
 
-		if (this.childClosed) await settleWithin(this.childClosed, DECODE_FAILURE_EXIT_WAIT_MS, this.streamSignal);
+		if (this.childClosed) await settleWithin(this.childClosed, CHILD_CLOSE_WAIT_MS, this.streamSignal);
+	}
+
+	private async failDecode(error: unknown, stdout: Readable): Promise<never> {
+		await this.waitForChildClose(stdout);
 
 		if (this.childSettled && this.exitPromise) {
 			const exit = exitError(this.label, await this.exitPromise, this.stderr);
@@ -320,7 +324,9 @@ export abstract class CliTransformStream<
 
 		const exit = await unlessAborted(this.exitPromise, this.streamSignal);
 
-		if (!exit) return;
+		if (!exit || exit.code === 0) return;
+
+		await this.waitForChildClose(this.child?.stdout);
 
 		const error = exitError(this.label, exit, this.stderr);
 
