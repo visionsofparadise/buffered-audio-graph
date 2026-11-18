@@ -5,11 +5,6 @@ const RELATIVE_GATE_OFFSET_LU = -20;
 const LOW_PERCENTILE = 0.1;
 const HIGH_PERCENTILE = 0.95;
 
-export interface LraConsideredStats {
-	readonly min: number;
-	readonly median: number;
-}
-
 function getConsideredLoudness(shortTerm: ReadonlyArray<number>): Array<number> {
 	const absoluteGated: Array<number> = [];
 
@@ -50,27 +45,4 @@ export function computeLoudnessRange(shortTerm: ReadonlyArray<number>): number {
 	const highIndex = Math.round((considered.length - 1) * HIGH_PERCENTILE);
 
 	return (considered[highIndex] ?? 0) - (considered[lowIndex] ?? 0);
-}
-
-export function getLraConsideredStats(shortTerm: ReadonlyArray<number>): LraConsideredStats {
-	const considered = getConsideredLoudness(shortTerm);
-
-	if (considered.length === 0) {
-		return { min: Number.POSITIVE_INFINITY, median: Number.POSITIVE_INFINITY };
-	}
-
-	considered.sort((left, right) => left - right);
-
-	const min = considered[0] ?? Number.POSITIVE_INFINITY;
-	const middleIndex = considered.length >> 1;
-	const median =
-		considered.length % 2 === 1
-			? (considered[middleIndex] ?? Number.POSITIVE_INFINITY)
-			: ((considered[middleIndex - 1] ?? 0) + (considered[middleIndex] ?? 0)) / 2;
-
-	return { min, median };
-}
-
-export function getLraConsideredMinLufs(shortTerm: ReadonlyArray<number>): number {
-	return getLraConsideredStats(shortTerm).min;
 }

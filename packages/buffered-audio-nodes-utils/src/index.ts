@@ -1,7 +1,5 @@
 export { AmplitudeHistogramAccumulator } from "./amplitude-histogram-accumulator";
 export { bandpass } from "./bandpass";
-export { BidirectionalIir } from "./bidirectional-iir";
-export type { BidirectionalIirOptions } from "./bidirectional-iir";
 export {
 	biquadFilter,
 	highPassCoefficients,
@@ -11,7 +9,7 @@ export {
 	zeroPhaseBiquadFilter,
 } from "./biquad";
 export { BlockSumAccumulator } from "./block-sum";
-export { dbToLinear, linearToDb } from "./db";
+export { dbToLinear } from "./db";
 export { smoothEnvelope } from "./envelope";
 export { detectFftBackend, getFftAddon, initFftBackend } from "./fft-backend";
 export type { FftBackend, FftBackendConfig } from "./fft-backend";
@@ -21,11 +19,8 @@ export { deinterleaveBuffer, interleave } from "./interleave";
 export { KWeightedSquaredSum } from "./k-weighted-squared-sum";
 export { IntegratedLufsAccumulator, LoudnessAccumulator } from "./loudness";
 export type { LoudnessAccumulatorResult } from "./loudness";
-export { getLraConsideredMinLufs, getLraConsideredStats } from "./loudness-range";
-export type { LraConsideredStats } from "./loudness-range";
 export { MixedRadixFft } from "./mixed-radix-fft";
 export { replaceChannel } from "./replace-channel";
-export { SlidingWindowMaxStream, SlidingWindowMinStream, slidingWindowMax, slidingWindowMin } from "./sliding-window";
 export { createFftWorkspace, fft, hanningWindow, ifft, istft, normalizeOverlapAdd, stft } from "./stft";
 export type { FftWorkspace, StftOutput, StftResult } from "./stft";
 export { TruePeakAccumulator } from "./true-peak";
