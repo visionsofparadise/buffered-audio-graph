@@ -9,6 +9,7 @@ import {
 import { deinterleaveBuffer } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../../package-metadata";
+import { settledOrAborted } from "../../../transforms/cli/utils/process";
 import { createFfmpegPathField } from "../../../utils/binary-fields";
 
 export const ffmpegSchema = z.object({
@@ -61,7 +62,7 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 
 		const probe = await this.probe(this.properties.ffprobePath, this.properties.path);
 
-		if (this.isDestroyed || this.stopRequested()) return;
+		this.throwIfStopped();
 
 		const selectedChannels = this.properties.channels;
 
@@ -102,6 +103,8 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 		const targetBytes = DEFAULT_CHUNK_SIZE * bytesPerFrame;
 
 		const data = await this.readBytes(targetBytes);
+
+		this.throwIfStopped();
 
 		if (!data || data.length === 0) {
 			return undefined;
@@ -168,6 +171,10 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 		this.remainder = undefined;
 	}
 
+	private throwIfStopped(): void {
+		if (this.stopRequested()) throw new DOMException("The stream was destroyed", "AbortError");
+	}
+
 	private async probe(ffprobePath: string, filePath: string): Promise<ProbeResult> {
 		const proc = spawn(
 			ffprobePath,
@@ -185,7 +192,7 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 
 		proc.stderr.resume();
 
-		await new Promise<void>((resolve, reject) => {
+		const probed = new Promise<void>((resolve, reject) => {
 			proc.on("close", (code) => {
 				if (code !== 0) {
 					reject(new Error(`ffprobe exited with code ${code} for "${filePath}"`));
@@ -197,6 +204,16 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 				reject(new Error(`Failed to spawn ffprobe: ${error.message}`));
 			});
 		});
+
+		probed.catch(() => undefined);
+
+		try {
+			await settledOrAborted(probed, this.streamSignal);
+		} catch (error) {
+			if (proc.exitCode === null && proc.signalCode === null) proc.kill();
+
+			throw error;
+		}
 
 		const json = JSON.parse(Buffer.concat(chunks).toString("utf-8")) as {
 			streams?: Array<{
@@ -220,10 +237,12 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 	}
 
 	private readBytes(targetBytes: number): Promise<Buffer | undefined> {
+		const signal = this.streamSignal;
+
 		return new Promise((resolve) => {
 			const stdout = this.stdout;
 
-			if (!stdout) {
+			if (!stdout || signal.aborted) {
 				resolve(undefined);
 
 				return;
@@ -256,13 +275,19 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 					cleanup();
 					resolve(existing && existing.length > 0 ? existing : undefined);
 				};
+				const onAbort = (): void => {
+					cleanup();
+					resolve(undefined);
+				};
 				const cleanup = (): void => {
 					stdout.removeListener("readable", onReadable);
 					stdout.removeListener("end", onEnd);
+					signal.removeEventListener("abort", onAbort);
 				};
 
 				stdout.once("readable", onReadable);
 				stdout.once("end", onEnd);
+				signal.addEventListener("abort", onAbort, { once: true });
 			};
 
 			read();
