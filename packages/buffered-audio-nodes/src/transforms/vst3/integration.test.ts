@@ -359,3 +359,103 @@ describe("processStreamingThroughVstHost settling", () => {
 		}
 	}, 30_000);
 });
+
+describe("vst-host abort reasons", () => {
+	it("rejects a READY wait with the signal's own reason", async () => {
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "vst3-ready-abort-"));
+		const stagesPath = join(temporaryDirectory, "stages.json");
+		const pidPath = join(temporaryDirectory, "host.pid");
+
+		await writeFile(stagesPath, JSON.stringify([{ pluginPath: "x" }]));
+
+		const controller = new AbortController();
+		const reason = new Error("render aborted");
+
+		try {
+			const ready = spawnVstHostReady(
+				process.execPath,
+				[
+					stubBinary,
+					"--stages-json",
+					stagesPath,
+					"--sample-rate",
+					"48000",
+					"--channels",
+					"1",
+					"--hang-before-ready",
+					"--pid-file",
+					pidPath,
+				],
+				{ signal: controller.signal },
+			);
+
+			ready.catch(() => undefined);
+
+			const pid = await waitForPid(pidPath);
+
+			controller.abort(reason);
+
+			await expect(settleWithin(ready, "READY wait")).rejects.toBe(reason);
+
+			await waitForProcessAbsence(pid);
+		} finally {
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	}, 30_000);
+});
+
+describe("processStreamingThroughVstHost output writes", () => {
+	it("starts and finishes no output write after an aborted pass settles", async () => {
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "vst3-late-write-"));
+		const stagesPath = join(temporaryDirectory, "stages.json");
+
+		await writeFile(stagesPath, JSON.stringify([{ pluginPath: "x" }]));
+
+		const frames = 2 * 48_000;
+		const buffer = new BlockBuffer(temporaryDirectory);
+
+		await buffer.write([Float32Array.from({ length: frames }, (_, index) => Math.sin(index / 100))], 48_000, 32);
+		await buffer.flushWrites();
+
+		const handle = await spawnVstHostReady(process.execPath, [
+			stubBinary,
+			"--stages-json",
+			stagesPath,
+			"--sample-rate",
+			"48000",
+			"--channels",
+			"1",
+		]);
+		const controller = new AbortController();
+		const write = buffer.write.bind(buffer);
+		const log: Array<string> = [];
+
+		// A slow output buffer: each write takes 100 ms, and the first one aborts the pass.
+		vi.spyOn(buffer, "write").mockImplementation(async (...args) => {
+			log.push("write starts");
+			controller.abort();
+			await delay(100);
+			await write(...args);
+			log.push("write ends");
+		});
+
+		try {
+			await processStreamingThroughVstHost(handle, buffer, {
+				channelCount: 1,
+				sampleRate: 48_000,
+				bitDepth: 32,
+				signal: controller.signal,
+			}).catch(() => undefined);
+
+			log.push("pass settled");
+			await delay(400);
+
+			expect(log.at(-1)).toBe("pass settled");
+			expect(log).toContain("write ends");
+		} finally {
+			handle.proc.kill();
+			await buffer.close();
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	}, 30_000);
+});

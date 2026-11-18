@@ -152,10 +152,6 @@ function isRetryableInitCrash(error: unknown): error is VstHostExitedBeforeReady
 	return error instanceof VstHostExitedBeforeReadyError && !CLEAN_WRAPPER_EXIT_CODES.has(error.code ?? -1);
 }
 
-function abortError(): Error {
-	return new DOMException("The operation was aborted", "AbortError");
-}
-
 async function delay(ms: number, signal?: AbortSignal): Promise<void> {
 	if (!signal) {
 		await new Promise((resolve) => setTimeout(resolve, ms));
@@ -168,7 +164,7 @@ async function delay(ms: number, signal?: AbortSignal): Promise<void> {
 	await new Promise<void>((resolve, reject) => {
 		const onAbort = (): void => {
 			clearTimeout(timer);
-			reject(abortError());
+			reject(signal.reason as Error);
 		};
 		const timer = setTimeout(() => {
 			signal.removeEventListener("abort", onAbort);
@@ -191,7 +187,7 @@ async function waitForReady(handle: VstHostHandle, signal?: AbortSignal): Promis
 	let onAbort: (() => void) | undefined;
 	const aborted = new Promise<never>((_resolve, reject) => {
 		onAbort = () => {
-			reject(abortError());
+			reject(signal.reason as Error);
 		};
 
 		signal.addEventListener("abort", onAbort, { once: true });
@@ -389,8 +385,13 @@ export async function processStreamingThroughVstHost(
 
 		handle.stdout.on("data", onData);
 
-		await settledOrAborted(stdoutEnd, signal);
-		await writeChain;
+		try {
+			await settledOrAborted(stdoutEnd, signal);
+		} finally {
+			handle.stdout.removeListener("data", onData);
+
+			await writeChain;
+		}
 
 		const exit = await settledOrAborted(handle.exited, signal);
 
