@@ -18,6 +18,7 @@ import {
 	terminateChild,
 	unlessAborted,
 	waitForChildWritable,
+	type CliChildHandle,
 	type CliExitResult,
 } from "./utils/process";
 import { buildStreamingWavHeader, WavStreamParser } from "./utils/wav-stream";
@@ -108,18 +109,31 @@ export abstract class CliTransformStream<
 		};
 		this.decoder = this.createDecoder(this.output);
 
-		const { child, exitPromise } = spawnCliChild({
-			command: this._command(),
-			args: this._buildArgs(this.streamContext, input),
-			onStderr: (chunk) => {
-				this.stderr = appendStderr(this.stderr, chunk);
-			},
-			onStdinError: (error) => {
-				if (error.code === "EPIPE" || error.code === "EOF") return;
+		const command = this._command();
 
-				this.stdinError ??= new Error(`${label} stdin error: ${error.message}`);
-			},
-		});
+		if (command === "") throw new Error(`${this.identity.nodeName} node has no command`);
+
+		const args = this._buildArgs(this.streamContext, input);
+		let handle: CliChildHandle;
+
+		try {
+			handle = spawnCliChild({
+				command,
+				args,
+				onStderr: (chunk) => {
+					this.stderr = appendStderr(this.stderr, chunk);
+				},
+				onStdinError: (error) => {
+					if (error.code === "EPIPE" || error.code === "EOF") return;
+
+					this.stdinError ??= new Error(`${label} stdin error: ${error.message}`);
+				},
+			});
+		} catch (error) {
+			throw new Error(`${label} failed to start: ${error instanceof Error ? error.message : String(error)}`);
+		}
+
+		const { child, exitPromise } = handle;
 
 		child.stdout.on("readable", this.onStdoutReadable);
 		child.stdout.on("end", this.onStdoutEnd);

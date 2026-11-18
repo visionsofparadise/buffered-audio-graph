@@ -684,6 +684,13 @@ describe("FfmpegStream bridge", () => {
 		await expect(drainBlocks(readable)).rejects.toThrow(/^ffmpeg failed to start: .*ENOENT/);
 	}, 5000);
 
+	it("refuses an empty ffmpegPath before spawning", async () => {
+		const { readable } = createBridge(readableFrom(inputBlocks(2)), { ffmpegPath: "" });
+
+		await expect(drainBlocks(readable)).rejects.toThrow("FFmpeg node has no command");
+		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
+	});
+
 	it("propagates a non-EPIPE stdin error to the next transform", async () => {
 		const { child, stdin, stdout } = createMockChild();
 

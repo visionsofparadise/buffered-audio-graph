@@ -182,6 +182,36 @@ describe("CliStream against a real child", () => {
 	});
 });
 
+describe("CliStream spawn failures", () => {
+	it("refuses an empty command before spawning", async () => {
+		const stream = new CliStream(cli({ command: "" }), createTestStreamContext().context);
+
+		stream._setup(createTestSetupContext());
+
+		await expect(drainBlocks(stream._pipe(readableFrom(inputBlocks(1))))).rejects.toThrow("CLI node has no command");
+	});
+
+	it("labels a synchronous spawn throw as a failure to start", async () => {
+		const stream = new CliStream(cli({ command: "tool\0name" }), createTestStreamContext().context);
+
+		stream._setup(createTestSetupContext());
+
+		await expect(drainBlocks(stream._pipe(readableFrom(inputBlocks(1))))).rejects.toThrow(
+			/^tool\0name failed to start: .*null bytes/,
+		);
+	});
+
+	it.skipIf(process.platform !== "win32")("labels the EINVAL Windows raises for a .cmd command", async () => {
+		const stream = new CliStream(cli({ command: join(tmpdir(), "tool.cmd") }), createTestStreamContext().context);
+
+		stream._setup(createTestSetupContext());
+
+		await expect(drainBlocks(stream._pipe(readableFrom(inputBlocks(1))))).rejects.toThrow(
+			"tool.cmd failed to start: spawn EINVAL",
+		);
+	});
+});
+
 describe("CliStream decode errors against the child's exit", () => {
 	// Each write finishes before the next starts, so stdout, stderr and the exit reach the parent in that order.
 	const USAGE = `process.stdout.write("usage: tool [options]\\n", () => process.stderr.write("bad option", () => process.exit(2)))`;
