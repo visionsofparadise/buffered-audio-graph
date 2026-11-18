@@ -37,71 +37,129 @@ export function readSample(data: Buffer, offset: number, bitsPerSample: number, 
 	return 0;
 }
 
-export async function parseWavFormat(fh: FileHandle, path: string): Promise<WavFormat> {
-	const fileInfo = await stat(path);
+const WAVE_FORMAT_EXTENSIBLE = 0xfffe;
+const HEADER_READ_SIZE = 4096;
 
-	const header = Buffer.alloc(12);
+class NotWavError extends Error {}
 
-	await fh.read(header, 0, 12, 0);
+function readFmtChunk(fmtData: Buffer): WavFormat {
+	const declaredFormat = fmtData.readUInt16LE(0);
+	const audioFormat =
+		declaredFormat === WAVE_FORMAT_EXTENSIBLE && fmtData.length >= 26 ? fmtData.readUInt16LE(24) : declaredFormat;
 
-	const magic = header.toString("ascii", 0, 4);
-	const wave = header.toString("ascii", 8, 12);
+	return {
+		sampleRate: fmtData.readUInt32LE(4),
+		channels: fmtData.readUInt16LE(2),
+		bitsPerSample: fmtData.readUInt16LE(14),
+		audioFormat,
+		blockAlign: fmtData.readUInt16LE(12),
+		dataOffset: 0,
+		dataSize: 0,
+	};
+}
 
-	if ((magic !== "RIFF" && magic !== "RF64") || wave !== "WAVE") {
-		throw new Error(`Not a WAV file: "${path}"`);
-	}
+export function parseWavHeader(bytes: Buffer): WavFormat | undefined {
+	if (bytes.length < 4) return undefined;
+
+	const magic = bytes.toString("latin1", 0, 4);
+
+	if (magic !== "RIFF" && magic !== "RF64") throw new NotWavError(`Not a WAV stream (first bytes "${magic}")`);
+
+	if (bytes.length < 12) return undefined;
+
+	if (bytes.toString("latin1", 8, 12) !== "WAVE") throw new NotWavError(`Not a WAV stream (first bytes "${magic}")`);
 
 	const isRf64 = magic === "RF64";
 	let ds64DataSize: number | undefined;
-
-	let offset = 12;
-	const fileSize = fileInfo.size;
 	let format: WavFormat | undefined;
-	const chunkHeader = Buffer.alloc(8);
+	let offset = 12;
 
-	while (offset < fileSize) {
-		await fh.read(chunkHeader, 0, 8, offset);
+	while (offset + 8 <= bytes.length) {
+		const chunkId = bytes.toString("latin1", offset, offset + 4);
+		const chunkSize = bytes.readUInt32LE(offset + 4);
+		const bodyStart = offset + 8;
 
-		const chunkId = chunkHeader.toString("ascii", 0, 4);
-		const chunkSize = chunkHeader.readUInt32LE(4);
-
-		if (chunkId === "ds64") {
-			const ds64Data = Buffer.alloc(Math.min(chunkSize, 28));
-
-			await fh.read(ds64Data, 0, ds64Data.length, offset + 8);
-			ds64DataSize = Number(ds64Data.readBigUInt64LE(8));
-		} else if (chunkId === "fmt ") {
-			if (chunkSize < 16) throw new Error("WAV fmt chunk too small");
-
-			const fmtData = Buffer.alloc(chunkSize);
-
-			await fh.read(fmtData, 0, chunkSize, offset + 8);
-
-			const audioFormat = fmtData.readUInt16LE(0);
-			const channels = fmtData.readUInt16LE(2);
-			const sampleRate = fmtData.readUInt32LE(4);
-			const blockAlign = fmtData.readUInt16LE(12);
-			const bitsPerSample = fmtData.readUInt16LE(14);
-
-			format = { sampleRate, channels, bitsPerSample, audioFormat, blockAlign, dataOffset: 0, dataSize: 0 };
-		} else if (chunkId === "data") {
+		if (chunkId === "data") {
 			if (!format) throw new Error("WAV file has data chunk before fmt chunk");
 
 			const dataSize = isRf64 && ds64DataSize !== undefined ? ds64DataSize : chunkSize;
 
-			format = { ...format, dataOffset: offset + 8, dataSize };
-
-			break;
+			return { ...format, dataOffset: bodyStart, dataSize };
 		}
 
-		offset += 8 + chunkSize;
+		if (chunkId === "ds64") {
+			if (bytes.length < bodyStart + 16) return undefined;
 
-		if (chunkSize % 2 !== 0) offset++;
+			ds64DataSize = Number(bytes.readBigUInt64LE(bodyStart + 8));
+		} else if (chunkId === "fmt ") {
+			if (chunkSize < 16) throw new Error("WAV fmt chunk too small");
+
+			if (bytes.length < bodyStart + chunkSize) return undefined;
+
+			format = readFmtChunk(bytes.subarray(bodyStart, bodyStart + chunkSize));
+		}
+
+		offset = bodyStart + chunkSize + (chunkSize % 2);
 	}
 
-	if (!format || format.dataOffset === 0) {
-		throw new Error(`Invalid WAV file: "${path}"`);
+	return undefined;
+}
+
+export function decodeWavFrames(data: Buffer, format: WavFormat, frames: number): Array<Float32Array> {
+	const { channels, blockAlign, bitsPerSample, audioFormat } = format;
+	const bytesPerSample = bitsPerSample / 8;
+	const samples: Array<Float32Array> = [];
+
+	for (let channel = 0; channel < channels; channel++) {
+		samples.push(new Float32Array(frames));
 	}
 
-	return format;
+	for (let frame = 0; frame < frames; frame++) {
+		for (let channel = 0; channel < channels; channel++) {
+			const channelArray = samples[channel];
+
+			if (channelArray) {
+				channelArray[frame] = readSample(
+					data,
+					frame * blockAlign + channel * bytesPerSample,
+					bitsPerSample,
+					audioFormat,
+				);
+			}
+		}
+	}
+
+	return samples;
+}
+
+export async function parseWavFormat(fh: FileHandle, path: string): Promise<WavFormat> {
+	const fileSize = (await stat(path)).size;
+	let bytes = Buffer.alloc(0);
+	let readSize = HEADER_READ_SIZE;
+
+	while (bytes.length < fileSize) {
+		const chunk = Buffer.alloc(Math.min(readSize, fileSize - bytes.length));
+		const { bytesRead } = await fh.read(chunk, 0, chunk.length, bytes.length);
+
+		if (bytesRead === 0) break;
+
+		bytes = Buffer.concat([bytes, chunk.subarray(0, bytesRead)]);
+		readSize *= 2;
+
+		let format: WavFormat | undefined;
+
+		try {
+			format = parseWavHeader(bytes);
+		} catch (error) {
+			if (error instanceof NotWavError) throw new Error(`Not a WAV file: "${path}"`);
+
+			throw error;
+		}
+
+		if (format) return format;
+	}
+
+	if (bytes.length < 12) throw new Error(`Not a WAV file: "${path}"`);
+
+	throw new Error(`Invalid WAV file: "${path}"`);
 }

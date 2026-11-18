@@ -53,7 +53,7 @@ export function writeSample(buffer: Buffer, offset: number, sample: number, bitD
 	}
 }
 
-function writeFmtAndDataChunks(
+export function writeFmtAndDataChunks(
 	header: Buffer,
 	offset: number,
 	sampleRate: number,

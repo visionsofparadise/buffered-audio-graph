@@ -8,7 +8,7 @@ import {
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../../package-metadata";
-import { DEFAULT_CHUNK_SIZE, parseWavFormat, readSample, type WavFormat } from "./utils/wav-format";
+import { DEFAULT_CHUNK_SIZE, decodeWavFrames, parseWavFormat, type WavFormat } from "./utils/wav-format";
 
 export const wavSchema = z.object({
 	path: z.string().default("").meta({ input: "file", mode: "open" }),
@@ -86,25 +86,8 @@ export class ReadWavStream extends BufferedSourceStream<ReadWavNode> {
 
 		this.bytesRead += frames * format.blockAlign;
 
-		const fileChannels = format.channels;
 		const selectedChannels = this.properties.channels;
-
-		const allChannels: Array<Float32Array> = [];
-
-		for (let fileChannel = 0; fileChannel < fileChannels; fileChannel++) {
-			allChannels.push(new Float32Array(frames));
-		}
-
-		for (let frame = 0; frame < frames; frame++) {
-			for (let fileChannel = 0; fileChannel < fileChannels; fileChannel++) {
-				const byteOffset = frame * format.blockAlign + fileChannel * (format.bitsPerSample / 8);
-				const channel = allChannels[fileChannel];
-
-				if (channel) {
-					channel[frame] = readSample(chunk, byteOffset, format.bitsPerSample, format.audioFormat);
-				}
-			}
-		}
+		const allChannels = decodeWavFrames(chunk, format, frames);
 
 		let samples: Array<Float32Array>;
 
