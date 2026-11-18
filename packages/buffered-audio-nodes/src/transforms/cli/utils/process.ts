@@ -119,6 +119,19 @@ export async function settledOrAborted<T>(promise: Promise<T>, signal?: AbortSig
 	return promise;
 }
 
+export async function settleWithin<T>(promise: Promise<T>, ms: number, signal: AbortSignal): Promise<T | undefined> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<undefined>((resolve) => {
+		timer = setTimeout(() => resolve(undefined), ms);
+	});
+
+	try {
+		return await unlessAborted(Promise.race([promise, timeout]), signal);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
 export function unlessAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T | undefined> {
 	if (signal.aborted) return Promise.resolve(undefined);
 

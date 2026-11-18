@@ -13,6 +13,7 @@ import { encodePcm, PcmStreamDecoder } from "./utils/pcm";
 import {
 	appendStderr,
 	exitError,
+	settleWithin,
 	spawnCliChild,
 	terminateChild,
 	unlessAborted,
@@ -22,6 +23,9 @@ import {
 import { buildStreamingWavHeader, WavStreamParser } from "./utils/wav-stream";
 import type { WavFormat } from "../../sources/read/wav/utils/wav-format";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { Readable } from "node:stream";
+
+const DECODE_FAILURE_EXIT_WAIT_MS = 2000;
 
 export type CliStreamFormat = "wav" | "f32le" | "f64le";
 
@@ -55,6 +59,7 @@ export abstract class CliTransformStream<
 	private stdinError?: Error;
 	private exitPromise?: Promise<CliExitResult>;
 	private childSettled = false;
+	private childClosed?: Promise<void>;
 	private stdoutEnded = false;
 	private stdoutWait?: Promise<void>;
 	private stdoutNotify?: () => void;
@@ -119,14 +124,16 @@ export abstract class CliTransformStream<
 		child.stdout.on("readable", this.onStdoutReadable);
 		child.stdout.on("end", this.onStdoutEnd);
 
-		const settleChild = (): void => {
-			this.childSettled = true;
-			this.wakeStdout();
-		};
+		this.childClosed = new Promise<void>((resolve) => {
+			const settleChild = (): void => {
+				this.childSettled = true;
+				this.wakeStdout();
+				resolve();
+			};
 
-		child.once("close", settleChild);
-		child.once("error", settleChild);
-
+			child.once("close", settleChild);
+			child.once("error", settleChild);
+		});
 		this.child = child;
 		this.exitPromise = exitPromise;
 
@@ -198,7 +205,7 @@ export abstract class CliTransformStream<
 		return block;
 	}
 
-	private *readAvailableStdout(): Generator<Block> {
+	private async *readAvailableStdout(): AsyncGenerator<Block> {
 		const stdout = this.child?.stdout;
 		const decoder = this.decoder;
 
@@ -209,10 +216,33 @@ export abstract class CliTransformStream<
 
 			if (!bytes) return;
 
-			const block = this.toBlock(decoder.push(bytes));
+			let samples: Array<Float32Array> | undefined;
+
+			try {
+				samples = decoder.push(bytes);
+			} catch (error) {
+				await this.failDecode(error, stdout);
+			}
+
+			const block = this.toBlock(samples);
 
 			if (block) yield block;
 		}
+	}
+
+	private async failDecode(error: unknown, stdout: Readable): Promise<never> {
+		stdout.off("readable", this.onStdoutReadable);
+		stdout.resume();
+
+		if (this.childClosed) await settleWithin(this.childClosed, DECODE_FAILURE_EXIT_WAIT_MS, this.streamSignal);
+
+		if (this.childSettled && this.exitPromise) {
+			const exit = exitError(this.label, await this.exitPromise, this.stderr);
+
+			if (exit) throw exit;
+		}
+
+		throw error instanceof Error ? error : new Error(String(error));
 	}
 
 	private waitForStdoutReadableOrEnd(): Promise<void> {

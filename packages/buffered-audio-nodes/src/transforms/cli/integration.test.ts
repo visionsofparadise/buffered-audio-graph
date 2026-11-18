@@ -12,6 +12,7 @@ import {
 	drainBlocks,
 	readableFrom,
 } from "@buffered-audio/core/testing";
+import { buildStreamingWavHeader } from "./utils/wav-stream";
 import { cli, CliStream, type CliProperties } from ".";
 
 const SAMPLE_RATE = 44100;
@@ -178,5 +179,51 @@ describe("CliStream against a real child", () => {
 		await expect(
 			run({ args: ["-e", FAIL_AFTER_INPUT(2, "no audio")], outputFormat: "wav" }, inputBlocks(2)),
 		).rejects.toThrow(`${LABEL} exited 2`);
+	});
+});
+
+describe("CliStream decode errors against the child's exit", () => {
+	// Each write finishes before the next starts, so stdout, stderr and the exit reach the parent in that order.
+	const USAGE = `process.stdout.write("usage: tool [options]\\n", () => process.stderr.write("bad option", () => process.exit(2)))`;
+
+	it("throws the exit error with stderr when a child prints text to stdout after reading its input", async () => {
+		const script = `process.stdin.resume(); process.stdin.on("end", () => ${USAGE})`;
+
+		await expect(run({ args: ["-e", script], outputFormat: "wav" }, inputBlocks(2))).rejects.toThrow(
+			`${LABEL} exited 2: bad option`,
+		);
+	});
+
+	it("throws the exit error with stderr when a child prints text to stdout before reading any input", async () => {
+		await expect(run({ args: ["-e", USAGE], outputFormat: "wav" }, inputBlocks(8))).rejects.toThrow(
+			`${LABEL} exited 2: bad option`,
+		);
+	});
+
+	it("throws the exit error with stderr over a WAV header whose rate disagrees", async () => {
+		const header = buildStreamingWavHeader(8000, 2).toString("base64");
+		const script = `process.stdout.write(Buffer.from(process.argv[1], "base64"), () => process.stderr.write("real cause", () => process.exit(1)))`;
+
+		await expect(run({ args: ["-e", script, header], outputFormat: "wav" }, inputBlocks(2))).rejects.toThrow(
+			`${LABEL} exited 1: real cause`,
+		);
+	});
+
+	it("throws the decode error when the child exits 0 after bad stdout", async () => {
+		const script = `process.stdin.resume(); process.stdin.on("end", () => process.stdout.write("usage: tool [options]\\n", () => process.exit(0)))`;
+
+		await expect(run({ args: ["-e", script], outputFormat: "wav" }, inputBlocks(2))).rejects.toThrow(
+			'Not a WAV stream (first bytes "usag")',
+		);
+	});
+
+	it("throws the decode error once a child that keeps running has had its bounded wait", async () => {
+		const script = `process.stdout.write("usage: tool [options]\\n"); setInterval(() => undefined, 1000)`;
+		const started = performance.now();
+
+		await expect(run({ args: ["-e", script], outputFormat: "wav" }, inputBlocks(2))).rejects.toThrow(
+			'Not a WAV stream (first bytes "usag")',
+		);
+		expect(performance.now() - started).toBeLessThan(5000);
 	});
 });
