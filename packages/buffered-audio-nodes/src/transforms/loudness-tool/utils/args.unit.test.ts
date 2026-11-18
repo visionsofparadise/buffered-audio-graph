@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildLoudnessToolArgs, validateLoudnessToolArgs } from "./args";
 
 describe("buildLoudnessToolArgs", () => {
-	it("puts --scratch-dir before the command and the stdin and stdout streams after the args", () => {
+	it("puts --scratch-dir before the command, then raw stdin and WAV stdout after the args", () => {
 		expect(
 			buildLoudnessToolArgs(["target", "--lufs", "-16"], "/tmp/render", { sampleRate: 48000, channels: 2 }),
 		).toEqual([
@@ -19,7 +19,7 @@ describe("buildLoudnessToolArgs", () => {
 			"2",
 			"-",
 			"-f",
-			"f32le",
+			"wav",
 			"-o",
 			"-",
 		]);
@@ -62,6 +62,10 @@ describe("validateLoudnessToolArgs", () => {
 		"-h",
 		"--help",
 		"-V",
+		"-V1",
+		"-Vx",
+		"-Vh",
+		"-Vo",
 		"--version",
 	])("rejects %s, which the node owns", (token) => {
 		expect(validateLoudnessToolArgs(["target", "--lufs", "-16", token])).toBe(

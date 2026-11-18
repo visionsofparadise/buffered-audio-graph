@@ -5,11 +5,12 @@ const AUDIO_COMMANDS: ReadonlyArray<string> = ["tp-norm", "lufs-norm", "target",
 const STREAM_OWNED_PATTERNS: ReadonlyArray<RegExp> = [
 	/^-(f|ar|ac|ch_layout|channel_layout|sample_rate)(:.*)?$/s,
 	/^(-o|--output)/,
+	/^-V/,
 	/^--scratch-dir/,
 	/^pipe:/,
 ];
 
-const STREAM_OWNED_TOKENS: ReadonlySet<string> = new Set(["-", "--", "-h", "--help", "-V", "--version"]);
+const STREAM_OWNED_TOKENS: ReadonlySet<string> = new Set(["-", "--", "-h", "--help", "--version"]);
 
 export function validateLoudnessToolArgs(args: ReadonlyArray<string>): string | undefined {
 	const command = args[0];
@@ -46,7 +47,7 @@ export function buildLoudnessToolArgs(
 		String(input.channels),
 		"-",
 		"-f",
-		"f32le",
+		"wav",
 		"-o",
 		"-",
 	];

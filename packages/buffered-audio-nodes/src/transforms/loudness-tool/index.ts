@@ -2,7 +2,7 @@ import { TransformNode, type StreamSetupContext, type TransformNodeProperties } 
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { createLoudnessToolPathField } from "../../utils/binary-fields";
-import { CliTransformStream, type CliStreamInput } from "../cli";
+import { CliTransformStream, type CliStreamFormat, type CliStreamInput } from "../cli";
 import { buildLoudnessToolArgs, validateLoudnessToolArgs } from "./utils/args";
 
 const schema = z.object({
@@ -31,6 +31,10 @@ export class LoudnessToolStream extends CliTransformStream<LoudnessToolNode> {
 
 	protected override _label(): string {
 		return "loudness-tool";
+	}
+
+	protected override _outputFormat(): CliStreamFormat {
+		return "wav";
 	}
 
 	protected override _buildArgs(context: StreamSetupContext, input: CliStreamInput): Array<string> {

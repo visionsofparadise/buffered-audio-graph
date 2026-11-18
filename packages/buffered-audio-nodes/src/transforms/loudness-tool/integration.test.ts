@@ -10,7 +10,7 @@ import {
 } from "@buffered-audio/core/testing";
 import { readWavSamples } from "../../utils/read-to-buffer";
 import { audio, binaries, hasAudioFixtures, hasBinaryFixtures } from "../../utils/test-binaries";
-import { loudnessTool, LoudnessToolStream } from ".";
+import { loudnessTool, LoudnessToolNode, LoudnessToolStream } from ".";
 
 const BLOCK_FRAMES = 4096;
 
@@ -36,14 +36,12 @@ async function stereoVoiceBlocks(): Promise<{ readonly blocks: Array<Block>; rea
 }
 
 async function run(
-	args: Array<string>,
+	args: Array<string> | LoudnessToolNode,
 	input: Array<Block>,
 	sampleRate: number,
 ): Promise<{ readonly output: Array<Block>; readonly contextSampleRate: number }> {
-	const stream = new LoudnessToolStream(
-		loudnessTool({ loudnessToolPath: binaries.loudnessTool, args }),
-		createTestStreamContext().context,
-	);
+	const node = Array.isArray(args) ? loudnessTool({ loudnessToolPath: binaries.loudnessTool, args }) : args;
+	const stream = new LoudnessToolStream(node, createTestStreamContext().context);
 	const context = createTestSetupContext({ sourceSampleRate: sampleRate, sampleRate });
 
 	stream._setup(context);
@@ -90,5 +88,19 @@ describeIfFixtures("LoudnessToolStream against the loudness-tool binary", () => 
 		await expect(run(["lufs-norm", "--lufs", "5"], blocks, sampleRate)).rejects.toThrow(
 			/^loudness-tool exited 1: .*lufs must be in \[-50, 0\]/s,
 		);
+	}, 60_000);
+
+	it("rejects -V1, and fails on its version text if validation is bypassed", async () => {
+		expect(() => loudnessTool({ loudnessToolPath: binaries.loudnessTool, args: ["lufs-norm", "-V1"] })).toThrow(
+			'args must not contain \\"-V1\\"',
+		);
+
+		const bypassed = loudnessTool({ loudnessToolPath: binaries.loudnessTool, args: ["lufs-norm"] });
+
+		bypassed.properties = { ...bypassed.properties, args: ["lufs-norm", "-V1"] };
+
+		const { blocks, sampleRate } = await stereoVoiceBlocks();
+
+		await expect(run(bypassed, blocks, sampleRate)).rejects.toThrow('Not a WAV stream (first bytes "0.1.")');
 	}, 60_000);
 });
