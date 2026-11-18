@@ -62,19 +62,6 @@ Process audio through any command-line tool over stdin and stdout. The bag runs 
 | `outputSampleRate` | number (min 0), optional    | —         | Sample rate the command emits. Required when the command changes the rate.                                                                  |
 | `outputChannels`   | number (min 0), optional    | —         | Channel count the command emits. Required when the command changes the channel count.                                                       |
 
-### Crest Reduce
-
-Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor
-
-[Source](./src/transforms/crest-reduce/index.ts)
-
-| Parameter        | Type           | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ---------------- | -------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `smoothing`      | number (min 0) | `100`   | Bidirectional (zero-phase) smoothing time constant in ms applied to the per-frame decorrelation envelope before it drives the lattice (default 100 ms). The envelope is 0 in segments with no active-band peak and the per-binding-peak optimal value at active-band peaks; smoothing eases it toward 0 across gaps so the bidirectional pass is predictable. Applied to the CONTROL trajectory only — never the audio path |
-| `frameSize`      | number         | `2048`  | Analysis frame length in samples (default 2048 @ 48 kHz ≈ 43 ms; 75% overlap, Hann analysis window). Whole-file processing — output is produced after the full input is accumulated                                                                                                                                                                                                                                         |
-| `vkfftAddonPath` | string         | `""`    | VkFFT native addon — GPU FFT acceleration Download: [vkfft-addon](https://github.com/visionsofparadise/vkfft-addon)                                                                                                                                                                                                                                                                                                         |
-| `fftwAddonPath`  | string         | `""`    | FFTW native addon — CPU FFT acceleration Download: [fftw-addon](https://github.com/visionsofparadise/fftw-addon)                                                                                                                                                                                                                                                                                                            |
-
 ### Cut
 
 Remove a region of audio
@@ -241,25 +228,6 @@ Measure integrated loudness, true peak, and loudness range per EBU R128, plus an
 | ------------- | -------------- | ------- | -------------------------------------------------------------- |
 | `bucketCount` | number (min 0) | `1024`  | Amplitude histogram bucket count                               |
 | `outputPath`  | string         | `""`    | Output Path (JSON sidecar). Empty string disables file output. |
-
-### Loudness Target
-
-Peak-aware content-adaptive curve fitting (LUFS, true-peak) via a level-indexed gain envelope. The solver iterates body gain B and assigns peakGainDb from the true-peak ceiling and optional neverExpand.
-
-[Source](./src/transforms/loudness-target/index.ts)
-
-| Parameter         | Type                         | Default | Description                                                                                                                                    |
-| ----------------- | ---------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `targetLufs`      | number (-50 to 0, step 0.1)  | `-16`   | Target integrated loudness (LUFS)                                                                                                              |
-| `pivot`           | number (-80 to 0), optional  | —       | Body anchor (dB). Default: median(considered LRA blocks) from BS.1770 LRA gating in pass 1.                                                    |
-| `floor`           | number (-100 to 0), optional | —       | Silence threshold (dB). Default: min(considered LRA blocks); no floor when no blocks survive gating.                                           |
-| `limitPercentile` | number (0.5 to 1)            | `0.995` | Top-1−p fraction of detection samples to brick-wall. Default 0.995 brick-walls the top 0.5%.                                                   |
-| `limitDb`         | number (-60 to 0), optional  | —       | Limit-anchor override (dB). Default: auto-derived from quantile(detection histogram, limitPercentile). Set explicitly to fix the limit anchor. |
-| `maxAttempts`     | number (min 1)               | `10`    | Hard cap on iteration attempts.                                                                                                                |
-| `targetTp`        | number (-24 to 0), optional  | —       | True-peak target (dBTP). Default: source true peak (peaks unchanged).                                                                          |
-| `smoothing`       | number (0.01 to 200)         | `1`     | Peak-respecting envelope time constant (ms).                                                                                                   |
-| `tolerance`       | number (0 to 6)              | `0.5`   | Iteration exit threshold (LUFS dB).                                                                                                            |
-| `neverExpand`     | boolean                      | `false` | upper arm flat or compressive (peakGainDb ≤ B)                                                                                                 |
 
 ### Loudness Tool
 

@@ -8,10 +8,5 @@ export default defineConfig({
 		testTimeout: 600_000,
 		fileParallelism: false,
 		pool: "forks",
-		poolOptions: {
-			forks: {
-				execArgv: ["--expose-gc"],
-			},
-		},
 	},
 });

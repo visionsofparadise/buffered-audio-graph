@@ -65,12 +65,6 @@ export {
 } from "./transforms/loudness-tool";
 
 export {
-	loudnessTarget,
-	LoudnessTargetNode,
-	LoudnessTargetStream,
-	type LoudnessTargetProperties,
-} from "./transforms/loudness-target";
-export {
 	loudnessNormalize,
 	LoudnessNormalizeNode,
 	LoudnessNormalizeStream,
@@ -82,7 +76,6 @@ export {
 	TruePeakNormalizeStream,
 	type TruePeakNormalizeProperties,
 } from "./transforms/true-peak-normalize";
-export { crestReduce, CrestReduceNode, CrestReduceStream, type CrestReduceProperties } from "./transforms/crest-reduce";
 
 export { deBleed, DeBleedNode, DeBleedStream, type DeBleedProperties } from "./transforms/de-bleed";
 export {
