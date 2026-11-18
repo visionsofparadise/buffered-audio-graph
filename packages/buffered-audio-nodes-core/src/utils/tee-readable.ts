@@ -129,12 +129,6 @@ export function teeReadable<T>(
 					return;
 				}
 
-				if (upstreamCancel) {
-					await upstreamCancel;
-
-					return;
-				}
-
 				void serve();
 			},
 		});
