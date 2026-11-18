@@ -37,7 +37,9 @@ async function stereoVoiceBlocks(): Promise<{ readonly blocks: Array<Block>; rea
 
 	if (!voice) throw new Error("test voice has no channel");
 
-	return { blocks: stereoBlocks(voice, voice.map((sample) => sample * 0.5), sampleRate), sampleRate };
+	const quieter = voice.map((sample) => sample * 0.5);
+
+	return { blocks: stereoBlocks(voice, quieter, sampleRate), sampleRate };
 }
 
 async function run(
@@ -116,14 +118,18 @@ describeIfBinary("LoudnessToolStream through loudness-tool's pass-through path",
 	it.each([
 		["lufs-norm", "--lufs", "-23"],
 		["target", "--lufs", "-16"],
-	])("returns -100 dBFS input bit-exact from %s, which has no loudness to measure", async (...args) => {
-		const input = stereoBlocks(left, right, sampleRate);
-		const { output, contextSampleRate } = await run(args, input, sampleRate);
+	])(
+		"returns -100 dBFS input bit-exact from %s, which has no loudness to measure",
+		async (...args) => {
+			const input = stereoBlocks(left, right, sampleRate);
+			const { output, contextSampleRate } = await run(args, input, sampleRate);
 
-		expect(frameCount(output)).toBe(frames);
-		expect(contextSampleRate).toBe(sampleRate);
-		expect(output.every((block) => block.sampleRate === sampleRate && block.samples.length === 2)).toBe(true);
-		expect(channelSamples(output, 0)).toEqual(left);
-		expect(channelSamples(output, 1)).toEqual(right);
-	}, 60_000);
+			expect(frameCount(output)).toBe(frames);
+			expect(contextSampleRate).toBe(sampleRate);
+			expect(output.every((block) => block.sampleRate === sampleRate && block.samples.length === 2)).toBe(true);
+			expect(channelSamples(output, 0)).toEqual(left);
+			expect(channelSamples(output, 1)).toEqual(right);
+		},
+		60_000,
+	);
 });
