@@ -32,10 +32,13 @@ afterEach(() => {
 });
 
 describe("terminateChild", () => {
-	it("settles on exit after SIGTERM without escalating", async () => {
+	it("settles on exit after SIGTERM and never escalates once the grace has passed", async () => {
+		vi.useFakeTimers();
+
 		const { child, kill } = createChild(["SIGTERM"]);
 
-		await terminateChild(child);
+		await terminateChild(child, 2000);
+		await vi.advanceTimersByTimeAsync(3000);
 
 		expect(kill.mock.calls).toEqual([["SIGTERM"]]);
 	});
