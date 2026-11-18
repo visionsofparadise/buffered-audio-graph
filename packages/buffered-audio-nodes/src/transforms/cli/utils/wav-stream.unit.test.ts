@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildStreamingWavHeader, WavStreamParser } from "./wav-stream";
 
 interface WavSpec {
@@ -216,5 +216,82 @@ describe("WavStreamParser", () => {
 		parser.push(stereo.subarray(0, 20));
 
 		expect(() => parser.end()).toThrow("WAV stream ended before its header completed");
+	});
+
+	describe("leading chunks", () => {
+		function riffHead(): Buffer {
+			const head = Buffer.alloc(12);
+
+			head.write("RIFF", 0, "latin1");
+			head.writeUInt32LE(0xffffffff, 4);
+			head.write("WAVE", 8, "latin1");
+
+			return head;
+		}
+
+		function chunkHead(id: string, size: number): Buffer {
+			const head = Buffer.alloc(8);
+
+			head.write(id, 0, "latin1");
+			head.writeUInt32LE(size, 4);
+
+			return head;
+		}
+
+		it("skips a huge leading chunk's payload as it arrives instead of buffering it", () => {
+			const parser = new WavStreamParser();
+			const piece = Buffer.alloc(64 * 1024);
+			const concat = vi.spyOn(Buffer, "concat");
+
+			try {
+				expect(parser.push(Buffer.concat([riffHead(), chunkHead("JUNK", 0xf0000000)]))).toEqual({});
+
+				concat.mockClear();
+
+				for (let index = 0; index < 256; index++) {
+					expect(parser.push(piece)).toEqual({});
+				}
+
+				const concatenated = concat.mock.results.reduce(
+					(total, result) => total + (result.value as Buffer).length,
+					0,
+				);
+
+				expect(concatenated).toBeLessThan(1024 * 1024);
+			} finally {
+				concat.mockRestore();
+			}
+		});
+
+		it("finds the header after a skipped chunk that spans many pushes", () => {
+			const junk = Buffer.alloc(1001, 7);
+			const bytes = Buffer.concat([
+				riffHead(),
+				chunkHead("JUNK", junk.length),
+				junk,
+				Buffer.alloc(1),
+				wav({ audioFormat: 3, bits: 32, channels: 1, data: float32([0.5, -0.25]) }).subarray(12),
+			]);
+			const parser = new WavStreamParser();
+			const headers: Array<number> = [];
+			const samples: Array<number> = [];
+
+			for (let offset = 0; offset < bytes.length; offset += 100) {
+				const result = parser.push(bytes.subarray(offset, offset + 100));
+
+				if (result.header) headers.push(result.header.dataOffset);
+
+				samples.push(...(result.samples?.[0] ?? []));
+			}
+
+			expect(headers).toEqual([bytes.length - 8]);
+			expect(samples).toEqual([0.5, -0.25]);
+		});
+
+		it("rejects a fmt chunk larger than the 1 MiB header limit as soon as its size is known", () => {
+			expect(() =>
+				new WavStreamParser().push(Buffer.concat([riffHead(), chunkHead("fmt ", 2 * 1024 * 1024)])),
+			).toThrow("Invalid WAV stream: fmt chunk of 2097152 bytes exceeds the 1 MiB header limit");
+		});
 	});
 });

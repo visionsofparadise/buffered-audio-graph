@@ -1,4 +1,4 @@
-import { decodeWavFrames, parseWavHeader, type WavFormat } from "../../../sources/read/wav/utils/wav-format";
+import { decodeWavFrames, WavHeaderReader, type WavFormat } from "../../../sources/read/wav/utils/wav-format";
 import { writeFmtAndDataChunks } from "../../../targets/write/utils/wav";
 
 const UINT32_MAX = 0xffffffff;
@@ -17,7 +17,7 @@ export function buildStreamingWavHeader(sampleRate: number, channels: number): B
 }
 
 export class WavStreamParser {
-	private pending: Buffer = Buffer.alloc(0);
+	private readonly headerReader = new WavHeaderReader();
 	private format?: WavFormat;
 	private remaining = Infinity;
 	private stash: Buffer = Buffer.alloc(0);
@@ -25,21 +25,18 @@ export class WavStreamParser {
 	push(bytes: Buffer): { readonly header?: WavFormat; readonly samples?: Array<Float32Array> } {
 		if (this.format) return { samples: this.decode(this.format, bytes) };
 
-		this.pending = this.pending.length > 0 ? Buffer.concat([this.pending, bytes]) : bytes;
+		const result = this.headerReader.push(bytes);
 
-		const header = parseWavHeader(this.pending);
+		if (!result) return {};
 
-		if (!header) return {};
+		const header = result.format;
 
 		if (header.blockAlign === 0) throw new Error("WAV stream declares a block align of 0");
 
-		const data = this.pending.subarray(header.dataOffset);
-
 		this.format = header;
-		this.pending = Buffer.alloc(0);
 		this.remaining = header.dataSize === 0 || header.dataSize === UINT32_MAX ? Infinity : header.dataSize;
 
-		return { header, samples: this.decode(header, data) };
+		return { header, samples: this.decode(header, result.rest) };
 	}
 
 	end(): Array<Float32Array> | undefined {
