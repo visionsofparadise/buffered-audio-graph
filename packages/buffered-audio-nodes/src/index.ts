@@ -57,6 +57,12 @@ export {
 } from "./transforms/cli";
 export { faust, FaustNode, FaustStream, type FaustProperties } from "./transforms/faust";
 export { ffmpeg, FfmpegNode, FfmpegStream, type FfmpegProperties } from "./transforms/ffmpeg";
+export {
+	loudnessTool,
+	LoudnessToolNode,
+	LoudnessToolStream,
+	type LoudnessToolProperties,
+} from "./transforms/loudness-tool";
 
 export {
 	loudnessTarget,

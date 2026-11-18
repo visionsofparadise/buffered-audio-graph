@@ -261,6 +261,17 @@ Peak-aware content-adaptive curve fitting (LUFS, true-peak) via a level-indexed 
 | `tolerance`       | number (0 to 6)              | `0.5`   | Iteration exit threshold (LUFS dB).                                                                                                            |
 | `neverExpand`     | boolean                      | `false` | upper arm flat or compressive (peakGainDb ≤ B)                                                                                                 |
 
+### Loudness Tool
+
+Process audio through loudness-tool: tp-norm, lufs-norm, target or crest
+
+[Source](./src/transforms/loudness-tool/index.ts)
+
+| Parameter          | Type     | Default | Description                                                                                                                                                                                                          |
+| ------------------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loudnessToolPath` | string   | `""`    | loudness-tool — loudness measurement and processing CLI Download: [loudness-tool](https://github.com/visionsofparadise/loudness-tool/releases/latest)                                                                |
+| `args`             | string[] | —       | loudness-tool command and options, such as ["target", "--lufs", "-16", "--tp", "-1"]. The command is tp-norm, lufs-norm, target or crest. The node supplies the input, output, stream formats and scratch directory. |
+
 ### Normalize
 
 Adjust peak or loudness level to a target ceiling

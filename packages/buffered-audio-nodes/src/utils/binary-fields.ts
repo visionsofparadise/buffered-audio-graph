@@ -8,6 +8,19 @@ export function createFfmpegPathField(description = "FFmpeg — audio/video proc
 		.describe(description);
 }
 
+export function createLoudnessToolPathField() {
+	return z
+		.string()
+		.default("")
+		.meta({
+			input: "file",
+			mode: "open",
+			binary: "loudness-tool",
+			download: "https://github.com/visionsofparadise/loudness-tool/releases/latest",
+		})
+		.describe("loudness-tool — loudness measurement and processing CLI");
+}
+
 export function createOnnxAddonPathField() {
 	return z
 		.string()
