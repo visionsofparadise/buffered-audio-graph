@@ -198,6 +198,27 @@
 			"source": "https://github.com/facebookresearch/demucs"
 		},
 		{
+			"key": "loudness-tool",
+			"platform": "darwin",
+			"arch": "arm64",
+			"filename": "loudness-tool-darwin-arm64",
+			"source": "https://github.com/visionsofparadise/loudness-tool/releases/tag/v0.1.0"
+		},
+		{
+			"key": "loudness-tool",
+			"platform": "linux",
+			"arch": "x64",
+			"filename": "loudness-tool-linux-x64",
+			"source": "https://github.com/visionsofparadise/loudness-tool/releases/tag/v0.1.0"
+		},
+		{
+			"key": "loudness-tool",
+			"platform": "win32",
+			"arch": "x64",
+			"filename": "loudness-tool-win32-x64.exe",
+			"source": "https://github.com/visionsofparadise/loudness-tool/releases/tag/v0.1.0"
+		},
+		{
 			"key": "onnx-addon",
 			"platform": "darwin",
 			"arch": "arm64",

@@ -1,6 +1,6 @@
 outs:
-- md5: 5abd4e528e59b5dd0d48708186ef082d.dir
-  size: 302541426
-  nfiles: 9
+- md5: fac4bb6e6b8a98aaaa9d6392a8286e7a.dir
+  size: 391833428
+  nfiles: 10
   hash: md5
   path: darwin-arm64

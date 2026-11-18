@@ -34,7 +34,7 @@ function exeSuffix(target: Target): string {
 }
 
 function resolveFixtureFilename(asset: ManifestAsset, target: Target): string | null {
-	if (asset.key === "ffmpeg" || asset.key === "ffprobe") {
+	if (asset.key === "ffmpeg" || asset.key === "ffprobe" || asset.key === "loudness-tool") {
 		return `${asset.key}${exeSuffix(target)}`;
 	}
 

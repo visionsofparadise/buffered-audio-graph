@@ -12,6 +12,7 @@ const exe = process.platform === "win32" ? ".exe" : "";
 export const binaries = {
 	ffmpeg: resolve(binariesDir, `ffmpeg${exe}`),
 	ffprobe: resolve(binariesDir, `ffprobe${exe}`),
+	loudnessTool: resolve(binariesDir, `loudness-tool${exe}`),
 	onnxAddon: resolve(binariesDir, "onnx_addon.node"),
 	vkfftAddon: resolve(binariesDir, "vkfft_addon.node"),
 	fftwAddon: resolve(binariesDir, "fftw_addon.node"),
