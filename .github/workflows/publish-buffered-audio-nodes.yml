@@ -79,6 +79,23 @@ jobs:
            if: steps.check.outputs.skip == 'false'
            run: npx turbo run integration:heavy --filter=@buffered-audio/nodes
 
+         - name: Wait for pinned @buffered-audio dependencies on npm
+           if: steps.check.outputs.skip == 'false'
+           run: |
+              PINS=$(node -p "const { dependencies = {}, peerDependencies = {}, optionalDependencies = {} } = require('./packages/buffered-audio-nodes/package.json'); Object.entries({ ...dependencies, ...peerDependencies, ...optionalDependencies }).filter(([name]) => name.startsWith('@buffered-audio/')).map(([name, version]) => name + '@' + version).join(' ')")
+              DEADLINE=$(( $(date +%s) + 1800 ))
+              for PIN in $PINS; do
+                until [ -n "$(npm view "$PIN" version --prefer-online 2>/dev/null)" ]; do
+                  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+                    echo "::error::$PIN is still not on npm after 30 minutes"
+                    exit 1
+                  fi
+                  echo "Waiting for $PIN on npm"
+                  sleep 30
+                done
+                echo "$PIN is on npm"
+              done
+
          - name: Publish to npm
            if: steps.check.outputs.skip == 'false'
            run: npm publish --workspace=packages/buffered-audio-nodes --access public
