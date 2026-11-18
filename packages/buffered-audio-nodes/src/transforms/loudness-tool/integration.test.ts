@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Block } from "@buffered-audio/core";
+import { IntegratedLufsAccumulator } from "@buffered-audio/utils";
 import {
 	blockFromSamples,
 	channelSamples,
@@ -56,7 +57,7 @@ function frameCount(blocks: Array<Block>): number {
 }
 
 describeIfFixtures("LoudnessToolStream against the loudness-tool binary", () => {
-	it("keeps the frame count, sample rate and channels through lufs-norm, and changes the signal", async () => {
+	it("brings lufs-norm --lufs -23 to -23 LUFS, keeping the frame count, sample rate and channels", async () => {
 		const { blocks, sampleRate } = await stereoVoiceBlocks();
 		const { output, contextSampleRate } = await run(["lufs-norm", "--lufs", "-23"], blocks, sampleRate);
 
@@ -64,15 +65,12 @@ describeIfFixtures("LoudnessToolStream against the loudness-tool binary", () => 
 		expect(contextSampleRate).toBe(sampleRate);
 		expect(output.every((block) => block.sampleRate === sampleRate && block.samples.length === 2)).toBe(true);
 
-		const input = channelSamples(blocks, 0);
-		const processed = channelSamples(output, 0);
-		let maxDifference = 0;
+		const loudness = new IntegratedLufsAccumulator(sampleRate, 2);
+		const channels = [channelSamples(output, 0), channelSamples(output, 1)];
 
-		for (let index = 0; index < input.length; index++) {
-			maxDifference = Math.max(maxDifference, Math.abs((processed[index] ?? 0) - (input[index] ?? 0)));
-		}
+		loudness.push(channels, channels[0]?.length ?? 0);
 
-		expect(maxDifference).toBeGreaterThan(1e-3);
+		expect(Math.abs(loudness.finalize() + 23)).toBeLessThanOrEqual(0.5);
 	}, 60_000);
 
 	it("keeps the frame count through crest", async () => {
