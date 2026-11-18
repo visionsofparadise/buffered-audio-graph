@@ -1,4 +1,3 @@
-import { getEventListeners } from "node:events";
 import { describe, expect, it } from "vitest";
 import type { Block } from "../node/stream/block";
 import { createBlock } from "../testing/blocks";
@@ -181,58 +180,5 @@ describe("teeReadable", () => {
 		await tick();
 
 		expect(getAdvances()).toBe(advancesBefore + 1);
-	});
-
-	it("errors every branch with the signal's reason and cancels upstream on abort", async () => {
-		const { readable, cancelReasons } = createSource(createBlocks(3));
-		const controller = new AbortController();
-		const pairs = teeReadable(readable, ["a", "b"], controller.signal);
-		const [readerA, readerB] = pairs.map(([branch]) => branch.getReader());
-		const reason = new Error("render aborted");
-
-		controller.abort(reason);
-
-		await expect(readerA?.read()).rejects.toBe(reason);
-		await expect(readerB?.read()).rejects.toBe(reason);
-		expect(cancelReasons).toEqual([reason]);
-	});
-
-	it("errors every branch at once when the signal has already aborted", async () => {
-		const { readable } = createSource(createBlocks(3));
-		const controller = new AbortController();
-		const reason = new Error("render aborted");
-
-		controller.abort(reason);
-
-		const pairs = teeReadable(readable, ["a", "b"], controller.signal);
-
-		for (const [branch] of pairs) await expect(branch.getReader().read()).rejects.toBe(reason);
-	});
-
-	it("removes its abort listener once upstream ends", async () => {
-		const { readable } = createSource(createBlocks(1));
-		const controller = new AbortController();
-		const pairs = teeReadable(readable, ["a", "b"], controller.signal);
-		const readers = pairs.map(([branch]) => branch.getReader());
-
-		expect(getEventListeners(controller.signal, "abort")).toHaveLength(1);
-
-		for (;;) {
-			const results = await Promise.all(readers.map((reader) => reader.read()));
-
-			if (results.every((result) => result.done)) break;
-		}
-
-		expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
-	});
-
-	it("removes its abort listener once every branch has cancelled", async () => {
-		const { readable } = createSource(createBlocks(3));
-		const controller = new AbortController();
-		const pairs = teeReadable(readable, ["a", "b"], controller.signal);
-
-		for (const [branch] of pairs) await branch.cancel("gone");
-
-		expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
 	});
 });

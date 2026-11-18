@@ -20,6 +20,8 @@ export abstract class BufferedTargetStream<
 		this.recordRenderSignal(context);
 
 		try {
+			this.throwIfStopped();
+
 			await this._setup(readable, context);
 		} catch (error) {
 			await readable.cancel(error).catch(() => undefined);

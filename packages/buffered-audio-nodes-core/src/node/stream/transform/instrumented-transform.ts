@@ -22,6 +22,8 @@ export abstract class InstrumentedTransformStream<
 		this.recordRenderSignal(context);
 
 		try {
+			this.throwIfStopped();
+
 			await this.trackHook(this._setup(context));
 		} catch (error) {
 			await input.cancel(error).catch(() => undefined);

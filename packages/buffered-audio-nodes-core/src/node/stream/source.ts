@@ -29,6 +29,7 @@ export abstract class BufferedSourceStream<
 
 	setup(context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.recordRenderSignal(context);
+		this.throwIfStopped();
 
 		return this.trackHook(this._setup(context));
 	}

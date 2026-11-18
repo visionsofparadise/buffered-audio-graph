@@ -110,6 +110,10 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 		this.cancelController.abort();
 	}
 
+	protected throwIfStopped(): void {
+		if (this.stopRequested()) throw new DOMException("The stream was destroyed", "AbortError");
+	}
+
 	protected stopRequested(): boolean {
 		if (this.renderSignal?.aborted) throw this.renderSignal.reason;
 

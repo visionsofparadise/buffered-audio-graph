@@ -171,10 +171,6 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 		this.remainder = undefined;
 	}
 
-	private throwIfStopped(): void {
-		if (this.stopRequested()) throw new DOMException("The stream was destroyed", "AbortError");
-	}
-
 	private async probe(ffprobePath: string, filePath: string): Promise<ProbeResult> {
 		const proc = spawn(
 			ffprobePath,

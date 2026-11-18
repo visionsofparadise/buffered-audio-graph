@@ -363,6 +363,19 @@ describe("UnbufferedTransformStream cancellation", () => {
 		expect(log).toEqual(["upstream call ends", "upstream _destroy", "cancel resolved"]);
 	});
 
+	it("refuses setup once teardown has begun and cancels the input it was given", async () => {
+		const { context } = createTestStreamContext();
+		const stream = new LifecycleStream(nodeWith({}), context);
+		const input = openInput([createBlock(1, 0, 10)]);
+
+		await stream.destroy();
+
+		await expect(stream.setup(input.readable, createTestSetupContext())).rejects.toMatchObject({
+			name: "AbortError",
+		});
+		expect(input.cancelled()).toBe(true);
+	});
+
 	it("cancels its input when _transform throws", async () => {
 		class ThrowingStream extends UnbufferedTransformStream {
 			override _transform(): Iterable<Block> {
