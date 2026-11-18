@@ -47,6 +47,21 @@ Render `.bag` files and run pipelines from the command line with [`@buffered-aud
 
 ## Nodes
 
+### CLI
+
+Process audio through any command-line tool over stdin and stdout. The bag runs the named executable with full system access.
+
+[Source](./src/transforms/cli/index.ts)
+
+| Parameter          | Type                        | Default   | Description                                                                                                                                 |
+| ------------------ | --------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `command`          | string                      | `""`      | Executable to run: a path, or a bare name resolved through PATH. It runs without a shell, so Windows .cmd and .bat shims are not supported. |
+| `args`             | string[]                    | `[]`      | Arguments for the command. {sampleRate} and {channels} become the input stream's sample rate and channel count.                             |
+| `inputFormat`      | "wav" \| "f32le" \| "f64le" | `"f32le"` | Format written to the command's stdin: wav (32-bit float), f32le or f64le                                                                   |
+| `outputFormat`     | "wav" \| "f32le" \| "f64le" | `"f32le"` | Format read from the command's stdout: wav, f32le or f64le                                                                                  |
+| `outputSampleRate` | number (min 0), optional    | —         | Sample rate the command emits. Required when the command changes the rate.                                                                  |
+| `outputChannels`   | number (min 0), optional    | —         | Channel count the command emits. Required when the command changes the channel count.                                                       |
+
 ### Crest Reduce
 
 Content-adaptive, magnitude-preserving, phase-only crest-factor reducer — a pre-limiter headroom stage that rearranges signal phase to flatten true-peak excursions without changing the magnitude spectrum, never increasing crest factor
