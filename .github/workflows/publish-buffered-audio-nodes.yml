@@ -55,10 +55,6 @@ jobs:
            if: steps.check.outputs.skip == 'false'
            run: npx turbo build --filter=@buffered-audio/nodes
 
-         - name: Run integration tests
-           if: steps.check.outputs.skip == 'false'
-           run: npx turbo run integration --filter=@buffered-audio/nodes
-
          - if: steps.check.outputs.skip == 'false'
            uses: astral-sh/setup-uv@v6
 
@@ -74,6 +70,10 @@ jobs:
          - name: Pull and stage assets
            if: steps.check.outputs.skip == 'false'
            run: npm run assets:pull -- --target=linux-x64
+
+         - name: Run integration tests
+           if: steps.check.outputs.skip == 'false'
+           run: npx turbo run integration --filter=@buffered-audio/nodes
 
          - name: Run heavy integration tests
            if: steps.check.outputs.skip == 'false'
