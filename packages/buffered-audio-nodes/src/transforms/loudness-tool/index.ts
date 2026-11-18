@@ -14,6 +14,7 @@ const schema = z.object({
 
 			if (message !== undefined) context.addIssue({ code: "custom", message });
 		})
+		.default(["lufs-norm", "--lufs", "-23"])
 		.describe(
 			'loudness-tool command and options, such as ["target", "--lufs", "-16", "--tp", "-1"]. The command is tp-norm, lufs-norm, target or crest. The node supplies the input, output, stream formats and scratch directory.',
 		),
@@ -53,7 +54,7 @@ export class LoudnessToolNode extends TransformNode<LoudnessToolProperties> {
 
 export function loudnessTool(options: {
 	loudnessToolPath: string;
-	args: Array<string>;
+	args?: Array<string>;
 	id?: string;
 }): LoudnessToolNode {
 	return new LoudnessToolNode({
