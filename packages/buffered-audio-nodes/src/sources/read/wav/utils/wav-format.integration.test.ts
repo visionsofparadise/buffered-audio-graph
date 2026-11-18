@@ -44,4 +44,36 @@ describe("parseWavFormat", () => {
 
 		expect(bytesRequested).toBeLessThanOrEqual(4096);
 	});
+
+	it("names the file in an unsupported format error", async () => {
+		const bytes = Buffer.alloc(44);
+
+		bytes.write("RIFF", 0, "latin1");
+		bytes.writeUInt32LE(36, 4);
+		bytes.write("WAVE", 8, "latin1");
+		bytes.write("fmt ", 12, "latin1");
+		bytes.writeUInt32LE(16, 16);
+		bytes.writeUInt16LE(6, 20);
+		bytes.writeUInt16LE(1, 22);
+		bytes.writeUInt32LE(8000, 24);
+		bytes.writeUInt32LE(8000, 28);
+		bytes.writeUInt16LE(1, 32);
+		bytes.writeUInt16LE(8, 34);
+		bytes.write("data", 36, "latin1");
+
+		const path = join(tmpdir(), `ban-wav-format-${randomBytes(8).toString("hex")}.wav`);
+
+		paths.push(path);
+		await writeFile(path, bytes);
+
+		const fh = await open(path, "r");
+
+		try {
+			await expect(parseWavFormat(fh, path)).rejects.toThrow(
+				`Unsupported WAV format (format code 6 at 8 bits; supported: PCM 8, 16, 24 or 32 bits, IEEE float 32 or 64 bits): "${path}"`,
+			);
+		} finally {
+			await fh.close();
+		}
+	});
 });

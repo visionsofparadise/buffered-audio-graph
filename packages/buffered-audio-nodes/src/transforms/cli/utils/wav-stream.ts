@@ -31,8 +31,6 @@ export class WavStreamParser {
 
 		const header = result.format;
 
-		if (header.blockAlign === 0) throw new Error("WAV stream declares a block align of 0");
-
 		this.format = header;
 		this.remaining = header.dataSize === 0 || header.dataSize === UINT32_MAX ? Infinity : header.dataSize;
 

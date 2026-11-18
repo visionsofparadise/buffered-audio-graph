@@ -113,7 +113,9 @@ describe("parseWavHeader", () => {
 	])("rejects $name as an unsupported format", ({ audioFormat, bits }) => {
 		const bytes = riff("RIFF", [chunk("fmt ", fmtBody(audioFormat, 1, 8000, bits)), dataHeader(0)]);
 
-		expect(() => parseWavHeader(bytes)).toThrow(`Unsupported WAV format: format code ${audioFormat} at ${bits} bits`);
+		expect(() => parseWavHeader(bytes)).toThrow(
+			`Unsupported WAV format (format code ${audioFormat} at ${bits} bits;`,
+		);
 	});
 
 	it("rejects WAVE_FORMAT_EXTENSIBLE whose SubFormat resolves to an unsupported format", () => {
@@ -124,7 +126,34 @@ describe("parseWavHeader", () => {
 		fmt.writeUInt16LE(7, 24);
 
 		expect(() => parseWavHeader(riff("RIFF", [chunk("fmt ", fmt), dataHeader(0)]))).toThrow(
-			"Unsupported WAV format: format code 7 at 8 bits",
+			"Unsupported WAV format (format code 7 at 8 bits;",
+		);
+	});
+
+	it.each([
+		{
+			name: "too small for its frames",
+			blockAlign: 4,
+			message: "block align 4 does not match 2 channels at 32 bits, which need 8",
+		},
+		{
+			name: "padded past its frames",
+			blockAlign: 12,
+			message: "block align 12 does not match 2 channels at 32 bits, which need 8",
+		},
+	])("rejects a block align $name", ({ blockAlign, message }) => {
+		const fmt = fmtBody(3, 2, 48000, 32);
+
+		fmt.writeUInt16LE(blockAlign, 12);
+
+		expect(() => parseWavHeader(riff("RIFF", [chunk("fmt ", fmt), dataHeader(0)]))).toThrow(
+			`Invalid WAV format (${message})`,
+		);
+	});
+
+	it("rejects a format with no channels", () => {
+		expect(() => parseWavHeader(riff("RIFF", [chunk("fmt ", fmtBody(1, 0, 48000, 16)), dataHeader(0)]))).toThrow(
+			"Invalid WAV format (0 channels)",
 		);
 	});
 });

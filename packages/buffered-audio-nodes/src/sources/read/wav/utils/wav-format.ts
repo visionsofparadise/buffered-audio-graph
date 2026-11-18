@@ -44,24 +44,39 @@ const SUPPORTED_BITS: Partial<Record<number, ReadonlyArray<number>>> = { 1: [8, 
 
 class NotWavError extends Error {}
 
+class WavFormatError extends Error {}
+
 function readFmtChunk(fmtData: Buffer): WavFormat {
 	const declaredFormat = fmtData.readUInt16LE(0);
 	const audioFormat =
 		declaredFormat === WAVE_FORMAT_EXTENSIBLE && fmtData.length >= 26 ? fmtData.readUInt16LE(24) : declaredFormat;
 	const bitsPerSample = fmtData.readUInt16LE(14);
 
+	const channels = fmtData.readUInt16LE(2);
+	const blockAlign = fmtData.readUInt16LE(12);
+
 	if (!SUPPORTED_BITS[audioFormat]?.includes(bitsPerSample)) {
-		throw new Error(
-			`Unsupported WAV format: format code ${audioFormat} at ${bitsPerSample} bits (supported: PCM 8, 16, 24 or 32 bits, IEEE float 32 or 64 bits)`,
+		throw new WavFormatError(
+			`Unsupported WAV format (format code ${audioFormat} at ${bitsPerSample} bits; supported: PCM 8, 16, 24 or 32 bits, IEEE float 32 or 64 bits)`,
+		);
+	}
+
+	if (channels === 0) throw new WavFormatError("Invalid WAV format (0 channels)");
+
+	const expectedBlockAlign = (channels * bitsPerSample) / 8;
+
+	if (blockAlign !== expectedBlockAlign) {
+		throw new WavFormatError(
+			`Invalid WAV format (block align ${blockAlign} does not match ${channels} channels at ${bitsPerSample} bits, which need ${expectedBlockAlign})`,
 		);
 	}
 
 	return {
 		sampleRate: fmtData.readUInt32LE(4),
-		channels: fmtData.readUInt16LE(2),
+		channels,
 		bitsPerSample,
 		audioFormat,
-		blockAlign: fmtData.readUInt16LE(12),
+		blockAlign,
 		dataOffset: 0,
 		dataSize: 0,
 	};
@@ -226,6 +241,8 @@ export async function parseWavFormat(fh: FileHandle, path: string): Promise<WavF
 			header = reader.push(chunk.subarray(0, bytesRead));
 		} catch (error) {
 			if (error instanceof NotWavError) throw new Error(`Not a WAV file: "${path}"`);
+
+			if (error instanceof WavFormatError) throw new Error(`${error.message}: "${path}"`);
 
 			throw error;
 		}
