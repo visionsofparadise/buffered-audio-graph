@@ -5,6 +5,7 @@ import {
 	filterAssetsForTarget,
 	formatTarget,
 	type ManifestAsset,
+	needsExecutableBit,
 	readManifest,
 	resolveRepoRoot,
 	type Target,
@@ -67,9 +68,7 @@ export async function stageFixtureBinaries(target: Target): Promise<void> {
 
 		await fs.copyFile(entry.sourcePath, destination);
 
-		if (target.platform !== "win32" && (entry.destFilename === "ffmpeg" || entry.destFilename === "ffprobe")) {
-			await fs.chmod(destination, 0o755);
-		}
+		if (needsExecutableBit(entry.destFilename, target.platform)) await fs.chmod(destination, 0o755);
 	}
 
 	console.warn(`[assets:pull] staged ${entries.length} test binaries into ${outDir} for ${formatTarget(target)}`);

@@ -128,6 +128,10 @@ export function filterAssetsForTarget(assets: ReadonlyArray<ManifestAsset>, targ
 	);
 }
 
+export function needsExecutableBit(filename: string, platform: string): boolean {
+	return platform !== "win32" && path.extname(filename) === "";
+}
+
 function assetGroup(asset: ManifestAsset): string {
 	return asset.platform === "all" ? "all" : `${asset.platform}-${asset.arch}`;
 }

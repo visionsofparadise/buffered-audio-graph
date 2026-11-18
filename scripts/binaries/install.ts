@@ -7,6 +7,7 @@ import {
 	formatTarget,
 	type Manifest,
 	type ManifestAsset,
+	needsExecutableBit,
 	parseTargetArgs,
 	readManifest,
 	resolveRepoRoot,
@@ -74,9 +75,7 @@ async function installAsset(source: string, destination: string, asset: Manifest
 
 	await fs.copyFile(source, destination);
 
-	if (target.platform !== "win32" && (asset.key === "ffmpeg" || asset.key === "ffprobe")) {
-		await fs.chmod(destination, 0o755);
-	}
+	if (needsExecutableBit(asset.filename, target.platform)) await fs.chmod(destination, 0o755);
 }
 
 function buildSchemaKeyMap(included: ReadonlyArray<ManifestAsset>): Record<string, string> {
