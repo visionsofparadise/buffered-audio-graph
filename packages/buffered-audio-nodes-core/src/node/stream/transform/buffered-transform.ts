@@ -54,65 +54,56 @@ export abstract class BufferedTransformStream<
 		const buffer = (this.buffer ??= new BlockBuffer(this.temporaryDirectory));
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
-		let failed = false;
 
-		try {
-			for await (const block of this.readInput(input)) {
-				this.markStarted();
+		for await (const block of this.readInput(input)) {
+			this.markStarted();
 
-				this.inferredChunkSize ??= block.samples[0]?.length ?? 0;
+			this.inferredChunkSize ??= block.samples[0]?.length ?? 0;
 
-				const blockFrames = block.samples[0]?.length ?? 0;
+			const blockFrames = block.samples[0]?.length ?? 0;
 
-				for (let offset = 0; offset < blockFrames;) {
-					const frames =
-						this.blockSize === WHOLE_FILE
-							? blockFrames
-							: Math.min(this.blockSize - buffer.frames, blockFrames - offset);
+			for (let offset = 0; offset < blockFrames;) {
+				const frames =
+					this.blockSize === WHOLE_FILE
+						? blockFrames
+						: Math.min(this.blockSize - buffer.frames, blockFrames - offset);
+
+				if (this.stopRequested()) return;
+
+				const start = performance.now();
+				const prepared = await this.trackHook(this._prepare(sliceBlock(block, offset, frames)));
+
+				await this.trackHook(buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth));
+
+				this.processingMs += performance.now() - start;
+				offset += frames;
+				this.framesBuffered += frames;
+
+				if (bufferGate(this.framesBuffered, Date.now()))
+					this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
+
+				if (this.blockSize !== WHOLE_FILE && buffer.frames >= this.blockSize) {
+					yield* this.batch(buffer, emitGate);
 
 					if (this.stopRequested()) return;
-
-					const start = performance.now();
-					const prepared = await this.trackHook(this._prepare(sliceBlock(block, offset, frames)));
-
-					await this.trackHook(buffer.write(prepared.samples, prepared.sampleRate, prepared.bitDepth));
-
-					this.processingMs += performance.now() - start;
-					offset += frames;
-					this.framesBuffered += frames;
-
-					if (bufferGate(this.framesBuffered, Date.now()))
-						this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-
-					if (this.blockSize !== WHOLE_FILE && buffer.frames >= this.blockSize) {
-						yield* this.batch(buffer, emitGate);
-
-						if (this.stopRequested()) return;
-					}
 				}
 			}
-
-			if (this.stopRequested()) return;
-
-			if (buffer.frames > 0) yield* this.batch(buffer, emitGate);
-
-			if (this.stopRequested()) return;
-
-			const flushed = this._flush();
-			const timed = this.timed(flushed);
-
-			yield* this.chunked(timed, emitGate);
-
-			if (this.stopRequested()) return;
-
-			this.emitCompletion();
-		} catch (error) {
-			failed = true;
-
-			throw error;
-		} finally {
-			await this.finishPipeline(failed);
 		}
+
+		if (this.stopRequested()) return;
+
+		if (buffer.frames > 0) yield* this.batch(buffer, emitGate);
+
+		if (this.stopRequested()) return;
+
+		const flushed = this._flush();
+		const timed = this.timed(flushed);
+
+		yield* this.chunked(timed, emitGate);
+
+		if (this.stopRequested()) return;
+
+		this.emitCompletion();
 	}
 
 	private async *batch(buffer: BlockBuffer, emitGate: ProgressGate): AsyncGenerator<Block> {

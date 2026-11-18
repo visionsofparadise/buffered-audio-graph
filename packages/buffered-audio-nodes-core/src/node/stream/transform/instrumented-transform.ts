@@ -37,7 +37,7 @@ export abstract class InstrumentedTransformStream<
 	}
 
 	_pipe(input: ReadableStream<Block>): ReadableStream<Block> {
-		const pipeline = this.blocks(input);
+		const pipeline = this.guarded(this.blocks(input));
 
 		this.pipeline = pipeline;
 
@@ -50,7 +50,21 @@ export abstract class InstrumentedTransformStream<
 		await this.pipeline.return(undefined);
 	}
 
-	protected async finishPipeline(failed: boolean): Promise<void> {
+	private async *guarded(blocks: AsyncGenerator<Block>): AsyncGenerator<Block> {
+		let failed = false;
+
+		try {
+			yield* blocks;
+		} catch (error) {
+			failed = true;
+
+			throw error;
+		} finally {
+			await this.finishPipeline(failed);
+		}
+	}
+
+	private async finishPipeline(failed: boolean): Promise<void> {
 		this.pipelineFinishing = true;
 
 		if (this.isDestroyed) return;

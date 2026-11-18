@@ -10,44 +10,35 @@ export abstract class UnbufferedTransformStream<
 	protected async *blocks(input: ReadableStream<Block>): AsyncGenerator<Block> {
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
-		let failed = false;
 
-		try {
-			for await (const block of this.readInput(input)) {
-				this.markStarted();
+		for await (const block of this.readInput(input)) {
+			this.markStarted();
 
-				this.framesBuffered += block.samples[0]?.length ?? 0;
+			this.framesBuffered += block.samples[0]?.length ?? 0;
 
-				if (bufferGate(this.framesBuffered, Date.now()))
-					this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
-
-				if (this.stopRequested()) return;
-
-				const output = this._transform(block);
-				const timed = this.timed(output);
-
-				yield* this.emitted(timed, emitGate);
-
-				if (this.stopRequested()) return;
-			}
+			if (bufferGate(this.framesBuffered, Date.now()))
+				this.emitProgress("buffer", this.framesBuffered, this.sourceTotalFrames);
 
 			if (this.stopRequested()) return;
 
-			const flushed = this._flush();
-			const timed = this.timed(flushed);
+			const output = this._transform(block);
+			const timed = this.timed(output);
 
 			yield* this.emitted(timed, emitGate);
 
 			if (this.stopRequested()) return;
-
-			this.emitCompletion();
-		} catch (error) {
-			failed = true;
-
-			throw error;
-		} finally {
-			await this.finishPipeline(failed);
 		}
+
+		if (this.stopRequested()) return;
+
+		const flushed = this._flush();
+		const timed = this.timed(flushed);
+
+		yield* this.emitted(timed, emitGate);
+
+		if (this.stopRequested()) return;
+
+		this.emitCompletion();
 	}
 
 	private async *emitted(blocks: AsyncIterable<Block>, emitGate: ProgressGate): AsyncGenerator<Block> {
