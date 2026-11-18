@@ -137,6 +137,31 @@ describe("CliStream against a real child", () => {
 		).rejects.toThrow(`${LABEL} output WAV has sample rate ${SAMPLE_RATE}, expected 22050`);
 	});
 
+	it("decodes outputChannels channels from a child that changes the channel count", async () => {
+		const downmix = [
+			"let stash = Buffer.alloc(0);",
+			'process.stdin.on("data", (chunk) => {',
+			"const data = Buffer.concat([stash, chunk]); const frames = Math.floor(data.length / 8); const out = Buffer.alloc(frames * 4);",
+			"for (let i = 0; i < frames; i++) out.writeFloatLE((data.readFloatLE(i * 8) + data.readFloatLE(i * 8 + 4)) / 2, i * 4);",
+			"stash = data.subarray(frames * 8); process.stdout.write(out); });",
+			'process.stdin.on("end", () => process.stdout.end());',
+		].join(" ");
+		const input = inputBlocks(4);
+		const output = await run({ args: ["-e", downmix], outputChannels: 1 }, input);
+		const left = channelSamples(input, 0);
+		const right = channelSamples(input, 1);
+		const expected = left.map((sample, index) => Math.fround((sample + (right[index] ?? 0)) / 2));
+
+		expect(output.every((block) => block.samples.length === 1)).toBe(true);
+		expect(channelSamples(output, 0)).toEqual(expected);
+	});
+
+	it("errors when the WAV output's channel count differs from outputChannels", async () => {
+		await expect(
+			run({ args: ["-e", ECHO], inputFormat: "wav", outputFormat: "wav", outputChannels: 1 }, inputBlocks(2)),
+		).rejects.toThrow(`${LABEL} output WAV has 2 channels, expected 1`);
+	});
+
 	it("terminates the child when the consumer cancels mid-stream", async () => {
 		const pidFile = join(tmpdir(), `ban-cli-pid-${randomBytes(8).toString("hex")}`);
 		const script = `require("node:fs").writeFileSync(process.argv[1], String(process.pid)); ${ECHO}`;
