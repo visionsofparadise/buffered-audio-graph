@@ -9,7 +9,7 @@ import { interleave } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { createFfmpegPathField } from "../../utils/binary-fields";
-import { unlessAborted, waitForChildWritable } from "../cli/utils/process";
+import { terminateChild, unlessAborted, waitForChildWritable } from "../cli/utils/process";
 import {
 	appendStderr,
 	buildInputArgs,
@@ -36,8 +36,6 @@ export interface FfmpegProperties extends TransformNodeProperties {
 	readonly args?: Array<string> | ((context: StreamSetupContext) => Array<string>);
 	readonly outputSampleRate?: number;
 }
-
-const TEARDOWN_KILL_GRACE_MS = 2000;
 
 export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends UnbufferedTransformStream<
 	FfmpegNode<P>
@@ -333,9 +331,7 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		if (!child) return;
 
 		const running = child.exitCode === null && child.signalCode === null && !child.killed;
-		const exited = running ? this.waitForTeardownExit(child) : Promise.resolve();
-
-		if (running) child.kill("SIGTERM");
+		const exited = running ? terminateChild(child) : Promise.resolve();
 
 		child.stdout.off("readable", this.onStdoutReadable);
 		child.stdout.off("end", this.onStdoutEnd);
@@ -344,24 +340,6 @@ export class FfmpegStream<P extends FfmpegProperties = FfmpegProperties> extends
 		await exited;
 
 		this.child = undefined;
-	}
-
-	private waitForTeardownExit(child: ChildProcessWithoutNullStreams): Promise<void> {
-		return new Promise<void>((resolve) => {
-			const settle = (): void => {
-				clearTimeout(timer);
-				child.off("exit", settle);
-				child.off("close", settle);
-				resolve();
-			};
-			const timer = setTimeout(() => {
-				child.kill("SIGKILL");
-				settle();
-			}, TEARDOWN_KILL_GRACE_MS);
-
-			child.once("exit", settle);
-			child.once("close", settle);
-		});
 	}
 }
 

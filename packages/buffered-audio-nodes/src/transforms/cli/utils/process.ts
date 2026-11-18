@@ -1,5 +1,28 @@
 import type { ChildProcess } from "node:child_process";
 
+const TEARDOWN_KILL_GRACE_MS = 2000;
+
+export function terminateChild(child: ChildProcess, graceMs = TEARDOWN_KILL_GRACE_MS): Promise<void> {
+	if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+
+	return new Promise<void>((resolve) => {
+		const settle = (): void => {
+			clearTimeout(timer);
+			child.off("exit", settle);
+			child.off("close", settle);
+			resolve();
+		};
+		const timer = setTimeout(() => {
+			child.kill("SIGKILL");
+			settle();
+		}, graceMs);
+
+		child.once("exit", settle);
+		child.once("close", settle);
+		child.kill("SIGTERM");
+	});
+}
+
 export type ChildStdin = NodeJS.WritableStream & { readonly destroyed?: boolean; readonly writableEnded?: boolean };
 
 export function isChildGone(child: ChildProcess, stdin: ChildStdin): boolean {

@@ -9,7 +9,7 @@ import {
 import { deinterleaveBuffer } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../../package-metadata";
-import { settledOrAborted } from "../../../transforms/cli/utils/process";
+import { settledOrAborted, terminateChild } from "../../../transforms/cli/utils/process";
 import { createFfmpegPathField } from "../../../utils/binary-fields";
 
 export const ffmpegSchema = z.object({
@@ -27,8 +27,6 @@ export interface ReadFfmpegProperties extends z.infer<typeof ffmpegSchema>, Sour
 }
 
 const DEFAULT_CHUNK_SIZE = 44100;
-
-const TEARDOWN_KILL_GRACE_MS = 2000;
 
 interface ProbeResult {
 	readonly sampleRate: number;
@@ -142,27 +140,7 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 		const proc = this.ffmpegProcess;
 
 		if (proc) {
-			if (proc.exitCode === null && !proc.killed) {
-				proc.kill("SIGTERM");
-
-				await new Promise<void>((resolve) => {
-					if (proc.exitCode !== null) {
-						resolve();
-
-						return;
-					}
-
-					const timer = setTimeout(() => {
-						proc.kill("SIGKILL");
-						resolve();
-					}, TEARDOWN_KILL_GRACE_MS);
-
-					proc.on("close", () => {
-						clearTimeout(timer);
-						resolve();
-					});
-				});
-			}
+			await terminateChild(proc);
 
 			this.ffmpegProcess = undefined;
 		}
@@ -206,7 +184,7 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 		try {
 			await settledOrAborted(probed, this.streamSignal);
 		} catch (error) {
-			if (proc.exitCode === null && proc.signalCode === null) proc.kill();
+			await terminateChild(proc);
 
 			throw error;
 		}

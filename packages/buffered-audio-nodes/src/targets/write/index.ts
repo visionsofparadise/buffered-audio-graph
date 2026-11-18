@@ -9,7 +9,12 @@ import {
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
-import { isChildGone, settledOrAborted, waitForChildWritable } from "../../transforms/cli/utils/process";
+import {
+	isChildGone,
+	settledOrAborted,
+	terminateChild,
+	waitForChildWritable,
+} from "../../transforms/cli/utils/process";
 import { createFfmpegPathField } from "../../utils/binary-fields";
 import { getBytesPerSample, writeSample, buildWavHeader, buildRf64Header } from "./utils/wav";
 
@@ -68,7 +73,6 @@ export interface WriteProperties extends TargetNodeProperties {
 }
 
 const WAV_HEADER_SIZE = 80;
-const TEARDOWN_KILL_GRACE_MS = 2000;
 const UINT32_MAX = 0xffffffff;
 
 export class WriteStream extends BufferedTargetStream<WriteNode> {
@@ -76,7 +80,6 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 	private ffmpegProcess?: ChildProcess;
 	private ffmpegStdin?: NodeJS.WritableStream;
 	private ffmpegDone?: Promise<void>;
-	private ffmpegExited?: Promise<void>;
 	private sampleRate = 0;
 	private channels = 0;
 	private bytesWritten = 0;
@@ -153,10 +156,6 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		done.catch(() => undefined);
 
 		this.ffmpegDone = done;
-		this.ffmpegExited = new Promise<void>((resolve) => {
-			proc.once("exit", () => resolve());
-			proc.once("error", () => resolve());
-		});
 	}
 
 	override async _write(chunk: Block): Promise<void> {
@@ -200,21 +199,12 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 	override async _destroy(): Promise<void> {
 		const proc = this.ffmpegProcess;
-		const exited = this.ffmpegExited;
 
 		this.ffmpegProcess = undefined;
 		this.ffmpegStdin = undefined;
 		this.ffmpegDone = undefined;
-		this.ffmpegExited = undefined;
 
-		if (proc && exited && proc.exitCode === null && proc.signalCode === null) {
-			proc.kill();
-
-			const timer = setTimeout(() => proc.kill("SIGKILL"), TEARDOWN_KILL_GRACE_MS);
-
-			await exited;
-			clearTimeout(timer);
-		}
+		if (proc) await terminateChild(proc);
 
 		if (this.fileHandle) {
 			await this.fileHandle.close().catch(() => undefined);

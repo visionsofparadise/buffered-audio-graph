@@ -53,6 +53,7 @@ function createSilentFfmpegProcess(): { readonly process: EventEmitter; readonly
 		stdout: { value: stdout },
 		stderr: { value: new PassThrough() },
 		exitCode: { get: () => exitCode },
+		signalCode: { value: null },
 		killed: { get: () => kill.mock.calls.length > 0 },
 		kill: { value: kill },
 	});
