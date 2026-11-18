@@ -68,6 +68,7 @@ export interface WriteProperties extends TargetNodeProperties {
 }
 
 const WAV_HEADER_SIZE = 80;
+const TEARDOWN_KILL_GRACE_MS = 2000;
 const UINT32_MAX = 0xffffffff;
 
 export class WriteStream extends BufferedTargetStream<WriteNode> {
@@ -75,6 +76,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 	private ffmpegProcess?: ChildProcess;
 	private ffmpegStdin?: NodeJS.WritableStream;
 	private ffmpegDone?: Promise<void>;
+	private ffmpegExited?: Promise<void>;
 	private sampleRate = 0;
 	private channels = 0;
 	private bytesWritten = 0;
@@ -134,7 +136,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 		this.ffmpegStdin.on("error", () => {});
 
-		this.ffmpegDone = new Promise<void>((resolve, reject) => {
+		const done = new Promise<void>((resolve, reject) => {
 			proc.on("close", (code) => {
 				if (code !== 0) {
 					reject(new Error(`ffmpeg exited with code ${code}`));
@@ -146,6 +148,14 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 			proc.on("error", (error) => {
 				reject(new Error(`Failed to spawn ffmpeg: ${error.message}`));
 			});
+		});
+
+		done.catch(() => undefined);
+
+		this.ffmpegDone = done;
+		this.ffmpegExited = new Promise<void>((resolve) => {
+			proc.once("exit", () => resolve());
+			proc.once("error", () => resolve());
 		});
 	}
 
@@ -189,11 +199,21 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 	}
 
 	override async _destroy(): Promise<void> {
-		if (this.ffmpegProcess) {
-			this.ffmpegProcess.kill();
-			this.ffmpegProcess = undefined;
-			this.ffmpegStdin = undefined;
-			this.ffmpegDone = undefined;
+		const proc = this.ffmpegProcess;
+		const exited = this.ffmpegExited;
+
+		this.ffmpegProcess = undefined;
+		this.ffmpegStdin = undefined;
+		this.ffmpegDone = undefined;
+		this.ffmpegExited = undefined;
+
+		if (proc && exited && proc.exitCode === null && proc.signalCode === null) {
+			proc.kill();
+
+			const timer = setTimeout(() => proc.kill("SIGKILL"), TEARDOWN_KILL_GRACE_MS);
+
+			await exited;
+			clearTimeout(timer);
 		}
 
 		if (this.fileHandle) {
