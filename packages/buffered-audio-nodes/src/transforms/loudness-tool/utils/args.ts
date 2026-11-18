@@ -12,6 +12,26 @@ const STREAM_OWNED_PATTERNS: ReadonlyArray<RegExp> = [
 
 const STREAM_OWNED_TOKENS: ReadonlySet<string> = new Set(["-", "--", "-h", "--help", "--version"]);
 
+const VALUE_OPTIONS: ReadonlySet<string> = new Set([
+	"--floor",
+	"--limit-db",
+	"--limit-percentile",
+	"--lufs",
+	"--oversampling",
+	"--pivot",
+	"--smoothing",
+	"--spread",
+	"--steps",
+	"--tolerance",
+	"--tp",
+]);
+
+const NEGATIVE_NUMBER = /^-(\d+|\d*\.\d+)(e[+-]?\d+)?$/;
+
+function isOptionToken(token: string): boolean {
+	return token.length > 1 && token.startsWith("-") && !NEGATIVE_NUMBER.test(token);
+}
+
 export function validateLoudnessToolArgs(args: ReadonlyArray<string>): string | undefined {
 	const command = args[0];
 
@@ -26,6 +46,14 @@ export function validateLoudnessToolArgs(args: ReadonlyArray<string>): string | 
 	if (owned !== undefined) {
 		return `args must not contain "${owned}", because the node owns loudness-tool's stdin, stdout, stream formats and scratch directory`;
 	}
+
+	const valueless = args.find((token, index) => {
+		const next = args[index + 1];
+
+		return VALUE_OPTIONS.has(token) && (next === undefined || isOptionToken(next));
+	});
+
+	if (valueless !== undefined) return `args must give "${valueless}" a value`;
 
 	return undefined;
 }

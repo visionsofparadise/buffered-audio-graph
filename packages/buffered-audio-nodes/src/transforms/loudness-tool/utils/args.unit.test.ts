@@ -72,4 +72,22 @@ describe("validateLoudnessToolArgs", () => {
 			`args must not contain "${token}", because the node owns loudness-tool's stdin, stdout, stream formats and scratch directory`,
 		);
 	});
+
+	it.each([
+		[["lufs-norm", "--lufs"], "--lufs"],
+		[["tp-norm", "--tp"], "--tp"],
+		[["crest", "--oversampling"], "--oversampling"],
+		[["target", "--lufs", "--tp", "-1"], "--lufs"],
+		[["target", "--tp", "-1", "--limit-db", "--never-expand"], "--limit-db"],
+	])("rejects %j, whose %s has no value", (args, option) => {
+		expect(validateLoudnessToolArgs(args)).toBe(`args must give "${option}" a value`);
+	});
+
+	it.each([
+		["target", "--lufs", "-23", "--tp", "-1.5"],
+		["target", "--lufs", "-16", "--floor", "-.5"],
+		["target", "--tp", "-1", "--limit-db", "-3e0"],
+	])("accepts negative numbers as values: %j", (...args) => {
+		expect(validateLoudnessToolArgs(args)).toBeUndefined();
+	});
 });
