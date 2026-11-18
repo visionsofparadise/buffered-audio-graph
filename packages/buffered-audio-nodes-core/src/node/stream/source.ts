@@ -27,7 +27,7 @@ export abstract class BufferedSourceStream<
 
 	abstract _read(): Promise<Block | undefined>;
 
-	setup(context: StreamSetupContext): Promise<ReadableStream<Block>> {
+	async setup(context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.recordRenderSignal(context);
 		this.throwIfStopped();
 

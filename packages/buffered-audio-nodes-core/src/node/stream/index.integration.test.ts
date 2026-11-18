@@ -240,6 +240,19 @@ describe("source stream-scoped destroy", () => {
 		expect(stream.destroyCount).toBe(1);
 	});
 
+	it("returns a rejected promise from setup() once destroyed", async () => {
+		const stream = new CountingSourceStream([createBlock(1, 0, 100)]);
+
+		await stream.destroy();
+
+		let setup: Promise<unknown> | undefined;
+
+		expect(() => {
+			setup = stream.setup(createTestSetupContext());
+		}).not.toThrow();
+		await expect(setup).rejects.toMatchObject({ name: "AbortError" });
+	});
+
 	it("consumer cancel invokes destroy once", async () => {
 		const stream = new CountingSourceStream([createBlock(1, 0, 100), createBlock(2, 100, 100)]);
 		const reader = (await stream._setup(createTestSetupContext())).getReader();
