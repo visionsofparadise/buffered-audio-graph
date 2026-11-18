@@ -17,23 +17,27 @@ const BLOCK_FRAMES = 4096;
 
 const describeIfFixtures =
 	hasBinaryFixtures("loudnessTool") && hasAudioFixtures("testVoice") ? describe : describe.skip;
+const describeIfBinary = hasBinaryFixtures("loudnessTool") ? describe : describe.skip;
+
+function stereoBlocks(left: Float32Array, right: Float32Array, sampleRate: number): Array<Block> {
+	const blocks: Array<Block> = [];
+
+	for (let offset = 0; offset < left.length; offset += BLOCK_FRAMES) {
+		const end = Math.min(offset + BLOCK_FRAMES, left.length);
+
+		blocks.push(blockFromSamples([left.slice(offset, end), right.slice(offset, end)], offset, { sampleRate }));
+	}
+
+	return blocks;
+}
 
 async function stereoVoiceBlocks(): Promise<{ readonly blocks: Array<Block>; readonly sampleRate: number }> {
-	const { samples, sampleRate, durationFrames } = await readWavSamples(audio.testVoice);
+	const { samples, sampleRate } = await readWavSamples(audio.testVoice);
 	const voice = samples[0];
 
 	if (!voice) throw new Error("test voice has no channel");
 
-	const quieter = voice.map((sample) => sample * 0.5);
-	const blocks: Array<Block> = [];
-
-	for (let offset = 0; offset < durationFrames; offset += BLOCK_FRAMES) {
-		const end = Math.min(offset + BLOCK_FRAMES, durationFrames);
-
-		blocks.push(blockFromSamples([voice.slice(offset, end), quieter.slice(offset, end)], offset, { sampleRate }));
-	}
-
-	return { blocks, sampleRate };
+	return { blocks: stereoBlocks(voice, voice.map((sample) => sample * 0.5), sampleRate), sampleRate };
 }
 
 async function run(
@@ -100,5 +104,26 @@ describeIfFixtures("LoudnessToolStream against the loudness-tool binary", () => 
 		const { blocks, sampleRate } = await stereoVoiceBlocks();
 
 		await expect(run(bypassed, blocks, sampleRate)).rejects.toThrow('Not a WAV stream (first bytes "0.1.")');
+	}, 60_000);
+});
+
+describeIfBinary("LoudnessToolStream through loudness-tool's pass-through path", () => {
+	const sampleRate = 48000;
+	const frames = sampleRate * 3;
+	const left = new Float32Array(frames).map((_, index) => Math.sin(index * 0.01) * 1e-5);
+	const right = new Float32Array(frames).map((_, index) => Math.sin(index * 0.013) * 1e-5);
+
+	it.each([
+		["lufs-norm", "--lufs", "-23"],
+		["target", "--lufs", "-16"],
+	])("returns -100 dBFS input bit-exact from %s, which has no loudness to measure", async (...args) => {
+		const input = stereoBlocks(left, right, sampleRate);
+		const { output, contextSampleRate } = await run(args, input, sampleRate);
+
+		expect(frameCount(output)).toBe(frames);
+		expect(contextSampleRate).toBe(sampleRate);
+		expect(output.every((block) => block.sampleRate === sampleRate && block.samples.length === 2)).toBe(true);
+		expect(channelSamples(output, 0)).toEqual(left);
+		expect(channelSamples(output, 1)).toEqual(right);
 	}, 60_000);
 });
