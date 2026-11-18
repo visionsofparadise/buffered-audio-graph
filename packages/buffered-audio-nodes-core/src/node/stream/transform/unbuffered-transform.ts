@@ -10,6 +10,7 @@ export abstract class UnbufferedTransformStream<
 	protected async *blocks(input: ReadableStream<Block>): AsyncGenerator<Block> {
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
+		let failed = false;
 
 		try {
 			for await (const block of this.readInput(input)) {
@@ -40,8 +41,12 @@ export abstract class UnbufferedTransformStream<
 			if (this.stopRequested()) return;
 
 			this.emitCompletion();
+		} catch (error) {
+			failed = true;
+
+			throw error;
 		} finally {
-			await this.finishPipeline();
+			await this.finishPipeline(failed);
 		}
 	}
 

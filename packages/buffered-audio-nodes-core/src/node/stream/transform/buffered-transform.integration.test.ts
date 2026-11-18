@@ -9,7 +9,7 @@ import { drainBlocks, readableFrom } from "../../../testing/streams";
 import type { ProgressPayload, RenderEvents } from "..";
 import type { Block } from "../block";
 import { BufferedTransformStream, WHOLE_FILE } from "./buffered-transform";
-import type { BlockBuffer } from "./utils/block-buffer";
+import { BlockBuffer } from "./utils/block-buffer";
 
 function nodeWith(properties: Record<string, unknown>): BufferedAudioNode {
 	return { properties, constructor: { nodeName: "probe-transform" } } as unknown as BufferedAudioNode;
@@ -316,6 +316,45 @@ describe("BufferedTransformStream cancellation", () => {
 		expect(stream.firings).toBe(1);
 		expect(stream.flushCalls).toBe(0);
 		expect(finished).not.toHaveBeenCalled();
+	});
+});
+
+describe("BufferedTransformStream concurrent destroy", () => {
+	it("resolves every concurrent destroy() only after the buffer has closed", async () => {
+		const close = BlockBuffer.prototype.close;
+		let closed = false;
+
+		vi.spyOn(BlockBuffer.prototype, "close").mockImplementation(async function (this: BlockBuffer) {
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			await close.call(this);
+			closed = true;
+		});
+
+		try {
+			const { context } = createTestStreamContext();
+			const stream = new IdentityTransformStream(nodeWith({ blockSize: WHOLE_FILE }), context);
+			const input = new ReadableStream<Block>({
+				start: (controller) => controller.enqueue(createBlock(1, 0, 10)),
+			});
+			const output = await stream.setup(input, createTestSetupContext());
+
+			output
+				.getReader()
+				.read()
+				.catch(() => undefined);
+			await new Promise((resolve) => setTimeout(resolve, 20));
+
+			const seen: Array<boolean> = [];
+
+			await Promise.all([
+				stream.destroy().then(() => seen.push(closed)),
+				stream.destroy().then(() => seen.push(closed)),
+			]);
+
+			expect(seen).toEqual([true, true]);
+		} finally {
+			vi.restoreAllMocks();
+		}
 	});
 });
 

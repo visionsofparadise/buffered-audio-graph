@@ -200,7 +200,7 @@ export class RenderJob {
 					try {
 						await stream.destroy();
 					} catch (error) {
-						errors.push(error);
+						if (!errors.includes(error)) errors.push(error);
 					}
 				}
 			}

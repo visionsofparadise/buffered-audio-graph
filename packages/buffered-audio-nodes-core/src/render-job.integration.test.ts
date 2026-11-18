@@ -900,6 +900,45 @@ describe("RenderJob execution", () => {
 		]);
 	});
 
+	it("reports a transform's own error first and its _destroy error once", async () => {
+		class FailingTransformStream extends UnbufferedTransformStream {
+			override _transform(): Iterable<Block> {
+				throw new Error("transform failed");
+			}
+
+			override _destroy(): void {
+				throw new Error("destroy failed");
+			}
+		}
+
+		class FailingTransform extends TransformNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "failing-transform";
+			static override readonly schema = z.object({});
+			static override readonly Stream = FailingTransformStream;
+		}
+
+		const source = new MockSource([createBlock(1, 0, 100), createBlock(2, 100, 100)]);
+		const transform = new FailingTransform();
+
+		source.to(transform);
+		transform.to(new MockTarget());
+
+		const error = await source
+			.createRenderJob()
+			.render()
+			.then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+
+		expect(error).toBeInstanceOf(AggregateError);
+		expect((error as AggregateError).errors.map((entry: Error) => entry.message)).toEqual([
+			"transform failed",
+			"destroy failed",
+		]);
+	});
+
 	it("waits for every fan-out branch to settle before tearing down after an abort", async () => {
 		const log: Array<string> = [];
 		const slow = createSlowTransform(log, 500);

@@ -50,10 +50,16 @@ export abstract class InstrumentedTransformStream<
 		await this.pipeline.return(undefined);
 	}
 
-	protected async finishPipeline(): Promise<void> {
+	protected async finishPipeline(failed: boolean): Promise<void> {
 		this.pipelineFinishing = true;
 
-		if (!this.isDestroyed) await this.destroy();
+		if (this.isDestroyed) return;
+
+		try {
+			await this.destroy();
+		} catch (error) {
+			if (!failed) throw error;
+		}
 	}
 
 	protected async *readInput(input: ReadableStream<Block>): AsyncGenerator<Block> {

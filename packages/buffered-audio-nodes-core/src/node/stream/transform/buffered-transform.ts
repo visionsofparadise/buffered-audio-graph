@@ -20,6 +20,7 @@ export abstract class BufferedTransformStream<
 	blockSize: number;
 
 	private buffer?: BlockBuffer;
+	private bufferedTeardown?: Promise<void>;
 	private inferredChunkSize?: number;
 
 	constructor(node: N, context: StreamContext) {
@@ -53,6 +54,7 @@ export abstract class BufferedTransformStream<
 		const buffer = (this.buffer ??= new BlockBuffer(this.temporaryDirectory));
 		const bufferGate = createProgressGate(this.sourceTotalFrames);
 		const emitGate = createProgressGate(this.sourceTotalFrames);
+		let failed = false;
 
 		try {
 			for await (const block of this.readInput(input)) {
@@ -104,8 +106,12 @@ export abstract class BufferedTransformStream<
 			if (this.stopRequested()) return;
 
 			this.emitCompletion();
+		} catch (error) {
+			failed = true;
+
+			throw error;
 		} finally {
-			await this.finishPipeline();
+			await this.finishPipeline(failed);
 		}
 	}
 
@@ -154,7 +160,13 @@ export abstract class BufferedTransformStream<
 		}
 	}
 
-	override async destroy(): Promise<void> {
+	override destroy(): Promise<void> {
+		this.bufferedTeardown ??= this.destroyAndCloseBuffer();
+
+		return this.bufferedTeardown;
+	}
+
+	private async destroyAndCloseBuffer(): Promise<void> {
 		try {
 			await super.destroy();
 		} finally {
