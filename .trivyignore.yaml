@@ -1,1 +1,6 @@
-vulnerabilities: []
+vulnerabilities:
+   - id: CVE-2026-118764
+     purls:
+        - pkg:npm/minimatch@10.2.6
+     statement: "Two copies remain at 10.2.6. aws-cdk-lib bundles one, which no override reaches, inside the deploy-only service app. @tufjs/models pins the other through pacote's sigstore verification, and npm dedupes an override of it to the root minimatch 3.1.5. Both match patterns from trusted inputs (the app's own CDK code and signed TUF metadata). The desktop package system that uses pacote is due for removal."
+     expired_at: 2027-02-19
