@@ -34,7 +34,7 @@
 		"vitest": "^3.0.0"
 	},
 	"dependencies": {
-		"@buffered-audio/core": "0.13.0",
+		"@buffered-audio/core": "0.14.0",
 		"commander": "^14.0.3",
 		"pacote": "^22.0.0",
 		"tsx": "^4.21.0"
