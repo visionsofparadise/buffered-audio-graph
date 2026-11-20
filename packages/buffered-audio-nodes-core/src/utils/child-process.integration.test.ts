@@ -2,7 +2,7 @@ import { once } from "node:events";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import {
 	boundAfterExit,
 	childFailure,
@@ -26,6 +26,23 @@ afterAll(async () => {
 	await Promise.all(
 		directories.map((directory) => rm(directory, { recursive: true, force: true }).catch(() => undefined)),
 	);
+});
+
+// Pid files of children that ignore SIGTERM and never exit on their own; any still running after a test is killed.
+const survivorPidFiles: Array<string> = [];
+
+afterEach(async () => {
+	for (const pidFile of survivorPidFiles.splice(0)) {
+		const pid = Number(await readFile(pidFile, "utf8").catch(() => ""));
+
+		if (!pid) continue;
+
+		try {
+			process.kill(pid, "SIGKILL");
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+		}
+	}
 });
 
 async function temporaryDirectory(): Promise<string> {
@@ -274,6 +291,9 @@ describe("runChild", () => {
 
 	it.skipIf(isWindows)("kills a child that ignores SIGTERM at once when aborted", async () => {
 		const pidFile = join(await temporaryDirectory(), "pid");
+
+		survivorPidFiles.push(pidFile);
+
 		const script = `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(process.argv[1], String(process.pid)); setInterval(() => undefined, 1000)`;
 		const controller = new AbortController();
 		const running = settleOrNull(
