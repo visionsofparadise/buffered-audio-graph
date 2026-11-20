@@ -178,7 +178,7 @@ describe("VST host settlement", () => {
 		controller.abort();
 
 		await expect(
-			processStreamingThroughVstHost(handle, buffer, {
+			processStreamingThroughVstHost(handle, buffer, {} as BlockBuffer, {
 				channelCount: 1,
 				sampleRate: 48_000,
 				signal: controller.signal,
@@ -204,9 +204,10 @@ describe("VST host settlement", () => {
 		});
 		const write = vi.fn().mockRejectedValue(outputFailure);
 		const flushWrites = vi.fn();
-		const buffer = { frames: 1, reset, read, write, flushWrites } as unknown as BlockBuffer;
+		const input = { frames: 1, reset, read } as unknown as BlockBuffer;
+		const output = { write, flushWrites } as unknown as BlockBuffer;
 
-		const processing = processStreamingThroughVstHost(handle, buffer, {
+		const processing = processStreamingThroughVstHost(handle, input, output, {
 			channelCount: 1,
 			sampleRate: 48_000,
 			signal: controller.signal,
@@ -223,6 +224,53 @@ describe("VST host settlement", () => {
 		expect(proc.stdout.listenerCount("data")).toBe(0);
 		expect(proc.stdout.listenerCount("end")).toBe(0);
 		expect(flushWrites).not.toHaveBeenCalled();
+	});
+
+	it("keeps the READY chunk's tail and the output buffered in paused stdout, in order", async () => {
+		const frames = 2048;
+		const directory = await mkdtemp(join(tmpdir(), "vst3-paused-"));
+		const input = new BlockBuffer(directory);
+		const output = new BlockBuffer(directory);
+		const ramp = Float32Array.from({ length: frames }, (_, index) => index / frames);
+		const hostOutput = Buffer.from(ramp.buffer);
+		const proc = createFakeChildProcess();
+
+		try {
+			await input.write([new Float32Array(frames)], 48_000, 32);
+			await input.flushWrites();
+
+			mockSpawn(proc);
+
+			const ready = spawnVstHostReady("vst-host", []);
+
+			proc.stdout.write(Buffer.concat([Buffer.from("READY\n"), hostOutput.subarray(0, 4)]));
+
+			const handle = await ready;
+
+			expect(proc.stdout.isPaused()).toBe(true);
+			expect(handle.readyTail()).toEqual(hostOutput.subarray(0, 4));
+
+			proc.stdout.write(hostOutput.subarray(4));
+			proc.stdout.end();
+			proc.exit(0, null);
+
+			const processing = processStreamingThroughVstHost(handle, input, output, {
+				channelCount: 1,
+				sampleRate: 48_000,
+				bitDepth: 32,
+			});
+
+			await processing;
+			await output.reset();
+
+			const result = await output.read(frames);
+
+			expect(result.samples[0]).toEqual(ramp);
+		} finally {
+			await input.close();
+			await output.close();
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 });
 
@@ -278,6 +326,7 @@ describe("vst-host stdout held after a clean exit", () => {
 		readonly outcome: Promise<unknown>;
 		readonly host: VstHostHandle;
 		readonly buffer: BlockBuffer;
+		readonly output: BlockBuffer;
 		readonly input: Float32Array;
 		readonly startedAt: number;
 		readonly writtenFrames: () => number;
@@ -305,16 +354,17 @@ describe("vst-host stdout held after a clean exit", () => {
 			directory,
 			...flags,
 		]);
-		const write = buffer.write.bind(buffer);
+		const output = new BlockBuffer(directory);
+		const write = output.write.bind(output);
 		let writtenFrames = 0;
 
-		vi.spyOn(buffer, "write").mockImplementation(async (samples, sampleRate, bitDepth) => {
+		vi.spyOn(output, "write").mockImplementation(async (samples, sampleRate, bitDepth) => {
 			writtenFrames += samples[0]?.length ?? 0;
 			await write(samples, sampleRate, bitDepth);
 		});
 
 		const startedAt = performance.now();
-		const outcome = processStreamingThroughVstHost(host, buffer, {
+		const outcome = processStreamingThroughVstHost(host, buffer, output, {
 			channelCount: 1,
 			sampleRate: 48_000,
 			bitDepth: 32,
@@ -324,12 +374,13 @@ describe("vst-host stdout held after a clean exit", () => {
 			(error: unknown) => error,
 		);
 
-		return { outcome, host, buffer, input, startedAt, writtenFrames: () => writtenFrames };
+		return { outcome, host, buffer, output, input, startedAt, writtenFrames: () => writtenFrames };
 	}
 
 	async function finish(pass: HeldPass): Promise<void> {
 		await terminateVstHost(pass.host);
 		await pass.buffer.close();
+		await pass.output.close();
 	}
 
 	it("keeps exactly complete output and reports the held stdout", async () => {
@@ -341,8 +392,8 @@ describe("vst-host stdout held after a clean exit", () => {
 			expect(onOutputHeld).toHaveBeenCalledOnce();
 			expect(onOutputHeld.mock.calls[0]?.[0]).toBeInstanceOf(ChildOutputHeldError);
 
-			await pass.buffer.reset();
-			const result = await pass.buffer.read(FRAMES);
+			await pass.output.reset();
+			const result = await pass.output.read(FRAMES);
 
 			expect(result.samples[0]).toEqual(pass.input);
 		} finally {

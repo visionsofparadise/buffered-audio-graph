@@ -29,6 +29,7 @@ interface VstHostTransferProgress {
 export interface VstHostHandle {
 	readonly handle: ChildHandle;
 	readonly ready: Promise<void>;
+	readonly readyTail: () => Buffer;
 }
 
 export interface VstStage {
@@ -54,7 +55,11 @@ export class VstHostExitedBeforeReadyError extends Error {
 	}
 }
 
-function readyLine(host: Pick<VstHostHandle, "handle">, stdout: Readable): Promise<void> {
+function readyLine(
+	host: Pick<VstHostHandle, "handle">,
+	stdout: Readable,
+	onTail: (tail: Buffer) => void,
+): Promise<void> {
 	return new Promise<void>((resolve, reject) => {
 		const seen: Array<Buffer> = [];
 		let settled = false;
@@ -74,15 +79,8 @@ function readyLine(host: Pick<VstHostHandle, "handle">, stdout: Readable): Promi
 			if (readyIndex === -1) return;
 
 			cleanup();
-
-			const tail = combined.subarray(readyIndex + READY_LINE.length);
-
-			if (tail.length > 0) {
-				queueMicrotask(() => {
-					stdout.emit("data", tail);
-				});
-			}
-
+			stdout.pause();
+			onTail(Buffer.from(combined.subarray(readyIndex + READY_LINE.length)));
 			resolve();
 		};
 
@@ -117,11 +115,14 @@ function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostH
 		throw new Error("Failed to create vst-host stdio streams");
 	}
 
-	const ready = readyLine({ handle }, handle.stdout);
+	let tail: Buffer = Buffer.alloc(0);
+	const ready = readyLine({ handle }, handle.stdout, (bytes) => {
+		tail = bytes;
+	});
 
 	ready.catch(() => undefined);
 
-	return { handle, ready };
+	return { handle, ready, readyTail: () => tail };
 }
 
 export async function terminateVstHost(host: VstHostHandle): Promise<void> {
@@ -259,19 +260,25 @@ export interface ProcessVstHostOptions {
 
 export async function processStreamingThroughVstHost(
 	host: VstHostHandle,
-	buffer: BlockBuffer,
+	input: BlockBuffer,
+	output: BlockBuffer,
 	options: ProcessVstHostOptions,
 ): Promise<void> {
 	const { channelCount, sampleRate, bitDepth, signal, onInputProgress, onOutputProgress, onOutputHeld } = options;
 	const { handle } = host;
 	const { child, stdin, stdout } = handle;
-	const inputFrames = buffer.frames;
-	const expectedOutputBytes = inputFrames * channelCount * 4;
-	let inputFramesDone = 0;
-	let onData: ((chunk: Buffer) => void) | undefined;
-	let onStdoutEnd: (() => void) | undefined;
 
 	if (!stdin || !stdout) throw new Error("vst-host has no stdio streams");
+
+	const inputFrames = input.frames;
+	const bytesPerFrame = channelCount * 4;
+	const expectedOutputBytes = inputFrames * bytesPerFrame;
+	let inputFramesDone = 0;
+	let outputBytesReceived = 0;
+	let outputFramesDone = 0;
+	let stdoutTail: Buffer = Buffer.alloc(0);
+	let stdoutError: Error | undefined;
+	let writeChain: Promise<void> = Promise.resolve();
 
 	const onAbort = (): void => {
 		if (child.exitCode !== null || child.signalCode !== null) return;
@@ -290,16 +297,57 @@ export async function processStreamingThroughVstHost(
 
 	signal?.addEventListener("abort", onAbort, { once: true });
 
+	const collect = (chunk: Buffer): void => {
+		if (stdoutError !== undefined || chunk.length === 0) return;
+
+		outputBytesReceived += chunk.length;
+
+		const combined = stdoutTail.length === 0 ? chunk : Buffer.concat([stdoutTail, chunk]);
+		const alignedFrames = Math.floor(combined.length / bytesPerFrame);
+		const alignedBytes = alignedFrames * bytesPerFrame;
+
+		if (alignedFrames === 0) {
+			stdoutTail = combined;
+
+			return;
+		}
+
+		const aligned = combined.subarray(0, alignedBytes);
+
+		stdoutTail = combined.length === alignedBytes ? Buffer.alloc(0) : combined.subarray(alignedBytes);
+
+		const channels = deinterleaveBuffer(aligned, channelCount);
+
+		writeChain = writeChain
+			.then(async () => {
+				await output.write(channels, sampleRate, bitDepth);
+				outputFramesDone = Math.min(inputFrames, outputFramesDone + alignedFrames);
+				onOutputProgress?.({
+					framesDone: outputFramesDone,
+					framesTotal: inputFrames,
+					bytesDone: outputFramesDone * bytesPerFrame,
+					bytesTotal: expectedOutputBytes,
+				});
+			})
+			.catch((error: unknown) => {
+				stdoutError ??= error instanceof Error ? error : new Error(String(error));
+			});
+	};
+	let onStdoutEnd: () => void = () => undefined;
 	const stdoutEnd = new Promise<void>((resolve) => {
 		onStdoutEnd = resolve;
-		stdout.once("end", onStdoutEnd);
 	});
 
+	collect(host.readyTail());
+	stdout.on("data", collect);
+	stdout.once("end", onStdoutEnd);
+	stdout.resume();
+
 	try {
-		await buffer.reset();
+		await input.reset();
 
 		for (;;) {
-			const chunk = await buffer.read(CHUNK_FRAMES);
+			const chunk = await input.read(CHUNK_FRAMES);
 			const chunkFrames = chunk.samples[0]?.length ?? 0;
 
 			if (chunkFrames === 0) break;
@@ -322,7 +370,7 @@ export async function processStreamingThroughVstHost(
 			onInputProgress?.({
 				framesDone: inputFramesDone,
 				framesTotal: inputFrames,
-				bytesDone: inputFramesDone * channelCount * 4,
+				bytesDone: inputFramesDone * bytesPerFrame,
 				bytesTotal: expectedOutputBytes,
 			});
 
@@ -330,55 +378,6 @@ export async function processStreamingThroughVstHost(
 		}
 
 		stdin.end();
-
-		await buffer.reset();
-
-		let outputBytesReceived = 0;
-		let stdoutTail: Buffer = Buffer.alloc(0);
-		let stdoutError: Error | undefined;
-		const bytesPerFrame = channelCount * 4;
-		let outputFramesDone = 0;
-		let writeChain: Promise<void> = Promise.resolve();
-
-		const collect = (chunk: Buffer): void => {
-			if (stdoutError !== undefined) return;
-
-			outputBytesReceived += chunk.length;
-
-			const combined = stdoutTail.length === 0 ? chunk : Buffer.concat([stdoutTail, chunk]);
-			const alignedFrames = Math.floor(combined.length / bytesPerFrame);
-			const alignedBytes = alignedFrames * bytesPerFrame;
-
-			if (alignedFrames === 0) {
-				stdoutTail = combined;
-
-				return;
-			}
-
-			const aligned = combined.subarray(0, alignedBytes);
-
-			stdoutTail = combined.length === alignedBytes ? Buffer.alloc(0) : combined.subarray(alignedBytes);
-
-			const channels = deinterleaveBuffer(aligned, channelCount);
-
-			writeChain = writeChain
-				.then(async () => {
-					await buffer.write(channels, sampleRate, bitDepth);
-					outputFramesDone = Math.min(inputFrames, outputFramesDone + alignedFrames);
-					onOutputProgress?.({
-						framesDone: outputFramesDone,
-						framesTotal: inputFrames,
-						bytesDone: outputFramesDone * bytesPerFrame,
-						bytesTotal: expectedOutputBytes,
-					});
-				})
-				.catch((error: unknown) => {
-					stdoutError ??= error instanceof Error ? error : new Error(String(error));
-				});
-		};
-
-		onData = collect;
-		stdout.on("data", collect);
 
 		let held: ChildOutputHeldError | undefined;
 
@@ -390,11 +389,10 @@ export async function processStreamingThroughVstHost(
 			held = error;
 			stdout.removeListener("data", collect);
 			releaseChild(handle);
-		} finally {
-			stdout.removeListener("data", collect);
-
-			await writeChain;
 		}
+
+		stdout.removeListener("data", collect);
+		await writeChain;
 
 		const exit = await settledOrAborted(host.handle.exited, signal);
 
@@ -412,10 +410,8 @@ export async function processStreamingThroughVstHost(
 
 		if (stdinFailure) throw stdinFailure;
 
-		const complete = outputBytesReceived === expectedOutputBytes && stdoutTail.length === 0;
-
 		if (held) {
-			if (!complete) throw held;
+			if (outputBytesReceived !== expectedOutputBytes || stdoutTail.length !== 0) throw held;
 
 			onOutputHeld?.(held);
 		}
@@ -432,12 +428,13 @@ export async function processStreamingThroughVstHost(
 			);
 		}
 
-		await buffer.flushWrites();
+		await output.flushWrites();
 	} finally {
 		signal?.removeEventListener("abort", onAbort);
+		stdout.removeListener("data", collect);
 
-		if (onData) stdout.removeListener("data", onData);
+		stdout.removeListener("end", onStdoutEnd);
 
-		if (onStdoutEnd) stdout.removeListener("end", onStdoutEnd);
+		await writeChain;
 	}
 }

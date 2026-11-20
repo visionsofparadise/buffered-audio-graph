@@ -280,6 +280,7 @@ describe("Vst3Stream subprocess lifecycle", () => {
 		const channelCount = 1;
 		const samples = Float32Array.from({ length: frames }, (_, index) => Math.sin(index / 100));
 		const buffer = new BlockBuffer();
+		const output = new BlockBuffer();
 		const stagesPath = await writeStagesFile();
 		const inputProgress: Array<unknown> = [];
 		const outputProgress: Array<unknown> = [];
@@ -298,7 +299,7 @@ describe("Vst3Stream subprocess lifecycle", () => {
 				"1",
 			]);
 
-			await processStreamingThroughVstHost(handle, buffer, {
+			await processStreamingThroughVstHost(handle, buffer, output, {
 				channelCount,
 				sampleRate: 48_000,
 				bitDepth: 32,
@@ -323,12 +324,13 @@ describe("Vst3Stream subprocess lifecycle", () => {
 			);
 			expect(handle.handle.stderrTail()).not.toContain("VST_HOST_EVENT");
 
-			await buffer.reset();
-			const result = await buffer.read(frames);
+			await output.reset();
+			const result = await output.read(frames);
 
 			expect(result.samples[0]).toEqual(samples);
 		} finally {
 			await buffer.close();
+			await output.close();
 		}
 	}, 30_000);
 

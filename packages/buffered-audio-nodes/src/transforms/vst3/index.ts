@@ -1,11 +1,11 @@
 import {
+	BlockBuffer,
 	BufferedTransformStream,
 	createProgressGate,
 	UnbufferedTransformStream,
 	TransformNode,
 	WHOLE_FILE,
 	type Block,
-	type BlockBuffer,
 	type StreamSetupContext,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
@@ -141,51 +141,57 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 						},
 					);
 
+		const output = new BlockBuffer(this.streamContext.temporaryDirectory);
+
 		try {
-			await processStreamingThroughVstHost(handle, buffered, {
-				channelCount: channels,
-				sampleRate,
-				bitDepth: bd,
-				signal: this.streamSignal,
-				onInputProgress: (progress) => {
-					if (inputGate(progress.framesDone, Date.now())) {
-						this.log("vst-host input", {
-							framesDone: progress.framesDone,
-							framesTotal: progress.framesTotal,
-							bytesDone: progress.bytesDone,
-							bytesTotal: progress.bytesTotal,
-						});
-					}
-				},
-				onOutputProgress: (progress) => {
-					if (outputGate(progress.framesDone, Date.now())) {
-						this.log("vst-host output", {
-							framesDone: progress.framesDone,
-							framesTotal: progress.framesTotal,
-							bytesDone: progress.bytesDone,
-							bytesTotal: progress.bytesTotal,
-						});
-					}
-				},
-				onOutputHeld: (error) => {
-					this.log("vst-host stdout stayed open after exit", { error: error.message }, "warn");
-				},
-			});
-		} finally {
 			try {
-				await stopMonitor?.();
+				await processStreamingThroughVstHost(handle, buffered, output, {
+					channelCount: channels,
+					sampleRate,
+					bitDepth: bd,
+					signal: this.streamSignal,
+					onInputProgress: (progress) => {
+						if (inputGate(progress.framesDone, Date.now())) {
+							this.log("vst-host input", {
+								framesDone: progress.framesDone,
+								framesTotal: progress.framesTotal,
+								bytesDone: progress.bytesDone,
+								bytesTotal: progress.bytesTotal,
+							});
+						}
+					},
+					onOutputProgress: (progress) => {
+						if (outputGate(progress.framesDone, Date.now())) {
+							this.log("vst-host output", {
+								framesDone: progress.framesDone,
+								framesTotal: progress.framesTotal,
+								bytesDone: progress.bytesDone,
+								bytesTotal: progress.bytesTotal,
+							});
+						}
+					},
+					onOutputHeld: (error) => {
+						this.log("vst-host stdout stayed open after exit", { error: error.message }, "warn");
+					},
+				});
 			} finally {
 				try {
-					await terminateVstHost(handle);
+					await stopMonitor?.();
 				} finally {
-					if (this.activeHost === handle) this.activeHost = undefined;
+					try {
+						await terminateVstHost(handle);
+					} finally {
+						if (this.activeHost === handle) this.activeHost = undefined;
+					}
 				}
 			}
+
+			await output.reset();
+
+			yield* output.iterate(44100);
+		} finally {
+			await output.close();
 		}
-
-		await buffered.reset();
-
-		yield* buffered.iterate(44100);
 	}
 
 	override async _destroy(): Promise<void> {

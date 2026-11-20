@@ -128,6 +128,7 @@ describe("Vst3PassthroughStream", () => {
 
 const stubBinary = fileURLToPath(new URL("./__fixtures__/stub-binary.mjs", import.meta.url));
 const teardownStub = fileURLToPath(new URL("./__fixtures__/teardown-stub.mjs", import.meta.url));
+const crashBinary = fileURLToPath(new URL("./__fixtures__/crash-then-ready.mjs", import.meta.url));
 
 const delay = (milliseconds: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -306,7 +307,8 @@ describe("processStreamingThroughVstHost settling", () => {
 		});
 
 		const controller = new AbortController();
-		const processing = processStreamingThroughVstHost(handle, buffer, {
+		const output = new BlockBuffer(temporaryDirectory);
+		const processing = processStreamingThroughVstHost(handle, buffer, output, {
 			channelCount: 1,
 			sampleRate: 48_000,
 			bitDepth: 32,
@@ -326,6 +328,7 @@ describe("processStreamingThroughVstHost settling", () => {
 		} finally {
 			handle.handle.child.kill();
 			await buffer.close();
+			await output.close();
 		}
 	}
 
@@ -431,11 +434,12 @@ describe("processStreamingThroughVstHost output writes", () => {
 			"1",
 		]);
 		const controller = new AbortController();
-		const write = buffer.write.bind(buffer);
+		const output = new BlockBuffer(temporaryDirectory);
+		const write = output.write.bind(output);
 		const log: Array<string> = [];
 
 		// A slow output buffer: each write takes 100 ms, and the first one aborts the pass.
-		vi.spyOn(buffer, "write").mockImplementation(async (...args) => {
+		vi.spyOn(output, "write").mockImplementation(async (...args) => {
 			log.push("write starts");
 			controller.abort();
 			await delay(100);
@@ -444,7 +448,7 @@ describe("processStreamingThroughVstHost output writes", () => {
 		});
 
 		try {
-			await processStreamingThroughVstHost(handle, buffer, {
+			await processStreamingThroughVstHost(handle, buffer, output, {
 				channelCount: 1,
 				sampleRate: 48_000,
 				bitDepth: 32,
@@ -459,6 +463,7 @@ describe("processStreamingThroughVstHost output writes", () => {
 		} finally {
 			handle.handle.child.kill();
 			await buffer.close();
+			await output.close();
 			await rm(temporaryDirectory, { recursive: true, force: true });
 		}
 	}, 30_000);
@@ -555,6 +560,79 @@ describe("vst-host teardown and readiness", () => {
 			run.controller.abort();
 			await settleWithin(run.render, "render cleanup", 15_000).catch(() => undefined);
 			await rm(run.directory, { recursive: true, force: true });
+		}
+	}, 30_000);
+});
+
+describe("Vst3Stream host output", () => {
+	async function renderFrames(stream: Vst3Stream, samples: Array<Float32Array>): Promise<Array<Float32Array>> {
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "vst3-output-"));
+
+		try {
+			const output = await stream.setup(
+				readableFrom([{ samples, offset: 0, sampleRate: 48_000, bitDepth: 32 }]),
+				createTestSetupContext({ temporaryDirectory, sampleRate: 48_000, highWaterMark: 1 }),
+			);
+			const blocks = await drainBlocks(output);
+
+			return samples.map((_, channel) => {
+				const frames = blocks.reduce((total, block) => total + (block.samples[channel]?.length ?? 0), 0);
+				const joined = new Float32Array(frames);
+				let offset = 0;
+
+				for (const block of blocks) {
+					const part = block.samples[channel] ?? new Float32Array(0);
+
+					joined.set(part, offset);
+					offset += part.length;
+				}
+
+				return joined;
+			});
+		} finally {
+			await stream.destroy().catch(() => undefined);
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	}
+
+	it("keeps every frame of 30 s of stereo the host echoes while its input is still being written", async () => {
+		const frames = 30 * 48_000;
+		const samples = [0, 1].map((channel) =>
+			Float32Array.from({ length: frames }, (_, index) => Math.sin(index / (100 + channel))),
+		);
+		const stream = new Vst3Stream(
+			vst3({
+				vstHostPath: process.execPath,
+				stages: [{ pluginPath: "/ignored-by-stub.vst3" }],
+				extraArgs: [stubBinary],
+			}),
+			createTestStreamContext().context,
+		);
+
+		const output = await renderFrames(stream, samples);
+
+		expect(output.map((channel) => channel.length)).toEqual([1_440_000, 1_440_000]);
+	}, 60_000);
+
+	it("keeps output that arrives in the READY chunk after an init-crash retry", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "vst3-ready-output-"));
+		const counter = join(directory, "count");
+		const stream = new Vst3Stream(
+			vst3({
+				vstHostPath: process.execPath,
+				stages: [{ pluginPath: "/ignored-by-stub.vst3" }],
+				extraArgs: [crashBinary, "--crash-file", counter, "--crash-count", "1", "--ready-output-frames", "2048"],
+			}),
+			createTestStreamContext().context,
+		);
+
+		try {
+			const output = await renderFrames(stream, [new Float32Array(2048)]);
+
+			expect(output).toEqual([new Float32Array(2048)]);
+			expect(Number.parseInt(await readFile(counter, "utf8"), 10)).toBe(2);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
 		}
 	}, 30_000);
 });

@@ -5,6 +5,8 @@
 //   --crash-file <path>   counter file; incremented once per spawn (required)
 //   --crash-count <n>     crash on spawns 1..n (default 0 = never crash)
 //   --crash-code <code>   exit code used for the crash (default 3221225477)
+//   --ready-output-frames <n>  write READY and n frames of zero float32 output in one write, then read
+//                              stdin to its end, discard it and exit 0 (default 0 = echo stdin)
 
 import { readFileSync, writeFileSync } from "node:fs";
 import process from "node:process";
@@ -22,6 +24,7 @@ function readArg(name, fallback) {
 const crashFile = readArg("--crash-file", null);
 const crashCount = Number.parseInt(readArg("--crash-count", "0"), 10);
 const crashCode = Number.parseInt(readArg("--crash-code", "3221225477"), 10);
+const readyOutputFrames = Number.parseInt(readArg("--ready-output-frames", "0"), 10);
 
 if (!crashFile) {
 	process.stderr.write("crash-then-ready: missing --crash-file\n");
@@ -77,11 +80,16 @@ try {
 	process.exit(2);
 }
 
-process.stdout.write("READY\n");
-
-process.stdin.on("data", (chunk) => {
-	process.stdout.write(chunk);
-});
+if (readyOutputFrames > 0) {
+	// READY and the whole output in one write, before any input arrives; the input is read and discarded.
+	process.stdout.write(Buffer.concat([Buffer.from("READY\n"), Buffer.alloc(readyOutputFrames * channels * 4)]));
+	process.stdin.resume();
+} else {
+	process.stdout.write("READY\n");
+	process.stdin.on("data", (chunk) => {
+		process.stdout.write(chunk);
+	});
+}
 
 process.stdin.on("end", () => {
 	process.stdout.end();
