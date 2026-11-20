@@ -538,15 +538,11 @@ describe("vst-host teardown and readiness", () => {
 		}
 	}
 
-	it.skipIf(process.platform !== "win32")(
-		"settles an aborted render within 4 s while a grandchild holds the host's pipes",
-		async () => {
-			const { elapsed } = await abortAfterReady("hold-stdio-after-ready");
+	it("settles an aborted render within 4 s while a grandchild holds the host's pipes", async () => {
+		const { elapsed } = await abortAfterReady("hold-stdio-after-ready");
 
-			expect(elapsed).toBeLessThan(4_000);
-		},
-		30_000,
-	);
+		expect(elapsed).toBeLessThan(4_000);
+	}, 30_000);
 
 	it.skipIf(process.platform === "win32")(
 		"settles an aborted render within 4 s and ends a host that ignores SIGTERM",
