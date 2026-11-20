@@ -1503,6 +1503,47 @@ class PacedTarget extends TargetNode<PacedTargetProperties> {
 	}
 }
 
+class LateAdoptingStream extends UnbufferedTransformStream<LateAdoptingNode> {
+	private readonly streamContext: StreamContext;
+	private setupContext?: StreamSetupContext;
+	private adopted = false;
+
+	constructor(node: LateAdoptingNode, context: StreamContext) {
+		super(node, context);
+		this.streamContext = context;
+	}
+
+	override _setup(context: StreamSetupContext): void {
+		this.setupContext = context;
+	}
+
+	override async *_transform(block: Block): AsyncGenerator<Block> {
+		if (!this.adopted && this.setupContext) {
+			this.adopted = true;
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			const inner = new InnerStream(new InnerNode({ id: "late" }), this.streamContext);
+
+			inner.compositeLog = this.properties.compositeLog;
+			inner._setup(this.setupContext);
+			this.setupContext.adoptStream?.(inner);
+		}
+
+		yield block;
+	}
+}
+
+class LateAdoptingNode extends TransformNode<CompositeNodeProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "late-adopting";
+	static override readonly schema = z.object({});
+	static override readonly Stream = LateAdoptingStream;
+
+	constructor(compositeLog: CompositeLog) {
+		super({ compositeLog });
+	}
+}
+
 type CompositeBase = "unbuffered" | "buffered";
 
 interface CompositeCase {
@@ -1593,6 +1634,24 @@ describe("RenderJob composite inner streams", () => {
 		expect((outcome.reason as AggregateError).errors.map((entry: Error) => entry.message)).toEqual(
 			expect.arrayContaining(["write failed", "inner destroy failed"]),
 		);
+	});
+
+	it("destroys a stream adopted while the render's teardown is under way before render settles", async () => {
+		const compositeLog: CompositeLog = { entries: [] };
+		const source = new MockSource(Array.from({ length: 50 }, (_, index) => createBlock(index, index * 100, 100)));
+		const adopting = new LateAdoptingNode(compositeLog);
+
+		source.to(adopting);
+		adopting.to(new PacedTarget(10));
+		adopting.to(new PacedTarget(10));
+
+		const job = source.createRenderJob({ highWaterMark: 1 });
+
+		setTimeout(() => job.abort(), 30);
+		await job.render().catch(() => undefined);
+		compositeLog.entries.push("render settled");
+
+		expect(compositeLog.entries).toEqual(["inner late _destroy end", "render settled"]);
 	});
 });
 

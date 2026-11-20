@@ -203,12 +203,20 @@ export class RenderJob {
 			errors.push(error);
 			this.abortController.abort();
 		} finally {
-			for (const stream of [...[...this.streamsMap.values()].flat(), ...this.adoptedStreams]) {
+			const collectTeardown = async (stream: BufferedStream): Promise<void> => {
 				try {
 					await stream.destroy();
 				} catch (error) {
 					if (!errors.includes(error)) errors.push(error);
 				}
+			};
+
+			for (const stream of [...this.streamsMap.values()].flat()) await collectTeardown(stream);
+
+			for (let index = 0; index < this.adoptedStreams.length; index++) {
+				const stream = this.adoptedStreams[index];
+
+				if (stream) await collectTeardown(stream);
 			}
 
 			if (temporaryDirectory !== undefined) {
