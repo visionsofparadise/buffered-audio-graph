@@ -607,10 +607,10 @@ describe("Vst3Stream host output", () => {
 		}
 	}
 
-	it("keeps every frame of 30 s of stereo the host echoes while its input is still being written", async () => {
+	it("keeps every sample of 30 s of stereo the host echoes while its input is still being written", async () => {
 		const frames = 30 * 48_000;
-		const samples = [0, 1].map((channel) =>
-			Float32Array.from({ length: frames }, (_, index) => Math.sin(index / (100 + channel))),
+		const samples = [1, -1].map((sign) =>
+			Float32Array.from({ length: frames }, (_, index) => (sign * (index + 1)) / frames),
 		);
 		const stream = new Vst3Stream(
 			vst3({
@@ -624,6 +624,9 @@ describe("Vst3Stream host output", () => {
 		const output = await renderFrames(stream, samples);
 
 		expect(output.map((channel) => channel.length)).toEqual([1_440_000, 1_440_000]);
+		expect(
+			output.map((channel, index) => channel.findIndex((sample, frame) => sample !== samples[index]?.[frame])),
+		).toEqual([-1, -1]);
 	}, 60_000);
 
 	it("keeps output that arrives in the READY chunk after an init-crash retry", async () => {
