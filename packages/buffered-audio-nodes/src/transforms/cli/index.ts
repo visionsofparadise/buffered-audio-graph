@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import {
 	ChildOutputBuffer,
 	childFailure,
+	isAbortReason,
 	releaseChild,
 	spawnChild,
 	terminateChild,
@@ -53,6 +54,7 @@ export abstract class CliTransformStream<
 	private outputOffset = 0;
 	private childSettled = false;
 	private pendingDrain?: Promise<void>;
+	private failed = false;
 
 	protected abstract _command(): string;
 	protected abstract _label(): string;
@@ -266,71 +268,83 @@ export abstract class CliTransformStream<
 	}
 
 	override async *_transform(block: Block): AsyncGenerator<Block> {
-		const channels = block.samples.length;
-		const frames = block.samples[0]?.length ?? 0;
+		try {
+			const channels = block.samples.length;
+			const frames = block.samples[0]?.length ?? 0;
 
-		if (frames === 0) return;
+			if (frames === 0) return;
 
-		if (!this.handle) {
-			if (this.isDestroyed || this.aborted()) return;
+			if (!this.handle) {
+				if (this.isDestroyed || this.aborted()) return;
 
-			this.spawnChild(block, channels);
-		}
+				this.spawnChild(block, channels);
+			}
 
-		const handle = this.handle;
-		const stdin = handle?.stdin;
+			const handle = this.handle;
+			const stdin = handle?.stdin;
 
-		if (!handle || !stdin) throw new Error("CliTransformStream.child not initialized");
+			if (!handle || !stdin) throw new Error("CliTransformStream.child not initialized");
 
-		if (await this.checkChild(handle)) {
+			if (await this.checkChild(handle)) {
+				yield* this.readAvailableStdout();
+
+				return;
+			}
+
+			const ok = stdin.write(encodePcm(block.samples, frames, this._inputFormat() === "f64le" ? "f64le" : "f32le"));
+
+			if (!ok) {
+				const drain = waitForChildWritable(handle.child, stdin, this.streamSignal).then(() => {
+					if (this.pendingDrain === drain) this.pendingDrain = undefined;
+
+					this.stdoutBuffer?.notify();
+				});
+
+				this.pendingDrain = drain;
+			}
+
+			yield* this.serveWhileParked();
+
+			if (this.aborted()) return;
+
+			await this.checkChild(handle);
+
 			yield* this.readAvailableStdout();
+		} catch (error) {
+			if (error !== this.streamSignal.reason && !isAbortReason(error, this.streamSignal)) this.failed = true;
 
-			return;
+			throw error;
 		}
-
-		const ok = stdin.write(encodePcm(block.samples, frames, this._inputFormat() === "f64le" ? "f64le" : "f32le"));
-
-		if (!ok) {
-			const drain = waitForChildWritable(handle.child, stdin, this.streamSignal).then(() => {
-				if (this.pendingDrain === drain) this.pendingDrain = undefined;
-
-				this.stdoutBuffer?.notify();
-			});
-
-			this.pendingDrain = drain;
-		}
-
-		yield* this.serveWhileParked();
-
-		if (this.aborted()) return;
-
-		await this.checkChild(handle);
-
-		yield* this.readAvailableStdout();
 	}
 
 	override async *_flush(): AsyncGenerator<Block> {
-		const handle = this.handle;
+		try {
+			const handle = this.handle;
 
-		if (!handle) return;
+			if (!handle) return;
 
-		yield* this.serveWhileParked();
+			yield* this.serveWhileParked();
 
-		if (this.aborted()) return;
+			if (this.aborted()) return;
 
-		handle.stdin?.end();
+			handle.stdin?.end();
 
-		await this.checkChild(handle);
+			await this.checkChild(handle);
 
-		yield* this.flushOutput();
+			yield* this.flushOutput();
 
-		if (this.aborted()) return;
+			if (this.aborted()) return;
 
-		await this.throwIfFailed();
+			await this.throwIfFailed();
 
-		const tail = this.toBlock(this.decoder?.end());
+			const tail = this.toBlock(this.decoder?.end());
 
-		if (tail) yield tail;
+			if (tail) yield tail;
+		} catch (error) {
+			if (error !== this.streamSignal.reason && !isAbortReason(error, this.streamSignal)) this.failed = true;
+
+			throw error;
+		}
 	}
 
 	override async _destroy(): Promise<void> {
@@ -340,7 +354,9 @@ export abstract class CliTransformStream<
 
 		const { child } = handle;
 		const running = child.exitCode === null && child.signalCode === null && !child.killed;
-		const exited = running ? terminateChild(child) : Promise.resolve();
+		const exited = running
+			? terminateChild(child, { firstSignal: this.failed ? "SIGTERM" : "SIGKILL" })
+			: Promise.resolve();
 
 		handle.stdout?.destroy();
 

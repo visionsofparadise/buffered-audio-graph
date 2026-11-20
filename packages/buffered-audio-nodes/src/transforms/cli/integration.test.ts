@@ -1,12 +1,22 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { once } from "node:events";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import type { Block, StreamSetupContext } from "@buffered-audio/core";
+import {
+	BufferedSourceStream,
+	BufferedTargetStream,
+	SourceNode,
+	TargetNode,
+	type Block,
+	type SourceMetadata,
+	type StreamSetupContext,
+} from "@buffered-audio/core";
 import {
 	blockFromSamples,
 	channelSamples,
@@ -444,4 +454,108 @@ describe("CliStream with a process that holds the child's stdio after it exits",
 		expect(settledAt, `fixture stderr: ${stderr}`).toBeDefined();
 		expect(exitedAt - (settledAt ?? exitedAt)).toBeLessThan(500);
 	});
+});
+
+class SineSourceStream extends BufferedSourceStream {
+	private offset = 0;
+
+	override async getMetadata(): Promise<SourceMetadata> {
+		return { sampleRate: SAMPLE_RATE, channels: 1 };
+	}
+
+	override async _read(): Promise<Block> {
+		await delay(50, undefined, { signal: this.streamSignal });
+
+		const samples = Float32Array.from({ length: 4410 }, (_, index) =>
+			Math.sin((2 * Math.PI * 440 * (this.offset + index)) / SAMPLE_RATE),
+		);
+		const block = blockFromSamples([samples], this.offset, { sampleRate: SAMPLE_RATE });
+
+		this.offset += 4410;
+
+		return block;
+	}
+}
+
+class SineSource extends SourceNode {
+	static override readonly Stream = SineSourceStream;
+}
+
+class DiscardTargetStream extends BufferedTargetStream {
+	override _write(): void {
+		return undefined;
+	}
+
+	override _close(): void {
+		return undefined;
+	}
+}
+
+class DiscardTarget extends TargetNode {
+	static override readonly Stream = DiscardTargetStream;
+}
+
+async function processGone(pid: number, withinMs: number): Promise<unknown> {
+	const deadline = performance.now() + withinMs;
+
+	for (;;) {
+		try {
+			process.kill(pid, 0);
+		} catch (error) {
+			return error;
+		}
+
+		if (performance.now() > deadline) return undefined;
+
+		await delay(50);
+	}
+}
+
+describe("CliStream abort teardown", () => {
+	const IGNORES_SIGTERM = `process.on("SIGTERM", () => {}); require("fs").writeFileSync(process.argv[1], String(process.pid)); process.stdin.on("data", () => {});`;
+
+	for (const [name, reason] of [
+		["the default abort reason", undefined],
+		["a non-Error abort reason", "cancelled"],
+	] as const) {
+		it.skipIf(IS_WINDOWS)(
+			`kills a child that ignores SIGTERM at once when the render aborts with ${name}`,
+			async () => {
+				const directory = await temporaryDirectory("cli-abort-");
+				const pidFile = join(directory, "child.pid");
+				const source = new SineSource();
+				const node = cli({ command: process.execPath, args: ["-e", IGNORES_SIGTERM, pidFile] });
+				const controller = new AbortController();
+
+				source.to(node);
+				node.to(new DiscardTarget());
+
+				const rendering = source
+					.createRenderJob({ highWaterMark: 1, signal: controller.signal })
+					.render()
+					.then(
+						() => new Error("render resolved"),
+						(error: unknown) => error,
+					);
+
+				while (!existsSync(pidFile)) await delay(20);
+
+				await delay(50);
+
+				const pid = Number(await readFile(pidFile, "utf8"));
+
+				await delay(200);
+
+				const abortedAt = performance.now();
+
+				controller.abort(reason);
+
+				const error = await rendering;
+
+				expect(error).toBe(controller.signal.reason);
+				expect(performance.now() - abortedAt).toBeLessThan(1000);
+				expect(await processGone(pid, 1000)).toHaveProperty("code", "ESRCH");
+			},
+		);
+	}
 });

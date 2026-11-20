@@ -12,6 +12,7 @@ import {
 	readableFrom,
 } from "@buffered-audio/core/testing";
 import { binaries, hasBinaryFixtures } from "../../utils/test-binaries";
+import { cli, CliStream } from "../cli";
 import { ffmpeg, FfmpegStream } from ".";
 
 const childProcessMocks = vi.hoisted(() => ({
@@ -432,7 +433,7 @@ describe("FfmpegStream bridge", () => {
 
 		await reader.cancel();
 
-		expect(kill).toHaveBeenCalledWith("SIGTERM");
+		expect(kill).toHaveBeenCalledWith("SIGKILL");
 	});
 
 	it("errors with the exit error carrying stderr when the child exits non-zero while a write is parked", async () => {
@@ -667,8 +668,28 @@ describe("FfmpegStream bridge", () => {
 
 		await vi.waitFor(() => expect(endSpy).toHaveBeenCalled());
 		await expect(reader.cancel()).resolves.toBeUndefined();
-		expect(kill).toHaveBeenCalledWith("SIGTERM");
+		expect(kill).toHaveBeenCalledWith("SIGKILL");
 	});
+
+	it("sends SIGTERM first when the stream's own decode fails", async () => {
+		const { child, stdin, stdout, kill } = createMockChild();
+
+		childProcessMocks.spawn.mockReturnValue(child);
+		vi.spyOn(stdin, "write").mockReturnValue(true);
+
+		stdout.push(Buffer.from("usage: tool\n"));
+
+		const stream = new CliStream(cli({ command: "tool", outputFormat: "wav" }), createTestStreamContext().context);
+
+		stream._setup(createTestSetupContext());
+
+		const reader = stream._pipe(readableFrom(inputBlocks(4))).getReader();
+
+		await expect(reader.read()).rejects.toThrow('Not a WAV stream (first bytes "usag")');
+		await stream.destroy();
+
+		expect(kill).toHaveBeenNthCalledWith(1, "SIGTERM");
+	}, 10_000);
 
 	it("ignores an EOF stdin error, which Windows reports for a closed pipe", async () => {
 		const { child, stdin, stdout } = createMockChild();
