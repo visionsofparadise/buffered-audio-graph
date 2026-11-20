@@ -2,7 +2,9 @@
 // Stub `vst-host` for the teardown and held-stdout tests. Every mode writes its pid to --pid-file first. Modes (--mode):
 //   hold-stdio-after-ready            READY, spawn a silent grandchild that inherits stdio, then hang.
 //   ignore-sigterm-after-ready        ignore SIGTERM, READY, then hang.
-//   exit-3-before-ready-holding-stdio spawn a silent grandchild, write "crashed" to stderr, exit 3 after 100 ms.
+//   exit-3-before-ready-holding-stdio spawn a grandchild that inherits stdio, write "crashed" to stderr, exit 3
+//                                     after 100 ms. The grandchild writes "end of crash report" to the inherited
+//                                     stderr 500 ms after its start, so after that exit, and holds the pipes for 12 s.
 //   echo-then-exit-holding-stdio      READY, read stdin to its end, wait 200 ms, echo it all, spawn a grandchild,
 //                                     exit 0. --short-output drops the echo's last 4 bytes. --exit-code <n> writes
 //                                     "failed" to stderr and exits n. --holder-writes makes the grandchild write
@@ -39,6 +41,23 @@ function spawnSilentGrandchild() {
 	// A native grandchild: a Node grandchild does not keep the inherited pipes open on Windows.
 	if (process.platform === "win32") spawn("cmd.exe", ["/d", "/c", "ping -n 13 127.0.0.1 >nul"], { stdio: "inherit" });
 	else spawn("sleep", ["12"], { stdio: "inherit" });
+}
+
+function spawnReportingGrandchild() {
+	if (process.platform !== "win32") {
+		spawn("sh", ["-c", "sleep 0.5; echo end of crash report >&2; sleep 12"], { stdio: "inherit" });
+
+		return;
+	}
+
+	// A Node started by cmd's `start /b` holds the pipes it inherits, unlike one this stub spawns directly. Verbatim
+	// arguments keep the inner quotes, which spawn would escape as \" and cmd would reject.
+	const script = "setTimeout(function(){console.error('end of crash report')},500);setTimeout(function(){},12000)";
+
+	spawn("cmd.exe", ["/d", "/s", "/c", `"start /b "" "${process.execPath}" -e "${script}""`], {
+		stdio: "inherit",
+		windowsVerbatimArguments: true,
+	});
 }
 
 function spawnWritingGrandchild() {
@@ -80,7 +99,7 @@ if (mode === "hold-stdio-after-ready") {
 	process.stdout.write("READY\n");
 	hang();
 } else if (mode === "exit-3-before-ready-holding-stdio") {
-	spawnSilentGrandchild();
+	spawnReportingGrandchild();
 	process.stderr.write("crashed\n");
 	setTimeout(() => process.exit(3), 100);
 } else if (mode === "echo-then-exit-holding-stdio") {

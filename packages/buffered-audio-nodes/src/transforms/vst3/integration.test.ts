@@ -560,10 +560,16 @@ describe("vst-host teardown and readiness", () => {
 		const startedAt = performance.now();
 
 		try {
-			await expect(settleWithin(run.render, "pre-READY crash render", 20_000)).rejects.toThrow(
-				/vst-host exited before READY \(code 3\): crashed/,
+			const error = await settleWithin(run.render, "pre-READY crash render", 20_000).then(
+				() => undefined,
+				(reason: unknown) => reason,
 			);
+
 			expect(performance.now() - startedAt).toBeLessThan(10_000);
+			expect(error).toBeInstanceOf(Error);
+			expect((error as Error).message.trimEnd()).toMatch(
+				/^vst-host exited before READY \(code 3\): crashed\nend of crash report$/,
+			);
 		} finally {
 			await finishHostRender(run);
 		}
