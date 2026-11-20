@@ -1,10 +1,10 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import packageJson from "../package.json";
@@ -171,7 +171,15 @@ describe("bag render", () => {
 const ECHO_SCRIPT =
 	"let c = Promise.resolve(); process.stdin.on('data', (d) => { c = c.then(() => new Promise((r) => setTimeout(r, 200))).then(() => process.stdout.write(d)); }); process.stdin.on('end', () => c.then(() => process.stdout.end()));";
 
-function writeSignalBag(path: string, inputPath: string, outputPath: string, marker: string): void {
+const SLOW_TEARDOWN_PACKAGE = "slow-teardown";
+
+function writeSignalBag(
+	path: string,
+	inputPath: string,
+	outputPath: string,
+	marker: string,
+	slowTeardown: boolean,
+): void {
 	const definition = {
 		id: randomUUID(),
 		name: "cli-signal",
@@ -191,6 +199,9 @@ function writeSignalBag(path: string, inputPath: string, outputPath: string, mar
 				nodeName: "CLI",
 				parameters: { command: process.execPath, args: ["-e", ECHO_SCRIPT, marker] },
 			},
+			...(slowTeardown
+				? [{ id: "slow", packageName: SLOW_TEARDOWN_PACKAGE, packageVersion: "1.0.0", nodeName: "Slow Teardown" }]
+				: []),
 			{
 				id: "write",
 				packageName: "@buffered-audio/nodes",
@@ -199,13 +210,78 @@ function writeSignalBag(path: string, inputPath: string, outputPath: string, mar
 				parameters: { path: outputPath, ffmpegPath, encoding: { format: "flac" } },
 			},
 		],
-		edges: [
-			{ from: "read", to: "echo" },
-			{ from: "echo", to: "write" },
-		],
+		edges: slowTeardown
+			? [
+					{ from: "read", to: "echo" },
+					{ from: "echo", to: "slow" },
+					{ from: "slow", to: "write" },
+				]
+			: [
+					{ from: "read", to: "echo" },
+					{ from: "echo", to: "write" },
+				],
 	};
 
 	writeFileSync(path, JSON.stringify(definition));
+}
+
+/**
+ * A local package whose one node is a Gain at 0 dB that takes 3 s to tear down, so a render aborted by
+ * a first signal is still tearing down when a second one arrives. The nodes bundle their own copy of
+ * core, and a render job checks streams against its source's copy, so the node extends the nodes'
+ * own Gain, imported by the URL the CLI's `--resolve` import uses.
+ */
+function writeSlowTeardownPackage(directory: string): string {
+	const packageDir = join(directory, SLOW_TEARDOWN_PACKAGE);
+	const nodesEntryUrl = pathToFileURL(join(nodesDir, "dist", "index.js")).href;
+
+	mkdirSync(packageDir);
+	writeFileSync(
+		join(packageDir, "package.json"),
+		JSON.stringify({ name: SLOW_TEARDOWN_PACKAGE, version: "1.0.0", main: "index.mjs" }),
+	);
+	writeFileSync(
+		join(packageDir, "index.mjs"),
+		[
+			`import { GainNode, GainStream } from ${JSON.stringify(nodesEntryUrl)};`,
+			"class SlowTeardownStream extends GainStream {",
+			"\tasync _destroy() { await new Promise((resolve) => setTimeout(resolve, 3000)); }",
+			"}",
+			"export class SlowTeardownNode extends GainNode {",
+			'\tstatic nodeName = "Slow Teardown";',
+			`\tstatic packageName = ${JSON.stringify(SLOW_TEARDOWN_PACKAGE)};`,
+			"\tstatic Stream = SlowTeardownStream;",
+			"}",
+			"",
+		].join("\n"),
+	);
+
+	return packageDir;
+}
+
+const SLOW_PACKAGE = "slow-package";
+const SLOW_PACKAGE_LOADING = "slow-package is loading";
+
+/** A local package whose module takes 8 s to evaluate, announcing on stderr when it starts. */
+function writeSlowPackage(directory: string): string {
+	const packageDir = join(directory, SLOW_PACKAGE);
+
+	mkdirSync(packageDir);
+	writeFileSync(
+		join(packageDir, "package.json"),
+		JSON.stringify({ name: SLOW_PACKAGE, version: "1.0.0", main: "index.mjs" }),
+	);
+	writeFileSync(
+		join(packageDir, "index.mjs"),
+		[
+			`process.stderr.write(${JSON.stringify(`${SLOW_PACKAGE_LOADING}\n`)});`,
+			"await new Promise((resolve) => setTimeout(resolve, 8000));",
+			"export const loaded = true;",
+			"",
+		].join("\n"),
+	);
+
+	return packageDir;
 }
 
 function isRunning(pattern: string): boolean {
@@ -228,12 +304,71 @@ async function waitFor(condition: () => boolean, timeoutMs: number): Promise<boo
 	return condition();
 }
 
-interface SignalledRender {
+type HandledSignal = "SIGINT" | "SIGTERM";
+
+interface CliExit {
 	readonly code: number | null;
 	readonly signal: NodeJS.Signals | null;
+}
+
+interface CliRun {
+	readonly child: ChildProcess;
+	readonly output: { stdout: string; stderr: string };
+	readonly closed: Promise<CliExit>;
+}
+
+/** Spawns the CLI as the leader of its own process group, so a test can always kill everything it started. */
+function spawnDetachedCli(args: ReadonlyArray<string>): CliRun {
+	const child = spawn(process.execPath, [cliPath, ...args], { detached: true, stdio: ["ignore", "pipe", "pipe"] });
+	const output = { stdout: "", stderr: "" };
+
+	child.stdout.setEncoding("utf-8");
+	child.stdout.on("data", (chunk: string) => {
+		output.stdout += chunk;
+	});
+	child.stderr.setEncoding("utf-8");
+	child.stderr.on("data", (chunk: string) => {
+		output.stderr += chunk;
+	});
+
+	const closed = new Promise<CliExit>((resolve) => {
+		child.once("close", (code, signal) => {
+			resolve({ code, signal });
+		});
+	});
+
+	return { child, output, closed };
+}
+
+function killProcessGroup(child: ChildProcess): void {
+	if (child.pid === undefined) return;
+
+	try {
+		process.kill(-child.pid, "SIGKILL");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+	}
+}
+
+function isAlive(child: ChildProcess): boolean {
+	return child.exitCode === null && child.signalCode === null;
+}
+
+interface SignalPlan {
+	readonly signal: HandledSignal;
+	/** Send the first signal to the CLI's whole process group, as a terminal's Ctrl+C does. */
+	readonly group?: boolean;
+	/** Send the same signal to the CLI again, this long after the first. */
+	readonly repeatAfterMs?: number;
+	/** Put a transform that takes 3 s to tear down between the echo child and the encoder. */
+	readonly slowTeardown?: boolean;
+}
+
+interface SignalledRender extends CliExit {
 	readonly elapsedMs: number;
 	readonly stderr: string;
-	readonly marker: string;
+	readonly echoRunning: boolean;
+	readonly encoderRunning: boolean;
 	readonly outputDir: string;
 	readonly outputPath: string;
 }
@@ -245,13 +380,14 @@ describe.skipIf(process.platform === "win32" || !hasBinaryFixtures || !hasPgrep)
 		for (const directory of directories) rmSync(directory, { recursive: true, force: true });
 	});
 
-	async function renderAndSignal(signal: "SIGINT" | "SIGTERM", group: boolean): Promise<SignalledRender> {
+	async function renderAndSignal(plan: SignalPlan): Promise<SignalledRender> {
 		const workDir = mkdtempSync(join(tmpdir(), "bag-cli-signal-"));
 		const outputDir = join(workDir, "out");
 		const inputPath = join(workDir, "input.wav");
 		const outputPath = join(outputDir, "out.flac");
 		const bagPath = join(workDir, "graph.bag");
 		const marker = randomUUID();
+		const slowTeardown = plan.slowTeardown ?? false;
 
 		directories.push(workDir);
 		mkdirSync(outputDir);
@@ -260,64 +396,65 @@ describe.skipIf(process.platform === "win32" || !hasBinaryFixtures || !hasPgrep)
 			Array.from({ length: 60 * 8000 }, (_, i) => Math.round(Math.sin(i / 8) * 10000)),
 			8000,
 		);
-		writeSignalBag(bagPath, inputPath, outputPath, marker);
+		writeSignalBag(bagPath, inputPath, outputPath, marker, slowTeardown);
 
-		const child = spawn(
-			process.execPath,
-			[cliPath, "render", bagPath, "--resolve", `@buffered-audio/nodes=${nodesDir}`],
-			{
-				detached: group,
-				stdio: ["ignore", "ignore", "pipe"],
-			},
-		);
-		let stderr = "";
+		const args = ["render", bagPath, "--resolve", `@buffered-audio/nodes=${nodesDir}`];
 
-		child.stderr.setEncoding("utf-8");
-		child.stderr.on("data", (chunk: string) => {
-			stderr += chunk;
-		});
+		if (slowTeardown) args.push("--resolve", `${SLOW_TEARDOWN_PACKAGE}=${writeSlowTeardownPackage(workDir)}`);
 
-		const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-			child.once("close", (code, closeSignal) => {
-				resolve({ code, signal: closeSignal });
-			});
-		});
+		const run = spawnDetachedCli(args);
 
 		try {
 			const started = await waitFor(() => isRunning(marker) && partialFiles(outputDir).length > 0, 20_000);
 
-			if (!started) throw new Error(`The render never reached its echo child and encoder. stderr: ${stderr}`);
+			if (!started)
+				throw new Error(`The render never reached its echo child and encoder. stderr: ${run.output.stderr}`);
 
-			const pid = child.pid;
+			const pid = run.child.pid;
 
 			if (pid === undefined) throw new Error("The CLI has no pid");
 
 			const signalledAt = performance.now();
 
-			if (group) process.kill(-pid, signal);
-			else process.kill(pid, signal);
+			process.kill(plan.group ? -pid : pid, plan.signal);
 
-			const exit = await Promise.race([closed, delay(10_000, undefined)]);
+			if (plan.repeatAfterMs !== undefined) {
+				await delay(plan.repeatAfterMs);
 
-			if (exit === undefined) throw new Error(`The CLI did not exit within 10 s of ${signal}. stderr: ${stderr}`);
+				if (isAlive(run.child)) process.kill(pid, plan.signal);
+			}
 
-			return { ...exit, elapsedMs: performance.now() - signalledAt, stderr, marker, outputDir, outputPath };
+			const exit = await Promise.race([run.closed, delay(10_000, undefined)]);
+
+			if (exit === undefined) {
+				throw new Error(`The CLI did not exit within 10 s of ${plan.signal}. stderr: ${run.output.stderr}`);
+			}
+
+			return {
+				...exit,
+				elapsedMs: performance.now() - signalledAt,
+				stderr: run.output.stderr,
+				echoRunning: isRunning(marker),
+				encoderRunning: isRunning(outputDir),
+				outputDir,
+				outputPath,
+			};
 		} finally {
-			if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+			killProcessGroup(run.child);
 		}
 	}
 
 	function expectCleanTeardown(result: SignalledRender, code: number): void {
 		expect.soft(result.code, result.stderr).toBe(code);
 		expect.soft(result.elapsedMs).toBeLessThan(10_000);
-		expect.soft(isRunning(result.marker)).toBe(false);
-		expect.soft(isRunning(result.outputDir)).toBe(false);
+		expect.soft(result.echoRunning).toBe(false);
+		expect.soft(result.encoderRunning).toBe(false);
 		expect.soft(existsSync(result.outputPath)).toBe(false);
 		expect.soft(partialFiles(result.outputDir)).toEqual([]);
 	}
 
 	it("tears down and exits 130 on SIGINT, leaving no output and no process", async () => {
-		const result = await renderAndSignal("SIGINT", false);
+		const result = await renderAndSignal({ signal: "SIGINT" });
 
 		expectCleanTeardown(result, 130);
 		expect.soft(result.stderr).toContain("Aborted by SIGINT");
@@ -325,7 +462,7 @@ describe.skipIf(process.platform === "win32" || !hasBinaryFixtures || !hasPgrep)
 	}, 60_000);
 
 	it("tears down and exits 143 on SIGTERM, leaving no output and no process", async () => {
-		const result = await renderAndSignal("SIGTERM", false);
+		const result = await renderAndSignal({ signal: "SIGTERM" });
 
 		expectCleanTeardown(result, 143);
 		expect.soft(result.stderr).toContain("Aborted by SIGTERM");
@@ -333,9 +470,83 @@ describe.skipIf(process.platform === "win32" || !hasBinaryFixtures || !hasPgrep)
 	}, 60_000);
 
 	it("tears down and exits 130 when SIGINT reaches its whole process group", async () => {
-		const result = await renderAndSignal("SIGINT", true);
+		const result = await renderAndSignal({ signal: "SIGINT", group: true });
 
 		expectCleanTeardown(result, 130);
 		expect.soft(result.stderr).toContain("Aborted by SIGINT");
+	}, 60_000);
+
+	it("treats a second SIGINT 1 ms after the first as the same interrupt and tears down", async () => {
+		const result = await renderAndSignal({ signal: "SIGINT", repeatAfterMs: 1 });
+
+		expectCleanTeardown(result, 130);
+		expect.soft(result.stderr).toContain("Aborted by SIGINT");
+		expect.soft(result.stderr).not.toContain("Forced exit");
+		expect.soft(result.stderr).not.toMatch(/^Error:/m);
+	}, 60_000);
+
+	it("forces the exit on a second SIGINT 1 s after the first, while teardown is still running", async () => {
+		const result = await renderAndSignal({ signal: "SIGINT", repeatAfterMs: 1000, slowTeardown: true });
+
+		expect.soft(result.code, result.stderr).toBe(130);
+		expect.soft(result.elapsedMs).toBeLessThan(2000);
+		expect.soft(result.stderr).toMatch(/^Forced exit by SIGINT$/m);
+		expect.soft(result.stderr).not.toContain("Aborted by SIGINT");
+	}, 60_000);
+});
+
+describe.skipIf(process.platform === "win32")("bag render signals during package resolution", () => {
+	let workDir: string;
+
+	beforeAll(() => {
+		workDir = mkdtempSync(join(tmpdir(), "bag-cli-resolve-signal-"));
+	});
+
+	afterAll(() => {
+		rmSync(workDir, { recursive: true, force: true });
+	});
+
+	it("exits 130 at once on SIGINT while a package module is still loading, and never renders", async () => {
+		const bagPath = join(workDir, "graph.bag");
+		const packageDir = writeSlowPackage(workDir);
+
+		writeFileSync(
+			bagPath,
+			JSON.stringify({
+				id: randomUUID(),
+				name: "cli-resolve-signal",
+				apiVersion: 1,
+				nodes: [{ id: "slow", packageName: SLOW_PACKAGE, packageVersion: "1.0.0", nodeName: "Slow" }],
+				edges: [],
+			}),
+		);
+
+		const run = spawnDetachedCli(["render", bagPath, "--resolve", `${SLOW_PACKAGE}=${packageDir}`]);
+
+		try {
+			const loading = await waitFor(() => run.output.stderr.includes(SLOW_PACKAGE_LOADING), 20_000);
+
+			if (!loading) throw new Error(`The CLI never started loading ${SLOW_PACKAGE}. stderr: ${run.output.stderr}`);
+
+			const pid = run.child.pid;
+
+			if (pid === undefined) throw new Error("The CLI has no pid");
+
+			const signalledAt = performance.now();
+
+			process.kill(pid, "SIGINT");
+
+			const exit = await Promise.race([run.closed, delay(15_000, undefined)]);
+
+			if (exit === undefined)
+				throw new Error(`The CLI did not exit within 15 s of SIGINT. stderr: ${run.output.stderr}`);
+
+			expect.soft(exit.code, run.output.stderr).toBe(130);
+			expect.soft(performance.now() - signalledAt).toBeLessThan(1000);
+			expect.soft(run.output.stderr).toContain("Aborted by SIGINT");
+			expect.soft(run.output.stdout).not.toContain("Rendering graph");
+		} finally {
+			killProcessGroup(run.child);
+		}
 	}, 60_000);
 });

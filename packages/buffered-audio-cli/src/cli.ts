@@ -4,6 +4,7 @@ import {
 	createRenderJobs,
 	describeError,
 	isAbortReason,
+	unlessAborted,
 	validateGraphDefinition,
 	type GraphDefinition,
 } from "@buffered-audio/core";
@@ -17,6 +18,13 @@ import { runJobs } from "./run-jobs";
 const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 } as const;
 
 type HandledSignal = keyof typeof SIGNAL_EXIT_CODES;
+
+const REPEAT_SIGNAL_WINDOW_MS = 500;
+
+function exitAtOnce(line: string, signal: HandledSignal): never {
+	process.stderr.write(`${line}\n`);
+	process.exit(SIGNAL_EXIT_CODES[signal]);
+}
 
 const program = new Command();
 
@@ -78,15 +86,20 @@ program
 			const unregister = register();
 			const controller = new AbortController();
 			let received: HandledSignal | undefined;
-			let signalCount = 0;
+			let receivedAt = 0;
 
 			const onSignal = (signal: HandledSignal): void => {
-				signalCount += 1;
+				if (received === undefined) {
+					received = signal;
+					receivedAt = performance.now();
+					controller.abort(new DOMException(`Received ${signal}`, "AbortError"));
 
-				if (signalCount > 1) process.exit(SIGNAL_EXIT_CODES[signal]);
+					return;
+				}
 
-				received = signal;
-				controller.abort(new DOMException(`Received ${signal}`, "AbortError"));
+				if (performance.now() - receivedAt < REPEAT_SIGNAL_WINDOW_MS) return;
+
+				exitAtOnce(`Forced exit by ${signal}`, signal);
 			};
 
 			process.on("SIGINT", onSignal);
@@ -111,7 +124,14 @@ program
 						pairs.push({ packageName: node.packageName, packageVersion: node.packageVersion });
 					}
 
-					const registry = await resolvePackages(pairs, { install: options.install, overrides });
+					const registry = await unlessAborted(
+						resolvePackages(pairs, { install: options.install, overrides }),
+						controller.signal,
+					);
+
+					if (received !== undefined) exitAtOnce(`Aborted by ${received}`, received);
+
+					if (registry === undefined) throw new Error("Package resolution ended without a registry");
 
 					process.stdout.write(`Rendering graph: ${definition.name}\n`);
 
