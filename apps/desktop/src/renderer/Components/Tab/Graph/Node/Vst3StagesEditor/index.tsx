@@ -71,8 +71,10 @@ export function Vst3StagesEditor({
 				if (current && event.path !== current.presetPath) {
 					callbacks.onParameterChangeAtPath?.(["stages", rowIndex, "presetPath"], event.path);
 				}
-			} else if (event.event === "exited" && event.code !== null && event.code !== 0) {
-				setRowErrors((previous) => ({ ...previous, [rowIndex]: event.stderrTail }));
+			} else if (event.event === "exited" && event.error !== undefined) {
+				const error = event.error;
+
+				setRowErrors((previous) => ({ ...previous, [rowIndex]: error }));
 			}
 		};
 
@@ -134,8 +136,11 @@ export function Vst3StagesEditor({
 				const rowId = rowIdsRef.current[rowIndex];
 
 				if (rowId !== undefined) launchRowByIdRef.current.set(result.launchId, rowId);
-			} catch {
-				return;
+			} catch (error) {
+				setRowErrors((previous) => ({
+					...previous,
+					[rowIndex]: error instanceof Error ? error.message : String(error),
+				}));
 			}
 		},
 		[main],

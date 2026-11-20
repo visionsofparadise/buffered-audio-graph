@@ -18,6 +18,7 @@ interface Vst3EditorExitedEvent {
 	readonly event: "exited";
 	readonly code: number | null;
 	readonly stderrTail: string;
+	readonly error?: string;
 }
 
 export type Vst3EditorEvent = Vst3EditorStdoutEvent | Vst3EditorExitedEvent;
