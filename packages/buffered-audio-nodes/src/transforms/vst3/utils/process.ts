@@ -1,15 +1,21 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
-	captureStderrTail,
-	isChildGone,
+	boundAfterExit,
+	childExitError,
+	ChildOutputHeldError,
+	releaseChild,
 	settledOrAborted,
-	waitForChildWritable,
+	spawnChild,
+	terminateChild,
+	waitForChildClose,
+	writeChildInput,
 	type BlockBuffer,
+	type ChildHandle,
 } from "@buffered-audio/core";
 import { deinterleaveBuffer, interleave } from "@buffered-audio/utils";
+import type { Readable } from "node:stream";
 
 const CHUNK_FRAMES = 48000;
 
@@ -21,13 +27,8 @@ interface VstHostTransferProgress {
 }
 
 export interface VstHostHandle {
-	readonly proc: ChildProcess;
-	readonly stdin: NodeJS.WritableStream;
-	readonly stdout: NodeJS.ReadableStream;
-	readonly stderr: NodeJS.ReadableStream;
+	readonly handle: ChildHandle;
 	readonly ready: Promise<void>;
-	readonly exited: Promise<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>;
-	readonly getStderrTail: () => string;
 }
 
 export interface VstStage {
@@ -41,46 +42,27 @@ const READY_TIMEOUT_MS = 300_000;
 
 export class VstHostExitedBeforeReadyError extends Error {
 	readonly code: number | null;
+	readonly signal: NodeJS.Signals | null;
 	readonly stderr: string;
 
-	constructor(code: number | null, stderr: string) {
-		super(`vst-host exited before READY (code ${code ?? "null"}): ${stderr}`);
+	constructor(code: number | null, signal: NodeJS.Signals | null, stderr: string) {
+		super(`vst-host exited before READY (code ${code ?? "null"}${signal ? `, signal ${signal}` : ""}): ${stderr}`);
 		this.name = "VstHostExitedBeforeReadyError";
 		this.code = code;
+		this.signal = signal;
 		this.stderr = stderr;
 	}
 }
 
-function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostHandle {
-	const proc: ChildProcess = spawn(binaryPath, [...args], {
-		stdio: ["pipe", "pipe", "pipe"],
-	});
-	const exited = new Promise<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>((resolve) => {
-		proc.once("close", (code, signal) => resolve({ code, signal }));
-	});
-
-	if (!proc.stdin || !proc.stdout || !proc.stderr) {
-		throw new Error("Failed to create vst-host stdio streams");
-	}
-
-	const stdin = proc.stdin;
-	const stdout = proc.stdout;
-	const stderr = proc.stderr;
-	const getStderrTail = captureStderrTail(stderr);
-
-	const ready = new Promise<void>((resolve, reject) => {
+function readyLine(host: Pick<VstHostHandle, "handle">, stdout: Readable): Promise<void> {
+	return new Promise<void>((resolve, reject) => {
 		const seen: Array<Buffer> = [];
+		let settled = false;
 
 		const cleanup = (): void => {
+			settled = true;
 			stdout.removeListener("data", onData);
-			proc.removeListener("error", onError);
-			proc.removeListener("close", onClose);
 			clearTimeout(timer);
-		};
-
-		const fail = (error: Error): void => {
-			cleanup();
-			reject(error);
 		};
 
 		const onData = (chunk: Buffer): void => {
@@ -104,34 +86,47 @@ function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostH
 			resolve();
 		};
 
-		const onError = (error: Error): void => {
-			fail(new Error(`vst-host failed to start: ${error.message}`));
-		};
-
-		const onClose = (code: number | null): void => {
-			const stderrOutput = getStderrTail();
-
-			fail(new VstHostExitedBeforeReadyError(code, stderrOutput));
-		};
-
 		const timer = setTimeout(() => {
-			fail(new Error(`vst-host did not emit READY within ${READY_TIMEOUT_MS}ms`));
+			cleanup();
+			reject(
+				new Error(
+					`vst-host did not emit READY within ${READY_TIMEOUT_MS}ms; a plugin may be waiting on a hidden dialog`,
+				),
+			);
 		}, READY_TIMEOUT_MS);
 
 		stdout.on("data", onData);
-		proc.once("error", onError);
-		proc.once("close", onClose);
+		void host.handle.exited.then((exit) => {
+			if (settled) return;
+
+			cleanup();
+			reject(
+				(exit.spawnError ? childExitError(host.handle.label, exit, "") : undefined) ??
+					new VstHostExitedBeforeReadyError(exit.code, exit.signal, host.handle.stderrTail()),
+			);
+		});
 	});
-
-	stdin.on("error", () => {});
-
-	return { proc, stdin, stdout, stderr, ready, exited, getStderrTail };
 }
 
-export async function terminateVstHost(handle: VstHostHandle): Promise<void> {
-	if (handle.proc.exitCode === null && handle.proc.signalCode === null) handle.proc.kill();
+function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostHandle {
+	const handle = spawnChild({ label: "vst-host", command: binaryPath, args });
 
-	await handle.exited;
+	if (!handle.stdin || !handle.stdout) {
+		releaseChild(handle);
+
+		throw new Error("Failed to create vst-host stdio streams");
+	}
+
+	const ready = readyLine({ handle }, handle.stdout);
+
+	ready.catch(() => undefined);
+
+	return { handle, ready };
+}
+
+export async function terminateVstHost(host: VstHostHandle): Promise<void> {
+	await terminateChild(host.handle.child);
+	releaseChild(host.handle);
 }
 
 const CLEAN_WRAPPER_EXIT_CODES: ReadonlySet<number> = new Set([0, 1, 2]);
@@ -196,6 +191,10 @@ export interface SpawnVstHostReadyOptions {
 	readonly onRetry?: (failedAttempt: number, error: VstHostExitedBeforeReadyError) => void;
 }
 
+function hasExited(host: VstHostHandle): boolean {
+	return host.handle.child.exitCode !== null || host.handle.child.signalCode !== null;
+}
+
 export async function spawnVstHostReady(
 	binaryPath: string,
 	args: ReadonlyArray<string>,
@@ -207,18 +206,30 @@ export async function spawnVstHostReady(
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 		options.signal?.throwIfAborted();
 
-		const handle = spawnVstHost(binaryPath, args);
+		let host: VstHostHandle | undefined;
 
 		try {
-			await waitForReady(handle, options.signal);
+			host = spawnVstHost(binaryPath, args);
 
-			return handle;
+			await waitForReady(host, options.signal);
+
+			return host;
 		} catch (error) {
-			await terminateVstHost(handle);
+			if (!host) throw error;
 
-			if (options.signal?.aborted) throw error;
+			const retry = !options.signal?.aborted && attempt < maxAttempts && isRetryableInitCrash(error);
+			let failure = error;
 
-			if (attempt >= maxAttempts || !isRetryableInitCrash(error)) throw error;
+			if (!retry && hasExited(host)) {
+				await waitForChildClose(host.handle, options.signal);
+
+				if (error instanceof VstHostExitedBeforeReadyError)
+					failure = new VstHostExitedBeforeReadyError(error.code, error.signal, host.handle.stderrTail());
+			}
+
+			await terminateVstHost(host);
+
+			if (!retry || !isRetryableInitCrash(error)) throw failure;
 
 			options.onRetry?.(attempt, error);
 			await delay(backoffMs, options.signal);
@@ -243,25 +254,30 @@ export interface ProcessVstHostOptions {
 	readonly signal?: AbortSignal;
 	readonly onInputProgress?: (progress: VstHostTransferProgress) => void;
 	readonly onOutputProgress?: (progress: VstHostTransferProgress) => void;
+	readonly onOutputHeld?: (error: ChildOutputHeldError) => void;
 }
 
 export async function processStreamingThroughVstHost(
-	handle: VstHostHandle,
+	host: VstHostHandle,
 	buffer: BlockBuffer,
 	options: ProcessVstHostOptions,
 ): Promise<void> {
-	const { channelCount, sampleRate, bitDepth, signal, onInputProgress, onOutputProgress } = options;
+	const { channelCount, sampleRate, bitDepth, signal, onInputProgress, onOutputProgress, onOutputHeld } = options;
+	const { handle } = host;
+	const { child, stdin, stdout } = handle;
 	const inputFrames = buffer.frames;
 	const expectedOutputBytes = inputFrames * channelCount * 4;
 	let inputFramesDone = 0;
 	let onData: ((chunk: Buffer) => void) | undefined;
 	let onStdoutEnd: (() => void) | undefined;
 
+	if (!stdin || !stdout) throw new Error("vst-host has no stdio streams");
+
 	const onAbort = (): void => {
-		if (handle.proc.exitCode !== null || handle.proc.signalCode !== null) return;
+		if (child.exitCode !== null || child.signalCode !== null) return;
 
 		try {
-			handle.proc.kill();
+			child.kill();
 		} catch {
 			return;
 		}
@@ -276,7 +292,7 @@ export async function processStreamingThroughVstHost(
 
 	const stdoutEnd = new Promise<void>((resolve) => {
 		onStdoutEnd = resolve;
-		handle.stdout.once("end", onStdoutEnd);
+		stdout.once("end", onStdoutEnd);
 	});
 
 	try {
@@ -295,22 +311,12 @@ export async function processStreamingThroughVstHost(
 			}
 
 			const interleaved = interleave(channelArrays, chunkFrames, channelCount);
-			const interleavedBuffer = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
-			const canWrite = handle.stdin.write(interleavedBuffer);
 
-			if (!canWrite) {
-				await waitForChildWritable(handle.proc, handle.stdin, signal ?? new AbortController().signal);
-
-				signal?.throwIfAborted();
-
-				if (isChildGone(handle.proc, handle.stdin)) {
-					const exit = await settledOrAborted(handle.exited, signal);
-
-					throw new Error(
-						`vst-host exited with code ${exit.code ?? "null"}${exit.signal ? ` (signal ${exit.signal})` : ""} while writing stdin: ${handle.getStderrTail()}`,
-					);
-				}
-			}
+			await writeChildInput(
+				handle,
+				Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength),
+				signal,
+			);
 
 			inputFramesDone = Math.min(inputFrames, inputFramesDone + chunkFrames);
 			onInputProgress?.({
@@ -323,7 +329,7 @@ export async function processStreamingThroughVstHost(
 			if (chunkFrames < CHUNK_FRAMES) break;
 		}
 
-		handle.stdin.end();
+		stdin.end();
 
 		await buffer.reset();
 
@@ -334,7 +340,7 @@ export async function processStreamingThroughVstHost(
 		let outputFramesDone = 0;
 		let writeChain: Promise<void> = Promise.resolve();
 
-		onData = (chunk: Buffer): void => {
+		const collect = (chunk: Buffer): void => {
 			if (stdoutError !== undefined) return;
 
 			outputBytesReceived += chunk.length;
@@ -371,28 +377,47 @@ export async function processStreamingThroughVstHost(
 				});
 		};
 
-		handle.stdout.on("data", onData);
+		onData = collect;
+		stdout.on("data", collect);
+
+		let held: ChildOutputHeldError | undefined;
 
 		try {
-			await settledOrAborted(stdoutEnd, signal);
+			await boundAfterExit(handle, settledOrAborted(stdoutEnd, signal));
+		} catch (error) {
+			if (!(error instanceof ChildOutputHeldError)) throw error;
+
+			held = error;
+			stdout.removeListener("data", collect);
+			releaseChild(handle);
 		} finally {
-			handle.stdout.removeListener("data", onData);
+			stdout.removeListener("data", collect);
 
 			await writeChain;
 		}
 
-		const exit = await settledOrAborted(handle.exited, signal);
+		const exit = await settledOrAborted(host.handle.exited, signal);
+
+		if (!held) await waitForChildClose(handle, signal);
 
 		signal?.throwIfAborted();
 
 		if (stdoutError !== undefined) throw stdoutError;
 
-		if (exit.code !== 0) {
-			const stderrOutput = handle.getStderrTail();
+		const exitFailure = childExitError(handle.label, exit, handle.stderrTail());
 
-			throw new Error(
-				`vst-host exited with code ${exit.code ?? "null"}${exit.signal ? ` (signal ${exit.signal})` : ""}: ${stderrOutput}`,
-			);
+		if (exitFailure) throw exitFailure;
+
+		const stdinFailure = handle.stdinError();
+
+		if (stdinFailure) throw stdinFailure;
+
+		const complete = outputBytesReceived === expectedOutputBytes && stdoutTail.length === 0;
+
+		if (held) {
+			if (!complete) throw held;
+
+			onOutputHeld?.(held);
 		}
 
 		if (outputBytesReceived !== expectedOutputBytes) {
@@ -411,8 +436,8 @@ export async function processStreamingThroughVstHost(
 	} finally {
 		signal?.removeEventListener("abort", onAbort);
 
-		if (onData) handle.stdout.removeListener("data", onData);
+		if (onData) stdout.removeListener("data", onData);
 
-		if (onStdoutEnd) handle.stdout.removeListener("end", onStdoutEnd);
+		if (onStdoutEnd) stdout.removeListener("end", onStdoutEnd);
 	}
 }

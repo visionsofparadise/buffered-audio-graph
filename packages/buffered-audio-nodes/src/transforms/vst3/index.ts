@@ -125,10 +125,10 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 		this.activeHost = handle;
 
 		const stopMonitor =
-			handle.proc.pid === undefined
+			handle.handle.child.pid === undefined
 				? undefined
 				: startProcessLivenessMonitor(
-						handle.proc.pid,
+						handle.handle.child.pid,
 						(sample) => {
 							this.log("vst-host liveness", { ...sample }, sample.state === "idle" ? "warn" : "info");
 						},
@@ -166,6 +166,9 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 							bytesTotal: progress.bytesTotal,
 						});
 					}
+				},
+				onOutputHeld: (error) => {
+					this.log("vst-host stdout stayed open after exit", { error: error.message }, "warn");
 				},
 			});
 		} finally {

@@ -318,10 +318,10 @@ describe("Vst3Stream subprocess lifecycle", () => {
 				bytesDone: frames * 4,
 				bytesTotal: frames * 4,
 			});
-			expect(handle.getStderrTail()).toBe(
+			expect(handle.handle.stderrTail()).toBe(
 				"stub-binary: ordinary diagnostic\nstub-binary: incomplete final diagnostic",
 			);
-			expect(handle.getStderrTail()).not.toContain("VST_HOST_EVENT");
+			expect(handle.handle.stderrTail()).not.toContain("VST_HOST_EVENT");
 
 			await buffer.reset();
 			const result = await buffer.read(frames);

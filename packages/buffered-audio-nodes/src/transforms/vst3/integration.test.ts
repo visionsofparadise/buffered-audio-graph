@@ -10,6 +10,9 @@ import {
 	drainBlocks,
 	readableFrom,
 } from "@buffered-audio/core/testing";
+import { read } from "../../sources/read";
+import { write } from "../../targets/write";
+import { createTestWav } from "../../utils/test-wav";
 import { schema, vst3, Vst3Node, Vst3PassthroughStream, Vst3Stream } from ".";
 import { processStreamingThroughVstHost, spawnVstHostReady } from "./utils/process";
 
@@ -124,6 +127,7 @@ describe("Vst3PassthroughStream", () => {
 });
 
 const stubBinary = fileURLToPath(new URL("./__fixtures__/stub-binary.mjs", import.meta.url));
+const teardownStub = fileURLToPath(new URL("./__fixtures__/teardown-stub.mjs", import.meta.url));
 
 const delay = (milliseconds: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -320,7 +324,7 @@ describe("processStreamingThroughVstHost settling", () => {
 				(reason: unknown) => reason,
 			);
 		} finally {
-			handle.proc.kill();
+			handle.handle.child.kill();
 			await buffer.close();
 		}
 	}
@@ -348,8 +352,8 @@ describe("processStreamingThroughVstHost settling", () => {
 			let signal: AbortSignal | undefined;
 			const error = await streamWithSlowSecondRead(temporaryDirectory, async (controller, handle) => {
 				signal = controller.signal;
-				handle.proc.kill();
-				await handle.exited;
+				handle.handle.child.kill();
+				await handle.handle.exited;
 				controller.abort();
 			});
 
@@ -453,9 +457,104 @@ describe("processStreamingThroughVstHost output writes", () => {
 			expect(log.at(-1)).toBe("pass settled");
 			expect(log).toContain("write ends");
 		} finally {
-			handle.proc.kill();
+			handle.handle.child.kill();
 			await buffer.close();
 			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	}, 30_000);
+});
+
+describe("vst-host teardown and readiness", () => {
+	interface TeardownRender {
+		readonly render: Promise<void>;
+		readonly controller: AbortController;
+		readonly pidPath: string;
+		readonly directory: string;
+	}
+
+	async function renderThroughTeardownStub(mode: string): Promise<TeardownRender> {
+		const directory = await mkdtemp(join(tmpdir(), "vst3-teardown-"));
+		const inputPath = join(directory, "input.wav");
+		const pidPath = join(directory, "host.pid");
+		const samples = Float32Array.from({ length: 1024 }, (_, index) => Math.sin(index / 100));
+
+		await writeFile(inputPath, createTestWav(48_000, 1, [samples], "32f"));
+
+		const source = read(inputPath);
+		const transform = vst3({
+			vstHostPath: process.execPath,
+			stages: [{ pluginPath: "/ignored-by-stub.vst3" }],
+			extraArgs: [teardownStub, "--mode", mode, "--pid-file", pidPath],
+		});
+
+		source.to(transform);
+		transform.to(write(join(directory, "output.wav")));
+
+		const controller = new AbortController();
+		const render = source.createRenderJob({ signal: controller.signal }).render();
+
+		render.catch(() => undefined);
+
+		return { render, controller, pidPath, directory };
+	}
+
+	async function abortAfterReady(mode: string): Promise<{ readonly elapsed: number; readonly pid: number }> {
+		const run = await renderThroughTeardownStub(mode);
+
+		try {
+			const pid = await waitForPid(run.pidPath);
+
+			// The stub writes its pid first; 500 ms later it has printed READY and the pass is waiting on its output.
+			await delay(500);
+
+			const abortedAt = performance.now();
+
+			run.controller.abort();
+
+			await expect(settleWithin(run.render, "aborted render", 15_000)).rejects.toHaveProperty("name", "AbortError");
+
+			return { elapsed: performance.now() - abortedAt, pid };
+		} finally {
+			run.controller.abort();
+			await settleWithin(run.render, "render cleanup", 15_000).catch(() => undefined);
+			await rm(run.directory, { recursive: true, force: true });
+		}
+	}
+
+	it.skipIf(process.platform !== "win32")(
+		"settles an aborted render within 4 s while a grandchild holds the host's pipes",
+		async () => {
+			const { elapsed } = await abortAfterReady("hold-stdio-after-ready");
+
+			expect(elapsed).toBeLessThan(4_000);
+		},
+		30_000,
+	);
+
+	it.skipIf(process.platform === "win32")(
+		"settles an aborted render within 4 s and ends a host that ignores SIGTERM",
+		async () => {
+			const { elapsed, pid } = await abortAfterReady("ignore-sigterm-after-ready");
+
+			expect(elapsed).toBeLessThan(4_000);
+			await waitForProcessAbsence(pid);
+		},
+		30_000,
+	);
+
+	it("rejects within 10 s when every attempt exits 3 before READY while a grandchild holds its pipes", async () => {
+		const run = await renderThroughTeardownStub("exit-3-before-ready-holding-stdio");
+		const startedAt = performance.now();
+
+		try {
+			await expect(settleWithin(run.render, "pre-READY crash render", 20_000)).rejects.toThrow(
+				/vst-host exited before READY \(code 3\): crashed/,
+			);
+			expect(performance.now() - startedAt).toBeLessThan(10_000);
+		} finally {
+			run.controller.abort();
+			await settleWithin(run.render, "render cleanup", 15_000).catch(() => undefined);
+			await rm(run.directory, { recursive: true, force: true });
 		}
 	}, 30_000);
 });
