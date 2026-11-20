@@ -11,7 +11,11 @@ import {
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
-import { startProcessLivenessMonitor, type ProcessLivenessOptions } from "../../utils/process-liveness";
+import {
+	DEFAULT_LIVENESS_INTERVAL_MS,
+	startProcessLivenessMonitor,
+	type ProcessLivenessOptions,
+} from "../../utils/process-liveness";
 import {
 	processStreamingThroughVstHost,
 	spawnVstHostReady,
@@ -20,6 +24,8 @@ import {
 	type VstHostHandle,
 	type VstStage,
 } from "./utils/process";
+
+const VST3_IDLE_LIMIT_SAMPLES = 10;
 
 const stageSchema = z.object({
 	pluginPath: z.string().meta({ input: "file", mode: "open", accept: ".vst3" }).describe("VST3 plugin file or bundle"),
@@ -124,6 +130,16 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 
 		this.activeHost = handle;
 
+		const idle = new AbortController();
+		const idleSeconds = String(
+			Number(
+				(
+					(VST3_IDLE_LIMIT_SAMPLES * (this.properties.monitorIntervalMs ?? DEFAULT_LIVENESS_INTERVAL_MS)) /
+					1000
+				).toFixed(3),
+			),
+		);
+		let idleSamples = 0;
 		const stopMonitor =
 			handle.handle.child.pid === undefined
 				? undefined
@@ -131,6 +147,16 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 						handle.handle.child.pid,
 						(sample) => {
 							this.log("vst-host liveness", { ...sample }, sample.state === "idle" ? "warn" : "info");
+
+							idleSamples = sample.state === "idle" ? idleSamples + 1 : 0;
+
+							if (idleSamples >= VST3_IDLE_LIMIT_SAMPLES && !idle.signal.aborted) {
+								idle.abort(
+									new Error(
+										`vst-host was idle for ${VST3_IDLE_LIMIT_SAMPLES} liveness samples (${idleSeconds} s); a plugin may be waiting on a hidden dialog`,
+									),
+								);
+							}
 						},
 						{
 							intervalMs: this.properties.monitorIntervalMs,
@@ -149,7 +175,7 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 					channelCount: channels,
 					sampleRate,
 					bitDepth: bd,
-					signal: this.streamSignal,
+					signal: AbortSignal.any([this.streamSignal, idle.signal]),
 					onInputProgress: (progress) => {
 						if (inputGate(progress.framesDone, Date.now())) {
 							this.log("vst-host input", {
@@ -176,13 +202,11 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 				});
 			} finally {
 				try {
-					await stopMonitor?.();
+					await terminateVstHost(handle);
 				} finally {
-					try {
-						await terminateVstHost(handle);
-					} finally {
-						if (this.activeHost === handle) this.activeHost = undefined;
-					}
+					if (this.activeHost === handle) this.activeHost = undefined;
+
+					await stopMonitor?.();
 				}
 			}
 

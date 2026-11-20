@@ -1,5 +1,10 @@
+import { settleWithin } from "@buffered-audio/core";
 import pidtree from "pidtree";
 import pidusage from "pidusage";
+
+export const DEFAULT_LIVENESS_INTERVAL_MS = 30_000;
+
+const STOP_WAIT_MS = 2000;
 
 export interface ProcessLivenessSample {
 	readonly elapsedMs: number;
@@ -51,7 +56,7 @@ export function startProcessLivenessMonitor(
 	onSample: (sample: ProcessLivenessSample) => void,
 	options: ProcessLivenessOptions = {},
 ): () => Promise<void> {
-	const intervalMs = options.intervalMs ?? 30_000;
+	const intervalMs = options.intervalMs ?? DEFAULT_LIVENESS_INTERVAL_MS;
 	const activeCpuThresholdMs = options.activeCpuThresholdMs ?? 100;
 	const sampler = options.sampler ?? sampleProcessTreeCpu;
 	const startedAt = performance.now();
@@ -69,7 +74,7 @@ export function startProcessLivenessMonitor(
 		try {
 			sample = await sampler(rootPid);
 		} catch (error) {
-			options.onError?.(error);
+			if (!hasStopped()) options.onError?.(error);
 
 			return;
 		}
@@ -118,7 +123,7 @@ export function startProcessLivenessMonitor(
 		if (currentTick === undefined) return;
 
 		try {
-			await currentTick;
+			await settleWithin(currentTick, STOP_WAIT_MS);
 		} catch {
 			throw inFlightError;
 		}

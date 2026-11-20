@@ -469,38 +469,52 @@ describe("processStreamingThroughVstHost output writes", () => {
 	}, 30_000);
 });
 
+interface HostRender {
+	readonly render: Promise<void>;
+	readonly controller: AbortController;
+	readonly pidPath: string;
+	readonly directory: string;
+}
+
+async function renderThroughHost(
+	extraArgs: (pidPath: string) => ReadonlyArray<string>,
+	monitor: Pick<Parameters<typeof vst3>[0], "monitorIntervalMs" | "monitorSampler"> = {},
+): Promise<HostRender> {
+	const directory = await mkdtemp(join(tmpdir(), "vst3-host-render-"));
+	const inputPath = join(directory, "input.wav");
+	const pidPath = join(directory, "host.pid");
+	const samples = Float32Array.from({ length: 1024 }, (_, index) => Math.sin(index / 100));
+
+	await writeFile(inputPath, createTestWav(48_000, 1, [samples], "32f"));
+
+	const source = read(inputPath);
+	const transform = vst3({
+		vstHostPath: process.execPath,
+		stages: [{ pluginPath: "/ignored-by-stub.vst3" }],
+		extraArgs: extraArgs(pidPath),
+		...monitor,
+	});
+
+	source.to(transform);
+	transform.to(write(join(directory, "output.wav")));
+
+	const controller = new AbortController();
+	const render = source.createRenderJob({ signal: controller.signal }).render();
+
+	render.catch(() => undefined);
+
+	return { render, controller, pidPath, directory };
+}
+
+async function finishHostRender(run: HostRender): Promise<void> {
+	run.controller.abort();
+	await settleWithin(run.render, "render cleanup", 15_000).catch(() => undefined);
+	await rm(run.directory, { recursive: true, force: true });
+}
+
 describe("vst-host teardown and readiness", () => {
-	interface TeardownRender {
-		readonly render: Promise<void>;
-		readonly controller: AbortController;
-		readonly pidPath: string;
-		readonly directory: string;
-	}
-
-	async function renderThroughTeardownStub(mode: string): Promise<TeardownRender> {
-		const directory = await mkdtemp(join(tmpdir(), "vst3-teardown-"));
-		const inputPath = join(directory, "input.wav");
-		const pidPath = join(directory, "host.pid");
-		const samples = Float32Array.from({ length: 1024 }, (_, index) => Math.sin(index / 100));
-
-		await writeFile(inputPath, createTestWav(48_000, 1, [samples], "32f"));
-
-		const source = read(inputPath);
-		const transform = vst3({
-			vstHostPath: process.execPath,
-			stages: [{ pluginPath: "/ignored-by-stub.vst3" }],
-			extraArgs: [teardownStub, "--mode", mode, "--pid-file", pidPath],
-		});
-
-		source.to(transform);
-		transform.to(write(join(directory, "output.wav")));
-
-		const controller = new AbortController();
-		const render = source.createRenderJob({ signal: controller.signal }).render();
-
-		render.catch(() => undefined);
-
-		return { render, controller, pidPath, directory };
+	async function renderThroughTeardownStub(mode: string): Promise<HostRender> {
+		return renderThroughHost((pidPath) => [teardownStub, "--mode", mode, "--pid-file", pidPath]);
 	}
 
 	async function abortAfterReady(mode: string): Promise<{ readonly elapsed: number; readonly pid: number }> {
@@ -520,9 +534,7 @@ describe("vst-host teardown and readiness", () => {
 
 			return { elapsed: performance.now() - abortedAt, pid };
 		} finally {
-			run.controller.abort();
-			await settleWithin(run.render, "render cleanup", 15_000).catch(() => undefined);
-			await rm(run.directory, { recursive: true, force: true });
+			await finishHostRender(run);
 		}
 	}
 
@@ -557,9 +569,7 @@ describe("vst-host teardown and readiness", () => {
 			);
 			expect(performance.now() - startedAt).toBeLessThan(10_000);
 		} finally {
-			run.controller.abort();
-			await settleWithin(run.render, "render cleanup", 15_000).catch(() => undefined);
-			await rm(run.directory, { recursive: true, force: true });
+			await finishHostRender(run);
 		}
 	}, 30_000);
 });
@@ -635,4 +645,51 @@ describe("Vst3Stream host output", () => {
 			await rm(directory, { recursive: true, force: true });
 		}
 	}, 30_000);
+});
+
+describe("vst-host idle bound", () => {
+	it("fails a pass whose host stays idle for 10 liveness samples and ends the host", async () => {
+		const run = await renderThroughHost((pidPath) => [stubBinary, "--hang-after-ready", "--pid-file", pidPath], {
+			monitorIntervalMs: 50,
+			monitorSampler: async () => ({ cpuMs: 0, pidCount: 1 }),
+		});
+		const startedAt = performance.now();
+
+		try {
+			await expect(settleWithin(run.render, "idle render", 8_000)).rejects.toHaveProperty(
+				"message",
+				"vst-host was idle for 10 liveness samples (0.5 s); a plugin may be waiting on a hidden dialog",
+			);
+			expect(performance.now() - startedAt).toBeLessThan(3_000);
+			await waitForProcessAbsence(await waitForPid(run.pidPath));
+		} finally {
+			await finishHostRender(run);
+		}
+	}, 10_000);
+
+	it("never trips on a host that alternates idle and active samples", async () => {
+		let samples = 0;
+		const run = await renderThroughHost((pidPath) => [stubBinary, "--hang-after-ready", "--pid-file", pidPath], {
+			monitorIntervalMs: 50,
+			monitorSampler: async () => {
+				samples += 1;
+
+				return { cpuMs: Math.floor(samples / 2) * 200, pidCount: 1 };
+			},
+		});
+
+		try {
+			await delay(1_500);
+			run.controller.abort();
+
+			const error = await settleWithin(run.render, "aborted render", 8_000).then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+
+			expect(isAbortReason(error, run.controller.signal)).toBe(true);
+		} finally {
+			await finishHostRender(run);
+		}
+	}, 15_000);
 });

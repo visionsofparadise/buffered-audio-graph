@@ -106,7 +106,7 @@ describe("startProcessLivenessMonitor", () => {
 		expect(onSample).not.toHaveBeenCalled();
 	});
 
-	it("reports an in-flight sampler rejection and resolves stop", async () => {
+	it("drops an in-flight sampler rejection that lands after stop and resolves stop", async () => {
 		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "performance"] });
 		let rejectSample: ((error: Error) => void) | undefined;
 		let sampleCount = 0;
@@ -136,9 +136,36 @@ describe("startProcessLivenessMonitor", () => {
 		rejectSample?.(sampleError);
 
 		await expect(stopPromise).resolves.toBeUndefined();
-		expect(onError).toHaveBeenCalledOnce();
-		expect(onError).toHaveBeenCalledWith(sampleError);
+		expect(onError).not.toHaveBeenCalled();
 		expect(onSample).not.toHaveBeenCalled();
+	});
+
+	it("settles stop 2000 ms after it is called when the in-flight sample never settles", async () => {
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance"] });
+		let sampleCount = 0;
+		const sampler = vi.fn(async () => {
+			sampleCount += 1;
+			if (sampleCount === 1) return { cpuMs: 100, pidCount: 1 };
+
+			return new Promise<{ cpuMs: number; pidCount: number }>(() => undefined);
+		});
+		const stop = startProcessLivenessMonitor(ROOT_PID, vi.fn(), { intervalMs: INTERVAL_MS, sampler });
+
+		await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+		vi.advanceTimersByTime(INTERVAL_MS);
+		expect(sampler).toHaveBeenCalledTimes(2);
+
+		let stopSettled = false;
+		const stopPromise = stop().then(() => {
+			stopSettled = true;
+		});
+
+		await vi.advanceTimersByTimeAsync(1_999);
+		expect(stopSettled).toBe(false);
+
+		await vi.advanceTimersByTimeAsync(1);
+		await stopPromise;
+		expect(stopSettled).toBe(true);
 	});
 
 	it("surfaces an onSample exception through stop", async () => {
