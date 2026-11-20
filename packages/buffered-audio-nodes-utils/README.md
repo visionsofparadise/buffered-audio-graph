@@ -106,11 +106,11 @@ const filtered = biquadFilter(samples, fb, fa);
 import { interleave, deinterleaveBuffer, replaceChannel } from "@buffered-audio/utils";
 ```
 
-| Function                                             | Description                                        |
-| ---------------------------------------------------- | -------------------------------------------------- |
-| `interleave(channels)`                               | Interleave per-channel arrays into a single buffer |
-| `deinterleaveBuffer(buffer, channelCount)`           | Deinterleave a buffer into per-channel arrays      |
-| `replaceChannel(samples, channelIndex, replacement)` | Replace a single channel in an interleaved buffer  |
+| Function                                                 | Description                                                                                                                                                                       |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `interleave(samples, frames, channels)`                  | Interleave the first `frames` frames of `channels` per-channel arrays into one `Float32Array`; a missing channel or frame reads as 0                                              |
+| `deinterleaveBuffer(buffer, channelCount)`               | Deinterleave a buffer into per-channel arrays                                                                                                                                     |
+| `replaceChannel(chunk, channelIndex, newData, channels)` | Return `channels` per-channel arrays taken from `chunk.samples`, with channel `channelIndex` replaced by `newData`; a channel `chunk` lacks becomes silence of `newData`'s length |
 
 ## License
 
