@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import {
 	BufferedSourceStream,
 	BufferedTargetStream,
@@ -456,6 +456,8 @@ describe("CliStream with a process that holds the child's stdio after it exits",
 	});
 });
 
+let sineReads = 0;
+
 class SineSourceStream extends BufferedSourceStream {
 	private offset = 0;
 
@@ -465,6 +467,8 @@ class SineSourceStream extends BufferedSourceStream {
 
 	override async _read(): Promise<Block> {
 		await delay(50, undefined, { signal: this.streamSignal });
+
+		sineReads += 1;
 
 		const samples = Float32Array.from({ length: 4410 }, (_, index) =>
 			Math.sin((2 * Math.PI * 440 * (this.offset + index)) / SAMPLE_RATE),
@@ -495,6 +499,14 @@ class DiscardTarget extends TargetNode {
 	static override readonly Stream = DiscardTargetStream;
 }
 
+// Resolves once the source has gone 300 ms without a read, so the node's stdin write is parked on drain.
+async function sourceStalled(): Promise<void> {
+	for (let reads = -1; reads !== sineReads;) {
+		reads = sineReads;
+		await delay(300);
+	}
+}
+
 async function processGone(pid: number, withinMs: number): Promise<unknown> {
 	const deadline = performance.now() + withinMs;
 
@@ -512,7 +524,15 @@ async function processGone(pid: number, withinMs: number): Promise<unknown> {
 }
 
 describe("CliStream abort teardown", () => {
-	const IGNORES_SIGTERM = `process.on("SIGTERM", () => {}); require("fs").writeFileSync(process.argv[1], String(process.pid)); process.stdin.on("data", () => {});`;
+	// Never reads stdin, so the abort lands while _transform waits on a parked write.
+	const IGNORES_SIGTERM = `process.on("SIGTERM", () => {}); require("fs").writeFileSync(process.argv[1], String(process.pid)); setInterval(() => {}, 1000);`;
+	let directory: string | undefined;
+
+	afterEach(async () => {
+		if (directory) await rm(directory, { recursive: true, force: true });
+
+		directory = undefined;
+	});
 
 	for (const [name, reason] of [
 		["the default abort reason", undefined],
@@ -521,7 +541,8 @@ describe("CliStream abort teardown", () => {
 		it.skipIf(IS_WINDOWS)(
 			`kills a child that ignores SIGTERM at once when the render aborts with ${name}`,
 			async () => {
-				const directory = await temporaryDirectory("cli-abort-");
+				directory = await mkdtemp(join(tmpdir(), "cli-abort-"));
+
 				const pidFile = join(directory, "child.pid");
 				const source = new SineSource();
 				const node = cli({ command: process.execPath, args: ["-e", IGNORES_SIGTERM, pidFile] });
@@ -544,7 +565,7 @@ describe("CliStream abort teardown", () => {
 
 				const pid = Number(await readFile(pidFile, "utf8"));
 
-				await delay(200);
+				await sourceStalled();
 
 				const abortedAt = performance.now();
 

@@ -433,7 +433,7 @@ describe("FfmpegStream bridge", () => {
 
 		await reader.cancel();
 
-		expect(kill).toHaveBeenCalledWith("SIGKILL");
+		expect(kill).toHaveBeenNthCalledWith(1, "SIGKILL");
 	});
 
 	it("errors with the exit error carrying stderr when the child exits non-zero while a write is parked", async () => {
@@ -668,7 +668,7 @@ describe("FfmpegStream bridge", () => {
 
 		await vi.waitFor(() => expect(endSpy).toHaveBeenCalled());
 		await expect(reader.cancel()).resolves.toBeUndefined();
-		expect(kill).toHaveBeenCalledWith("SIGKILL");
+		expect(kill).toHaveBeenNthCalledWith(1, "SIGKILL");
 	});
 
 	it("sends SIGTERM first when the stream's own decode fails", async () => {
