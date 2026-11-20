@@ -1,13 +1,15 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { open, type FileHandle } from "node:fs/promises";
+import { access, open, rename, rm, type FileHandle } from "node:fs/promises";
+import { join, parse } from "node:path";
 import {
 	BufferedTargetStream,
-	isChildGone,
-	settledOrAborted,
+	childFailure,
+	releaseChild,
+	spawnChild,
 	TargetNode,
 	terminateChild,
-	waitForChildWritable,
+	writeChildInput,
 	type Block,
+	type ChildHandle,
 	type StreamSetupContext,
 	type TargetNodeProperties,
 } from "@buffered-audio/core";
@@ -73,11 +75,17 @@ export interface WriteProperties extends TargetNodeProperties {
 const WAV_HEADER_SIZE = 80;
 const UINT32_MAX = 0xffffffff;
 
+function partialPath(path: string): string {
+	const { dir, name, ext } = parse(path);
+
+	return join(dir, `${name}.partial-${process.pid}${ext}`);
+}
+
 export class WriteStream extends BufferedTargetStream<WriteNode> {
 	private fileHandle?: FileHandle;
-	private ffmpegProcess?: ChildProcess;
-	private ffmpegStdin?: NodeJS.WritableStream;
-	private ffmpegDone?: Promise<void>;
+	private handle?: ChildHandle;
+	private closed = false;
+	private temporaryPath?: string;
 	private sampleRate = 0;
 	private channels = 0;
 	private bytesWritten = 0;
@@ -87,6 +95,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 	override async _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
 		this.bytesWritten = 0;
 		this.initialized = false;
+		this.closed = false;
 
 		const encoding = this.properties.encoding;
 
@@ -97,7 +106,8 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		this.useEncoding = encoding !== undefined && encoding.format !== "wav" && !!this.properties.ffmpegPath;
 
 		if (!this.useEncoding) {
-			this.fileHandle = await open(this.properties.path, "w");
+			this.temporaryPath = partialPath(this.properties.path);
+			this.fileHandle = await open(this.temporaryPath, "w");
 		}
 
 		return super._setup(input, context);
@@ -126,34 +136,15 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 		if (!encoding || !ffmpegPath) throw new Error("ffmpeg encoding misconfigured");
 
-		const args = this.buildFfmpegArgs(encoding);
+		const temporaryPath = partialPath(this.properties.path);
 
-		const proc = spawn(ffmpegPath, args, {
-			stdio: ["pipe", "ignore", "pipe"],
+		this.temporaryPath = temporaryPath;
+		this.handle = spawnChild({
+			label: "ffmpeg",
+			command: ffmpegPath,
+			args: this.buildFfmpegArgs(encoding, temporaryPath),
+			stdout: "ignore",
 		});
-
-		this.ffmpegProcess = proc;
-		this.ffmpegStdin = proc.stdin;
-
-		this.ffmpegStdin.on("error", () => {});
-
-		const done = new Promise<void>((resolve, reject) => {
-			proc.on("close", (code) => {
-				if (code !== 0) {
-					reject(new Error(`ffmpeg exited with code ${code}`));
-				} else {
-					resolve();
-				}
-			});
-
-			proc.on("error", (error) => {
-				reject(new Error(`Failed to spawn ffmpeg: ${error.message}`));
-			});
-		});
-
-		done.catch(() => undefined);
-
-		this.ffmpegDone = done;
 	}
 
 	override async _write(chunk: Block): Promise<void> {
@@ -161,8 +152,8 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 		const bytes = this.convertChunk(chunk);
 
-		if (this.useEncoding && this.ffmpegStdin) {
-			await this.writeToStdin(bytes);
+		if (this.useEncoding && this.handle) {
+			await writeChildInput(this.handle, bytes, this.streamSignal);
 		} else if (this.fileHandle) {
 			await this.fileHandle.write(bytes, 0, bytes.length, WAV_HEADER_SIZE + this.bytesWritten);
 		}
@@ -172,17 +163,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 	override async _close(): Promise<void> {
 		if (this.useEncoding) {
-			if (this.ffmpegStdin) {
-				this.ffmpegStdin.end();
-			}
-
-			if (this.ffmpegDone) {
-				await this.ffmpegDone;
-			}
-
-			this.ffmpegProcess = undefined;
-			this.ffmpegStdin = undefined;
-			this.ffmpegDone = undefined;
+			if (this.handle) await this.finishEncoder(this.handle);
 		} else if (this.fileHandle) {
 			const header =
 				this.bytesWritten > UINT32_MAX
@@ -193,20 +174,66 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 			await this.fileHandle.close();
 			this.fileHandle = undefined;
 		}
+
+		if (this.temporaryPath) await this.moveIntoPlace(this.temporaryPath);
+
+		this.closed = true;
 	}
 
 	override async _destroy(): Promise<void> {
-		const proc = this.ffmpegProcess;
+		const handle = this.handle;
 
-		this.ffmpegProcess = undefined;
-		this.ffmpegStdin = undefined;
-		this.ffmpegDone = undefined;
+		this.handle = undefined;
 
-		if (proc) await terminateChild(proc);
+		if (handle) {
+			await terminateChild(handle.child, this.closed ? undefined : { firstSignal: "SIGKILL" });
+			releaseChild(handle);
+		}
 
 		if (this.fileHandle) {
 			await this.fileHandle.close().catch(() => undefined);
 			this.fileHandle = undefined;
+		}
+
+		if (!this.closed && this.temporaryPath) await rm(this.temporaryPath, { force: true });
+	}
+
+	private async finishEncoder(handle: ChildHandle): Promise<void> {
+		const signal = this.streamSignal;
+
+		handle.stdin?.end();
+
+		const failure = await childFailure(handle, { signal });
+
+		signal.throwIfAborted();
+
+		if (failure) throw failure;
+
+		const stdinError = handle.stdinError();
+
+		if (stdinError) throw stdinError;
+
+		const temporaryPath = this.temporaryPath ?? "";
+		const written = await access(temporaryPath).then(
+			() => true,
+			() => false,
+		);
+
+		if (!written) throw new Error(`ffmpeg exited 0 but wrote no output at "${temporaryPath}"`);
+	}
+
+	private async moveIntoPlace(temporaryPath: string): Promise<void> {
+		const path = this.properties.path;
+
+		try {
+			await rename(temporaryPath, path);
+		} catch (error) {
+			await rm(temporaryPath, { force: true });
+
+			throw new Error(
+				`Cannot move "${temporaryPath}" onto "${path}": ${error instanceof Error ? error.message : String(error)}`,
+				{ cause: error },
+			);
 		}
 	}
 
@@ -229,9 +256,22 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		return buffer;
 	}
 
-	private buildFfmpegArgs(encoding: EncodingOptions): Array<string> {
+	private buildFfmpegArgs(encoding: EncodingOptions, outputPath: string): Array<string> {
 		const pcmFormat = bitDepthToPcmFormat(this.properties.bitDepth);
-		const args = ["-f", pcmFormat, "-ar", String(this.sampleRate), "-ac", String(this.channels), "-i", "pipe:0"];
+		const args = [
+			"-hide_banner",
+			"-nostats",
+			"-loglevel",
+			"error",
+			"-f",
+			pcmFormat,
+			"-ar",
+			String(this.sampleRate),
+			"-ac",
+			String(this.channels),
+			"-i",
+			"pipe:0",
+		];
 
 		switch (encoding.format) {
 			case "flac":
@@ -258,30 +298,9 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 			args.push("-ar", String(encoding.sampleRate));
 		}
 
-		args.push("-y", this.properties.path);
+		args.push("-y", outputPath);
 
 		return args;
-	}
-
-	private async writeToStdin(data: Buffer): Promise<void> {
-		const stdin = this.ffmpegStdin;
-		const proc = this.ffmpegProcess;
-
-		if (!stdin || !proc) return;
-
-		if (stdin.write(data)) return;
-
-		const signal = this.streamSignal;
-
-		await waitForChildWritable(proc, stdin, signal);
-
-		signal.throwIfAborted();
-
-		if (isChildGone(proc, stdin)) {
-			await settledOrAborted(this.ffmpegDone ?? Promise.resolve(), signal);
-
-			throw new Error("ffmpeg exited before its input ended");
-		}
 	}
 }
 
