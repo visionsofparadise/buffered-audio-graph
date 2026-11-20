@@ -17,6 +17,10 @@ const cacheRecordSchema = z.union([
 
 const cacheSchema = z.record(z.string(), cacheRecordSchema);
 
+const CACHE_VERSION = 2;
+
+const cacheFileSchema = z.object({ version: z.literal(CACHE_VERSION), entries: cacheSchema });
+
 export type CacheRecord = z.infer<typeof cacheRecordSchema>;
 export type ScanCache = z.infer<typeof cacheSchema>;
 
@@ -29,12 +33,13 @@ export const isCacheHit = (record: CacheRecord | undefined, stat: ModuleStat): r
 	record?.size === stat.size && record.mtimeMs === stat.mtimeMs;
 
 const parseCache = (raw: string): ScanCache => {
-	const result = cacheSchema.safeParse(JSON.parse(raw));
+	const result = cacheFileSchema.safeParse(JSON.parse(raw));
 
-	return result.success ? result.data : {};
+	return result.success ? result.data.entries : {};
 };
 
-const serializeCache = (cache: ScanCache): string => JSON.stringify(cache, null, "\t");
+const serializeCache = (cache: ScanCache): string =>
+	JSON.stringify({ version: CACHE_VERSION, entries: cache }, null, "\t");
 
 export const readCache = (cachePath: string, logger: Logger): ScanCache => {
 	let raw: string;

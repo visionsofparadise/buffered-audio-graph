@@ -13,6 +13,16 @@ export default defineConfig({
 					passWithNoTests: true,
 				},
 			},
+			{
+				test: {
+					name: "integration",
+					globals: true,
+					environment: "node",
+					include: ["src/**/*integration.test.ts"],
+					testTimeout: 30_000,
+					passWithNoTests: true,
+				},
+			},
 		],
 	},
 });

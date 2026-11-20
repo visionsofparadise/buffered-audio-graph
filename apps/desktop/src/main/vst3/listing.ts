@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { runChild, type RunChildResult } from "@buffered-audio/core";
 import { z } from "zod";
 
 export const CRASH_EXIT_CODES: ReadonlyArray<number> = [3221225477, -1073741819];
@@ -14,51 +14,58 @@ export const tailLines = (text: string, count = 5): string =>
 	text.trim().split(/\r?\n/).slice(-count).join("\n").trim();
 
 export type ListResult =
-	{ readonly ok: true; readonly classNames: ReadonlyArray<string> } | { readonly ok: false; readonly error: string };
+	| { readonly ok: true; readonly classNames: ReadonlyArray<string> }
+	| { readonly ok: false; readonly error: string; readonly cacheable: boolean };
 
-const runOnce = async (
-	cliPath: string,
-	modulePath: string,
-): Promise<{ code: number | null; stdout: string; stderr: string }> =>
-	new Promise((resolve, reject) => {
-		const child = spawn(cliPath, ["--plugin", modulePath, "--list"]);
+export interface ListModuleOptions {
+	readonly prefixArgs?: ReadonlyArray<string>;
+	readonly timeoutMs?: number;
+}
 
-		let stdout = "";
-		let stderr = "";
+const LIST_TIMEOUT_MS = 300_000;
+const LIST_STDOUT_LIMIT_BYTES = 1024 * 1024;
 
-		child.stdout.on("data", (chunk: Buffer) => {
-			stdout += chunk.toString();
-		});
-
-		child.stderr.on("data", (chunk: Buffer) => {
-			stderr += chunk.toString();
-		});
-
-		child.on("error", (error: Error) => {
-			reject(new Error(`Failed to spawn CLI for ${modulePath}: ${error.message}`));
-		});
-
-		child.on("close", (code) => {
-			resolve({ code, stdout, stderr });
-		});
+const runOnce = (cliPath: string, modulePath: string, options: ListModuleOptions): Promise<RunChildResult> =>
+	runChild({
+		label: "vst-demon-cli",
+		command: cliPath,
+		args: [...(options.prefixArgs ?? []), "--plugin", modulePath, "--list"],
+		timeoutMs: options.timeoutMs ?? LIST_TIMEOUT_MS,
+		stdoutLimitBytes: LIST_STDOUT_LIMIT_BYTES,
 	});
 
-export const listModule = async (cliPath: string, modulePath: string): Promise<ListResult> => {
-	let attempt = await runOnce(cliPath, modulePath);
+export const listModule = async (
+	cliPath: string,
+	modulePath: string,
+	options: ListModuleOptions = {},
+): Promise<ListResult> => {
+	let attempt: RunChildResult;
 
-	if (isCrashExit(attempt.code)) {
-		attempt = await runOnce(cliPath, modulePath);
+	try {
+		attempt = await runOnce(cliPath, modulePath, options);
+
+		if (isCrashExit(attempt.exit.code)) {
+			attempt = await runOnce(cliPath, modulePath, options);
+		}
+	} catch (error) {
+		return { ok: false, error: error instanceof Error ? error.message : String(error), cacheable: false };
 	}
 
-	if (attempt.code !== 0) {
-		const detail = tailLines(attempt.stderr) || `CLI exited with code ${String(attempt.code)}`;
+	if (attempt.exit.spawnError) {
+		return { ok: false, error: (attempt.failure ?? attempt.exit.spawnError).message, cacheable: false };
+	}
 
-		return { ok: false, error: detail };
+	if (attempt.failure) {
+		return { ok: false, error: tailLines(attempt.stderr) || attempt.failure.message, cacheable: true };
 	}
 
 	try {
-		return { ok: true, classNames: parseClassNames(attempt.stdout) };
+		return { ok: true, classNames: parseClassNames(attempt.stdout.toString()) };
 	} catch (error) {
-		return { ok: false, error: `Failed to parse --list output for ${modulePath}: ${String(error)}` };
+		return {
+			ok: false,
+			error: `Failed to parse --list output for ${modulePath}: ${String(error)}`,
+			cacheable: true,
+		};
 	}
 };

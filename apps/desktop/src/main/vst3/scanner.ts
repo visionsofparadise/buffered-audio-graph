@@ -91,15 +91,23 @@ export class Vst3Scanner {
 
 		const prep = prepared ?? this.prepare(roots);
 
-		this.inFlight = this.runExpansion(prep).finally(() => {
-			this.inFlight = undefined;
+		this.inFlight = this.runExpansion(prep)
+			.catch((error: unknown) => {
+				this.options.logger.error(
+					"VST3 scan expansion failed",
+					error instanceof Error ? error : new Error(String(error)),
+					{ namespace: "vst3" },
+				);
+			})
+			.finally(() => {
+				this.inFlight = undefined;
 
-			if (this.rescanQueued) {
-				this.rescanQueued = false;
+				if (this.rescanQueued) {
+					this.rescanQueued = false;
 
-				this.scheduleExpansion(this.queuedRoots);
-			}
-		});
+					this.scheduleExpansion(this.queuedRoots);
+				}
+			});
 	}
 
 	private async runExpansion(prep: PreparedScan): Promise<void> {
@@ -117,7 +125,7 @@ export class Vst3Scanner {
 			} else {
 				prep.entriesByModule.set(module.modulePath, [deriveErrorEntry(module, result.error)]);
 
-				if (stat !== undefined) nextCache[module.modulePath] = { ...stat, error: result.error };
+				if (stat !== undefined && result.cacheable) nextCache[module.modulePath] = { ...stat, error: result.error };
 			}
 
 			onUpdate(this.flatten(prep.modules, prep.entriesByModule));
