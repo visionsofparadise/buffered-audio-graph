@@ -50,6 +50,13 @@ export function launchVst3Editor(options: LaunchVst3EditorOptions): void {
 		const stderr = handle.stderrTail();
 		const failure = childExitError(LABEL, exit, stderr);
 
+		if (failure !== undefined) {
+			logger.error(exit.spawnError ? "VST3 editor failed to start" : "VST3 editor exited with an error", failure, {
+				namespace: "vst3",
+				launchId,
+			});
+		}
+
 		emit({
 			event: "exited",
 			code: exit.code,

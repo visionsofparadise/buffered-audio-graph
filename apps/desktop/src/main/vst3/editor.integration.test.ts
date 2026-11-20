@@ -6,13 +6,16 @@ import { Logger } from "../../shared/Models/Logger";
 import { launchVst3Editor } from "./editor";
 import type { Vst3EditorEvent } from "../../shared/ipc/Vst3/Vst3EditorEvent";
 
-const silent: Logger.BaseLogger = {
+const loggedErrors: Array<string | Logger.LogData> = [];
+const recorder: Logger.BaseLogger = {
 	debug: () => undefined,
 	info: () => undefined,
 	warn: () => undefined,
-	error: () => undefined,
+	error: (data) => {
+		loggedErrors.push(data);
+	},
 };
-const logger = new Logger("main", silent);
+const logger = new Logger("main", recorder);
 const directories: Array<string> = [];
 
 afterAll(async () => {
@@ -77,6 +80,13 @@ describe("launchVst3Editor", () => {
 		expect(events[1]).toMatchObject({ event: "exited", code: 3, stderrTail: "fatal" });
 		expect(events[1]?.event === "exited" ? events[1].error?.trimEnd() : undefined).toMatch(
 			/^vst-demon-cli exited 3: fatal$/,
+		);
+		expect(loggedErrors).toContainEqual(
+			expect.objectContaining({
+				message: "VST3 editor exited with an error",
+				launchId: "launch-1",
+				error: expect.objectContaining({ message: expect.stringMatching(/^vst-demon-cli exited 3: fatal/) }),
+			}),
 		);
 	});
 

@@ -46,6 +46,20 @@ describe("listModule", () => {
 		expect(result).toEqual({ ok: false, cacheable: true, error: "boom" });
 	});
 
+	it.skipIf(process.platform === "win32")(
+		"resolves a non-cacheable failure when the CLI is killed by a signal",
+		async () => {
+			const result = await listModule(
+				process.execPath,
+				MODULE_PATH,
+				stub("process.kill(process.pid, 'SIGKILL'); setInterval(() => {}, 1000)"),
+			);
+
+			expect(result).toMatchObject({ ok: false, cacheable: false });
+			expect(result.ok ? "" : result.error).toMatch(/exited with signal SIGKILL/);
+		},
+	);
+
 	it("resolves a cacheable failure when the CLI prints output that does not parse", async () => {
 		const result = await listModule(process.execPath, MODULE_PATH, stub("process.stdout.write('not json')"));
 

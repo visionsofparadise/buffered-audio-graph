@@ -56,7 +56,11 @@ export const listModule = async (
 	}
 
 	if (attempt.failure) {
-		return { ok: false, error: tailLines(attempt.stderr) || attempt.failure.message, cacheable: true };
+		return {
+			ok: false,
+			error: tailLines(attempt.stderr) || attempt.failure.message,
+			cacheable: attempt.exit.signal === null,
+		};
 	}
 
 	try {
