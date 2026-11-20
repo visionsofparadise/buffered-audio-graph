@@ -109,20 +109,32 @@ async function copyModeOfTarget(temporaryPath: string, path: string): Promise<vo
 const RENAME_RETRY_MS = 1000;
 const RENAME_BUSY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
 
-async function renameOnto(from: string, to: string): Promise<void> {
+async function isRetryableRename(error: unknown, to: string, deadline: number): Promise<boolean> {
+	const code = (error as NodeJS.ErrnoException).code ?? "";
+
+	if (process.platform !== "win32" || !RENAME_BUSY_CODES.has(code) || performance.now() > deadline) return false;
+
+	const target = await statTarget(to).catch(() => undefined);
+
+	return !target?.isDirectory();
+}
+
+async function renameOnto(from: string, to: string, signal: AbortSignal): Promise<void> {
 	const deadline = performance.now() + RENAME_RETRY_MS;
 
 	for (;;) {
+		signal.throwIfAborted();
+
 		try {
 			await rename(from, to);
 
 			return;
 		} catch (error) {
-			const code = (error as NodeJS.ErrnoException).code ?? "";
+			if (!(await isRetryableRename(error, to, deadline))) throw error;
 
-			if (process.platform !== "win32" || !RENAME_BUSY_CODES.has(code) || performance.now() > deadline) throw error;
+			signal.throwIfAborted();
 
-			await delay(20);
+			await delay(20, undefined, { signal }).catch(() => undefined);
 		}
 	}
 }
@@ -280,11 +292,15 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 	private async moveIntoPlace(temporaryPath: string): Promise<void> {
 		const path = this.properties.path;
 
+		const signal = this.streamSignal;
+
 		try {
 			await copyModeOfTarget(temporaryPath, path);
-			await renameOnto(temporaryPath, path);
+			await renameOnto(temporaryPath, path, signal);
 		} catch (error) {
 			await rm(temporaryPath, { force: true });
+
+			if (signal.aborted && error === signal.reason) throw error;
 
 			throw new Error(
 				`Cannot move "${temporaryPath}" onto "${path}": ${error instanceof Error ? error.message : String(error)}`,

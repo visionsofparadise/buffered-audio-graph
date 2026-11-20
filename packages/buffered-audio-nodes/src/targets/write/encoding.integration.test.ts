@@ -1,6 +1,18 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+	chmod,
+	lstat,
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	stat,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -22,6 +34,8 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 	return { ...actual, spawn: vi.fn(actual.spawn) };
 });
+
+vi.mock("node:fs/promises", { spy: true });
 
 const SAMPLE_RATE = 44100;
 const IS_WINDOWS = process.platform === "win32";
@@ -194,6 +208,7 @@ afterEach(async () => {
 	process.off("unhandledRejection", onUnhandled);
 	unhandled.length = 0;
 	vi.mocked(spawn).mockClear();
+	vi.mocked(rename).mockClear();
 	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -486,4 +501,97 @@ describe("WriteStream target path", () => {
 		expect((await stat(path)).isCharacterDevice()).toBe(true);
 		expect(await readdir(directory)).toEqual(["out.wav"]);
 	});
+
+	it.skipIf(!IS_WINDOWS)(
+		"rejects with the abort at once and leaves the target unchanged when aborted while a held target's rename retries",
+		async () => {
+			const directory = await temporaryDirectory("write-held-");
+			const path = join(directory, "out.wav");
+
+			await writeFile(path, "old");
+
+			// Another process holding the target open makes every rename onto it fail with EPERM on Windows.
+			const holder = actualSpawn(
+				process.execPath,
+				[
+					"-e",
+					"require('fs').openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1000)",
+					path,
+				],
+				{ stdio: ["ignore", "pipe", "ignore"] },
+			);
+			const holderExited = new Promise((resolve) => holder.once("exit", resolve));
+
+			try {
+				await new Promise((resolve) => holder.stdout.once("data", resolve));
+
+				const source = new EndlessSource({ readDelayMs: 20, maxBlocks: 2 });
+				const controller = new AbortController();
+
+				source.to(write(path, { bitDepth: "16" }));
+
+				const rendering = source
+					.createRenderJob({ signal: controller.signal })
+					.render()
+					.then(
+						() => undefined,
+						(reason: unknown) => reason,
+					);
+				const deadline = performance.now() + 5000;
+
+				while (vi.mocked(rename).mock.calls.length === 0 && performance.now() < deadline) await delay(5);
+
+				expect(vi.mocked(rename).mock.calls.length).toBeGreaterThan(0);
+
+				// The first rename has failed and the retry is waiting for its next attempt.
+				await delay(100);
+
+				const abortedAt = performance.now();
+
+				controller.abort();
+
+				const error = await rendering;
+
+				expect(error).toBe(controller.signal.reason);
+				expect(performance.now() - abortedAt).toBeLessThan(300);
+				expect(await readFile(path, "utf8")).toBe("old");
+				expect(await partialFiles(directory)).toEqual([]);
+			} finally {
+				holder.kill();
+				await holderExited;
+			}
+		},
+		20_000,
+	);
+
+	it.skipIf(!IS_WINDOWS)(
+		"fails at once, without the rename retry, when a directory takes the target's place",
+		async () => {
+			const directory = await temporaryDirectory("write-replaced-");
+			const path = join(directory, "out.wav");
+			const source = new EndlessSource({ readDelayMs: 300, maxBlocks: 2 });
+
+			source.to(write(path, { bitDepth: "16" }));
+
+			const startedAt = performance.now();
+			const rendering = source
+				.createRenderJob()
+				.render()
+				.then(
+					() => undefined,
+					(reason: unknown) => reason,
+				);
+
+			// Setup has passed by now, so only the rename meets the directory.
+			await delay(150);
+			await mkdir(path);
+
+			const error = await rendering;
+
+			expect((error as Error).message).toMatch(/^Cannot move ".*" onto ".*out\.wav": EPERM/);
+			expect(vi.mocked(rename).mock.calls.length).toBe(1);
+			expect(performance.now() - startedAt).toBeLessThan(1500);
+			expect(await partialFiles(directory)).toEqual([]);
+		},
+	);
 });
