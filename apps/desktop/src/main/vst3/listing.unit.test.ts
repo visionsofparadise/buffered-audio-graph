@@ -14,6 +14,16 @@ describe("isCrashExit", () => {
 		expect(isCrashExit(1)).toBe(false);
 		expect(isCrashExit(null)).toBe(false);
 	});
+
+	it("is true for a signal the process raises when it crashes, and false for one sent from outside", () => {
+		for (const signal of ["SIGSEGV", "SIGABRT", "SIGBUS", "SIGILL", "SIGFPE"] as const) {
+			expect(isCrashExit(null, signal)).toBe(true);
+		}
+
+		for (const signal of ["SIGKILL", "SIGTERM", "SIGINT", "SIGHUP"] as const) {
+			expect(isCrashExit(null, signal)).toBe(false);
+		}
+	});
 });
 
 describe("parseClassNames", () => {

@@ -38,7 +38,8 @@
 				"vitest.heavy.config.ts"
 			],
 			"project": ["src/**/*.{ts,tsx}", "*.{ts,tsx,mjs}"],
-			"ignoreDependencies": ["@fontsource/azeret-mono", "tailwindcss"]
+			"ignoreDependencies": ["@fontsource/azeret-mono", "tailwindcss"],
+			"ignoreBinaries": ["prlimit"]
 		},
 		"apps/service": {
 			"entry": ["src/app.ts"],

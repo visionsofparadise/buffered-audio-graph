@@ -3,7 +3,10 @@ import { z } from "zod";
 
 export const CRASH_EXIT_CODES: ReadonlyArray<number> = [3221225477, -1073741819];
 
-export const isCrashExit = (code: number | null): boolean => code !== null && CRASH_EXIT_CODES.includes(code);
+const CRASH_SIGNALS: ReadonlyArray<NodeJS.Signals> = ["SIGSEGV", "SIGABRT", "SIGBUS", "SIGILL", "SIGFPE"];
+
+export const isCrashExit = (code: number | null, signal: NodeJS.Signals | null = null): boolean =>
+	(code !== null && CRASH_EXIT_CODES.includes(code)) || (signal !== null && CRASH_SIGNALS.includes(signal));
 
 const classNamesSchema = z.array(z.string());
 
@@ -44,7 +47,7 @@ export const listModule = async (
 	try {
 		attempt = await runOnce(cliPath, modulePath, options);
 
-		if (isCrashExit(attempt.exit.code)) {
+		if (isCrashExit(attempt.exit.code, attempt.exit.signal)) {
 			attempt = await runOnce(cliPath, modulePath, options);
 		}
 	} catch (error) {
@@ -59,7 +62,7 @@ export const listModule = async (
 		return {
 			ok: false,
 			error: tailLines(attempt.stderr) || attempt.failure.message,
-			cacheable: attempt.exit.signal === null,
+			cacheable: attempt.exit.signal === null || isCrashExit(null, attempt.exit.signal),
 		};
 	}
 
