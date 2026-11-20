@@ -16,11 +16,12 @@ function createProbeProcess(): { readonly process: EventEmitter; readonly finish
 	const probeProcess = new EventEmitter();
 	const stdout = new PassThrough();
 	const stderr = new PassThrough();
+	let exitCode: number | null = null;
 
 	Object.defineProperties(probeProcess, {
 		stdout: { value: stdout },
 		stderr: { value: stderr },
-		exitCode: { value: null, writable: true },
+		exitCode: { get: () => exitCode },
 		signalCode: { value: null },
 		kill: { value: vi.fn() },
 	});
@@ -29,7 +30,13 @@ function createProbeProcess(): { readonly process: EventEmitter; readonly finish
 		process: probeProcess,
 		finish: () => {
 			stdout.write(JSON.stringify({ streams: [{ sample_rate: "44100", channels: 1, duration: "1" }] }));
-			setImmediate(() => probeProcess.emit("close", 0));
+			stdout.end();
+			stderr.end();
+			setImmediate(() => {
+				exitCode = 0;
+				probeProcess.emit("exit", 0, null);
+				probeProcess.emit("close", 0, null);
+			});
 		},
 	};
 }
@@ -37,11 +44,13 @@ function createProbeProcess(): { readonly process: EventEmitter; readonly finish
 function createSilentFfmpegProcess(): { readonly process: EventEmitter; readonly kill: ReturnType<typeof vi.fn> } {
 	const ffmpegProcess = new EventEmitter();
 	const stdout = new PassThrough();
+	const stderr = new PassThrough();
 	let exitCode: number | null = null;
 	const kill = vi.fn(() => {
 		queueMicrotask(() => {
 			exitCode = 1;
 			stdout.end();
+			stderr.end();
 			ffmpegProcess.emit("exit", 1, null);
 			ffmpegProcess.emit("close", 1, null);
 		});
@@ -51,7 +60,7 @@ function createSilentFfmpegProcess(): { readonly process: EventEmitter; readonly
 
 	Object.defineProperties(ffmpegProcess, {
 		stdout: { value: stdout },
-		stderr: { value: new PassThrough() },
+		stderr: { value: stderr },
 		exitCode: { get: () => exitCode },
 		signalCode: { value: null },
 		killed: { get: () => kill.mock.calls.length > 0 },

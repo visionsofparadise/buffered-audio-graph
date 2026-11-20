@@ -1,11 +1,16 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import {
 	BufferedSourceStream,
-	settledOrAborted,
+	ChildOutputBuffer,
+	childFailure,
+	releaseChild,
+	runChild,
 	SourceNode,
+	spawnChild,
 	terminateChild,
 	type Block,
+	type ChildHandle,
 	type SourceMetadata,
+	type SourceMetadataOptions,
 	type SourceNodeProperties,
 } from "@buffered-audio/core";
 import { deinterleaveBuffer } from "@buffered-audio/utils";
@@ -28,6 +33,7 @@ export interface ReadFfmpegProperties extends z.infer<typeof ffmpegSchema>, Sour
 }
 
 const DEFAULT_CHUNK_SIZE = 44100;
+const PROBE_STDOUT_LIMIT_BYTES = 16 * 1024 * 1024;
 
 interface ProbeResult {
 	readonly sampleRate: number;
@@ -36,16 +42,16 @@ interface ProbeResult {
 }
 
 export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
-	private ffmpegProcess?: ChildProcess;
-	private stdout?: NodeJS.ReadableStream;
+	private handle?: ChildHandle;
+	private stdoutBuffer?: ChildOutputBuffer;
 	private frameOffset = 0;
-	private remainder?: Buffer;
 	private outputChannels = 0;
 	private sourceSampleRate = 0;
 	private sourceBitDepth = 0;
 
-	override async getMetadata(): Promise<SourceMetadata> {
-		const probe = await this.probe(this.properties.ffprobePath, this.properties.path);
+	override async getMetadata(options?: SourceMetadataOptions): Promise<SourceMetadata> {
+		const signal = options?.signal ? AbortSignal.any([this.streamSignal, options.signal]) : this.streamSignal;
+		const probe = await this.probe(this.properties.ffprobePath, this.properties.path, signal);
 		const selectedChannels = this.properties.channels;
 		const channels = selectedChannels ? selectedChannels.length : probe.channels;
 
@@ -57,9 +63,9 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 	}
 
 	private async ensureInitialized(): Promise<void> {
-		if (this.ffmpegProcess) return;
+		if (this.handle) return;
 
-		const probe = await this.probe(this.properties.ffprobePath, this.properties.path);
+		const probe = await this.probe(this.properties.ffprobePath, this.properties.path, this.streamSignal);
 
 		this.throwIfStopped();
 
@@ -69,7 +75,20 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 		this.sourceSampleRate = probe.sampleRate;
 		this.sourceBitDepth = 32;
 
-		const args = ["-i", this.properties.path, "-f", "f32le", "-acodec", "pcm_f32le", "-ar", String(probe.sampleRate)];
+		const args = [
+			"-hide_banner",
+			"-nostats",
+			"-loglevel",
+			"error",
+			"-i",
+			this.properties.path,
+			"-f",
+			"f32le",
+			"-acodec",
+			"pcm_f32le",
+			"-ar",
+			String(probe.sampleRate),
+		];
 
 		if (selectedChannels) {
 			const panParts = selectedChannels.map((srcCh, outCh) => `c${outCh}=c${srcCh}`);
@@ -83,16 +102,11 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 
 		args.push("pipe:1");
 
-		const proc = spawn(this.properties.ffmpegPath, args, {
-			stdio: ["ignore", "pipe", "pipe"],
-		});
+		const handle = spawnChild({ label: "ffmpeg", command: this.properties.ffmpegPath, args, stdin: "ignore" });
 
-		this.ffmpegProcess = proc;
-		this.stdout = proc.stdout;
-		this.remainder = undefined;
+		this.handle = handle;
+		this.stdoutBuffer = new ChildOutputBuffer(handle, { signal: this.streamSignal });
 		this.frameOffset = 0;
-
-		proc.stderr.resume();
 	}
 
 	override async _read(): Promise<Block | undefined> {
@@ -106,19 +120,23 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 		this.throwIfStopped();
 
 		if (!data || data.length === 0) {
+			await this.endOfStream();
+
 			return undefined;
 		}
 
 		const usableBytes = Math.floor(data.length / bytesPerFrame) * bytesPerFrame;
 
 		if (usableBytes === 0) {
+			await this.endOfStream();
+
 			return undefined;
 		}
 
 		const leftover = data.length - usableBytes;
 
 		if (leftover > 0) {
-			this.remainder = Buffer.from(data.buffer, data.byteOffset + usableBytes, leftover);
+			this.stdoutBuffer?.unshift(Buffer.from(data.buffer, data.byteOffset + usableBytes, leftover));
 		}
 
 		const frames = usableBytes / bytesPerFrame;
@@ -138,65 +156,65 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 	}
 
 	override async _destroy(): Promise<void> {
-		const proc = this.ffmpegProcess;
+		const handle = this.handle;
 
-		if (proc) {
-			await terminateChild(proc);
-
-			this.ffmpegProcess = undefined;
+		if (handle) {
+			handle.stdout?.destroy();
+			await terminateChild(handle.child);
+			releaseChild(handle);
+			this.stdoutBuffer?.dispose();
 		}
 
-		this.stdout = undefined;
-		this.remainder = undefined;
+		this.handle = undefined;
+		this.stdoutBuffer = undefined;
 	}
 
-	private async probe(ffprobePath: string, filePath: string): Promise<ProbeResult> {
-		const proc = spawn(
-			ffprobePath,
-			["-v", "quiet", "-print_format", "json", "-show_streams", "-select_streams", "a:0", filePath],
-			{
-				stdio: ["ignore", "pipe", "pipe"],
-			},
-		);
+	private async endOfStream(): Promise<void> {
+		const failure = this.handle ? await childFailure(this.handle, { signal: this.streamSignal }) : undefined;
 
-		const chunks: Array<Buffer> = [];
+		this.throwIfStopped();
 
-		proc.stdout.on("data", (chunk: Buffer) => {
-			chunks.push(chunk);
+		if (failure) throw failure;
+	}
+
+	private async probe(ffprobePath: string, filePath: string, signal: AbortSignal): Promise<ProbeResult> {
+		const result = await runChild({
+			label: "ffprobe",
+			command: ffprobePath,
+			args: [
+				"-hide_banner",
+				"-loglevel",
+				"error",
+				"-print_format",
+				"json",
+				"-show_streams",
+				"-select_streams",
+				"a:0",
+				filePath,
+			],
+			signal,
+			stdoutLimitBytes: PROBE_STDOUT_LIMIT_BYTES,
+		}).catch((error: unknown) => {
+			if (signal.aborted) throw signal.reason;
+
+			throw new Error(`Cannot probe "${filePath}": ${error instanceof Error ? error.message : String(error)}`, {
+				cause: error,
+			});
 		});
 
-		proc.stderr.resume();
+		if (result.failure)
+			throw new Error(`Cannot probe "${filePath}": ${result.failure.message}`, { cause: result.failure });
 
-		const probed = new Promise<void>((resolve, reject) => {
-			proc.on("close", (code) => {
-				if (code !== 0) {
-					reject(new Error(`ffprobe exited with code ${code} for "${filePath}"`));
-				} else {
-					resolve();
-				}
-			});
-			proc.on("error", (error) => {
-				reject(new Error(`Failed to spawn ffprobe: ${error.message}`));
-			});
-		});
-
-		probed.catch(() => undefined);
+		let json: { streams?: Array<{ sample_rate?: string; channels?: number; duration?: string }> };
 
 		try {
-			await settledOrAborted(probed, this.streamSignal);
+			json = JSON.parse(result.stdout.toString("utf-8")) as typeof json;
 		} catch (error) {
-			await terminateChild(proc);
-
-			throw error;
+			throw new Error(
+				`Cannot probe "${filePath}": ffprobe printed unreadable JSON (${error instanceof Error ? error.message : String(error)})`,
+				{ cause: error },
+			);
 		}
-
-		const json = JSON.parse(Buffer.concat(chunks).toString("utf-8")) as {
-			streams?: Array<{
-				sample_rate?: string;
-				channels?: number;
-				duration?: string;
-			}>;
-		};
 
 		const stream = json.streams?.[0];
 
@@ -211,62 +229,21 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 		};
 	}
 
-	private readBytes(targetBytes: number): Promise<Buffer | undefined> {
-		const signal = this.streamSignal;
+	private async readBytes(targetBytes: number): Promise<Buffer | undefined> {
+		const buffer = this.stdoutBuffer;
 
-		return new Promise((resolve) => {
-			const stdout = this.stdout;
+		if (!buffer) return undefined;
 
-			if (!stdout || signal.aborted) {
-				resolve(undefined);
+		for (;;) {
+			buffer.throwIfFailed();
+			buffer.pull();
 
-				return;
-			}
+			if (buffer.length >= targetBytes) return buffer.take(targetBytes);
 
-			const existing = this.remainder;
+			if (buffer.ended) return buffer.take();
 
-			this.remainder = undefined;
-
-			const read = (): void => {
-				const raw = stdout.read(targetBytes - (existing?.length ?? 0)) as Buffer | null;
-
-				if (raw) {
-					resolve(existing ? Buffer.concat([existing, raw]) : raw);
-
-					return;
-				}
-
-				if ((stdout as NodeJS.ReadableStream & { readableEnded?: boolean }).readableEnded) {
-					resolve(existing && existing.length > 0 ? existing : undefined);
-
-					return;
-				}
-
-				const onReadable = (): void => {
-					cleanup();
-					read();
-				};
-				const onEnd = (): void => {
-					cleanup();
-					resolve(existing && existing.length > 0 ? existing : undefined);
-				};
-				const onAbort = (): void => {
-					cleanup();
-					resolve(undefined);
-				};
-				const cleanup = (): void => {
-					stdout.removeListener("readable", onReadable);
-					stdout.removeListener("end", onEnd);
-					signal.removeEventListener("abort", onAbort);
-				};
-
-				stdout.once("readable", onReadable);
-				stdout.once("end", onEnd);
-				signal.addEventListener("abort", onAbort, { once: true });
-			};
-
-			read();
-		});
+			await buffer.nextChange();
+		}
 	}
 }
 
