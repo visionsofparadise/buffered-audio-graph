@@ -1,10 +1,11 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import packageJson from "../package.json";
 
@@ -12,6 +13,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = join(here, "..");
 const nodesDir = join(here, "..", "..", "buffered-audio-nodes");
 const nodesVersion = "0.21.0";
+const ffmpegPath = join(here, "..", "..", "..", "fixtures", "binaries", "ffmpeg");
+const hasBinaryFixtures = existsSync(ffmpegPath);
+const hasPgrep = spawnSync("pgrep", ["-V"]).status === 0;
 
 let buildParent = "";
 let buildDir: string;
@@ -162,4 +166,176 @@ describe("bag render", () => {
 		expect(result.stderr).toContain("@buffered-audio/nodes");
 		expect(existsSync(outputPath)).toBe(false);
 	});
+});
+
+const ECHO_SCRIPT =
+	"let c = Promise.resolve(); process.stdin.on('data', (d) => { c = c.then(() => new Promise((r) => setTimeout(r, 200))).then(() => process.stdout.write(d)); }); process.stdin.on('end', () => c.then(() => process.stdout.end()));";
+
+function writeSignalBag(path: string, inputPath: string, outputPath: string, marker: string): void {
+	const definition = {
+		id: randomUUID(),
+		name: "cli-signal",
+		apiVersion: 1,
+		nodes: [
+			{
+				id: "read",
+				packageName: "@buffered-audio/nodes",
+				packageVersion: nodesVersion,
+				nodeName: "Read WAV",
+				parameters: { path: inputPath },
+			},
+			{
+				id: "echo",
+				packageName: "@buffered-audio/nodes",
+				packageVersion: nodesVersion,
+				nodeName: "CLI",
+				parameters: { command: process.execPath, args: ["-e", ECHO_SCRIPT, marker] },
+			},
+			{
+				id: "write",
+				packageName: "@buffered-audio/nodes",
+				packageVersion: nodesVersion,
+				nodeName: "Write",
+				parameters: { path: outputPath, ffmpegPath, encoding: { format: "flac" } },
+			},
+		],
+		edges: [
+			{ from: "read", to: "echo" },
+			{ from: "echo", to: "write" },
+		],
+	};
+
+	writeFileSync(path, JSON.stringify(definition));
+}
+
+function isRunning(pattern: string): boolean {
+	return spawnSync("pgrep", ["-f", pattern]).status === 0;
+}
+
+function partialFiles(directory: string): Array<string> {
+	return readdirSync(directory).filter((name) => name.includes(".partial-"));
+}
+
+async function waitFor(condition: () => boolean, timeoutMs: number): Promise<boolean> {
+	const deadline = performance.now() + timeoutMs;
+
+	while (performance.now() < deadline) {
+		if (condition()) return true;
+
+		await delay(50);
+	}
+
+	return condition();
+}
+
+interface SignalledRender {
+	readonly code: number | null;
+	readonly signal: NodeJS.Signals | null;
+	readonly elapsedMs: number;
+	readonly stderr: string;
+	readonly marker: string;
+	readonly outputDir: string;
+	readonly outputPath: string;
+}
+
+describe.skipIf(process.platform === "win32" || !hasBinaryFixtures || !hasPgrep)("bag render signals", () => {
+	const directories: Array<string> = [];
+
+	afterAll(() => {
+		for (const directory of directories) rmSync(directory, { recursive: true, force: true });
+	});
+
+	async function renderAndSignal(signal: "SIGINT" | "SIGTERM", group: boolean): Promise<SignalledRender> {
+		const workDir = mkdtempSync(join(tmpdir(), "bag-cli-signal-"));
+		const outputDir = join(workDir, "out");
+		const inputPath = join(workDir, "input.wav");
+		const outputPath = join(outputDir, "out.flac");
+		const bagPath = join(workDir, "graph.bag");
+		const marker = randomUUID();
+
+		directories.push(workDir);
+		mkdirSync(outputDir);
+		writeWav(
+			inputPath,
+			Array.from({ length: 60 * 8000 }, (_, i) => Math.round(Math.sin(i / 8) * 10000)),
+			8000,
+		);
+		writeSignalBag(bagPath, inputPath, outputPath, marker);
+
+		const child = spawn(
+			process.execPath,
+			[cliPath, "render", bagPath, "--resolve", `@buffered-audio/nodes=${nodesDir}`],
+			{
+				detached: group,
+				stdio: ["ignore", "ignore", "pipe"],
+			},
+		);
+		let stderr = "";
+
+		child.stderr.setEncoding("utf-8");
+		child.stderr.on("data", (chunk: string) => {
+			stderr += chunk;
+		});
+
+		const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+			child.once("close", (code, closeSignal) => {
+				resolve({ code, signal: closeSignal });
+			});
+		});
+
+		try {
+			const started = await waitFor(() => isRunning(marker) && partialFiles(outputDir).length > 0, 20_000);
+
+			if (!started) throw new Error(`The render never reached its echo child and encoder. stderr: ${stderr}`);
+
+			const pid = child.pid;
+
+			if (pid === undefined) throw new Error("The CLI has no pid");
+
+			const signalledAt = performance.now();
+
+			if (group) process.kill(-pid, signal);
+			else process.kill(pid, signal);
+
+			const exit = await Promise.race([closed, delay(10_000, undefined)]);
+
+			if (exit === undefined) throw new Error(`The CLI did not exit within 10 s of ${signal}. stderr: ${stderr}`);
+
+			return { ...exit, elapsedMs: performance.now() - signalledAt, stderr, marker, outputDir, outputPath };
+		} finally {
+			if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+		}
+	}
+
+	function expectCleanTeardown(result: SignalledRender, code: number): void {
+		expect.soft(result.code, result.stderr).toBe(code);
+		expect.soft(result.elapsedMs).toBeLessThan(10_000);
+		expect.soft(isRunning(result.marker)).toBe(false);
+		expect.soft(isRunning(result.outputDir)).toBe(false);
+		expect.soft(existsSync(result.outputPath)).toBe(false);
+		expect.soft(partialFiles(result.outputDir)).toEqual([]);
+	}
+
+	it("tears down and exits 130 on SIGINT, leaving no output and no process", async () => {
+		const result = await renderAndSignal("SIGINT", false);
+
+		expectCleanTeardown(result, 130);
+		expect.soft(result.stderr).toContain("Aborted by SIGINT");
+		expect.soft(result.stderr).not.toMatch(/^Error:/m);
+	}, 60_000);
+
+	it("tears down and exits 143 on SIGTERM, leaving no output and no process", async () => {
+		const result = await renderAndSignal("SIGTERM", false);
+
+		expectCleanTeardown(result, 143);
+		expect.soft(result.stderr).toContain("Aborted by SIGTERM");
+		expect.soft(result.stderr).not.toMatch(/^Error:/m);
+	}, 60_000);
+
+	it("tears down and exits 130 when SIGINT reaches its whole process group", async () => {
+		const result = await renderAndSignal("SIGINT", true);
+
+		expectCleanTeardown(result, 130);
+		expect.soft(result.stderr).toContain("Aborted by SIGINT");
+	}, 60_000);
 });

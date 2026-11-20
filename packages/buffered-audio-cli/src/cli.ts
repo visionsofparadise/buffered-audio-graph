@@ -1,11 +1,22 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createRenderJobs, describeError, validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
+import {
+	createRenderJobs,
+	describeError,
+	isAbortReason,
+	validateGraphDefinition,
+	type GraphDefinition,
+} from "@buffered-audio/core";
 import { Command } from "commander";
 import packageJson from "../package.json";
 import { createEventSink } from "./event-sink";
 import { parseParams, parseResolveOverrides } from "./parse-options";
 import { resolvePackages } from "./resolve-packages";
+import { runJobs } from "./run-jobs";
+
+const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 } as const;
+
+type HandledSignal = keyof typeof SIGNAL_EXIT_CODES;
 
 const program = new Command();
 
@@ -65,6 +76,21 @@ program
 
 			const { register } = await import("tsx/esm/api");
 			const unregister = register();
+			const controller = new AbortController();
+			let received: HandledSignal | undefined;
+			let signalCount = 0;
+
+			const onSignal = (signal: HandledSignal): void => {
+				signalCount += 1;
+
+				if (signalCount > 1) process.exit(SIGNAL_EXIT_CODES[signal]);
+
+				received = signal;
+				controller.abort(new DOMException(`Received ${signal}`, "AbortError"));
+			};
+
+			process.on("SIGINT", onSignal);
+			process.on("SIGTERM", onSignal);
 
 			try {
 				const chunkSize = options.chunkSize ? parseInt(options.chunkSize, 10) : undefined;
@@ -89,19 +115,34 @@ program
 
 					process.stdout.write(`Rendering graph: ${definition.name}\n`);
 
-					const jobs = createRenderJobs(definition, registry, { chunkSize, highWaterMark, parameters });
+					const jobs = createRenderJobs(definition, registry, {
+						signal: controller.signal,
+						chunkSize,
+						highWaterMark,
+						parameters,
+					});
 
 					for (const job of jobs) sink.subscribe(job);
 
-					await Promise.all(jobs.map((job) => job.render()));
+					await runJobs(jobs, controller.signal);
 
 					sink.printSummary(jobs);
 					process.stdout.write("Done.\n");
 				} catch (error) {
-					process.stderr.write(`Error: ${describeError(error)}\n`);
-					process.exitCode = 1;
+					if (received === undefined || !isAbortReason(error, controller.signal)) {
+						process.stderr.write(`Error: ${describeError(error)}\n`);
+
+						if (received === undefined) process.exitCode = 1;
+					}
+				}
+
+				if (received !== undefined) {
+					process.stderr.write(`Aborted by ${received}\n`);
+					process.exitCode = SIGNAL_EXIT_CODES[received];
 				}
 			} finally {
+				process.off("SIGINT", onSignal);
+				process.off("SIGTERM", onSignal);
 				await unregister();
 			}
 		},

@@ -21,7 +21,8 @@
 		"packages/buffered-audio-cli": {
 			"entry": ["src/cli.ts"],
 			"project": ["src/**/*.{ts,tsx}"],
-			"ignoreDependencies": ["@buffered-audio/nodes"]
+			"ignoreDependencies": ["@buffered-audio/nodes"],
+			"ignoreBinaries": ["pgrep"]
 		},
 		"apps/desktop": {
 			"entry": [
