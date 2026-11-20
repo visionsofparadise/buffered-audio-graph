@@ -523,13 +523,28 @@ async function processGone(pid: number, withinMs: number): Promise<unknown> {
 	}
 }
 
+function killSurvivor(pid: number): void {
+	try {
+		process.kill(pid, "SIGKILL");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+	}
+}
+
 describe("CliStream abort teardown", () => {
 	// Never reads stdin, so the abort lands while _transform waits on a parked write.
 	const IGNORES_SIGTERM = `process.on("SIGTERM", () => {}); require("fs").writeFileSync(process.argv[1], String(process.pid)); setInterval(() => {}, 1000);`;
 	let directory: string | undefined;
 
+	// The child ignores SIGTERM and never exits on its own, so one the node failed to kill must not outlive the test.
 	afterEach(async () => {
-		if (directory) await rm(directory, { recursive: true, force: true });
+		if (directory) {
+			const pid = Number(await readFile(join(directory, "child.pid"), "utf8").catch(() => ""));
+
+			if (pid) killSurvivor(pid);
+
+			await rm(directory, { recursive: true, force: true });
+		}
 
 		directory = undefined;
 	});

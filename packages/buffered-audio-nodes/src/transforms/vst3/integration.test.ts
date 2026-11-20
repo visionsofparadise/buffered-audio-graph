@@ -515,6 +515,18 @@ async function renderThroughHost(
 async function finishHostRender(run: HostRender): Promise<void> {
 	run.controller.abort();
 	await settleWithin(run.render, "render cleanup", 15_000).catch(() => undefined);
+
+	// The teardown stub's crash-report grandchildren hold the pipes for 12 s after the host exits; end them now.
+	const grandchildren = await readFile(`${run.pidPath}.grandchildren`, "utf8").catch(() => "");
+
+	for (const pid of grandchildren.split(" ").filter(Boolean).map(Number)) {
+		try {
+			process.kill(pid, "SIGKILL");
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+		}
+	}
+
 	await rm(run.directory, { recursive: true, force: true });
 }
 

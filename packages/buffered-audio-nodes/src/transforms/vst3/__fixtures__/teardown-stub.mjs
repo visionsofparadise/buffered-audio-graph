@@ -6,6 +6,7 @@
 //   exit-3-before-ready-holding-stdio spawn a grandchild that inherits stdio, write "crashed" to stderr, exit 3
 //                                     after 100 ms. The grandchild writes "end of crash report" to the inherited
 //                                     stderr 500 ms after its start, so after that exit, and holds the pipes for 12 s.
+//                                     It appends its pid and a space to <--pid-file>.grandchildren, so a test can end it.
 //   echo-then-exit-holding-stdio      READY, read stdin to its end, wait 200 ms, echo it all, spawn a grandchild,
 //                                     exit 0. --short-output drops the echo's last 4 bytes. --exit-code <n> writes
 //                                     "failed" to stderr and exits n. --holder-writes makes the grandchild write
@@ -45,17 +46,28 @@ function spawnSilentGrandchild() {
 }
 
 function spawnReportingGrandchild() {
+	const pidList = `${pidFile ?? join(process.cwd(), "teardown-stub.pid")}.grandchildren`;
+
 	if (process.platform !== "win32") {
-		spawn("sh", ["-c", "sleep 0.5; echo end of crash report >&2; sleep 12"], { stdio: "inherit" });
+		// exec keeps the shell's pid for the final sleep, so the recorded pid is the process holding the pipes.
+		spawn(
+			"sh",
+			["-c", 'printf "%s " "$$" >> "$0"; sleep 0.5; echo end of crash report >&2; exec sleep 12', pidList],
+			{
+				stdio: "inherit",
+			},
+		);
 
 		return;
 	}
 
 	// A Node started by cmd's `start /b` holds the pipes it inherits, unlike one this stub spawns directly. Verbatim
 	// arguments keep the inner quotes, which spawn would escape as \" and cmd would reject.
-	const script = "setTimeout(function(){console.error('end of crash report')},500);setTimeout(function(){},12000)";
+	const script =
+		"require('fs').appendFileSync(process.argv[1],process.pid+' ');" +
+		"setTimeout(function(){console.error('end of crash report')},500);setTimeout(function(){},12000)";
 
-	spawn("cmd.exe", ["/d", "/s", "/c", `"start /b "" "${process.execPath}" -e "${script}""`], {
+	spawn("cmd.exe", ["/d", "/s", "/c", `"start /b "" "${process.execPath}" -e "${script}" "${pidList}""`], {
 		stdio: "inherit",
 		windowsVerbatimArguments: true,
 	});
