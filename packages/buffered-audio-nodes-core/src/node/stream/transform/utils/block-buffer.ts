@@ -11,7 +11,19 @@ import type { Block } from "../../block";
 
 const HIGH_WATER_MARK = 10 * 1024 * 1024;
 
+const reportedFailures = new WeakSet<WriteStream>();
+
+function streamFailure(ws: WriteStream): Error | undefined {
+	if (ws.errored) return ws.errored;
+
+	return ws.destroyed ? new Error("BlockBuffer: its file stream was closed before the write") : undefined;
+}
+
 function drainOrError(ws: WriteStream): Promise<void> {
+	const failure = streamFailure(ws);
+
+	if (failure) return Promise.reject(failure);
+
 	return new Promise<void>((resolve, reject) => {
 		const onDrain = (): void => {
 			ws.removeListener("error", onError);
@@ -93,9 +105,18 @@ export class BlockBuffer {
 
 		const writeBuffer = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
 		const ws = this.ensureWriteStream();
-		const ok = ws.write(writeBuffer);
 
-		if (!ok) await drainOrError(ws);
+		try {
+			const failure = streamFailure(ws);
+
+			if (failure) throw failure;
+
+			if (!ws.write(writeBuffer)) await drainOrError(ws);
+		} catch (error) {
+			reportedFailures.add(ws);
+
+			throw error;
+		}
 
 		this.writePositionByte += writeBuffer.length;
 
@@ -162,6 +183,12 @@ export class BlockBuffer {
 	}
 
 	async reset(): Promise<void> {
+		if (this.writeStream && reportedFailures.has(this.writeStream)) {
+			await this.clear();
+
+			return;
+		}
+
 		await this.endWriteStream();
 		await this.endReadStream();
 
@@ -169,7 +196,11 @@ export class BlockBuffer {
 	}
 
 	async clear(): Promise<void> {
-		await this.endWriteStream();
+		const writeFailure = await this.endWriteStream().then(
+			() => undefined,
+			(error: unknown) => ({ error }),
+		);
+
 		await this.endReadStream();
 		await this.closeReverseReaders();
 
@@ -182,6 +213,8 @@ export class BlockBuffer {
 		this.tempFileExists = false;
 		this.writePositionByte = 0;
 		this._frames = 0;
+
+		if (writeFailure) throw writeFailure.error;
 	}
 
 	async close(): Promise<void> {
@@ -257,6 +290,13 @@ export class BlockBuffer {
 
 		this.writeStream = undefined;
 		this.writeStreamFinished = undefined;
+
+		if (reportedFailures.has(ws)) {
+			ws.destroy();
+			await awaitStreamClose(ws);
+
+			return;
+		}
 
 		ws.end();
 

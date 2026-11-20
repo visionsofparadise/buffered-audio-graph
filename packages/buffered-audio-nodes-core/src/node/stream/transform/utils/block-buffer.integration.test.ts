@@ -1,4 +1,4 @@
-import { createWriteStream, type WriteStream } from "node:fs";
+import { createWriteStream, writeFileSync, type WriteStream } from "node:fs";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -224,6 +224,90 @@ describe("BlockBuffer", () => {
 			clearTimeout(timeout);
 			await buffer.close().catch(() => undefined);
 		}
+	});
+
+	describe("after its file stream fails", () => {
+		const diskFull = new Error("ENOSPC: no space left on device, write");
+
+		// Stands in for the buffer's next file stream: it creates the temp file, as a real one would, and fails every
+		// write with ENOSPC on a later turn. A 16-byte high-water mark makes a write wait for drain.
+		function failNextFileStream(highWaterMark?: number): Writable {
+			const failing = new Writable({
+				highWaterMark,
+				write(_chunk, _encoding, callback) {
+					setTimeout(() => callback(diskFull), 10);
+				},
+			});
+
+			vi.mocked(createWriteStream).mockImplementationOnce((path) => {
+				writeFileSync(path, "");
+
+				return failing as WriteStream;
+			});
+
+			return failing;
+		}
+
+		function settleWithin<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
+			let timeout: ReturnType<typeof setTimeout> | undefined;
+			const hung = new Promise<never>((_resolve, reject) => {
+				timeout = setTimeout(
+					() => reject(new Error(`did not settle within ${String(milliseconds)}ms`)),
+					milliseconds,
+				);
+			});
+
+			return Promise.race([promise, hung]).finally(() => clearTimeout(timeout));
+		}
+
+		it("rejects the next write within 100 ms when the stream failed between writes, and close removes the temp file", async () => {
+			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-failed-"));
+			const failing = failNextFileStream();
+			const buffer = new BlockBuffer(temporaryDirectory);
+
+			try {
+				await buffer.write([new Float32Array(1024)], 44100, 32);
+				await new Promise((resolve) => failing.once("close", resolve));
+
+				expect(failing.errored).toBe(diskFull);
+				await expect(settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 100)).rejects.toBe(diskFull);
+				await expect(settleWithin(buffer.close(), 1000)).resolves.toBeUndefined();
+				expect(await readdir(temporaryDirectory)).toEqual([]);
+			} finally {
+				await rm(temporaryDirectory, { recursive: true, force: true });
+			}
+		});
+
+		it("resolves close and removes the temp file after a write waiting for drain was rejected", async () => {
+			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-failed-"));
+			const buffer = new BlockBuffer(temporaryDirectory);
+
+			failNextFileStream(16);
+
+			try {
+				await expect(settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 2000)).rejects.toBe(diskFull);
+				await expect(settleWithin(buffer.close(), 1000)).resolves.toBeUndefined();
+				expect(await readdir(temporaryDirectory)).toEqual([]);
+			} finally {
+				await rm(temporaryDirectory, { recursive: true, force: true });
+			}
+		});
+
+		it("resolves reset and removes the temp file after a write waiting for drain was rejected", async () => {
+			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-failed-"));
+			const buffer = new BlockBuffer(temporaryDirectory);
+
+			failNextFileStream(16);
+
+			try {
+				await expect(settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 2000)).rejects.toBe(diskFull);
+				await expect(settleWithin(buffer.reset(), 1000)).resolves.toBeUndefined();
+				expect(await readdir(temporaryDirectory)).toEqual([]);
+			} finally {
+				await buffer.close().catch(() => undefined);
+				await rm(temporaryDirectory, { recursive: true, force: true });
+			}
+		});
 	});
 
 	it("iterate over an empty buffer yields nothing", async () => {

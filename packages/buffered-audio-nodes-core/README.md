@@ -282,6 +282,8 @@ for (const framesDone of frameCounts) {
 | `openReverseReader(): Promise<ReverseBlockReader>`      | Open a read-only reverse view over the buffer.                                                                             |
 | `close(): Promise<void>`                                | Release the temp file and reset state.                                                                                     |
 
+Once the temp file's stream has failed, for example on a full disk, the next `write` rejects at once with the stream's error, and so does a `write` waiting for the stream to drain. After a rejected `write`, `reset()` and `close()` remove the temp file and resolve, and `reset()` leaves the buffer empty. `clear()` and `close()` remove the temp file even when they reject on a failure no `write` has reported.
+
 Walk a buffer with `iterate` (or `read` in a loop until a short block). Transforms whose output differs in length, position, or rate from the input allocate a separate scratch `BlockBuffer`, stream output into it, `clear()` the source, then stream the scratch back.
 
 ### ReverseBlockReader
