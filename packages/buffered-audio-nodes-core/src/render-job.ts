@@ -139,13 +139,18 @@ export class RenderJob {
 			this.events.emit("liveness", { createdAt: Date.now(), elapsedMs: performance.now() - renderCalledAt });
 		}, RENDER_LIVENESS_INTERVAL_MS);
 		const errors: Array<unknown> = [];
+		const signal = this.signal();
 		let temporaryDirectory: string | undefined;
 
 		try {
+			signal.throwIfAborted();
+
 			await scavengeRenderTemporaryDirectories();
 			temporaryDirectory = await createRenderTemporaryDirectory();
 
-			const meta = await this.sourceStream.getMetadata();
+			const meta = await this.sourceStream.getMetadata({ signal });
+
+			signal.throwIfAborted();
 
 			const defaultProviders: ReadonlyArray<ExecutionProvider> = ["gpu", "cpu-native", "cpu"];
 			const memoryLimit = this.options?.memoryLimit ?? 256 * 1024 * 1024;
@@ -154,7 +159,6 @@ export class RenderJob {
 			const bytesPerChunk = meta.channels * chunkSize * 4;
 			const computedHighWaterMark = Math.max(1, Math.floor(memoryLimit / (stages * bytesPerChunk)));
 
-			const signal = this.signal();
 			const context: StreamSetupContext = {
 				executionProviders: this.options?.executionProviders ?? defaultProviders,
 				memoryLimit,
@@ -238,7 +242,7 @@ export class RenderJob {
 	): Promise<Array<Promise<void>>> {
 		const pairs = teeReadable(readable, children, context.signal);
 		const results = await Promise.allSettled(
-			pairs.map(([branch, child]) => this.setup(child, branch, { ...context })),
+			pairs.map(([branch, child]) => this.abortOnFailure(this.setup(child, branch, { ...context }))),
 		);
 		const promises = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 		const failure = preferredFailure(results, context.signal);

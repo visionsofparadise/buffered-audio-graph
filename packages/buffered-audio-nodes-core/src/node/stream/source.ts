@@ -9,6 +9,10 @@ export interface SourceMetadata {
 	readonly durationFrames?: number;
 }
 
+export interface SourceMetadataOptions {
+	readonly signal?: AbortSignal;
+}
+
 export interface RenderTiming {
 	readonly totalMs: number;
 	readonly audioDurationMs: number;
@@ -23,7 +27,7 @@ export abstract class BufferedSourceStream<
 	private framesRead = 0;
 	private hasStarted = false;
 
-	abstract getMetadata(): Promise<SourceMetadata>;
+	abstract getMetadata(options?: SourceMetadataOptions): Promise<SourceMetadata>;
 
 	abstract _read(): Promise<Block | undefined>;
 

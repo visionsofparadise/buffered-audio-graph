@@ -5,7 +5,13 @@ import { z } from "zod";
 import type { StreamSetupContext } from "./node/stream";
 import type { Block } from "./node/stream/block";
 import { SourceNode } from "./node/source";
-import { BufferedSourceStream, type SourceMetadata, type SourceNodeProperties } from "./node/stream/source";
+import { BufferedAudioNode } from "./node";
+import {
+	BufferedSourceStream,
+	type SourceMetadata,
+	type SourceMetadataOptions,
+	type SourceNodeProperties,
+} from "./node/stream/source";
 import { BufferedTargetStream, TargetNode, type TargetNodeProperties } from "./node/stream/target";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
 import { TransformNode, type TransformNodeProperties } from "./node/transform";
@@ -1134,6 +1140,131 @@ describe("RenderJob hook errors ahead of teardown errors", () => {
 		transform.to(new HookErrorTarget({ destroyFails: true }));
 
 		expectHookThenDestroyError(await renderFailure(source), "transform failed");
+	});
+});
+
+describe("RenderJob aborts and the metadata signal", () => {
+	it("aborts sibling branches at once when its own setup of a branch fails", async () => {
+		const log: Array<string> = [];
+
+		class StraySourceStream extends BufferedSourceStream {
+			override async getMetadata(): Promise<SourceMetadata> {
+				return { sampleRate: 44100, channels: 1 };
+			}
+
+			override async _read(): Promise<Block | undefined> {
+				return undefined;
+			}
+		}
+
+		class StrayNode extends BufferedAudioNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "stray";
+			static override readonly schema = z.object({});
+			static override readonly Stream = StraySourceStream;
+		}
+
+		class SlowSetupTransformStream extends UnbufferedTransformStream {
+			override async _setup(context: StreamSetupContext): Promise<void> {
+				log.push("X _setup start");
+				context.signal?.addEventListener("abort", () => log.push("X sees render abort"), { once: true });
+				await new Promise((resolve) => setTimeout(resolve, 300));
+				log.push("X _setup end");
+			}
+
+			override *_transform(block: Block): Iterable<Block> {
+				yield block;
+			}
+		}
+
+		class SlowSetupTransform extends TransformNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "slow-setup-transform";
+			static override readonly schema = z.object({});
+			static override readonly Stream = SlowSetupTransformStream;
+		}
+
+		class LoggingSetupTargetStream extends MockTargetStream {
+			override _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> | void {
+				log.push("T2 _setup start");
+
+				return super._setup(input, context);
+			}
+		}
+
+		class LoggingSetupTarget extends TargetNode {
+			static override readonly packageName = "test";
+			static override readonly nodeName = "logging-setup-target";
+			static override readonly schema = z.object({});
+			static override readonly Stream = LoggingSetupTargetStream;
+		}
+
+		const source = new MockSource([createBlock(1, 0, 100), createBlock(2, 100, 100)]);
+		const slow = new SlowSetupTransform();
+
+		source.properties = { ...source.properties, children: [new StrayNode()] };
+		source.to(slow);
+		slow.to(new LoggingSetupTarget());
+
+		await expect(source.createRenderJob().render()).rejects.toThrow('Unexpected stream type for node "stray"');
+		expect(log).toEqual(["X _setup start", "X sees render abort", "X _setup end"]);
+	});
+
+	it("rejects an already-aborted render with its reason before any work", async () => {
+		vi.clearAllMocks();
+
+		const reason = new Error("aborted before render");
+		const source = new MockSource([createBlock(1, 0, 100)]);
+
+		source.to(new MockTarget());
+
+		const job = source.createRenderJob({ signal: AbortSignal.abort(reason) });
+		const getMetadata = vi.spyOn(job.streams.get(source)?.[0] as MockSourceStream, "getMetadata");
+
+		await expect(job.render()).rejects.toBe(reason);
+		expect(getMetadata).not.toHaveBeenCalled();
+		expect(scavengeRenderTemporaryDirectories).not.toHaveBeenCalled();
+		expect(createRenderTemporaryDirectory).not.toHaveBeenCalled();
+	});
+
+	it("passes the render signal to getMetadata, so an abort during it rejects the render", async () => {
+		let received: AbortSignal | undefined;
+
+		class SignalMetadataSourceStream extends MockSourceStream {
+			override getMetadata(options?: SourceMetadataOptions): Promise<SourceMetadata> {
+				const signal = options?.signal;
+
+				received = signal;
+
+				return new Promise((_resolve, reject) => {
+					if (!signal) {
+						reject(new Error("getMetadata received no signal"));
+
+						return;
+					}
+
+					signal.addEventListener("abort", () => reject(signal.reason as Error), { once: true });
+				});
+			}
+		}
+
+		class SignalMetadataSource extends MockSource {
+			static override readonly Stream = SignalMetadataSourceStream;
+		}
+
+		const reason = new Error("aborted during getMetadata");
+		const controller = new AbortController();
+		const source = new SignalMetadataSource([createBlock(1, 0, 100)]);
+
+		source.to(new MockTarget());
+
+		const render = source.createRenderJob({ signal: controller.signal }).render();
+
+		setTimeout(() => controller.abort(reason), 20);
+
+		await expect(render).rejects.toBe(reason);
+		expect(received).toBeInstanceOf(AbortSignal);
+		expect(received?.aborted).toBe(true);
 	});
 });
 

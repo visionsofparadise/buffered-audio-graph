@@ -22,6 +22,7 @@ export {
 	BufferedSourceStream,
 	type RenderTiming,
 	type SourceMetadata,
+	type SourceMetadataOptions,
 	type SourceNodeProperties,
 } from "./node/stream/source";
 export { BufferedTargetStream, TargetNode, type TargetNodeProperties } from "./node/stream/target";
