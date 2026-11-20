@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -94,6 +94,33 @@ async function rejection(promise: Promise<unknown>): Promise<unknown> {
 		},
 		(error: unknown) => error,
 	);
+}
+
+async function stubPid(directory: string): Promise<number> {
+	for (;;) {
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		const pid = Number(await readFile(join(directory, "pid"), "utf8").catch(() => ""));
+
+		if (pid) return pid;
+	}
+}
+
+// A stand-in that ignores SIGTERM, writes `output` bytes to stdout, records its pid once they are written, then idles.
+function ignoresSigterm(directory: string, output = 0): Array<string> {
+	const script = `process.on("SIGTERM", () => {}); process.stdout.write(Buffer.alloc(${output}), () => require("fs").writeFileSync(process.argv[1], String(process.pid))); setInterval(() => undefined, 1000)`;
+
+	return ["-e", script, join(directory, "pid")];
+}
+
+async function abortWithin(controller: AbortController, rendering: Promise<unknown>, pid: number): Promise<void> {
+	const abortedAt = performance.now();
+
+	controller.abort();
+
+	expect(await rendering).toBe(controller.signal.reason);
+	expect(performance.now() - abortedAt).toBeLessThan(1000);
+	expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }));
 }
 
 function spawnedChild(index: number): ChildProcess {
@@ -214,5 +241,32 @@ describe("ReadFfmpegStream against real children", () => {
 
 		expect((error as Error).message).toMatch(/ffmpeg exited 1: bad/);
 		expect(performance.now() - started).toBeLessThan(4000);
+	});
+
+	it.skipIf(IS_WINDOWS)("kills an ffprobe that ignores SIGTERM at once when the render aborts", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "read-ffmpeg-abort-"));
+
+		directories.push(directory);
+		redirect(process.execPath, ignoresSigterm(directory));
+
+		const controller = new AbortController();
+		const rendering = rejection(render({ signal: controller.signal }));
+
+		await abortWithin(controller, rendering, await stubPid(directory));
+	});
+
+	it.skipIf(IS_WINDOWS)("kills an ffmpeg that ignores SIGTERM at once when the render aborts", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "read-ffmpeg-abort-"));
+
+		directories.push(directory);
+		redirectProbes();
+		redirect(process.execPath, ignoresSigterm(directory, ONE_SECOND_BYTES));
+
+		const controller = new AbortController();
+		const rendering = rejection(render({ signal: controller.signal }));
+		const pid = await stubPid(directory);
+
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		await abortWithin(controller, rendering, pid);
 	});
 });

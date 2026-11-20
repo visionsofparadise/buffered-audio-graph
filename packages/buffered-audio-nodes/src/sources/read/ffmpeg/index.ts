@@ -160,7 +160,7 @@ export class ReadFfmpegStream extends BufferedSourceStream<ReadFfmpegNode> {
 
 		if (handle) {
 			handle.stdout?.destroy();
-			await terminateChild(handle.child);
+			await terminateChild(handle.child, { firstSignal: "SIGKILL" });
 			releaseChild(handle);
 			this.stdoutBuffer?.dispose();
 		}
