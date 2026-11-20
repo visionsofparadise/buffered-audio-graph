@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { access, open, rename, rm, type FileHandle } from "node:fs/promises";
-import { join, parse } from "node:path";
+import { access, chmod, open, rename, rm, stat, type FileHandle } from "node:fs/promises";
+import { join, parse, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
 	BufferedTargetStream,
@@ -19,6 +19,7 @@ import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { createFfmpegPathField } from "../../utils/binary-fields";
 import { getBytesPerSample, writeSample, buildWavHeader, buildRf64Header } from "./utils/wav";
+import type { Stats } from "node:fs";
 
 function bitDepthToPcmFormat(bitDepth: WavBitDepth): string {
 	switch (bitDepth) {
@@ -83,6 +84,28 @@ function partialPath(path: string): string {
 	return join(dir, `${name}.partial-${process.pid}-${randomBytes(4).toString("hex")}${ext}`);
 }
 
+function endsWithSeparator(path: string): boolean {
+	return path.endsWith("/") || path.endsWith(sep);
+}
+
+async function statTarget(path: string): Promise<Stats | undefined> {
+	try {
+		return await stat(path);
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+
+		throw error;
+	}
+}
+
+async function copyModeOfTarget(temporaryPath: string, path: string): Promise<void> {
+	if (process.platform === "win32") return;
+
+	const target = await statTarget(path);
+
+	if (target?.isFile()) await chmod(temporaryPath, target.mode & 0o7777);
+}
+
 const RENAME_RETRY_MS = 1000;
 const RENAME_BUSY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
 
@@ -116,7 +139,15 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 	private initialized = false;
 
 	override async _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
-		if (this.properties.path === "") throw new Error("Write needs a file path; path is empty");
+		const path = this.properties.path;
+
+		if (path === "") throw new Error("Write needs a file path; path is empty");
+
+		if (endsWithSeparator(path)) throw new Error(`Write needs a file path; "${path}" ends with a path separator`);
+
+		const target = await statTarget(path);
+
+		if (target?.isDirectory()) throw new Error(`Write needs a file path; "${path}" is a directory`);
 
 		this.bytesWritten = 0;
 		this.initialized = false;
@@ -130,10 +161,9 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 		this.useEncoding = encoding !== undefined && encoding.format !== "wav" && !!this.properties.ffmpegPath;
 
-		if (!this.useEncoding) {
-			this.temporaryPath = partialPath(this.properties.path);
-			this.fileHandle = await open(this.temporaryPath, "w");
-		}
+		this.temporaryPath = target && !target.isFile() ? undefined : partialPath(path);
+
+		if (!this.useEncoding) this.fileHandle = await open(this.temporaryPath ?? path, "w");
 
 		return super._setup(input, context);
 	}
@@ -161,13 +191,10 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 		if (!encoding || !ffmpegPath) throw new Error("ffmpeg encoding misconfigured");
 
-		const temporaryPath = partialPath(this.properties.path);
-
-		this.temporaryPath = temporaryPath;
 		this.handle = spawnChild({
 			label: "ffmpeg",
 			command: ffmpegPath,
-			args: this.buildFfmpegArgs(encoding, temporaryPath),
+			args: this.buildFfmpegArgs(encoding, this.temporaryPath ?? this.properties.path),
 			stdout: "ignore",
 		});
 	}
@@ -238,7 +265,10 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 		if (stdinError) throw stdinError;
 
-		const temporaryPath = this.temporaryPath ?? "";
+		const temporaryPath = this.temporaryPath;
+
+		if (temporaryPath === undefined) return;
+
 		const written = await access(temporaryPath).then(
 			() => true,
 			() => false,
@@ -251,6 +281,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		const path = this.properties.path;
 
 		try {
+			await copyModeOfTarget(temporaryPath, path);
 			await renameOnto(temporaryPath, path);
 		} catch (error) {
 			await rm(temporaryPath, { force: true });

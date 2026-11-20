@@ -1,8 +1,9 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
 	BufferedSourceStream,
@@ -23,6 +24,7 @@ vi.mock("node:child_process", async (importOriginal) => {
 });
 
 const SAMPLE_RATE = 44100;
+const IS_WINDOWS = process.platform === "win32";
 const WRITE_OUTPUT = `require("fs").writeFileSync(process.argv.at(-1), "")`;
 
 interface EndlessSourceProperties extends SourceNodeProperties {
@@ -62,6 +64,47 @@ class EndlessSource extends SourceNode<EndlessSourceProperties> {
 	static override readonly nodeName = "endless-source";
 	static override readonly schema = z.object({});
 	static override readonly Stream = EndlessSourceStream;
+}
+
+let delayedBlocks = 0;
+
+// Delivers one block after 2 s, or nothing once its stream aborts, and counts the blocks it delivered.
+class DelayedSourceStream extends BufferedSourceStream<DelayedSource> {
+	private done = false;
+
+	override async getMetadata(): Promise<SourceMetadata> {
+		return { sampleRate: SAMPLE_RATE, channels: 1 };
+	}
+
+	override async _read(): Promise<Block | undefined> {
+		if (this.done) return undefined;
+
+		this.done = true;
+
+		const signal = this.streamSignal;
+
+		await new Promise<void>((resolve) => {
+			const timer = setTimeout(resolve, 2000);
+
+			signal.addEventListener("abort", () => {
+				clearTimeout(timer);
+				resolve();
+			});
+		});
+
+		if (signal.aborted) return undefined;
+
+		delayedBlocks += 1;
+
+		return { samples: [new Float32Array(SAMPLE_RATE)], offset: 0, sampleRate: SAMPLE_RATE, bitDepth: 32 };
+	}
+}
+
+class DelayedSource extends SourceNode {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "delayed-source";
+	static override readonly schema = z.object({});
+	static override readonly Stream = DelayedSourceStream;
 }
 
 let actualSpawn: typeof spawn;
@@ -315,5 +358,132 @@ describe("WriteStream output file", () => {
 
 		expect(isAbortReason(error, signal)).toBe(true);
 		expect(await readdir(directory)).toEqual([]);
+	});
+});
+
+describe("WriteStream target path", () => {
+	// Renders the delayed source into `path`, returning the error, the time to settle and the blocks the source delivered.
+	async function renderDelayed(path: string): Promise<{ error: unknown; elapsedMs: number; blocks: number }> {
+		const source = new DelayedSource();
+
+		delayedBlocks = 0;
+		source.to(write(path, { bitDepth: "16" }));
+
+		const startedAt = performance.now();
+		const error = await source
+			.createRenderJob()
+			.render()
+			.then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+
+		return { error, elapsedMs: performance.now() - startedAt, blocks: delayedBlocks };
+	}
+
+	it("rejects a directory target in setup, before the source delivers a block", async () => {
+		const parent = await temporaryDirectory("write-directory-");
+		const path = join(parent, "out.wav");
+
+		await mkdir(path);
+
+		const { error, elapsedMs, blocks } = await renderDelayed(path);
+
+		expect((error as Error).message).toBe(`Write needs a file path; "${path}" is a directory`);
+		expect(blocks).toBe(0);
+		expect(elapsedMs).toBeLessThan(1000);
+		expect(await readdir(parent)).toEqual(["out.wav"]);
+		expect((await stat(path)).isDirectory()).toBe(true);
+	});
+
+	it("rejects a path that ends with a path separator in setup, before the source delivers a block", async () => {
+		const parent = await temporaryDirectory("write-separator-");
+
+		for (const separator of new Set([sep, "/"])) {
+			const path = `${join(parent, "out.wav")}${separator}`;
+			const { error, elapsedMs, blocks } = await renderDelayed(path);
+
+			expect((error as Error).message).toBe(`Write needs a file path; "${path}" ends with a path separator`);
+			expect(blocks).toBe(0);
+			expect(elapsedMs).toBeLessThan(1000);
+			expect(await readdir(parent)).toEqual([]);
+		}
+	});
+
+	it.skipIf(IS_WINDOWS)("keeps the mode of the existing file it replaces", async () => {
+		const directory = await temporaryDirectory("write-mode-");
+		const path = join(directory, "out.wav");
+
+		await writeFile(path, "old");
+		await chmod(path, 0o640);
+
+		const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
+
+		expect(error).toBeUndefined();
+		expect((await stat(path)).mode & 0o7777).toBe(0o640);
+		expect((await readFile(path)).subarray(0, 4).toString("ascii")).toBe("RIFF");
+	});
+
+	it.skipIf(IS_WINDOWS)(
+		"writes into a FIFO target and leaves it a FIFO",
+		async () => {
+			const directory = await temporaryDirectory("write-fifo-");
+			const path = join(directory, "out.mp3");
+			const made = spawnSync("mkfifo", [path]);
+
+			if (made.status !== 0) throw new Error(`mkfifo failed: ${made.stderr.toString()}`);
+
+			// The FIFO's reader, started before the render so the encoder's open of the FIFO does not block.
+			const reader = actualSpawn("cat", [path], { stdio: ["ignore", "pipe", "ignore"] });
+			const received: Array<Buffer> = [];
+
+			reader.stdout.on("data", (chunk: Buffer) => received.push(chunk));
+
+			const readerClosed = new Promise<boolean>((resolve) => reader.once("close", () => resolve(true)));
+
+			try {
+				// A stand-in encoder that copies its input to its output path, as ffmpeg's `-y <path>` writes it.
+				standIn(
+					`const out = require("fs").createWriteStream(process.argv.at(-1)); process.stdin.pipe(out); out.on("finish", () => process.exit(0));`,
+				);
+
+				const { error } = await renderTo(
+					write(path, { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "mp3" } }),
+					{
+						maxBlocks: 2,
+					},
+				);
+
+				expect(error).toBeUndefined();
+				expect(await Promise.race([readerClosed, delay(5000, false)])).toBe(true);
+				expect(Buffer.concat(received).length).toBe(2 * SAMPLE_RATE * 4);
+				expect((await lstat(path)).isFIFO()).toBe(true);
+				expect(await partialFiles(directory)).toEqual([]);
+			} finally {
+				reader.kill("SIGKILL");
+			}
+		},
+		20_000,
+	);
+
+	it.skipIf(IS_WINDOWS)("writes a WAV straight to /dev/null and leaves it a character device", async () => {
+		const { error } = await renderTo(write("/dev/null", { bitDepth: "16" }), { maxBlocks: 2 });
+
+		expect(error).toBeUndefined();
+		expect((await stat("/dev/null")).isCharacterDevice()).toBe(true);
+	});
+
+	it.skipIf(IS_WINDOWS)("follows a symlink to a character device and leaves both in place", async () => {
+		const directory = await temporaryDirectory("write-symlink-");
+		const path = join(directory, "out.wav");
+
+		await symlink("/dev/null", path);
+
+		const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
+
+		expect(error).toBeUndefined();
+		expect((await lstat(path)).isSymbolicLink()).toBe(true);
+		expect((await stat(path)).isCharacterDevice()).toBe(true);
+		expect(await readdir(directory)).toEqual(["out.wav"]);
 	});
 });

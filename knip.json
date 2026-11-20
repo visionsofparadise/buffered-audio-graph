@@ -16,7 +16,8 @@
 		},
 		"packages/buffered-audio-nodes": {
 			"entry": ["src/index.ts", "scripts/generate-docs.ts"],
-			"project": ["src/**/*.{ts,tsx}"]
+			"project": ["src/**/*.{ts,tsx}"],
+			"ignoreBinaries": ["mkfifo"]
 		},
 		"packages/buffered-audio-cli": {
 			"entry": ["src/cli.ts"],
