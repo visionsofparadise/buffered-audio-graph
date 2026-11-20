@@ -15,19 +15,21 @@ Three node types — sources produce audio, transforms process it, targets consu
 ```ts
 import { chain, read, normalize, write } from "@buffered-audio/nodes";
 
-const pipeline = chain(read("input.wav"), normalize({ ceiling: 0.95 }), write("output.wav", { bitDepth: "24" }));
+const source = read("input.wav");
 
-await pipeline.render();
+chain(source, normalize({ ceiling: 0.95 }), write("output.wav", { bitDepth: "24" }));
+
+await source.createRenderJob().render();
 ```
 
-`render()` streams audio through the chain. Backpressure, buffering, and lifecycle are handled by the framework.
+`createRenderJob()` builds a render job for the pipeline rooted at the source, and its `render()` streams audio through the chain. Backpressure, buffering, and lifecycle are handled by the framework.
 
 ### Fan-out
 
 Split a stream into parallel branches by calling `.to()` multiple times from the same node:
 
 ```ts
-import { chain, read, normalize, trim, write } from "@buffered-audio/nodes";
+import { read, normalize, trim, write } from "@buffered-audio/nodes";
 
 const source = read("input.wav");
 const normalizeNode = normalize();
@@ -38,7 +40,7 @@ source.to(trimNode);
 normalizeNode.to(write("normalized.wav"));
 trimNode.to(write("trimmed.wav"));
 
-await source.render();
+await source.createRenderJob().render();
 ```
 
 ## CLI
