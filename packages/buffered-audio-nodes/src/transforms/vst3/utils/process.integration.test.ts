@@ -285,6 +285,117 @@ describe("vst-host spawn failures", () => {
 	});
 });
 
+describe("vst-host READY timer", () => {
+	const READY_TIMEOUT_MS = 300_000;
+
+	async function waitForPid(path: string): Promise<number> {
+		const deadline = Date.now() + 5_000;
+
+		for (;;) {
+			const pid = await readFile(path, "utf8").then(
+				(text) => Number.parseInt(text, 10),
+				() => undefined,
+			);
+
+			if (pid !== undefined) return pid;
+
+			if (Date.now() >= deadline) throw new Error("PID file was not written within 5000ms");
+
+			await delay(20);
+		}
+	}
+
+	function isRunning(pid: number): boolean {
+		try {
+			process.kill(pid, 0);
+
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	async function startHostBeforeReady(directory: string): Promise<{
+		readonly ready: Promise<VstHostHandle>;
+		readonly controller: AbortController;
+		readonly pid: number;
+		readonly timer: NodeJS.Timeout;
+	}> {
+		const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+		const controller = new AbortController();
+		const pidPath = join(directory, "host.pid");
+
+		try {
+			const ready = spawnVstHostReady(
+				process.execPath,
+				[teardownStub, "--mode", "ignore-sigterm-before-ready", "--pid-file", pidPath],
+				{ signal: controller.signal },
+			);
+
+			ready.catch(() => undefined);
+
+			const call = setTimeoutSpy.mock.calls.findIndex(([, milliseconds]) => milliseconds === READY_TIMEOUT_MS);
+			const timer = setTimeoutSpy.mock.results[call]?.value as NodeJS.Timeout | undefined;
+
+			if (timer === undefined) throw new Error("spawnVstHostReady set no READY timer");
+
+			return { ready, controller, pid: await waitForPid(pidPath), timer };
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+	}
+
+	async function finishHost(host: Awaited<ReturnType<typeof startHostBeforeReady>> | undefined): Promise<void> {
+		host?.controller.abort();
+		await host?.ready.catch(() => undefined);
+	}
+
+	it("does not hold the process open with its READY timer", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "vst3-ready-timer-"));
+		let host: Awaited<ReturnType<typeof startHostBeforeReady>> | undefined;
+
+		try {
+			host = await startHostBeforeReady(directory);
+
+			expect(host.timer.hasRef()).toBe(false);
+
+			host.controller.abort();
+			await expect(host.ready).rejects.toHaveProperty("name", "AbortError");
+		} finally {
+			await finishHost(host);
+			await rm(directory, { recursive: true, force: true });
+		}
+	}, 15_000);
+
+	it.skipIf(process.platform === "win32")(
+		"clears its READY timer on abort, while a host that ignores SIGTERM is still running",
+		async () => {
+			const directory = await mkdtemp(join(tmpdir(), "vst3-ready-timer-"));
+			const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+			let host: Awaited<ReturnType<typeof startHostBeforeReady>> | undefined;
+
+			try {
+				host = await startHostBeforeReady(directory);
+
+				const { timer } = host;
+
+				host.controller.abort();
+				await delay(200);
+
+				expect(isRunning(host.pid)).toBe(true);
+				expect(clearTimeoutSpy.mock.calls.some(([cleared]) => cleared === timer)).toBe(true);
+
+				await expect(host.ready).rejects.toHaveProperty("name", "AbortError");
+			} finally {
+				clearTimeoutSpy.mockRestore();
+				await finishHost(host);
+				await rm(directory, { recursive: true, force: true });
+			}
+		},
+		15_000,
+	);
+});
+
 describe("vst-host stdout held after a clean exit", () => {
 	const FRAMES = 2048;
 	const directories = new Set<string>();

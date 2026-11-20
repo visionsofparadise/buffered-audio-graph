@@ -2,6 +2,7 @@
 // Stub `vst-host` for the teardown and held-stdout tests. Every mode writes its pid to --pid-file first. Modes (--mode):
 //   hold-stdio-after-ready            READY, spawn a silent grandchild that inherits stdio, then hang.
 //   ignore-sigterm-after-ready        ignore SIGTERM, READY, then hang.
+//   ignore-sigterm-before-ready       ignore SIGTERM, then hang without printing READY.
 //   exit-3-before-ready-holding-stdio spawn a grandchild that inherits stdio, write "crashed" to stderr, exit 3
 //                                     after 100 ms. The grandchild writes "end of crash report" to the inherited
 //                                     stderr 500 ms after its start, so after that exit, and holds the pipes for 12 s.
@@ -93,6 +94,9 @@ function hang() {
 if (mode === "hold-stdio-after-ready") {
 	spawnSilentGrandchild();
 	process.stdout.write("READY\n");
+	hang();
+} else if (mode === "ignore-sigterm-before-ready") {
+	process.on("SIGTERM", () => {});
 	hang();
 } else if (mode === "ignore-sigterm-after-ready") {
 	process.on("SIGTERM", () => {});

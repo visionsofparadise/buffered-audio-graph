@@ -59,6 +59,7 @@ function readyLine(
 	host: Pick<VstHostHandle, "handle">,
 	stdout: Readable,
 	onTail: (tail: Buffer) => void,
+	signal?: AbortSignal,
 ): Promise<void> {
 	return new Promise<void>((resolve, reject) => {
 		const seen: Array<Buffer> = [];
@@ -67,7 +68,13 @@ function readyLine(
 		const cleanup = (): void => {
 			settled = true;
 			stdout.removeListener("data", onData);
+			signal?.removeEventListener("abort", onAbort);
 			clearTimeout(timer);
+		};
+
+		const onAbort = (): void => {
+			cleanup();
+			reject(signal?.reason as Error);
 		};
 
 		const onData = (chunk: Buffer): void => {
@@ -93,6 +100,15 @@ function readyLine(
 			);
 		}, READY_TIMEOUT_MS);
 
+		timer.unref();
+
+		if (signal?.aborted) {
+			onAbort();
+
+			return;
+		}
+
+		signal?.addEventListener("abort", onAbort, { once: true });
 		stdout.on("data", onData);
 		void host.handle.exited.then((exit) => {
 			if (settled) return;
@@ -106,7 +122,7 @@ function readyLine(
 	});
 }
 
-function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostHandle {
+function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>, signal?: AbortSignal): VstHostHandle {
 	const handle = spawnChild({ label: "vst-host", command: binaryPath, args });
 
 	if (!handle.stdin || !handle.stdout) {
@@ -116,9 +132,14 @@ function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostH
 	}
 
 	let tail: Buffer = Buffer.alloc(0);
-	const ready = readyLine({ handle }, handle.stdout, (bytes) => {
-		tail = bytes;
-	});
+	const ready = readyLine(
+		{ handle },
+		handle.stdout,
+		(bytes) => {
+			tail = bytes;
+		},
+		signal,
+	);
 
 	ready.catch(() => undefined);
 
@@ -159,32 +180,6 @@ async function delay(ms: number, signal?: AbortSignal): Promise<void> {
 	});
 }
 
-async function waitForReady(handle: VstHostHandle, signal?: AbortSignal): Promise<void> {
-	if (!signal) {
-		await handle.ready;
-
-		return;
-	}
-
-	signal.throwIfAborted();
-
-	let onAbort: (() => void) | undefined;
-	const aborted = new Promise<never>((_resolve, reject) => {
-		onAbort = () => {
-			reject(signal.reason as Error);
-		};
-
-		signal.addEventListener("abort", onAbort, { once: true });
-	});
-
-	try {
-		await Promise.race([handle.ready, aborted]);
-		signal.throwIfAborted();
-	} finally {
-		if (onAbort) signal.removeEventListener("abort", onAbort);
-	}
-}
-
 export interface SpawnVstHostReadyOptions {
 	readonly maxAttempts?: number;
 	readonly backoffMs?: number;
@@ -210,9 +205,10 @@ export async function spawnVstHostReady(
 		let host: VstHostHandle | undefined;
 
 		try {
-			host = spawnVstHost(binaryPath, args);
+			host = spawnVstHost(binaryPath, args, options.signal);
 
-			await waitForReady(host, options.signal);
+			await host.ready;
+			options.signal?.throwIfAborted();
 
 			return host;
 		} catch (error) {
