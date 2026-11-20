@@ -16,6 +16,7 @@ export abstract class InstrumentedTransformStream<
 	private pipeline?: AsyncGenerator<Block>;
 	private pipelineFinishing = false;
 	private cancelRequested = false;
+	private unwindFailure?: { readonly error: unknown };
 
 	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.sourceTotalFrames;
@@ -53,20 +54,31 @@ export abstract class InstrumentedTransformStream<
 	}
 
 	protected override async unwind(): Promise<void> {
-		if (!this.pipeline || this.pipelineFinishing) return;
+		if (this.pipeline && !this.pipelineFinishing) await this.pipeline.return(undefined);
 
-		await this.pipeline.return(undefined);
+		if (this.unwindFailure) throw this.unwindFailure.error;
 	}
 
 	private async *guarded(blocks: AsyncGenerator<Block>): AsyncGenerator<Block> {
 		let failed = false;
+		let parked = false;
 
 		try {
-			yield* blocks;
-		} catch (error) {
-			failed = true;
+			for await (const block of blocks) {
+				parked = true;
 
-			throw error;
+				yield block;
+
+				parked = false;
+			}
+		} catch (error) {
+			if (!parked) {
+				failed = true;
+
+				throw error;
+			}
+
+			this.unwindFailure = { error };
 		} finally {
 			await this.finishPipeline(failed);
 		}

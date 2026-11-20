@@ -1019,6 +1019,7 @@ class HookErrorSource extends SourceNode<HookErrorSourceProperties> {
 
 interface HookErrorTransformProperties extends TransformNodeProperties {
 	readonly transformFails: boolean;
+	readonly finallyFails: boolean;
 	readonly destroyFails: boolean;
 }
 
@@ -1026,7 +1027,11 @@ class HookErrorTransformStream extends UnbufferedTransformStream<HookErrorTransf
 	override *_transform(block: Block): Iterable<Block> {
 		if (this.properties.transformFails) throw new Error("transform failed");
 
-		yield block;
+		try {
+			yield block;
+		} finally {
+			if (this.properties.finallyFails && this.streamSignal.aborted) throw new Error("finally failed");
+		}
 	}
 
 	override _destroy(): void {
@@ -1040,8 +1045,12 @@ class HookErrorTransform extends TransformNode<HookErrorTransformProperties> {
 	static override readonly schema = z.object({});
 	static override readonly Stream = HookErrorTransformStream;
 
-	constructor(options: { transformFails?: boolean; destroyFails?: boolean }) {
-		super({ transformFails: options.transformFails ?? false, destroyFails: options.destroyFails ?? false });
+	constructor(options: { transformFails?: boolean; finallyFails?: boolean; destroyFails?: boolean }) {
+		super({
+			transformFails: options.transformFails ?? false,
+			finallyFails: options.finallyFails ?? false,
+			destroyFails: options.destroyFails ?? false,
+		});
 	}
 }
 
@@ -1087,6 +1096,12 @@ async function renderFailure(source: SourceNode): Promise<unknown> {
 			() => undefined,
 			(reason: unknown) => reason,
 		);
+}
+
+function leafMessages(error: unknown): Array<string> {
+	if (error instanceof AggregateError) return error.errors.flatMap((entry: unknown) => leafMessages(entry));
+
+	return [error instanceof Error ? error.message : String(error)];
 }
 
 function expectHookThenDestroyError(error: unknown, hookMessage: string): void {
@@ -1141,6 +1156,65 @@ describe("RenderJob hook errors ahead of teardown errors", () => {
 		transform.to(new HookErrorTarget({ destroyFails: true }));
 
 		expectHookThenDestroyError(await renderFailure(source), "transform failed");
+	});
+
+	it("reports a target's write error, then the unwind error its cancel raised in a transform parked at a yield", async () => {
+		const source = new HookErrorSource({});
+		const transform = new HookErrorTransform({ finallyFails: true });
+
+		source.to(transform);
+		transform.to(new HookErrorTarget({ writeFailsAfterMs: 20 }));
+
+		const error = await renderFailure(source);
+
+		expect(error).toBeInstanceOf(AggregateError);
+		expect((error as AggregateError).message).toBe("Render and cleanup failed");
+		expect((error as AggregateError).errors.map((entry: Error) => entry.message)).toEqual([
+			"write failed",
+			"finally failed",
+		]);
+	});
+
+	it("reports a target's write error first, then the cancel's unwind error and the _destroy error", async () => {
+		const source = new HookErrorSource({});
+		const transform = new HookErrorTransform({ finallyFails: true, destroyFails: true });
+
+		source.to(transform);
+		transform.to(new HookErrorTarget({ writeFailsAfterMs: 20 }));
+
+		const error = await renderFailure(source);
+
+		expect(error).toBeInstanceOf(AggregateError);
+		expect((error as AggregateError).message).toBe("Render and cleanup failed");
+		expect(leafMessages(error)).toEqual(["write failed", "finally failed", "destroy failed"]);
+	});
+
+	it("rejects a split transform's destroy() with the tee cancel's unwind error, then its _destroy error", async () => {
+		const source = new HookErrorSource({ count: 50 });
+		const transform = new HookErrorTransform({ finallyFails: true, destroyFails: true });
+
+		source.to(transform);
+		transform.to(new HookErrorTarget({ writeFailsAfterMs: 20 }));
+		transform.to(new PacedTarget(50));
+
+		const job = source.createRenderJob({ highWaterMark: 1 });
+
+		await job.render().catch(() => undefined);
+
+		const error = await job.streams
+			.get(transform)?.[0]
+			?.destroy()
+			.then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+
+		expect(error).toBeInstanceOf(AggregateError);
+		expect((error as AggregateError).message).toBe("Stream teardown failed");
+		expect((error as AggregateError).errors.map((entry: Error) => entry.message)).toEqual([
+			"finally failed",
+			"destroy failed",
+		]);
 	});
 });
 
