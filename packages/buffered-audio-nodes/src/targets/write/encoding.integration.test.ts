@@ -197,8 +197,9 @@ describe("WriteStream encoder teardown", () => {
 	}, 20_000);
 
 	it("resolves when the encoder writes 4 KiB of stderr per input chunk", async () => {
+		// writeSync blocks on a full stderr pipe on every platform; process.stderr.write queues in memory on Linux.
 		standIn(
-			`process.stdin.on("data", () => process.stderr.write("x".repeat(4096))); process.stdin.on("end", () => { ${WRITE_OUTPUT}; process.exit(0); })`,
+			`process.stdin.on("data", () => require("fs").writeSync(2, "x".repeat(4096))); process.stdin.on("end", () => { ${WRITE_OUTPUT}; process.exit(0); })`,
 		);
 
 		const { error } = await renderToEncoder("ffmpeg", undefined, 40);
