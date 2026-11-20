@@ -87,8 +87,11 @@ program
 			const controller = new AbortController();
 			let received: HandledSignal | undefined;
 			let receivedAt = 0;
+			let succeeded = false;
 
 			const onSignal = (signal: HandledSignal): void => {
+				if (succeeded) return;
+
 				if (received === undefined) {
 					received = signal;
 					receivedAt = performance.now();
@@ -146,6 +149,8 @@ program
 
 					await runJobs(jobs, controller.signal);
 
+					succeeded = true;
+
 					sink.printSummary(jobs);
 					process.stdout.write("Done.\n");
 				} catch (error) {
@@ -156,7 +161,7 @@ program
 					}
 				}
 
-				if (received !== undefined) {
+				if (received !== undefined && !succeeded) {
 					process.stderr.write(`Aborted by ${received}\n`);
 					process.exitCode = SIGNAL_EXIT_CODES[received];
 				}

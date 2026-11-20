@@ -226,10 +226,11 @@ function writeSignalBag(
 }
 
 /**
- * A local package whose one node is a Gain at 0 dB that takes 3 s to tear down, so a render aborted by
- * a first signal is still tearing down when a second one arrives. The nodes bundle their own copy of
- * core, and a render job checks streams against its source's copy, so the node extends the nodes'
- * own Gain, imported by the URL the CLI's `--resolve` import uses.
+ * A local package with two nodes that each take 3 s to tear down. "Slow Teardown" is a Gain at 0 dB, so a render
+ * aborted by a first signal is still tearing down when a second one arrives. "Slow Write" is a Write target whose
+ * teardown starts after it has renamed its output into place, so a successful render is still settling when its
+ * output exists. The nodes bundle their own copy of core, and a render job checks streams against its source's copy,
+ * so each node extends the nodes' own class, imported by the URL the CLI's `--resolve` import uses.
  */
 function writeSlowTeardownPackage(directory: string): string {
 	const packageDir = join(directory, SLOW_TEARDOWN_PACKAGE);
@@ -243,7 +244,7 @@ function writeSlowTeardownPackage(directory: string): string {
 	writeFileSync(
 		join(packageDir, "index.mjs"),
 		[
-			`import { GainNode, GainStream } from ${JSON.stringify(nodesEntryUrl)};`,
+			`import { GainNode, GainStream, WriteNode, WriteStream } from ${JSON.stringify(nodesEntryUrl)};`,
 			"class SlowTeardownStream extends GainStream {",
 			"\tasync _destroy() { await new Promise((resolve) => setTimeout(resolve, 3000)); }",
 			"}",
@@ -251,6 +252,14 @@ function writeSlowTeardownPackage(directory: string): string {
 			'\tstatic nodeName = "Slow Teardown";',
 			`\tstatic packageName = ${JSON.stringify(SLOW_TEARDOWN_PACKAGE)};`,
 			"\tstatic Stream = SlowTeardownStream;",
+			"}",
+			"class SlowWriteStream extends WriteStream {",
+			"\tasync _destroy() { await super._destroy(); await new Promise((resolve) => setTimeout(resolve, 3000)); }",
+			"}",
+			"export class SlowWriteNode extends WriteNode {",
+			'\tstatic nodeName = "Slow Write";',
+			`\tstatic packageName = ${JSON.stringify(SLOW_TEARDOWN_PACKAGE)};`,
+			"\tstatic Stream = SlowWriteStream;",
 			"}",
 			"",
 		].join("\n"),
@@ -545,6 +554,91 @@ describe.skipIf(process.platform === "win32")("bag render signals during package
 			expect.soft(performance.now() - signalledAt).toBeLessThan(1000);
 			expect.soft(run.output.stderr).toContain("Aborted by SIGINT");
 			expect.soft(run.output.stdout).not.toContain("Rendering graph");
+		} finally {
+			killProcessGroup(run.child);
+		}
+	}, 60_000);
+});
+
+describe.skipIf(process.platform === "win32")("bag render signals after the render's output is complete", () => {
+	let workDir: string;
+
+	beforeAll(() => {
+		workDir = mkdtempSync(join(tmpdir(), "bag-cli-late-signal-"));
+	});
+
+	afterAll(() => {
+		rmSync(workDir, { recursive: true, force: true });
+	});
+
+	it("exits 0 without an abort line when SIGINT arrives while a successful render tears down", async () => {
+		const inputPath = join(workDir, "input.wav");
+		const outputPath = join(workDir, "output.wav");
+		const bagPath = join(workDir, "graph.bag");
+
+		writeWav(
+			inputPath,
+			Array.from({ length: 8000 }, (_, i) => Math.round(Math.sin(i / 8) * 10000)),
+			8000,
+		);
+		writeFileSync(
+			bagPath,
+			JSON.stringify({
+				id: randomUUID(),
+				name: "cli-late-signal",
+				apiVersion: 1,
+				nodes: [
+					{
+						id: "read",
+						packageName: "@buffered-audio/nodes",
+						packageVersion: nodesVersion,
+						nodeName: "Read WAV",
+						parameters: { path: inputPath },
+					},
+					{
+						id: "write",
+						packageName: SLOW_TEARDOWN_PACKAGE,
+						packageVersion: "1.0.0",
+						nodeName: "Slow Write",
+						parameters: { path: outputPath, bitDepth: "16" },
+					},
+				],
+				edges: [{ from: "read", to: "write" }],
+			}),
+		);
+
+		const run = spawnDetachedCli([
+			"render",
+			bagPath,
+			"--resolve",
+			`@buffered-audio/nodes=${nodesDir}`,
+			"--resolve",
+			`${SLOW_TEARDOWN_PACKAGE}=${writeSlowTeardownPackage(workDir)}`,
+		]);
+
+		try {
+			// The Slow Write target renames its output into place when it closes and then tears down for 3 s, so the
+			// output existing means the render has done its work and has not yet settled.
+			const written = await waitFor(() => existsSync(outputPath), 20_000);
+
+			if (!written) throw new Error(`The render never wrote its output. stderr: ${run.output.stderr}`);
+
+			await delay(200);
+
+			const pid = run.child.pid;
+
+			if (pid === undefined) throw new Error("The CLI has no pid");
+
+			process.kill(pid, "SIGINT");
+
+			const exit = await Promise.race([run.closed, delay(15_000, undefined)]);
+
+			if (exit === undefined) throw new Error(`The CLI did not exit within 15 s. stderr: ${run.output.stderr}`);
+
+			expect.soft(exit.code, run.output.stderr).toBe(0);
+			expect.soft(run.output.stdout).toContain("Done.");
+			expect.soft(run.output.stderr).not.toContain("Aborted by");
+			expect.soft(existsSync(outputPath)).toBe(true);
 		} finally {
 			killProcessGroup(run.child);
 		}
