@@ -29,6 +29,9 @@
 		"integration": {
 			"dependsOn": ["build", "^integration"]
 		},
+		"@buffered-audio/cli#integration": {
+			"dependsOn": ["build", "^integration", "@buffered-audio/nodes#build"]
+		},
 		"integration:heavy": {
 			"dependsOn": ["build", "^integration:heavy"]
 		},
