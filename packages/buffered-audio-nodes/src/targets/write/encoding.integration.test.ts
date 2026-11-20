@@ -273,6 +273,15 @@ describe("WriteStream output file", () => {
 		expect(await partialFiles(directory)).toEqual([]);
 	});
 
+	it("rejects an empty path in setup, writing nothing to the working directory", async () => {
+		const source = new EndlessSource({ readDelayMs: 20, maxBlocks: 2 });
+
+		source.to(write("", { bitDepth: "16" }));
+
+		await expect(source.createRenderJob().render()).rejects.toThrow("Write needs a file path; path is empty");
+		expect((await readdir(process.cwd())).filter((name) => name.startsWith(".partial-"))).toEqual([]);
+	});
+
 	it("leaves neither the target nor a partial file when a WAV render aborts", async () => {
 		const directory = await temporaryDirectory("write-abort-wav-");
 		const { error, signal } = await renderTo(write(join(directory, "out.wav"), { bitDepth: "16" }), {

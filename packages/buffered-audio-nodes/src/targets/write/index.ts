@@ -93,6 +93,8 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 	private initialized = false;
 
 	override async _setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<void> {
+		if (this.properties.path === "") throw new Error("Write needs a file path; path is empty");
+
 		this.bytesWritten = 0;
 		this.initialized = false;
 		this.closed = false;
