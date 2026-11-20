@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, vi } from "vitest";
-import { BlockBuffer, isAbortReason, type Block } from "@buffered-audio/core";
+import { BlockBuffer, isAbortReason, type Block, type LogPayload } from "@buffered-audio/core";
 import {
 	createTestSetupContext,
 	createTestStreamContext,
@@ -474,6 +474,7 @@ interface HostRender {
 	readonly controller: AbortController;
 	readonly pidPath: string;
 	readonly directory: string;
+	readonly logs: Array<LogPayload>;
 }
 
 async function renderThroughHost(
@@ -499,11 +500,16 @@ async function renderThroughHost(
 	transform.to(write(join(directory, "output.wav")));
 
 	const controller = new AbortController();
-	const render = source.createRenderJob({ signal: controller.signal }).render();
+	const job = source.createRenderJob({ signal: controller.signal });
+	const logs: Array<LogPayload> = [];
+
+	job.events.on("log", (_identity, payload) => logs.push(payload));
+
+	const render = job.render();
 
 	render.catch(() => undefined);
 
-	return { render, controller, pidPath, directory };
+	return { render, controller, pidPath, directory, logs };
 }
 
 async function finishHostRender(run: HostRender): Promise<void> {
@@ -697,4 +703,59 @@ describe("vst-host idle bound", () => {
 			await finishHostRender(run);
 		}
 	}, 15_000);
+
+	it.skipIf(process.platform === "win32")(
+		"ignores liveness samples that land while a host that ignores SIGTERM is being killed",
+		async () => {
+			let abortedAt: number | undefined;
+			let samples = 0;
+			let lateSamples = 0;
+			const run = await renderThroughHost(
+				(pidPath) => [teardownStub, "--mode", "ignore-sigterm-after-ready", "--pid-file", pidPath],
+				{
+					monitorIntervalMs: 50,
+					monitorSampler: async () => {
+						samples += 1;
+
+						if (abortedAt === undefined) return { cpuMs: samples * 200, pidCount: 1 };
+
+						// Every sample after the abort lands 300 ms or more after it, inside the 2 s kill grace.
+						await delay(Math.max(0, abortedAt + 300 - performance.now()));
+						lateSamples += 1;
+
+						if (lateSamples % 2 === 1) throw new Error("late liveness sample");
+
+						return { cpuMs: 0, pidCount: 1 };
+					},
+				},
+			);
+
+			try {
+				await waitForPid(run.pidPath);
+				await delay(500);
+
+				const logsBeforeAbort = run.logs.length;
+
+				abortedAt = performance.now();
+				run.controller.abort();
+
+				const error = await settleWithin(run.render, "aborted render", 15_000).then(
+					() => undefined,
+					(reason: unknown) => reason,
+				);
+
+				expect(isAbortReason(error, run.controller.signal)).toBe(true);
+				expect(performance.now() - abortedAt).toBeGreaterThan(1_000);
+				expect(
+					run.logs
+						.slice(logsBeforeAbort)
+						.filter((log) => log.message.startsWith("vst-host liveness"))
+						.map((log) => log.message),
+				).toEqual([]);
+			} finally {
+				await finishHostRender(run);
+			}
+		},
+		30_000,
+	);
 });

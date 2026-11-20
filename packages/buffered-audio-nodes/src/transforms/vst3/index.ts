@@ -201,12 +201,16 @@ export class Vst3Stream<P extends Vst3Properties = Vst3Properties> extends Buffe
 					},
 				});
 			} finally {
+				const monitorStopped = stopMonitor?.();
+
+				monitorStopped?.catch(() => undefined);
+
 				try {
 					await terminateVstHost(handle);
 				} finally {
 					if (this.activeHost === handle) this.activeHost = undefined;
 
-					await stopMonitor?.();
+					await monitorStopped;
 				}
 			}
 
