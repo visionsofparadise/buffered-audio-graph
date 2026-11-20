@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { EventEmitter, getEventListeners, once } from "node:events";
+import { EventEmitter, getEventListeners } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -7,8 +7,6 @@ import { PassThrough } from "node:stream";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockBuffer } from "@buffered-audio/core";
 import {
-	DIAGNOSTIC_TAIL_BYTES,
-	observeVstHostStderr,
 	processStreamingThroughVstHost,
 	spawnVstHostReady,
 	terminateVstHost,
@@ -87,42 +85,6 @@ describe("writeStagesJson", () => {
 		} finally {
 			await rm(temporaryDirectory, { recursive: true, force: true });
 		}
-	});
-});
-
-describe("observeVstHostStderr", () => {
-	it("accumulates arbitrary stderr bytes", async () => {
-		const stderr = new PassThrough();
-		const getStderrTail = observeVstHostStderr(stderr);
-		const ended = once(stderr, "end");
-
-		stderr.write("ordinary ");
-		stderr.write(Buffer.from("café\n"));
-		stderr.end("incomplete final");
-		stderr.resume();
-
-		await ended;
-
-		expect(getStderrTail()).toBe("ordinary café\nincomplete final");
-	});
-
-	it("retains the newest 64 KiB of diagnostic bytes", async () => {
-		const stderr = new PassThrough();
-		const getStderrTail = observeVstHostStderr(stderr);
-		const ended = once(stderr, "end");
-		const diagnostic = `old-prefix\n${"x".repeat(DIAGNOSTIC_TAIL_BYTES + 1024)}\n`;
-
-		stderr.end(diagnostic);
-		stderr.resume();
-
-		await ended;
-
-		const expected = Buffer.from(diagnostic)
-			.subarray(Buffer.byteLength(diagnostic) - DIAGNOSTIC_TAIL_BYTES)
-			.toString("utf8");
-
-		expect(Buffer.byteLength(getStderrTail())).toBe(DIAGNOSTIC_TAIL_BYTES);
-		expect(getStderrTail()).toBe(expected);
 	});
 });
 

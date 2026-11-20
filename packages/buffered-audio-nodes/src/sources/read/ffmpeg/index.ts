@@ -1,7 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import {
 	BufferedSourceStream,
+	settledOrAborted,
 	SourceNode,
+	terminateChild,
 	type Block,
 	type SourceMetadata,
 	type SourceNodeProperties,
@@ -9,7 +11,6 @@ import {
 import { deinterleaveBuffer } from "@buffered-audio/utils";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../../package-metadata";
-import { settledOrAborted, terminateChild } from "../../../transforms/cli/utils/process";
 import { createFfmpegPathField } from "../../../utils/binary-fields";
 
 export const ffmpegSchema = z.object({

@@ -1,8 +1,10 @@
+import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { readFile, unlink } from "node:fs/promises";
+import { mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
+import { afterAll, describe, expect, it } from "vitest";
 import type { Block, StreamSetupContext } from "@buffered-audio/core";
 import {
 	blockFromSamples,
@@ -16,6 +18,9 @@ import { buildStreamingWavHeader } from "./utils/wav-stream";
 import { cli, CliStream, type CliProperties } from ".";
 
 const SAMPLE_RATE = 44100;
+const IS_WINDOWS = process.platform === "win32";
+const RENDER_STDERR_HOLDER = fileURLToPath(new URL("./__fixtures__/render-stderr-holder.mjs", import.meta.url));
+const HOLDER_SCRIPT = "setInterval(function(){console.log('holder')},500);setTimeout(function(){process.exit()},6000)";
 const BLOCK_FRAMES = 4096;
 const LABEL = basename(process.execPath);
 
@@ -68,6 +73,64 @@ async function run(properties: Omit<CliProperties, "command">, input: Array<Bloc
 	const { stream } = createStream(properties);
 
 	return drainBlocks(stream._pipe(readableFrom(input)));
+}
+
+const directories: Array<string> = [];
+
+afterAll(async () => {
+	await Promise.all(
+		directories.map((directory) => rm(directory, { recursive: true, force: true }).catch(() => undefined)),
+	);
+});
+
+async function temporaryDirectory(prefix: string): Promise<string> {
+	const directory = await mkdtemp(join(tmpdir(), prefix));
+
+	directories.push(directory);
+
+	return directory;
+}
+
+async function holderCommand(code: number): Promise<{ readonly command: string; readonly args: Array<string> }> {
+	if (!IS_WINDOWS) {
+		return { command: "sh", args: ["-c", code === 0 ? "sleep 6 & exit 0" : `sleep 6 & echo bad >&2; exit ${code}`] };
+	}
+
+	const file = join(await temporaryDirectory("cli-holder-cmd-"), "holder.cmd");
+	const lines = [`@start /b "" "${process.execPath}" -e "${HOLDER_SCRIPT}"`, "@echo bad 1>&2", `@exit ${code}`];
+
+	await writeFile(file, `${lines.join("\r\n")}\r\n`);
+
+	return { command: "cmd.exe", args: ["/d", "/c", file] };
+}
+
+async function runCommand(command: string, args: Array<string>, input: Array<Block>): Promise<Array<Block>> {
+	const stream = new CliStream(cli({ command, args }), createTestStreamContext().context);
+
+	stream._setup(createTestSetupContext({ sourceSampleRate: SAMPLE_RATE, sampleRate: SAMPLE_RATE }));
+
+	return drainBlocks(stream._pipe(readableFrom(input)));
+}
+
+function silentWav(sampleRate: number, frames: number): Buffer {
+	const dataBytes = frames * 2;
+	const header = Buffer.alloc(44);
+
+	header.write("RIFF", 0, "ascii");
+	header.writeUInt32LE(36 + dataBytes, 4);
+	header.write("WAVE", 8, "ascii");
+	header.write("fmt ", 12, "ascii");
+	header.writeUInt32LE(16, 16);
+	header.writeUInt16LE(1, 20);
+	header.writeUInt16LE(1, 22);
+	header.writeUInt32LE(sampleRate, 24);
+	header.writeUInt32LE(sampleRate * 2, 28);
+	header.writeUInt16LE(2, 32);
+	header.writeUInt16LE(16, 34);
+	header.write("data", 36, "ascii");
+	header.writeUInt32LE(dataBytes, 40);
+
+	return Buffer.concat([header, Buffer.alloc(dataBytes)]);
 }
 
 function expectSameSamples(output: Array<Block>, input: Array<Block>): void {
@@ -193,6 +256,26 @@ describe("CliStream against a real child", () => {
 		}
 	});
 
+	it("round-trips 30 s of stereo f32le through an echo child sample-exactly, across the child's exit", async () => {
+		const input = inputBlocks(Math.ceil((30 * SAMPLE_RATE) / BLOCK_FRAMES));
+		const output = await run({ args: ["-e", ECHO] }, input);
+
+		for (let channel = 0; channel < 2; channel++) {
+			const expected = channelSamples(input, channel);
+			const actual = channelSamples(output, channel);
+
+			expect(actual.length).toBe(expected.length);
+			expect(Buffer.from(actual.buffer).equals(Buffer.from(expected.buffer))).toBe(true);
+		}
+	});
+
+	it("serves output a child writes only after its stdin ends", async () => {
+		const script = `process.stdin.resume(); process.stdin.on("end", () => process.stdout.write(Buffer.alloc(1048576), () => process.exit(0)))`;
+		const output = await run({ args: ["-e", script] }, inputBlocks(4));
+
+		expect(output.reduce((frames, block) => frames + (block.samples[0]?.length ?? 0), 0)).toBe(1048576 / 4 / 2);
+	});
+
 	it("carries the input's bit depth onto the output blocks", async () => {
 		const output = await run({ args: ["-e", ECHO] }, inputBlocks(2, { bitDepth: 24 }));
 
@@ -272,6 +355,14 @@ describe("CliStream decode errors against the child's exit", () => {
 		);
 	});
 
+	it("throws the decode error for bad stdout that a child wrote before exiting 0, unread until after the exit", async () => {
+		const script = `process.stdout.write("usage: tool\\n", () => process.exit(0))`;
+
+		await expect(run({ args: ["-e", script], outputFormat: "wav" }, inputBlocks(2))).rejects.toThrow(
+			'Not a WAV stream (first bytes "usag")',
+		);
+	});
+
 	it("throws the decode error once a child that keeps running has had its bounded wait", async () => {
 		const script = `process.stdout.write("usage: tool [options]\\n"); setInterval(() => undefined, 1000)`;
 		const started = performance.now();
@@ -280,5 +371,49 @@ describe("CliStream decode errors against the child's exit", () => {
 			'Not a WAV stream (first bytes "usag")',
 		);
 		expect(performance.now() - started).toBeLessThan(5000);
+	});
+});
+
+describe("CliStream with a process that holds the child's stdio after it exits", () => {
+	it("rejects a clean exit whose stdout stays open with the held-stdout error, within 4000 ms", async () => {
+		const { command, args } = await holderCommand(0);
+		const started = performance.now();
+
+		await expect(runCommand(command, args, inputBlocks(2))).rejects.toThrow(
+			/exited, but its stdout stayed open for 2000 ms/,
+		);
+		expect(performance.now() - started).toBeLessThan(4000);
+	});
+
+	it("rejects a failed exit with its exit error rather than the held stdout, within 4000 ms", async () => {
+		const { command, args } = await holderCommand(3);
+		const started = performance.now();
+
+		await expect(runCommand(command, args, inputBlocks(2))).rejects.toThrow(/exited 3: bad/);
+		expect(performance.now() - started).toBeLessThan(4000);
+	});
+
+	it.skipIf(IS_WINDOWS)("lets the process exit once a render settles while a grandchild holds stderr", async () => {
+		const directory = await temporaryDirectory("cli-holder-");
+		const input = join(directory, "in.wav");
+
+		await writeFile(input, silentWav(44100, 44100));
+
+		const child = spawn(process.execPath, [RENDER_STDERR_HOLDER, input, join(directory, "out.wav")], {
+			stdio: ["ignore", "pipe", "inherit"],
+		});
+		const exited = new Promise<number>((resolve) => {
+			child.once("exit", () => resolve(performance.now()));
+		});
+		const settled = new Promise<number>((resolve) => {
+			child.stdout.on("data", (chunk: Buffer) => {
+				if (chunk.toString().includes("settled")) resolve(performance.now());
+			});
+		});
+
+		const settledAt = await settled;
+		const exitedAt = await exited;
+
+		expect(exitedAt - settledAt).toBeLessThan(500);
 	});
 });

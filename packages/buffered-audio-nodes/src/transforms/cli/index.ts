@@ -1,32 +1,26 @@
 import { basename } from "node:path";
 import {
-	UnbufferedTransformStream,
+	ChildOutputBuffer,
+	childFailure,
+	releaseChild,
+	spawnChild,
+	terminateChild,
 	TransformNode,
+	UnbufferedTransformStream,
+	waitForChildWritable,
 	type Block,
 	type BufferedAudioNode,
+	type ChildHandle,
 	type StreamSetupContext,
 	type TransformNodeProperties,
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
 import { encodePcm, PcmStreamDecoder } from "./utils/pcm";
-import {
-	appendStderr,
-	exitError,
-	settleWithin,
-	spawnCliChild,
-	terminateChild,
-	unlessAborted,
-	waitForChildWritable,
-	type CliChildHandle,
-	type CliExitResult,
-} from "./utils/process";
 import { buildStreamingWavHeader, WavStreamParser } from "./utils/wav-stream";
 import type { WavFormat } from "../../sources/read/wav/utils/wav-format";
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import type { Readable } from "node:stream";
 
-const CHILD_CLOSE_WAIT_MS = 2000;
+const CHILD_EXIT_WAIT_MS = 2000;
 
 export type CliStreamFormat = "wav" | "f32le" | "f64le";
 
@@ -51,19 +45,13 @@ export abstract class CliTransformStream<
 > extends UnbufferedTransformStream<N> {
 	private streamContext?: StreamSetupContext;
 
-	private child?: ChildProcessWithoutNullStreams;
+	private handle?: ChildHandle;
+	private stdoutBuffer?: ChildOutputBuffer;
 	private label = "";
 	private decoder?: OutputDecoder;
 	private output?: OutputShape;
 	private outputOffset = 0;
-	private stderr = "";
-	private stdinError?: Error;
-	private exitPromise?: Promise<CliExitResult>;
 	private childSettled = false;
-	private childClosed?: Promise<void>;
-	private stdoutEnded = false;
-	private stdoutWait?: Promise<void>;
-	private stdoutNotify?: () => void;
 	private pendingDrain?: Promise<void>;
 
 	protected abstract _command(): string;
@@ -114,44 +102,17 @@ export abstract class CliTransformStream<
 		if (command === "") throw new Error(`${this.identity.nodeName} node has no command`);
 
 		const args = this._buildArgs(this.streamContext, input);
-		let handle: CliChildHandle;
+		const handle = spawnChild({ label, command, args });
 
-		try {
-			handle = spawnCliChild({
-				command,
-				args,
-				onStderr: (chunk) => {
-					this.stderr = appendStderr(this.stderr, chunk);
-				},
-				onStdinError: (error) => {
-					if (error.code === "EPIPE" || error.code === "EOF") return;
+		this.handle = handle;
+		this.stdoutBuffer = new ChildOutputBuffer(handle, { signal: this.streamSignal });
 
-					this.stdinError ??= new Error(`${label} stdin error: ${error.message}`);
-				},
-			});
-		} catch (error) {
-			throw new Error(`${label} failed to start: ${error instanceof Error ? error.message : String(error)}`);
-		}
-
-		const { child, exitPromise } = handle;
-
-		child.stdout.on("readable", this.onStdoutReadable);
-		child.stdout.on("end", this.onStdoutEnd);
-
-		this.childClosed = new Promise<void>((resolve) => {
-			const settleChild = (): void => {
-				this.childSettled = true;
-				this.wakeStdout();
-				resolve();
-			};
-
-			child.once("close", settleChild);
-			child.once("error", settleChild);
+		void handle.closed.then(() => {
+			this.childSettled = true;
+			this.stdoutBuffer?.notify();
 		});
-		this.child = child;
-		this.exitPromise = exitPromise;
 
-		if (this._inputFormat() === "wav") child.stdin.write(buildStreamingWavHeader(input.sampleRate, input.channels));
+		if (this._inputFormat() === "wav") handle.stdin?.write(buildStreamingWavHeader(input.sampleRate, input.channels));
 	}
 
 	private createDecoder(output: OutputShape): OutputDecoder {
@@ -185,23 +146,6 @@ export abstract class CliTransformStream<
 		}
 	}
 
-	private readonly onStdoutReadable = (): void => {
-		this.wakeStdout();
-	};
-
-	private readonly onStdoutEnd = (): void => {
-		this.stdoutEnded = true;
-		this.wakeStdout();
-	};
-
-	private wakeStdout(): void {
-		const notify = this.stdoutNotify;
-
-		this.stdoutNotify = undefined;
-		this.stdoutWait = undefined;
-		notify?.();
-	}
-
 	private toBlock(samples: Array<Float32Array> | undefined): Block | undefined {
 		const frames = samples?.[0]?.length ?? 0;
 
@@ -219,100 +163,78 @@ export abstract class CliTransformStream<
 		return block;
 	}
 
-	private async *readAvailableStdout(): AsyncGenerator<Block> {
-		const stdout = this.child?.stdout;
-		const decoder = this.decoder;
+	private async *decode(bytes: Buffer): AsyncGenerator<Block> {
+		let samples: Array<Float32Array> | undefined;
 
-		if (!stdout || !decoder) return;
+		try {
+			samples = this.decoder?.push(bytes);
+		} catch (error) {
+			await this.failDecode(error);
+		}
+
+		const block = this.toBlock(samples);
+
+		if (block) yield block;
+	}
+
+	private async *readAvailableStdout(): AsyncGenerator<Block> {
+		const buffer = this.stdoutBuffer;
+
+		if (!buffer) return;
+
+		buffer.pull();
+
+		const bytes = buffer.take();
+
+		if (bytes) yield* this.decode(bytes);
+	}
+
+	private async *serveOutput(stop: () => boolean): AsyncGenerator<Block> {
+		const buffer = this.stdoutBuffer;
+
+		if (!buffer) return;
 
 		for (;;) {
-			const bytes = stdout.read() as Buffer | null;
+			if (buffer.failure) throw buffer.failure;
 
-			if (!bytes) return;
+			buffer.pull();
 
-			let samples: Array<Float32Array> | undefined;
+			const bytes = buffer.take();
 
-			try {
-				samples = decoder.push(bytes);
-			} catch (error) {
-				await this.failDecode(error, stdout);
+			if (bytes) {
+				yield* this.decode(bytes);
+
+				continue;
 			}
 
-			const block = this.toBlock(samples);
+			if (stop()) return;
 
-			if (block) yield block;
+			await buffer.nextChange();
 		}
 	}
 
-	private async waitForChildClose(stdout: Readable | undefined): Promise<void> {
-		stdout?.off("readable", this.onStdoutReadable);
-		stdout?.resume();
-
-		if (this.childClosed) await settleWithin(this.childClosed, CHILD_CLOSE_WAIT_MS, this.streamSignal);
-	}
-
-	private async failDecode(error: unknown, stdout: Readable): Promise<never> {
-		await this.waitForChildClose(stdout);
-
-		if (this.childSettled && this.exitPromise) {
-			const exit = exitError(this.label, await this.exitPromise, this.stderr);
-
-			if (exit) throw exit;
-		}
-
-		throw error instanceof Error ? error : new Error(String(error));
-	}
-
-	private waitForStdoutReadableOrEnd(): Promise<void> {
-		const stdout = this.child?.stdout;
-		const signal = this.streamSignal;
-
-		if (!stdout || this.stdoutEnded || signal.aborted) return Promise.resolve();
-
-		if (stdout.readableLength > 0) return Promise.resolve();
-
-		if (stdout.readableEnded) {
-			this.stdoutEnded = true;
-
-			return Promise.resolve();
-		}
-
-		if (this.stdoutWait) return this.stdoutWait;
-
-		const wait = new Promise<void>((resolve) => {
-			const onAbort = (): void => this.wakeStdout();
-
-			signal.addEventListener("abort", onAbort, { once: true });
-
-			this.stdoutNotify = () => {
-				signal.removeEventListener("abort", onAbort);
-				resolve();
-			};
-		});
-
-		this.stdoutWait = wait;
-
-		return wait;
+	private flushOutput(): AsyncGenerator<Block> {
+		return this.serveOutput(() => this.stdoutBuffer?.ended ?? true);
 	}
 
 	private async *serveWhileParked(): AsyncGenerator<Block> {
-		for (;;) {
-			yield* this.readAvailableStdout();
+		yield* this.serveOutput(() => this.pendingDrain === undefined || this.stdoutBuffer?.ended !== false);
 
-			if (this.aborted()) return;
+		const drain = this.pendingDrain;
 
-			const drain = this.pendingDrain;
+		if (drain) await drain;
+	}
 
-			if (drain === undefined) return;
+	private async failDecode(error: unknown): Promise<never> {
+		const failure = this.handle
+			? await childFailure(this.handle, {
+					signal: this.streamSignal,
+					exitWithinMs: CHILD_EXIT_WAIT_MS,
+					discardOutput: true,
+				})
+			: undefined;
 
-			if (this.stdoutEnded) {
-				await drain;
-
-				return;
-			}
-
-			await Promise.race([drain, this.waitForStdoutReadableOrEnd()]);
-		}
+		throw failure ?? (error instanceof Error ? error : new Error(String(error)));
 	}
 
 	private aborted(): boolean {
@@ -320,27 +242,25 @@ export abstract class CliTransformStream<
 	}
 
 	private async throwIfFailed(): Promise<void> {
-		if (!this.exitPromise) return;
+		if (!this.handle) return;
 
-		const exit = await unlessAborted(this.exitPromise, this.streamSignal);
+		const failure = await childFailure(this.handle, { signal: this.streamSignal });
 
-		if (!exit || exit.code === 0) return;
-
-		await this.waitForChildClose(this.child?.stdout);
-
-		const error = exitError(this.label, exit, this.stderr);
-
-		if (error) throw error;
+		if (failure) throw failure;
 	}
 
-	private async checkChild(child: ChildProcessWithoutNullStreams): Promise<boolean> {
+	private async checkChild(handle: ChildHandle): Promise<boolean> {
+		const { child } = handle;
+
 		if (child.exitCode !== null || child.signalCode !== null || this.childSettled) {
 			await this.throwIfFailed();
 
 			return true;
 		}
 
-		if (this.stdinError) throw this.stdinError;
+		const stdinError = handle.stdinError();
+
+		if (stdinError) throw stdinError;
 
 		return false;
 	}
@@ -351,61 +271,58 @@ export abstract class CliTransformStream<
 
 		if (frames === 0) return;
 
-		if (!this.child) {
+		if (!this.handle) {
 			if (this.isDestroyed || this.aborted()) return;
 
 			this.spawnChild(block, channels);
 		}
 
-		const child = this.child;
+		const handle = this.handle;
+		const stdin = handle?.stdin;
 
-		if (!child) throw new Error("CliTransformStream.child not initialized");
+		if (!handle || !stdin) throw new Error("CliTransformStream.child not initialized");
 
-		if (await this.checkChild(child)) {
+		if (await this.checkChild(handle)) {
 			yield* this.readAvailableStdout();
 
 			return;
 		}
 
-		const ok = child.stdin.write(
-			encodePcm(block.samples, frames, this._inputFormat() === "f64le" ? "f64le" : "f32le"),
-		);
+		const ok = stdin.write(encodePcm(block.samples, frames, this._inputFormat() === "f64le" ? "f64le" : "f32le"));
 
 		if (!ok) {
-			this.pendingDrain = waitForChildWritable(child, child.stdin, this.streamSignal).then(() => {
-				this.pendingDrain = undefined;
+			const drain = waitForChildWritable(handle.child, stdin, this.streamSignal).then(() => {
+				if (this.pendingDrain === drain) this.pendingDrain = undefined;
+
+				this.stdoutBuffer?.notify();
 			});
+
+			this.pendingDrain = drain;
 		}
 
 		yield* this.serveWhileParked();
 
 		if (this.aborted()) return;
 
-		await this.checkChild(child);
+		await this.checkChild(handle);
 
 		yield* this.readAvailableStdout();
 	}
 
 	override async *_flush(): AsyncGenerator<Block> {
-		const child = this.child;
+		const handle = this.handle;
 
-		if (!child) return;
+		if (!handle) return;
 
 		yield* this.serveWhileParked();
 
 		if (this.aborted()) return;
 
-		child.stdin.end();
+		handle.stdin?.end();
 
-		await this.checkChild(child);
+		await this.checkChild(handle);
 
-		for (;;) {
-			yield* this.readAvailableStdout();
-
-			if (this.stdoutEnded || this.childSettled || this.aborted()) break;
-
-			await this.waitForStdoutReadableOrEnd();
-		}
+		yield* this.flushOutput();
 
 		if (this.aborted()) return;
 
@@ -417,20 +334,22 @@ export abstract class CliTransformStream<
 	}
 
 	override async _destroy(): Promise<void> {
-		const child = this.child;
+		const handle = this.handle;
 
-		if (!child) return;
+		if (!handle) return;
 
+		const { child } = handle;
 		const running = child.exitCode === null && child.signalCode === null && !child.killed;
 		const exited = running ? terminateChild(child) : Promise.resolve();
 
-		child.stdout.off("readable", this.onStdoutReadable);
-		child.stdout.off("end", this.onStdoutEnd);
-		child.stdout.destroy();
+		handle.stdout?.destroy();
 
 		await exited;
 
-		this.child = undefined;
+		releaseChild(handle);
+		this.stdoutBuffer?.dispose();
+		this.handle = undefined;
+		this.stdoutBuffer = undefined;
 	}
 }
 

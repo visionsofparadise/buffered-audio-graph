@@ -54,5 +54,34 @@ export { windowedIterate, type WindowedIterateOptions } from "./node/stream/tran
 export { collectPackageEntryCandidates, type PackageEntryManifest, type PackageExports } from "./utils/package-entry";
 export { teeReadable } from "./utils/tee-readable";
 export { isAbortReason, preferredFailure } from "./utils/abort-reason";
+export {
+	boundAfterExit,
+	captureStderrTail,
+	childExitError,
+	childFailure,
+	ChildOutputBuffer,
+	ChildOutputHeldError,
+	discardChildOutput,
+	isChildGone,
+	releaseChild,
+	runChild,
+	settledOrAborted,
+	settleWithin,
+	spawnChild,
+	terminateChild,
+	unlessAborted,
+	waitForChildClose,
+	waitForChildWritable,
+	writeChildInput,
+	type ChildExit,
+	type ChildFailureOptions,
+	type ChildHandle,
+	type ChildOutputBufferOptions,
+	type ChildStdin,
+	type RunChildOptions,
+	type RunChildResult,
+	type SpawnChildOptions,
+	type TerminateChildOptions,
+} from "./utils/child-process";
 export { describeError } from "./utils/describe-error";
 export { toReadable, type ToReadableOptions } from "./utils/to-readable";

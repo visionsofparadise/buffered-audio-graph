@@ -2,13 +2,16 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+	captureStderrTail,
+	isChildGone,
+	settledOrAborted,
+	waitForChildWritable,
+	type BlockBuffer,
+} from "@buffered-audio/core";
 import { deinterleaveBuffer, interleave } from "@buffered-audio/utils";
-import { isChildGone, settledOrAborted, waitForChildWritable } from "../../cli/utils/process";
-import type { BlockBuffer } from "@buffered-audio/core";
 
 const CHUNK_FRAMES = 48000;
-
-export const DIAGNOSTIC_TAIL_BYTES = 64 * 1024;
 
 interface VstHostTransferProgress {
 	readonly framesDone: number;
@@ -35,21 +38,6 @@ export interface VstStage {
 
 const READY_LINE = "READY\n";
 const READY_TIMEOUT_MS = 300_000;
-
-export function observeVstHostStderr(stderr: NodeJS.ReadableStream): () => string {
-	let diagnosticTail: Buffer = Buffer.alloc(0);
-
-	stderr.on("data", (chunk: Buffer) => {
-		const combined = diagnosticTail.length === 0 ? chunk : Buffer.concat([diagnosticTail, chunk]);
-
-		diagnosticTail =
-			combined.length <= DIAGNOSTIC_TAIL_BYTES
-				? combined
-				: combined.subarray(combined.length - DIAGNOSTIC_TAIL_BYTES);
-	});
-
-	return () => diagnosticTail.toString("utf8");
-}
 
 export class VstHostExitedBeforeReadyError extends Error {
 	readonly code: number | null;
@@ -78,7 +66,7 @@ function spawnVstHost(binaryPath: string, args: ReadonlyArray<string>): VstHostH
 	const stdin = proc.stdin;
 	const stdout = proc.stdout;
 	const stderr = proc.stderr;
-	const getStderrTail = observeVstHostStderr(stderr);
+	const getStderrTail = captureStderrTail(stderr);
 
 	const ready = new Promise<void>((resolve, reject) => {
 		const seen: Array<Buffer> = [];

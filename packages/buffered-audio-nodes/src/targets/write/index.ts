@@ -2,19 +2,17 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { open, type FileHandle } from "node:fs/promises";
 import {
 	BufferedTargetStream,
+	isChildGone,
+	settledOrAborted,
 	TargetNode,
+	terminateChild,
+	waitForChildWritable,
 	type Block,
 	type StreamSetupContext,
 	type TargetNodeProperties,
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { PACKAGE_NAME } from "../../package-metadata";
-import {
-	isChildGone,
-	settledOrAborted,
-	terminateChild,
-	waitForChildWritable,
-} from "../../transforms/cli/utils/process";
 import { createFfmpegPathField } from "../../utils/binary-fields";
 import { getBytesPerSample, writeSample, buildWavHeader, buildRf64Header } from "./utils/wav";
 
