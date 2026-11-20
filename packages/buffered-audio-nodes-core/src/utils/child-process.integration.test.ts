@@ -272,6 +272,34 @@ describe("runChild", () => {
 		await expect(running).rejects.toBe("cancelled");
 	});
 
+	it.skipIf(isWindows)("kills a child that ignores SIGTERM at once when aborted", async () => {
+		const pidFile = join(await temporaryDirectory(), "pid");
+		const script = `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(process.argv[1], String(process.pid)); setInterval(() => undefined, 1000)`;
+		const controller = new AbortController();
+		const running = settleOrNull(
+			runChild({
+				label: "node",
+				command: process.execPath,
+				args: ["-e", script, pidFile],
+				signal: controller.signal,
+			}),
+		);
+		let pid = 0;
+
+		while (!pid) {
+			await delay(50);
+			pid = Number(await readFile(pidFile, "utf8").catch(() => ""));
+		}
+
+		const abortedAt = performance.now();
+
+		controller.abort();
+
+		expect(await running).toBe(controller.signal.reason);
+		expect(performance.now() - abortedAt).toBeLessThan(1000);
+		expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }));
+	});
+
 	it("rejects when stdout passes the cap", async () => {
 		await expect(
 			runChild({

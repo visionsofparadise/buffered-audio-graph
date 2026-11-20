@@ -383,7 +383,8 @@ export async function runChild(options: RunChildOptions): Promise<RunChildResult
 
 		return { exit, stdout: Buffer.concat(chunks), stderr, failure: held ?? childExitError(label, exit, stderr) };
 	} catch (error) {
-		if (!(error instanceof ChildOutputHeldError)) await terminateChild(handle.child);
+		if (!(error instanceof ChildOutputHeldError))
+			await terminateChild(handle.child, signal?.aborted ? { firstSignal: "SIGKILL" } : undefined);
 
 		throw error;
 	} finally {
