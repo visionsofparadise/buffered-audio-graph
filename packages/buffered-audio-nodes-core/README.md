@@ -132,6 +132,8 @@ Construction resolves bypass and composites: a bypassed node contributes no stre
 
 `RenderOptions` are the caller-facing knobs: `{ chunkSize?, highWaterMark?, memoryLimit?, signal?, executionProviders? }`.
 
+A rejected render often holds several causes in an `AggregateError`, whose own message is only "Render and cleanup failed". `describeError(error)` shows them all on one line: an aggregate's message, then its leaf causes' messages, flattened through nested aggregates, deduplicated and joined by semicolons, for example `Render and cleanup failed: write failed; destroy failed`. Any other error gives its message, and a non-error gives `String(error)`.
+
 ### Events
 
 Subscribe on `job.events`, a typed `EventEmitter`. Each event carries the emitting stream's `StreamIdentity` as its first argument, followed by a payload:

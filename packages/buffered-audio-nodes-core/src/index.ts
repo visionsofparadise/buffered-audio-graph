@@ -54,4 +54,5 @@ export { windowedIterate, type WindowedIterateOptions } from "./node/stream/tran
 export { collectPackageEntryCandidates, type PackageEntryManifest, type PackageExports } from "./utils/package-entry";
 export { teeReadable } from "./utils/tee-readable";
 export { isAbortReason, preferredFailure } from "./utils/abort-reason";
+export { describeError } from "./utils/describe-error";
 export { toReadable, type ToReadableOptions } from "./utils/to-readable";

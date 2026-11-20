@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createRenderJobs, validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
+import { createRenderJobs, describeError, validateGraphDefinition, type GraphDefinition } from "@buffered-audio/core";
 import { Command } from "commander";
 import packageJson from "../package.json";
 import { createEventSink } from "./event-sink";
@@ -59,7 +59,7 @@ program
 				overrides = parseResolveOverrides(options.resolve);
 				parameters = parseParams(options.param);
 			} catch (error) {
-				process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+				process.stderr.write(`Error: ${describeError(error)}\n`);
 				process.exit(1);
 			}
 
@@ -98,7 +98,7 @@ program
 					sink.printSummary(jobs);
 					process.stdout.write("Done.\n");
 				} catch (error) {
-					process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+					process.stderr.write(`Error: ${describeError(error)}\n`);
 					process.exitCode = 1;
 				}
 			} finally {

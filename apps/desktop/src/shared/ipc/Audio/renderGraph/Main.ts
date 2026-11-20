@@ -1,4 +1,4 @@
-import { createRenderJobs, isAbortReason, preferredFailure } from "@buffered-audio/core";
+import { createRenderJobs, describeError, isAbortReason, preferredFailure } from "@buffered-audio/core";
 import { AsyncMainIpc, type IpcHandlerDependencies } from "../../../Models/AsyncMainIpc";
 import { emitToRenderer, type AudioProgressPayload } from "../../../utilities/emitToRenderer";
 import {
@@ -48,7 +48,13 @@ export class RenderGraphMainIpc extends AsyncMainIpc<RenderGraphIpcParameters, R
 			);
 			const failure = preferredFailure(results, signal);
 
-			if (failure && !(signal.aborted && isAbortReason(failure.reason, signal))) throw failure.reason;
+			if (failure && !(signal.aborted && isAbortReason(failure.reason, signal))) {
+				const reason: unknown = failure.reason;
+
+				throw reason instanceof Error && reason.name === "AggregateError"
+					? Object.assign(new Error(describeError(reason)), { cause: reason })
+					: reason;
+			}
 		} finally {
 			jobManager.completeJob(jobId);
 		}
