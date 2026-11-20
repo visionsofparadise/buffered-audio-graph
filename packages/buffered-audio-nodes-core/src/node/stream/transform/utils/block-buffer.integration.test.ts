@@ -1,9 +1,13 @@
+import { createWriteStream, type WriteStream } from "node:fs";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { Writable } from "node:stream";
+import { describe, expect, it, vi } from "vitest";
 import type { Block } from "../../block";
 import { BlockBuffer } from "./block-buffer";
+
+vi.mock("node:fs", { spy: true });
 
 describe("BlockBuffer", () => {
 	it("uses its injected directory and unlinks block-buffer files on clear and close", async () => {
@@ -193,6 +197,33 @@ describe("BlockBuffer", () => {
 		expect(lengths).toEqual([50, 50, 50, 50]);
 
 		await buffer.close();
+	});
+
+	it("rejects a write that waits for drain when its file stream fails", async () => {
+		const diskFull = new Error("ENOSPC: no space left on device, write");
+		const failing = new Writable({
+			highWaterMark: 16,
+			write(_chunk, _encoding, callback) {
+				setTimeout(() => callback(diskFull), 10);
+			},
+		});
+
+		vi.mocked(createWriteStream).mockReturnValueOnce(failing as WriteStream);
+
+		const buffer = new BlockBuffer();
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+
+		try {
+			const write = buffer.write([new Float32Array(1024)], 44100, 32);
+			const hung = new Promise<never>((_resolve, reject) => {
+				timeout = setTimeout(() => reject(new Error("write did not settle within 2000ms")), 2_000);
+			});
+
+			await expect(Promise.race([write, hung])).rejects.toBe(diskFull);
+		} finally {
+			clearTimeout(timeout);
+			await buffer.close().catch(() => undefined);
+		}
 	});
 
 	it("iterate over an empty buffer yields nothing", async () => {

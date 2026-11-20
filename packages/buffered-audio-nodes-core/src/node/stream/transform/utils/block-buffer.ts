@@ -11,6 +11,22 @@ import type { Block } from "../../block";
 
 const HIGH_WATER_MARK = 10 * 1024 * 1024;
 
+function drainOrError(ws: WriteStream): Promise<void> {
+	return new Promise<void>((resolve, reject) => {
+		const onDrain = (): void => {
+			ws.removeListener("error", onError);
+			resolve();
+		};
+		const onError = (error: Error): void => {
+			ws.removeListener("drain", onDrain);
+			reject(error);
+		};
+
+		ws.once("drain", onDrain);
+		ws.once("error", onError);
+	});
+}
+
 export class BlockBuffer {
 	private _frames = 0;
 	private _channels = 0;
@@ -79,9 +95,7 @@ export class BlockBuffer {
 		const ws = this.ensureWriteStream();
 		const ok = ws.write(writeBuffer);
 
-		if (!ok) {
-			await new Promise<void>((resolve) => ws.once("drain", () => resolve()));
-		}
+		if (!ok) await drainOrError(ws);
 
 		this.writePositionByte += writeBuffer.length;
 
