@@ -15,6 +15,7 @@ export abstract class InstrumentedTransformStream<
 
 	private pipeline?: AsyncGenerator<Block>;
 	private pipelineFinishing = false;
+	private cancelRequested = false;
 
 	async setup(input: ReadableStream<Block>, context: StreamSetupContext): Promise<ReadableStream<Block>> {
 		this.sourceTotalFrames = context.sourceTotalFrames;
@@ -43,7 +44,12 @@ export abstract class InstrumentedTransformStream<
 
 		this.pipeline = pipeline;
 
-		return toReadable(pipeline, { onCancel: () => this.abortStream() });
+		return toReadable(pipeline, {
+			onCancel: () => {
+				this.cancelRequested = true;
+				this.abortStream();
+			},
+		});
 	}
 
 	protected override async unwind(): Promise<void> {
@@ -74,7 +80,7 @@ export abstract class InstrumentedTransformStream<
 		try {
 			await this.destroy();
 		} catch (error) {
-			if (!failed) throw error;
+			if (!failed && !this.cancelRequested) throw error;
 		}
 	}
 

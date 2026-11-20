@@ -75,7 +75,7 @@ export abstract class BufferedTargetStream<
 				await this.destroy();
 			},
 			abort: async () => {
-				await this.destroy();
+				await this.destroy().catch(() => undefined);
 			},
 		});
 	}

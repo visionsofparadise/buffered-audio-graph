@@ -264,6 +264,51 @@ describe("source stream-scoped destroy", () => {
 	});
 });
 
+class FinallyThrowingTransformStream extends UnbufferedTransformStream {
+	constructor() {
+		super(fakeNode("finally-throwing-transform"), createTestStreamContext().context);
+	}
+
+	override async *_transform(block: Block): AsyncGenerator<Block> {
+		try {
+			yield block;
+		} finally {
+			if (this.streamSignal.aborted) throw new Error("finally failed");
+		}
+	}
+
+	override _destroy(): void {
+		throw new Error("destroy failed");
+	}
+}
+
+describe("transform teardown errors", () => {
+	it("rejects destroy() with the pipeline unwind error and the _destroy error, unwind error first", async () => {
+		const stream = new FinallyThrowingTransformStream();
+		const input = new ReadableStream<Block>({
+			pull(controller) {
+				controller.enqueue(createBlock(1, 0, 100));
+			},
+		});
+		const reader = (await stream.setup(input, createTestSetupContext({ highWaterMark: 1 }))).getReader();
+
+		await reader.read();
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		const error = await stream.destroy().then(
+			() => undefined,
+			(reason: unknown) => reason,
+		);
+
+		expect(error).toBeInstanceOf(AggregateError);
+		expect((error as AggregateError).message).toBe("Stream teardown failed");
+		expect((error as AggregateError).errors.map((entry: Error) => entry.message)).toEqual([
+			"finally failed",
+			"destroy failed",
+		]);
+	});
+});
+
 describe("target stream-scoped destroy", () => {
 	it("graceful close invokes destroy once", async () => {
 		const target = new CountingTargetStream();

@@ -51,7 +51,7 @@ export abstract class BufferedSourceStream<
 
 					if (signal?.aborted) {
 						done = true;
-						await this.destroy();
+						await this.destroy().catch(() => undefined);
 						controller.error(signal.reason);
 
 						return;
@@ -92,13 +92,13 @@ export abstract class BufferedSourceStream<
 							this.emitProgress("read", this.framesRead, sourceTotalFrames);
 					} catch (error) {
 						done = true;
-						await this.destroy();
+						await this.destroy().catch(() => undefined);
 						controller.error(error);
 					}
 				},
 				cancel: async () => {
 					done = true;
-					await this.destroy();
+					await this.destroy().catch(() => undefined);
 				},
 			},
 			{ highWaterMark },

@@ -6,7 +6,7 @@ import type { StreamSetupContext } from "./node/stream";
 import type { Block } from "./node/stream/block";
 import { SourceNode } from "./node/source";
 import { BufferedSourceStream, type SourceMetadata, type SourceNodeProperties } from "./node/stream/source";
-import { BufferedTargetStream, TargetNode } from "./node/stream/target";
+import { BufferedTargetStream, TargetNode, type TargetNodeProperties } from "./node/stream/target";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
 import { TransformNode, type TransformNodeProperties } from "./node/transform";
 import { RenderJob } from "./render-job";
@@ -964,6 +964,176 @@ describe("RenderJob execution", () => {
 		await render;
 
 		expect(log).toEqual(["long call ends", "slow: _destroy (inCall=false)", "render rejected"]);
+	});
+});
+
+interface HookErrorSourceProperties extends SourceNodeProperties {
+	readonly count: number;
+	readonly readFails: boolean;
+	readonly destroyFails: boolean;
+}
+
+class HookErrorSourceStream extends BufferedSourceStream<HookErrorSource> {
+	private index = 0;
+
+	override async getMetadata(): Promise<SourceMetadata> {
+		return { sampleRate: 44100, channels: 1 };
+	}
+
+	override async _read(): Promise<Block | undefined> {
+		if (this.properties.readFails) throw new Error("read failed");
+
+		if (this.index >= this.properties.count) return undefined;
+
+		this.index += 1;
+
+		return createBlock(this.index, (this.index - 1) * 100, 100);
+	}
+
+	override _destroy(): void {
+		if (this.properties.destroyFails) throw new Error("destroy failed");
+	}
+}
+
+class HookErrorSource extends SourceNode<HookErrorSourceProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "hook-error-source";
+	static override readonly schema = z.object({});
+	static override readonly Stream = HookErrorSourceStream;
+
+	constructor(options: { count?: number; readFails?: boolean; destroyFails?: boolean }) {
+		super({
+			count: options.count ?? 8,
+			readFails: options.readFails ?? false,
+			destroyFails: options.destroyFails ?? false,
+		});
+	}
+}
+
+interface HookErrorTransformProperties extends TransformNodeProperties {
+	readonly transformFails: boolean;
+	readonly destroyFails: boolean;
+}
+
+class HookErrorTransformStream extends UnbufferedTransformStream<HookErrorTransform> {
+	override *_transform(block: Block): Iterable<Block> {
+		if (this.properties.transformFails) throw new Error("transform failed");
+
+		yield block;
+	}
+
+	override _destroy(): void {
+		if (this.properties.destroyFails) throw new Error("destroy failed");
+	}
+}
+
+class HookErrorTransform extends TransformNode<HookErrorTransformProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "hook-error-transform";
+	static override readonly schema = z.object({});
+	static override readonly Stream = HookErrorTransformStream;
+
+	constructor(options: { transformFails?: boolean; destroyFails?: boolean }) {
+		super({ transformFails: options.transformFails ?? false, destroyFails: options.destroyFails ?? false });
+	}
+}
+
+interface HookErrorTargetProperties extends TargetNodeProperties {
+	readonly writeFailsAfterMs?: number;
+	readonly destroyFails: boolean;
+}
+
+class HookErrorTargetStream extends BufferedTargetStream<HookErrorTarget> {
+	override async _write(): Promise<void> {
+		const delayMs = this.properties.writeFailsAfterMs;
+
+		if (delayMs === undefined) return;
+
+		if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+		throw new Error("write failed");
+	}
+
+	override _close(): void {}
+
+	override _destroy(): void {
+		if (this.properties.destroyFails) throw new Error("destroy failed");
+	}
+}
+
+class HookErrorTarget extends TargetNode<HookErrorTargetProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "hook-error-target";
+	static override readonly schema = z.object({});
+	static override readonly Stream = HookErrorTargetStream;
+
+	constructor(options: { writeFailsAfterMs?: number; destroyFails?: boolean }) {
+		super({ writeFailsAfterMs: options.writeFailsAfterMs, destroyFails: options.destroyFails ?? false });
+	}
+}
+
+async function renderFailure(source: SourceNode): Promise<unknown> {
+	return source
+		.createRenderJob()
+		.render()
+		.then(
+			() => undefined,
+			(reason: unknown) => reason,
+		);
+}
+
+function expectHookThenDestroyError(error: unknown, hookMessage: string): void {
+	expect(error).toBeInstanceOf(AggregateError);
+	expect((error as AggregateError).message).toBe("Render and cleanup failed");
+	expect((error as AggregateError).errors.map((entry: Error) => entry.message)).toEqual([
+		hookMessage,
+		"destroy failed",
+	]);
+}
+
+describe("RenderJob hook errors ahead of teardown errors", () => {
+	it("reports a source's read error, then its _destroy error", async () => {
+		const source = new HookErrorSource({ readFails: true, destroyFails: true });
+
+		source.to(new HookErrorTarget({}));
+
+		expectHookThenDestroyError(await renderFailure(source), "read failed");
+	});
+
+	it("reports a target's write error, then the _destroy error of the source its cancel tore down", async () => {
+		const source = new HookErrorSource({ destroyFails: true });
+
+		source.to(new HookErrorTarget({ writeFailsAfterMs: 0 }));
+
+		expectHookThenDestroyError(await renderFailure(source), "write failed");
+	});
+
+	it("reports a target's write error, then the _destroy error of a transform parked at a yield", async () => {
+		const source = new HookErrorSource({});
+		const transform = new HookErrorTransform({ destroyFails: true });
+
+		source.to(transform);
+		transform.to(new HookErrorTarget({ writeFailsAfterMs: 20 }));
+
+		expectHookThenDestroyError(await renderFailure(source), "write failed");
+	});
+
+	it("reports a source's read error ahead of the _destroy error of the target its abort tore down", async () => {
+		const source = new HookErrorSource({ readFails: true });
+
+		source.to(new HookErrorTarget({ destroyFails: true }));
+
+		expectHookThenDestroyError(await renderFailure(source), "read failed");
+	});
+
+	it("reports a transform's error ahead of the _destroy error of the target its abort tore down", async () => {
+		const source = new HookErrorSource({});
+		const transform = new HookErrorTransform({ transformFails: true });
+
+		source.to(transform);
+		transform.to(new HookErrorTarget({ destroyFails: true }));
+
+		expectHookThenDestroyError(await renderFailure(source), "transform failed");
 	});
 });
 

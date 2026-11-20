@@ -192,7 +192,13 @@ export abstract class BufferedStream<N extends BufferedAudioNode = BufferedAudio
 
 		while (this.hookCalls.size > 0) await Promise.allSettled([...this.hookCalls]);
 
-		await this._destroy();
+		try {
+			await this._destroy();
+		} catch (destroyError) {
+			if (unwindFailed) throw new AggregateError([unwindError, destroyError], "Stream teardown failed");
+
+			throw destroyError;
+		}
 
 		if (unwindFailed) throw unwindError;
 	}
