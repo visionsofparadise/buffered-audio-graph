@@ -24,6 +24,7 @@ export function createAnalysisStream(options: {
 	);
 
 	resample._setup({ ...options.setupContext });
+	options.setupContext.adoptStream?.(resample);
 
 	return resample._pipe(monoStream);
 }

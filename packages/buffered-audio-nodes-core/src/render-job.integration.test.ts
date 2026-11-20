@@ -2,7 +2,7 @@ import { access, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import type { StreamSetupContext } from "./node/stream";
+import type { StreamContext, StreamSetupContext } from "./node/stream";
 import type { Block } from "./node/stream/block";
 import { SourceNode } from "./node/source";
 import { BufferedAudioNode } from "./node";
@@ -13,6 +13,7 @@ import {
 	type SourceNodeProperties,
 } from "./node/stream/source";
 import { BufferedTargetStream, TargetNode, type TargetNodeProperties } from "./node/stream/target";
+import { BufferedTransformStream } from "./node/stream/transform/buffered-transform";
 import { UnbufferedTransformStream } from "./node/stream/transform/unbuffered-transform";
 import { TransformNode, type TransformNodeProperties } from "./node/transform";
 import { RenderJob } from "./render-job";
@@ -1265,6 +1266,259 @@ describe("RenderJob aborts and the metadata signal", () => {
 		await expect(render).rejects.toBe(reason);
 		expect(received).toBeInstanceOf(AbortSignal);
 		expect(received?.aborted).toBe(true);
+	});
+});
+
+interface CompositeLog {
+	readonly entries: Array<string>;
+	readonly innerDestroyFails?: string;
+}
+
+class InnerStream extends UnbufferedTransformStream {
+	compositeLog?: CompositeLog;
+
+	override _setup(context: StreamSetupContext): void {
+		this.recordRenderSignal(context);
+	}
+
+	override *_transform(block: Block): Iterable<Block> {
+		yield block;
+	}
+
+	override async _destroy(): Promise<void> {
+		await new Promise((resolve) => setTimeout(resolve, 300));
+		this.compositeLog?.entries.push(`inner ${this.node.id ?? ""} _destroy end`);
+
+		if (this.node.id === "down" && this.compositeLog?.innerDestroyFails)
+			throw new Error(this.compositeLog.innerDestroyFails);
+	}
+}
+
+class InnerNode extends TransformNode {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "inner";
+	static override readonly schema = z.object({});
+	static override readonly Stream = InnerStream;
+}
+
+interface CompositeNodeProperties extends TransformNodeProperties {
+	readonly compositeLog: CompositeLog;
+}
+
+interface InnerPair {
+	readonly up: InnerStream;
+	readonly down: InnerStream;
+}
+
+function setUpInnerPair(
+	streamContext: StreamContext,
+	context: StreamSetupContext,
+	compositeLog: CompositeLog,
+): InnerPair {
+	const up = new InnerStream(new InnerNode({ id: "up" }), streamContext);
+	const down = new InnerStream(new InnerNode({ id: "down" }), streamContext);
+
+	up.compositeLog = compositeLog;
+	down.compositeLog = compositeLog;
+	up._setup(context);
+	down._setup(context);
+	context.adoptStream?.(down);
+	context.adoptStream?.(up);
+
+	return { up, down };
+}
+
+function pipeThroughPair(
+	pair: InnerPair | undefined,
+	input: ReadableStream<Block>,
+	pipe: (input: ReadableStream<Block>) => ReadableStream<Block>,
+): ReadableStream<Block> {
+	if (!pair) throw new Error("composite piped before setup");
+
+	return pair.down._pipe(pipe(pair.up._pipe(input)));
+}
+
+class UnbufferedCompositeStream extends UnbufferedTransformStream<UnbufferedCompositeNode> {
+	private readonly streamContext: StreamContext;
+	private pair?: InnerPair;
+
+	constructor(node: UnbufferedCompositeNode, context: StreamContext) {
+		super(node, context);
+		this.streamContext = context;
+	}
+
+	override _setup(context: StreamSetupContext): void {
+		this.pair = setUpInnerPair(this.streamContext, context, this.properties.compositeLog);
+	}
+
+	override _pipe(input: ReadableStream<Block>): ReadableStream<Block> {
+		return pipeThroughPair(this.pair, input, (inner) => super._pipe(inner));
+	}
+
+	override *_transform(block: Block): Iterable<Block> {
+		yield block;
+	}
+}
+
+class UnbufferedCompositeNode extends TransformNode<CompositeNodeProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "unbuffered-composite";
+	static override readonly schema = z.object({});
+	static override readonly Stream = UnbufferedCompositeStream;
+
+	constructor(compositeLog: CompositeLog) {
+		super({ compositeLog });
+	}
+}
+
+class BufferedCompositeStream extends BufferedTransformStream<BufferedCompositeNode> {
+	private readonly streamContext: StreamContext;
+	private pair?: InnerPair;
+
+	constructor(node: BufferedCompositeNode, context: StreamContext) {
+		super(node, context);
+		this.streamContext = context;
+	}
+
+	override _setup(context: StreamSetupContext): void {
+		this.pair = setUpInnerPair(this.streamContext, context, this.properties.compositeLog);
+	}
+
+	override _pipe(input: ReadableStream<Block>): ReadableStream<Block> {
+		return pipeThroughPair(this.pair, input, (inner) => super._pipe(inner));
+	}
+}
+
+class BufferedCompositeNode extends TransformNode<CompositeNodeProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "buffered-composite";
+	static override readonly schema = z.object({});
+	static override readonly Stream = BufferedCompositeStream;
+
+	constructor(compositeLog: CompositeLog) {
+		super({ compositeLog });
+	}
+}
+
+interface PacedTargetProperties extends TargetNodeProperties {
+	readonly delayMs: number;
+	readonly failOnBlock?: number;
+}
+
+class PacedTargetStream extends BufferedTargetStream<PacedTarget> {
+	private written = 0;
+
+	override async _write(): Promise<void> {
+		await new Promise((resolve) => setTimeout(resolve, this.properties.delayMs));
+		this.written += 1;
+
+		if (this.written === this.properties.failOnBlock) throw new Error("write failed");
+	}
+
+	override _close(): void {}
+}
+
+class PacedTarget extends TargetNode<PacedTargetProperties> {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "paced-target";
+	static override readonly schema = z.object({});
+	static override readonly Stream = PacedTargetStream;
+
+	constructor(delayMs: number, failOnBlock?: number) {
+		super({ delayMs, failOnBlock });
+	}
+}
+
+type CompositeBase = "unbuffered" | "buffered";
+
+interface CompositeCase {
+	readonly name: string;
+	readonly blocks: number;
+	readonly targets: ReadonlyArray<PacedTarget>;
+	readonly abortAfterMs?: number;
+	readonly fails: boolean;
+}
+
+function compositeCases(): Array<CompositeCase> {
+	return [
+		{
+			name: "split with a failing branch",
+			blocks: 20,
+			targets: [new PacedTarget(5, 2), new PacedTarget(10)],
+			fails: true,
+		},
+		{
+			name: "split aborted at 30 ms",
+			blocks: 50,
+			targets: [new PacedTarget(10), new PacedTarget(10)],
+			abortAfterMs: 30,
+			fails: true,
+		},
+		{ name: "linear success", blocks: 5, targets: [new PacedTarget(10)], fails: false },
+		{ name: "linear failure", blocks: 20, targets: [new PacedTarget(5, 2)], fails: true },
+		{ name: "split success", blocks: 5, targets: [new PacedTarget(10), new PacedTarget(10)], fails: false },
+		{ name: "linear aborted at 30 ms", blocks: 50, targets: [new PacedTarget(10)], abortAfterMs: 30, fails: true },
+	];
+}
+
+async function renderComposite(
+	base: CompositeBase,
+	testCase: Pick<CompositeCase, "blocks" | "targets" | "abortAfterMs">,
+	compositeLog: CompositeLog,
+): Promise<{ readonly fulfilled: boolean; readonly reason?: unknown }> {
+	const source = new MockSource(
+		Array.from({ length: testCase.blocks }, (_, index) => createBlock(index, index * 100, 100)),
+	);
+	const composite =
+		base === "unbuffered" ? new UnbufferedCompositeNode(compositeLog) : new BufferedCompositeNode(compositeLog);
+
+	source.to(composite);
+
+	for (const target of testCase.targets) composite.to(target);
+
+	const job = source.createRenderJob({ highWaterMark: 1 });
+
+	if (testCase.abortAfterMs !== undefined) setTimeout(() => job.abort(), testCase.abortAfterMs);
+
+	const outcome = await job.render().then(
+		() => ({ fulfilled: true }),
+		(reason: unknown) => ({ fulfilled: false, reason }),
+	);
+
+	compositeLog.entries.push("render settled");
+
+	return outcome;
+}
+
+describe("RenderJob composite inner streams", () => {
+	for (const base of ["unbuffered", "buffered"] as const) {
+		for (const testCase of compositeCases()) {
+			it(`finishes an adopted inner stream's teardown before render settles: ${base}, ${testCase.name}`, async () => {
+				const compositeLog: CompositeLog = { entries: [] };
+				const outcome = await renderComposite(base, testCase, compositeLog);
+				const settledAt = compositeLog.entries.indexOf("render settled");
+
+				expect(outcome.fulfilled).toBe(!testCase.fails);
+				expect(compositeLog.entries.indexOf("inner up _destroy end")).toBeGreaterThanOrEqual(0);
+				expect(compositeLog.entries.indexOf("inner up _destroy end")).toBeLessThan(settledAt);
+				expect(compositeLog.entries.indexOf("inner down _destroy end")).toBeGreaterThanOrEqual(0);
+				expect(compositeLog.entries.indexOf("inner down _destroy end")).toBeLessThan(settledAt);
+			});
+		}
+	}
+
+	it("reports an adopted inner stream's destroy error beside the failure of a split branch", async () => {
+		const compositeLog: CompositeLog = { entries: [], innerDestroyFails: "inner destroy failed" };
+		const outcome = await renderComposite(
+			"unbuffered",
+			{ blocks: 20, targets: [new PacedTarget(5, 2), new PacedTarget(10)] },
+			compositeLog,
+		);
+
+		expect(outcome.reason).toBeInstanceOf(AggregateError);
+		expect((outcome.reason as AggregateError).errors.map((entry: Error) => entry.message)).toEqual(
+			expect.arrayContaining(["write failed", "inner destroy failed"]),
+		);
 	});
 });
 

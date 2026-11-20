@@ -31,6 +31,8 @@ export function createResampleComposition(options: {
 
 	upResample._setup(options.context);
 	downResample._setup(options.context);
+	options.context.adoptStream?.(downResample);
+	options.context.adoptStream?.(upResample);
 
 	return { upResample, downResample };
 }

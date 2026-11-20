@@ -66,6 +66,25 @@ describe("createResampleComposition", () => {
 		expect(down.ffmpegPath).toBe("/bin/ffmpeg");
 	});
 
+	it("hands the render job its down, then its up resampler", () => {
+		const adoptStream = vi.fn();
+		const context = createTestSetupContext({ sourceSampleRate: EDGE_RATE, sampleRate: EDGE_RATE, adoptStream });
+
+		const composition = createResampleComposition({
+			context,
+			streamContext: createTestStreamContext().context,
+			ffmpegPath: "ffmpeg",
+			modelRate: MODEL_RATE,
+		});
+
+		if (!composition) throw new Error("expected a composition");
+
+		expect(adoptStream).toHaveBeenCalledTimes(2);
+		expect(adoptStream.mock.calls[0]?.[0]).toBe(composition.downResample);
+		expect(adoptStream.mock.calls[1]?.[0]).toBe(composition.upResample);
+		expect(childProcessMocks.spawn).not.toHaveBeenCalled();
+	});
+
 	it("spawns no child process at construction", () => {
 		const context = createTestSetupContext({ sourceSampleRate: EDGE_RATE, sampleRate: EDGE_RATE });
 

@@ -21,6 +21,10 @@ export interface StreamSetupContext {
 	readonly sourceTotalFrames?: number;
 	readonly highWaterMark: number;
 	readonly signal?: AbortSignal;
+	/**
+	 * Set by RenderJob. A composite hands it each inner stream it builds and drives itself; the job destroys adopted streams after its own, in adoption order, before render() settles.
+	 */
+	readonly adoptStream?: (stream: BufferedStream) => void;
 }
 
 export type StreamPhase = "read" | "buffer" | "process" | "emit" | "write";

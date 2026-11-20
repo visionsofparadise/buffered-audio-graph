@@ -33,6 +33,7 @@ export class RenderJob {
 	readonly events: RenderEvents = new EventEmitter();
 
 	private readonly streamsMap = new Map<BufferedAudioNode, Array<BufferedStream>>();
+	private readonly adoptedStreams: Array<BufferedStream> = [];
 	private readonly abortController = new AbortController();
 	private readonly renderContext: StreamContext;
 
@@ -168,6 +169,9 @@ export class RenderJob {
 				sourceTotalFrames: meta.durationFrames,
 				highWaterMark: this.options?.highWaterMark ?? computedHighWaterMark,
 				signal,
+				adoptStream: (stream) => {
+					this.adoptedStreams.push(stream);
+				},
 			};
 
 			const start = performance.now();
@@ -199,13 +203,11 @@ export class RenderJob {
 			errors.push(error);
 			this.abortController.abort();
 		} finally {
-			for (const streams of this.streamsMap.values()) {
-				for (const stream of streams) {
-					try {
-						await stream.destroy();
-					} catch (error) {
-						if (!errors.includes(error)) errors.push(error);
-					}
+			for (const stream of [...[...this.streamsMap.values()].flat(), ...this.adoptedStreams]) {
+				try {
+					await stream.destroy();
+				} catch (error) {
+					if (!errors.includes(error)) errors.push(error);
 				}
 			}
 
