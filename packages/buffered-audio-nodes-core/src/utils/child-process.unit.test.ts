@@ -105,6 +105,13 @@ describe("childExitError", () => {
 		expect(error?.message).toBe(`tool exited 2: ${stderr.slice(-1024)}`);
 	});
 
+	it("starts the excerpt after a surrogate pair the 1024-character cut would split", () => {
+		const stderr = `a\u{1F600}${"x".repeat(1023)}`;
+		const error = childExitError("tool", { code: 2, signal: null }, stderr);
+
+		expect(error?.message).toBe(`tool exited 2: ${"x".repeat(1023)}`);
+	});
+
 	it("reads a signal exit as the signal", () => {
 		expect(childExitError("tool", { code: null, signal: "SIGTERM" }, "")?.message).toBe(
 			"tool exited with signal SIGTERM",

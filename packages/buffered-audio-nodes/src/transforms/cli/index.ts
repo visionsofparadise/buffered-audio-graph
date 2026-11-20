@@ -182,6 +182,7 @@ export abstract class CliTransformStream<
 
 		if (!buffer) return;
 
+		buffer.throwIfFailed();
 		buffer.pull();
 
 		const bytes = buffer.take();
@@ -195,8 +196,7 @@ export abstract class CliTransformStream<
 		if (!buffer) return;
 
 		for (;;) {
-			if (buffer.failure) throw buffer.failure;
-
+			buffer.throwIfFailed();
 			buffer.pull();
 
 			const bytes = buffer.take();

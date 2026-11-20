@@ -140,6 +140,13 @@ export function captureStderrTail(stream: NodeJS.ReadableStream, limitBytes = ST
 	return () => decodeTail(tail, truncated);
 }
 
+function stderrExcerpt(stderr: string): string {
+	const excerpt = stderr.slice(-STDERR_EXCERPT_CHARS);
+	const first = excerpt.charCodeAt(0);
+
+	return first >= 0xdc00 && first <= 0xdfff ? excerpt.slice(1) : excerpt;
+}
+
 export function childExitError(label: string, exit: ChildExit, stderr: string): Error | undefined {
 	if (exit.spawnError)
 		return new Error(`${label} failed to start: ${exit.spawnError.message}`, { cause: exit.spawnError });
@@ -147,7 +154,7 @@ export function childExitError(label: string, exit: ChildExit, stderr: string): 
 	if (exit.code === 0) return undefined;
 
 	const status = exit.code === null ? `exited with signal ${exit.signal ?? "unknown"}` : `exited ${exit.code}`;
-	const detail = stderr ? `: ${stderr.slice(-STDERR_EXCERPT_CHARS)}` : "";
+	const detail = stderr ? `: ${stderrExcerpt(stderr)}` : "";
 
 	return new Error(`${label} ${status}${detail}`);
 }
@@ -253,7 +260,8 @@ export function boundAfterExit<T>(handle: ChildHandle, wait: Promise<T>): Promis
 			(error: unknown) => {
 				settled = true;
 				clearTimeout(timer);
-				reject(toError(error));
+				// eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- an abort keeps the signal's reason as it is
+				reject(error);
 			},
 		);
 
@@ -320,7 +328,8 @@ export async function runChild(options: RunChildOptions): Promise<RunChildResult
 	let stop: (reason: unknown) => void = () => undefined;
 	const stopped = new Promise<never>((_resolve, reject) => {
 		stop = (reason) => {
-			reject(reason instanceof Error ? reason : toError(reason));
+			// eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- an abort keeps the signal's reason as it is
+			reject(reason);
 		};
 	});
 	const onAbort = (): void => {
@@ -403,7 +412,9 @@ export class ChildOutputBuffer {
 	private heldBytes = 0;
 	private exited = false;
 	private stdoutEnded = false;
-	private failureReason?: Error;
+	private failed = false;
+	private failureReason: unknown;
+	private disposed = false;
 	private timer?: ReturnType<typeof setTimeout>;
 	private change?: Promise<void>;
 	private resolveChange?: () => void;
@@ -425,12 +436,16 @@ export class ChildOutputBuffer {
 		else this.signal?.addEventListener("abort", this.onAbort, { once: true });
 	}
 
-	get failure(): Error | undefined {
+	get failure(): unknown {
 		return this.failureReason;
 	}
 
 	get ended(): boolean {
 		return this.stdoutEnded;
+	}
+
+	throwIfFailed(): void {
+		if (this.failed) throw this.failureReason;
 	}
 
 	get length(): number {
@@ -454,7 +469,7 @@ export class ChildOutputBuffer {
 	}
 
 	pull(): void {
-		if (this.failureReason) return;
+		if (this.failed) return;
 
 		for (;;) {
 			const chunk = this.stdout.read() as Buffer | null;
@@ -482,7 +497,7 @@ export class ChildOutputBuffer {
 	}
 
 	take(maxBytes = Infinity): Buffer | undefined {
-		if (this.failureReason || this.releasedBytes === 0) return undefined;
+		if (this.failed || this.releasedBytes === 0) return undefined;
 
 		const parts: Array<Buffer> = [];
 		let size = 0;
@@ -511,13 +526,14 @@ export class ChildOutputBuffer {
 	}
 
 	unshift(bytes: Buffer): void {
-		if (this.failureReason || bytes.length === 0) return;
+		if (this.failed || bytes.length === 0) return;
 
 		this.released.unshift(bytes);
 		this.releasedBytes += bytes.length;
 	}
 
 	dispose(): void {
+		this.disposed = true;
 		clearTimeout(this.timer);
 		this.stdout.off("readable", this.onReadable);
 		this.stdout.off("end", this.onEnd);
@@ -525,16 +541,20 @@ export class ChildOutputBuffer {
 	}
 
 	private readonly onReadable = (): void => {
+		if (this.disposed) return;
+
 		if (this.exited) this.pull();
 
 		this.notify();
 	};
 
 	private readonly onEnd = (): void => {
+		if (this.disposed) return;
+
 		this.stdoutEnded = true;
 		clearTimeout(this.timer);
 
-		if (!this.failureReason) {
+		if (!this.failed) {
 			this.released.push(...this.held);
 			this.releasedBytes += this.heldBytes;
 			this.held = [];
@@ -545,10 +565,12 @@ export class ChildOutputBuffer {
 	};
 
 	private readonly onExit = (exit: ChildExit): void => {
+		if (this.disposed) return;
+
 		this.exited = true;
 		this.pull();
 
-		if (!this.stdoutEnded && !this.failureReason) {
+		if (!this.stdoutEnded && !this.failed) {
 			this.timer = setTimeout(() => {
 				this.onDeadline(exit);
 			}, this.deadlineMs);
@@ -559,19 +581,22 @@ export class ChildOutputBuffer {
 	};
 
 	private onDeadline(exit: ChildExit): void {
-		if (this.stdoutEnded) return;
+		if (this.disposed || this.stdoutEnded) return;
 
 		this.fail(this.exitError(exit) ?? new ChildOutputHeldError(this.label, `stayed open for ${this.deadlineMs} ms`));
 	}
 
 	private readonly onAbort = (): void => {
+		if (this.disposed) return;
+
 		this.fail(this.signal?.reason);
 	};
 
 	private fail(reason: unknown): void {
-		if (this.failureReason) return;
+		if (this.failed) return;
 
-		this.failureReason = toError(reason);
+		this.failed = true;
+		this.failureReason = reason;
 		this.released = [];
 		this.releasedBytes = 0;
 		this.held = [];

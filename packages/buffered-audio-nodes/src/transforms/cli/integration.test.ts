@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { once } from "node:events";
 import { mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -385,6 +386,30 @@ describe("CliStream with a process that holds the child's stdio after it exits",
 		expect(performance.now() - started).toBeLessThan(4000);
 	});
 
+	it("rejects a clean exit with held stdout mid-stream at the deadline, not once the input ends", async () => {
+		const { command, args } = await holderCommand(0);
+		const blocks = inputBlocks(60);
+		let index = 0;
+		const input = new ReadableStream<Block>({
+			pull: async (controller) => {
+				await new Promise((resolve) => setTimeout(resolve, 100));
+
+				const block = blocks[index++];
+
+				if (block) controller.enqueue(block);
+				else controller.close();
+			},
+		});
+		const stream = new CliStream(cli({ command, args }), createTestStreamContext().context);
+
+		stream._setup(createTestSetupContext({ sourceSampleRate: SAMPLE_RATE, sampleRate: SAMPLE_RATE }));
+
+		const started = performance.now();
+
+		await expect(drainBlocks(stream._pipe(input))).rejects.toThrow(/exited, but its stdout stayed open for 2000 ms/);
+		expect(performance.now() - started).toBeLessThan(4000);
+	});
+
 	it("rejects a failed exit with its exit error rather than the held stdout, within 4000 ms", async () => {
 		const { command, args } = await holderCommand(3);
 		const started = performance.now();
@@ -400,20 +425,23 @@ describe("CliStream with a process that holds the child's stdio after it exits",
 		await writeFile(input, silentWav(44100, 44100));
 
 		const child = spawn(process.execPath, [RENDER_STDERR_HOLDER, input, join(directory, "out.wav")], {
-			stdio: ["ignore", "pipe", "inherit"],
+			stdio: ["ignore", "pipe", "pipe"],
 		});
-		const exited = new Promise<number>((resolve) => {
-			child.once("exit", () => resolve(performance.now()));
+		let stderr = "";
+		let settledAt: number | undefined;
+
+		child.stderr.on("data", (chunk: Buffer) => {
+			stderr += chunk.toString();
 		});
-		const settled = new Promise<number>((resolve) => {
-			child.stdout.on("data", (chunk: Buffer) => {
-				if (chunk.toString().includes("settled")) resolve(performance.now());
-			});
+		child.stdout.on("data", (chunk: Buffer) => {
+			if (settledAt === undefined && chunk.toString().includes("settled")) settledAt = performance.now();
 		});
 
-		const settledAt = await settled;
-		const exitedAt = await exited;
+		const [code] = (await once(child, "exit")) as [number | null];
+		const exitedAt = performance.now();
 
-		expect(exitedAt - settledAt).toBeLessThan(500);
+		expect(code, `fixture stderr: ${stderr}`).toBe(0);
+		expect(settledAt, `fixture stderr: ${stderr}`).toBeDefined();
+		expect(exitedAt - (settledAt ?? exitedAt)).toBeLessThan(500);
 	});
 });

@@ -10,6 +10,7 @@ import {
 	ChildOutputHeldError,
 	releaseChild,
 	runChild,
+	settledOrAborted,
 	spawnChild,
 	terminateChild,
 	waitForChildClose,
@@ -257,6 +258,20 @@ describe("runChild", () => {
 		await expect(running).rejects.toBe(reason);
 	});
 
+	it("rejects with a non-Error abort reason itself", async () => {
+		const controller = new AbortController();
+		const running = runChild({
+			label: "node",
+			command: process.execPath,
+			args: ["-e", "setInterval(() => undefined, 1000)"],
+			signal: controller.signal,
+		});
+
+		setTimeout(() => controller.abort("cancelled"), 200);
+
+		await expect(running).rejects.toBe("cancelled");
+	});
+
 	it("rejects when stdout passes the cap", async () => {
 		await expect(
 			runChild({
@@ -335,6 +350,25 @@ describe("boundAfterExit", () => {
 			await expectHeld("cmd.exe", await windowsHolder(0));
 		},
 	);
+
+	it("rejects with a non-Error abort reason of its wait itself", async () => {
+		const handle = node("setInterval(() => undefined, 1000)");
+		const controller = new AbortController();
+
+		try {
+			const bounded = boundAfterExit(
+				handle,
+				settledOrAborted(new Promise<never>(() => undefined), controller.signal),
+			);
+
+			controller.abort("cancelled");
+
+			await expect(bounded).rejects.toBe("cancelled");
+		} finally {
+			await terminateChild(handle.child);
+			releaseChild(handle);
+		}
+	});
 
 	it("reports a failed exit rather than the held stdout", async () => {
 		const { command, args } = await heldStdout(3);
@@ -529,7 +563,7 @@ describe("ChildOutputBuffer", () => {
 
 				const sinceExit = performance.now() - (await exitedAt);
 
-				expect(buffer.failure?.message).toMatch(message);
+				expect((buffer.failure as Error | undefined)?.message).toMatch(message);
 				expect(buffer.failure instanceof ChildOutputHeldError).toBe(code === 0);
 				expect(sinceExit).toBeLessThan(2500);
 				expect(buffer.length).toBe(0);
@@ -558,7 +592,9 @@ describe("ChildOutputBuffer", () => {
 			const sinceExit = performance.now() - (await exitedAt);
 
 			expect(buffer.failure).toBeInstanceOf(ChildOutputHeldError);
-			expect(buffer.failure?.message).toMatch(/delivered more than 16777216 bytes after the exit/);
+			expect((buffer.failure as Error | undefined)?.message).toMatch(
+				/delivered more than 16777216 bytes after the exit/,
+			);
 			expect(sinceExit).toBeLessThan(2000);
 		} finally {
 			releaseChild(handle);
@@ -587,6 +623,45 @@ describe("ChildOutputBuffer", () => {
 			await terminateChild(handle.child);
 			releaseChild(handle);
 			buffer.dispose();
+		}
+	});
+
+	it("keeps a non-Error abort reason itself as its failure", async () => {
+		const handle = node("setInterval(() => undefined, 1000)");
+		const controller = new AbortController();
+		const buffer = new ChildOutputBuffer(handle, { signal: controller.signal });
+
+		try {
+			controller.abort("cancelled");
+
+			expect(buffer.failure).toBe("cancelled");
+		} finally {
+			await terminateChild(handle.child);
+			releaseChild(handle);
+			buffer.dispose();
+		}
+	});
+
+	it("arms no deadline and sets no failure when the child exits after dispose", async () => {
+		const handle = node("setTimeout(() => process.exit(0), 200)");
+		const buffer = new ChildOutputBuffer(handle, { deadlineMs: 100 });
+
+		try {
+			buffer.dispose();
+
+			let changed = false;
+
+			void buffer.nextChange().then(() => {
+				changed = true;
+			});
+
+			await handle.exited;
+			await delay(300);
+
+			expect(buffer.failure).toBeUndefined();
+			expect(changed).toBe(false);
+		} finally {
+			releaseChild(handle);
 		}
 	});
 
