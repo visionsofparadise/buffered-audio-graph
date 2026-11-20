@@ -14,7 +14,7 @@ import {
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { binaries, hasBinaryFixtures } from "../../utils/test-binaries";
-import { write } from ".";
+import { write, type WavBitDepth } from ".";
 
 vi.mock("node:child_process", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("node:child_process")>();
@@ -212,7 +212,9 @@ describe("WriteStream encoder teardown", () => {
 
 		const { error } = await renderToEncoder("ffmpeg", undefined, 2);
 
-		expect((error as Error).message).toMatch(/^ffmpeg exited 0 but wrote no output at ".*\.partial-\d+\.mp3"$/);
+		expect((error as Error).message).toMatch(
+			/^ffmpeg exited 0 but wrote no output at ".*\.partial-\d+-[0-9a-f]{8}\.mp3"$/,
+		);
 	}, 20_000);
 
 	it("rejects with the abort within 3 s when the encoder never exits after its input ends", async () => {
@@ -270,6 +272,29 @@ describe("WriteStream output file", () => {
 		expect(error).toBeUndefined();
 		expect(written.subarray(0, 4).toString("ascii")).toBe("RIFF");
 		expect(written.length).toBeGreaterThan(2 * SAMPLE_RATE * 2);
+		expect(await partialFiles(directory)).toEqual([]);
+	});
+
+	it("gives two Write streams to the same path their own temporary files", async () => {
+		const directory = await temporaryDirectory("write-twice-");
+		const render = async (...bitDepths: Array<WavBitDepth>): Promise<void> => {
+			const source = new EndlessSource({ readDelayMs: 20, maxBlocks: 2 });
+
+			for (const bitDepth of bitDepths)
+				source.to(write(join(directory, `${bitDepths.join("-")}.wav`), { bitDepth }));
+
+			await source.createRenderJob().render();
+		};
+
+		// Different bit depths write different bytes at different offsets, so a shared temporary file mixes them.
+		await render("16");
+		await render("24");
+		await render("16", "24");
+
+		const references = await Promise.all(["16.wav", "24.wav"].map((name) => readFile(join(directory, name))));
+		const written = await readFile(join(directory, "16-24.wav"));
+
+		expect(references.some((reference) => reference.equals(written))).toBe(true);
 		expect(await partialFiles(directory)).toEqual([]);
 	});
 

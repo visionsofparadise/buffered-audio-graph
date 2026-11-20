@@ -1,5 +1,7 @@
+import { randomBytes } from "node:crypto";
 import { access, open, rename, rm, type FileHandle } from "node:fs/promises";
 import { join, parse } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import {
 	BufferedTargetStream,
 	childFailure,
@@ -78,7 +80,28 @@ const UINT32_MAX = 0xffffffff;
 function partialPath(path: string): string {
 	const { dir, name, ext } = parse(path);
 
-	return join(dir, `${name}.partial-${process.pid}${ext}`);
+	return join(dir, `${name}.partial-${process.pid}-${randomBytes(4).toString("hex")}${ext}`);
+}
+
+const RENAME_RETRY_MS = 1000;
+const RENAME_BUSY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+
+async function renameOnto(from: string, to: string): Promise<void> {
+	const deadline = performance.now() + RENAME_RETRY_MS;
+
+	for (;;) {
+		try {
+			await rename(from, to);
+
+			return;
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code ?? "";
+
+			if (process.platform !== "win32" || !RENAME_BUSY_CODES.has(code) || performance.now() > deadline) throw error;
+
+			await delay(20);
+		}
+	}
 }
 
 export class WriteStream extends BufferedTargetStream<WriteNode> {
@@ -228,7 +251,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		const path = this.properties.path;
 
 		try {
-			await rename(temporaryPath, path);
+			await renameOnto(temporaryPath, path);
 		} catch (error) {
 			await rm(temporaryPath, { force: true });
 
