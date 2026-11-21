@@ -40,7 +40,7 @@ Fetch is on by default. `--no-install` turns an unsatisfiable pin into an error 
 
 ## Interrupting a render
 
-The first SIGINT or SIGTERM aborts every render the bag runs. The CLI waits for the renders to tear down, which ends their child processes, then prints `Aborted by SIGINT` or `Aborted by SIGTERM` to stderr and exits with code 130 for SIGINT or 143 for SIGTERM. A signal that arrives while packages are still resolving stops the CLI at once, with the same line and code, before any render starts. A signal that arrives once every render has succeeded changes nothing, and the CLI exits 0.
+The first SIGINT or SIGTERM aborts every render the bag runs. The CLI waits for the renders to tear down, which ends their child processes, then prints `Aborted by SIGINT` or `Aborted by SIGTERM` to stderr and exits with code 130 for SIGINT or 143 for SIGTERM. A signal that arrives while packages are still resolving stops the CLI at once, with the same line and code, before any render starts. A signal that arrives after every render has succeeded, which includes the moment every target has finished while the renders still tear down, changes nothing: the CLI prints no abort line and exits 0.
 
 A repeat of either signal within 500 ms of the first counts as the same interrupt, because one Ctrl+C through `npm run` or `npx` can deliver two. A signal after that window forces the exit: the CLI prints `Forced exit by SIGINT` or `Forced exit by SIGTERM` and exits at once with that signal's code, without waiting for teardown.
 
