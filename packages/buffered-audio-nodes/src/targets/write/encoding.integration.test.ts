@@ -490,7 +490,8 @@ describe("WriteStream target path", () => {
 		expect((await stat("/dev/null")).isCharacterDevice()).toBe(true);
 	});
 
-	it.skipIf(IS_WINDOWS)("follows a symlink to a character device and leaves both in place", async () => {
+	// Skipped as root, like the test above, since a regression could replace /dev/null through the symlink.
+	it.skipIf(IS_WINDOWS || IS_ROOT)("follows a symlink to a character device and leaves both in place", async () => {
 		const directory = await temporaryDirectory("write-symlink-");
 		const path = join(directory, "out.wav");
 
@@ -504,21 +505,25 @@ describe("WriteStream target path", () => {
 		expect(await readdir(directory)).toEqual(["out.wav"]);
 	});
 
-	it.skipIf(IS_WINDOWS)("writes straight through a chain of symlinks to a device, as /dev/stdout is", async () => {
-		const directory = await temporaryDirectory("write-symlink-chain-");
-		const inner = join(directory, "fd");
-		const path = join(directory, "stdout");
+	// Skipped as root for the same reason.
+	it.skipIf(IS_WINDOWS || IS_ROOT)(
+		"writes straight through a chain of symlinks to a device, as /dev/stdout is",
+		async () => {
+			const directory = await temporaryDirectory("write-symlink-chain-");
+			const inner = join(directory, "fd");
+			const path = join(directory, "stdout");
 
-		await symlink("/dev/null", inner);
-		await symlink(inner, path);
+			await symlink("/dev/null", inner);
+			await symlink(inner, path);
 
-		const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
+			const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
 
-		expect(error).toBeUndefined();
-		expect((await lstat(path)).isSymbolicLink()).toBe(true);
-		expect((await lstat(inner)).isSymbolicLink()).toBe(true);
-		expect((await readdir(directory)).sort()).toEqual(["fd", "stdout"]);
-	});
+			expect(error).toBeUndefined();
+			expect((await lstat(path)).isSymbolicLink()).toBe(true);
+			expect((await lstat(inner)).isSymbolicLink()).toBe(true);
+			expect((await readdir(directory)).sort()).toEqual(["fd", "stdout"]);
+		},
+	);
 
 	it.skipIf(IS_WINDOWS)(
 		"writes through a symlink to a regular file in another directory and leaves it a symlink",
