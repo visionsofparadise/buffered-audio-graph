@@ -587,6 +587,26 @@ describe("WriteStream target path", () => {
 	);
 
 	it.skipIf(!IS_WINDOWS)(
+		"writes a reserved device name in place, creating no file in the working directory",
+		async () => {
+			const created = async (): Promise<Array<string>> =>
+				(await readdir(process.cwd())).filter((name) => /^nul(?:\.|$)/i.test(name));
+
+			try {
+				for (const path of ["NUL", "nul.wav"]) {
+					const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
+
+					expect(error).toBeUndefined();
+					expect(await created()).toEqual([]);
+				}
+			} finally {
+				// A regression creates real files named after the device here, which only a namespaced path removes.
+				for (const name of await created()) await rm(join(process.cwd(), name), { force: true });
+			}
+		},
+	);
+
+	it.skipIf(!IS_WINDOWS)(
 		"rejects with the abort at once and leaves the target unchanged when aborted while a held target's rename retries",
 		async () => {
 			const directory = await temporaryDirectory("write-held-");

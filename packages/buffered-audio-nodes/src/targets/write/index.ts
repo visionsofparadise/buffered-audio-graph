@@ -90,6 +90,18 @@ function endsWithSeparator(path: string): boolean {
 	return path.endsWith("/") || path.endsWith(sep);
 }
 
+const WINDOWS_DEVICE_NAME = /^(?:NUL|CON|PRN|AUX|COM[1-9]|LPT[1-9])$/i;
+
+function windowsDevicePath(path: string): string | undefined {
+	if (process.platform !== "win32") return undefined;
+
+	if (path.startsWith("\\\\.\\") || path.startsWith("//./")) return path;
+
+	const stem = (basename(path).split(".")[0] ?? "").trimEnd();
+
+	return WINDOWS_DEVICE_NAME.test(stem) ? `\\\\.\\${stem.toUpperCase()}` : undefined;
+}
+
 async function statTarget(path: string): Promise<Stats | undefined> {
 	try {
 		return await stat(path);
@@ -183,7 +195,8 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 		if (endsWithSeparator(path)) throw new Error(`Write needs a file path; "${path}" ends with a path separator`);
 
-		const target = await statTarget(path);
+		const device = windowsDevicePath(path);
+		const target = device === undefined ? await statTarget(path) : undefined;
 
 		if (target?.isDirectory()) throw new Error(`Write needs a file path; "${path}" is a directory`);
 
@@ -199,13 +212,14 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 		this.useEncoding = encoding !== undefined && encoding.format !== "wav" && !!this.properties.ffmpegPath;
 
-		this.destination = target && !target.isFile() ? undefined : await resolveDestination(path, target);
+		this.destination =
+			device !== undefined || (target && !target.isFile()) ? undefined : await resolveDestination(path, target);
 
 		if (target && this.destination !== undefined) await access(this.destination, constants.W_OK);
 
 		this.temporaryPath = this.destination === undefined ? undefined : partialPath(this.destination);
 
-		if (!this.useEncoding) this.fileHandle = await open(this.temporaryPath ?? path, "w");
+		if (!this.useEncoding) this.fileHandle = await open(this.temporaryPath ?? device ?? path, "w");
 
 		return super._setup(input, context);
 	}
