@@ -504,6 +504,46 @@ describe("WriteStream target path", () => {
 		expect(await readdir(directory)).toEqual(["out.wav"]);
 	});
 
+	it.skipIf(IS_WINDOWS)("writes straight through a chain of symlinks to a device, as /dev/stdout is", async () => {
+		const directory = await temporaryDirectory("write-symlink-chain-");
+		const inner = join(directory, "fd");
+		const path = join(directory, "stdout");
+
+		await symlink("/dev/null", inner);
+		await symlink(inner, path);
+
+		const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
+
+		expect(error).toBeUndefined();
+		expect((await lstat(path)).isSymbolicLink()).toBe(true);
+		expect((await lstat(inner)).isSymbolicLink()).toBe(true);
+		expect((await readdir(directory)).sort()).toEqual(["fd", "stdout"]);
+	});
+
+	it.skipIf(IS_WINDOWS)(
+		"writes through a symlink to a regular file in another directory and leaves it a symlink",
+		async () => {
+			const directory = await temporaryDirectory("write-symlink-file-");
+			const real = join(directory, "real");
+			const links = join(directory, "links");
+			const target = join(real, "out.wav");
+			const path = join(links, "out.wav");
+
+			await mkdir(real);
+			await mkdir(links);
+			await writeFile(target, "old");
+			await symlink(target, path);
+
+			const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
+
+			expect(error).toBeUndefined();
+			expect((await lstat(path)).isSymbolicLink()).toBe(true);
+			expect((await readFile(target)).subarray(0, 4).toString("ascii")).toBe("RIFF");
+			expect(await readdir(links)).toEqual(["out.wav"]);
+			expect(await readdir(real)).toEqual(["out.wav"]);
+		},
+	);
+
 	it.skipIf(!IS_WINDOWS)(
 		"rejects with the abort at once and leaves the target unchanged when aborted while a held target's rename retries",
 		async () => {

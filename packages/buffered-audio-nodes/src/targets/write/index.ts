@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { access, chmod, open, rename, rm, stat, type FileHandle } from "node:fs/promises";
-import { join, parse, sep } from "node:path";
+import { access, chmod, lstat, open, realpath, rename, rm, stat, type FileHandle } from "node:fs/promises";
+import { basename, dirname, join, parse, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
 	BufferedTargetStream,
@@ -98,6 +98,16 @@ async function statTarget(path: string): Promise<Stats | undefined> {
 	}
 }
 
+async function resolveDestination(path: string, target: Stats | undefined): Promise<string> {
+	if (target) return (await lstat(path)).isSymbolicLink() ? realpath(path) : path;
+
+	try {
+		return join(await realpath(dirname(path)), basename(path));
+	} catch {
+		return path;
+	}
+}
+
 async function copyModeOfTarget(temporaryPath: string, path: string): Promise<void> {
 	if (process.platform === "win32") return;
 
@@ -144,6 +154,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 	private handle?: ChildHandle;
 	private closed = false;
 	private temporaryPath?: string;
+	private destination?: string;
 	private sampleRate = 0;
 	private channels = 0;
 	private bytesWritten = 0;
@@ -173,7 +184,8 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 		this.useEncoding = encoding !== undefined && encoding.format !== "wav" && !!this.properties.ffmpegPath;
 
-		this.temporaryPath = target && !target.isFile() ? undefined : partialPath(path);
+		this.destination = target && !target.isFile() ? undefined : await resolveDestination(path, target);
+		this.temporaryPath = this.destination === undefined ? undefined : partialPath(this.destination);
 
 		if (!this.useEncoding) this.fileHandle = await open(this.temporaryPath ?? path, "w");
 
@@ -239,7 +251,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 			this.fileHandle = undefined;
 		}
 
-		if (this.temporaryPath) await this.moveIntoPlace(this.temporaryPath);
+		if (this.temporaryPath && this.destination) await this.moveIntoPlace(this.temporaryPath, this.destination);
 
 		this.closed = true;
 	}
@@ -289,9 +301,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		if (!written) throw new Error(`ffmpeg exited 0 but wrote no output at "${temporaryPath}"`);
 	}
 
-	private async moveIntoPlace(temporaryPath: string): Promise<void> {
-		const path = this.properties.path;
-
+	private async moveIntoPlace(temporaryPath: string, path: string): Promise<void> {
 		const signal = this.streamSignal;
 
 		try {
