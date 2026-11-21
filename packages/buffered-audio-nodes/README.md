@@ -434,16 +434,12 @@ The Write target writes to a temporary file beside its output, named `<stem>.par
 
 ## Child Processes
 
-Every child process a node runs goes through the child-process layer of `@buffered-audio/core`, which spawns it with `windowsHide` true, drains its stderr and bounds its teardown. That covers the CLI base's child, which serves the CLI, FFmpeg and Loudness Tool nodes and the FFmpeg resamplers of the ONNX nodes, the Read FFmpeg source's `ffmpeg` and `ffprobe`, the Write target's encoder and the VST3 node's `vst-host`. The VST3 node's liveness sampler sits outside the layer: the `pidtree` and `pidusage` packages it uses run `ps`, or PowerShell on Windows, as children of their own.
+The CLI, FFmpeg, Loudness Tool and VST3 nodes, the Read FFmpeg source, the Write target's encoder and the ONNX nodes' resamplers each run their tool as a child process.
 
-The Write target and the VST3 node write their child's input through the layer's `writeChildInput`. The CLI base writes its child's input itself and waits on a full pipe through `waitForChildWritable`. When its tool exits 0 before the input has ended, it stops writing, drops the rest of the input and ends its output with what the tool wrote, without an error.
-
-Each node picks the first signal that ends its child:
-
-- **CLI base:** SIGKILL when its stream is aborted, cancelled or torn down by a failure elsewhere in the render, and SIGTERM with the 2 s grace only when its own child or decoding failed.
-- **Read FFmpeg:** SIGKILL.
-- **Write:** SIGKILL unless its close completed, and SIGTERM after it.
-- **VST3:** SIGTERM and the grace for `vst-host`, on an abort as on every other path.
+- **Hidden on Windows.** No child process opens a console window.
+- **Aborts.** An abort kills each child at once, except the VST3 node's `vst-host`, which gets SIGTERM and up to 2 s to exit before it is killed.
+- **Background processes.** When a tool exits while a background process it started still holds its output open, the CLI, FFmpeg and Loudness Tool nodes and the Read FFmpeg source fail 2 s after the exit.
+- **No partial output.** An aborted or failed render leaves no partial Write output, as [Writing Files](#writing-files) describes.
 
 ## Creating Nodes
 
