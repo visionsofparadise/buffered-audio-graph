@@ -423,14 +423,11 @@ Write audio to a file
 
 ## Writing Files
 
-The Write target writes to a temporary file beside its output, named `<stem>.partial-<pid>-<hex><ext>`, and renames it onto the output path once the render succeeds. An aborted or failed render leaves the output path untouched and removes the temporary file, and an encoder is killed before it can finalize.
+The Write target writes its output in place, as nodes 0.25.0 did. A WAV output is created or emptied when the render starts, and an encoded output once the first block of audio reaches the encoder. A render that succeeds leaves the same file as 0.25.0.
 
-- **Devices and FIFOs.** A device, FIFO or socket, or a symlink to one, is written directly with no temporary file. So is any `\\.\` path on Windows, and a path whose last part is exactly a reserved device name with no extension, such as `NUL` or `COM1`. A reserved name with an extension, such as `nul.wav`, is an ordinary file.
-- **Symlinks.** A symlink to a regular file is written through: the file it points to is replaced and the symlink stays. A dangling symlink is written through too, so the missing file it names is created and the symlink stays.
-- **Rejected in setup.** An empty path, a path ending in a path separator, a directory, an existing file the process cannot write, and a path in a folder that does not exist each reject before any audio is read. A missing folder rejects with ENOENT naming the output path.
-- **What a replaced file keeps.** On POSIX the new file keeps the old one's permission bits, but not its owner, its hard links or its ACLs. The temporary file needs write access to the output's directory.
+- **Aborted or failed renders.** The encoder is killed before it can finalize, and the output the render wrote is removed. Output reached through a symlink is emptied instead, and the symlink stays. A device, a FIFO or a socket stays as it is, and so does an existing encoded output that the encoder had not yet opened.
+- **Rejected in setup.** An empty path and a path ending in a path separator reject before any audio is read, and so does a directory as an encoded output. A WAV output rejects in setup with the error from opening it, such as EISDIR for a directory or ENOENT for a missing folder.
 - **No audio.** A render that delivers no audio writes a WAV output with only its header, and leaves an encoded output alone: no file is created, and an existing one stays as it was.
-- **Mount points.** When the output is a mount point, or the rename would cross filesystems, the finished file is copied into the output in place instead. That copy runs to the end even if the render is aborted meanwhile, so the output is never left truncated.
 
 ## Child Processes
 
@@ -439,7 +436,8 @@ The CLI, FFmpeg, Loudness Tool and VST3 nodes, the Read FFmpeg source, the Write
 - **Hidden on Windows.** No child process opens a console window.
 - **Aborts.** An abort kills each child at once, except the VST3 node's `vst-host`, which gets SIGTERM and up to 2 s to exit before it is killed.
 - **Background processes.** When a tool exits while a background process it started still holds its output open, the CLI, FFmpeg and Loudness Tool nodes and the Read FFmpeg source fail 2 s after the exit.
-- **No partial output.** An aborted or failed render leaves no partial Write output, as [Writing Files](#writing-files) describes.
+- **Early exit.** When the tool of the CLI, FFmpeg or Loudness Tool node exits 0 before its input has ended, the node drops the rest of its input and ends its output with what the tool wrote, without an error.
+- **Unfinished output.** An aborted or failed render removes the output the Write target wrote, as [Writing Files](#writing-files) describes.
 
 ## Creating Nodes
 

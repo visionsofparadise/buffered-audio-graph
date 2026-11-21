@@ -1,22 +1,8 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import {
-	chmod,
-	lstat,
-	mkdir,
-	mkdtemp,
-	open,
-	readdir,
-	readFile,
-	rename,
-	rm,
-	stat,
-	symlink,
-	writeFile,
-} from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
 	BufferedSourceStream,
@@ -28,7 +14,7 @@ import {
 } from "@buffered-audio/core";
 import { z } from "zod";
 import { binaries, hasBinaryFixtures } from "../../utils/test-binaries";
-import { write, type WavBitDepth } from ".";
+import { write } from ".";
 
 vi.mock("node:child_process", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("node:child_process")>();
@@ -155,10 +141,6 @@ async function temporaryDirectory(prefix: string): Promise<string> {
 	return directory;
 }
 
-async function partialFiles(directory: string): Promise<Array<string>> {
-	return (await readdir(directory)).filter((name) => name.includes(".partial-"));
-}
-
 async function renderTo(
 	node: ReturnType<typeof write>,
 	options: { readonly maxBlocks?: number; readonly abortAfterMs?: number },
@@ -212,7 +194,6 @@ afterEach(async () => {
 	process.off("unhandledRejection", onUnhandled);
 	unhandled.length = 0;
 	vi.mocked(spawn).mockClear();
-	vi.mocked(rename).mockClear();
 	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -269,16 +250,6 @@ describe("WriteStream encoder teardown", () => {
 		expect(error).toBeUndefined();
 	}, 20_000);
 
-	it("rejects a clean encoder exit that wrote no output file", async () => {
-		standIn(`process.stdin.resume(); process.stdin.on("end", () => process.exit(0))`);
-
-		const { error } = await renderToEncoder("ffmpeg", undefined, 2);
-
-		expect((error as Error).message).toMatch(
-			/^ffmpeg exited 0 but wrote no output at ".*\.partial-\d+-[0-9a-f]{8}\.mp3"$/,
-		);
-	}, 20_000);
-
 	it("rejects with the abort within 3 s when the encoder never exits after its input ends", async () => {
 		standIn("process.stdin.resume(); setInterval(() => {}, 1000)");
 
@@ -300,9 +271,39 @@ describe("WriteStream encoder teardown", () => {
 	}, 20_000);
 });
 
+// Renders the delayed source into `path`, returning the error, the time to settle and the blocks the source delivered.
+async function renderDelayed(
+	path: string,
+	options: Parameters<typeof write>[1] = { bitDepth: "16" },
+	abortAfterMs?: number,
+): Promise<{ error: unknown; signal: AbortSignal; elapsedMs: number; blocks: number }> {
+	const source = new DelayedSource();
+	const controller = new AbortController();
+
+	delayedBlocks = 0;
+	source.to(write(path, options));
+
+	const abortTimer = abortAfterMs === undefined ? undefined : setTimeout(() => controller.abort(), abortAfterMs);
+	const startedAt = performance.now();
+
+	try {
+		const error = await source
+			.createRenderJob({ signal: controller.signal })
+			.render()
+			.then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+
+		return { error, signal: controller.signal, elapsedMs: performance.now() - startedAt, blocks: delayedBlocks };
+	} finally {
+		clearTimeout(abortTimer);
+	}
+}
+
 describe("WriteStream output file", () => {
 	it.skipIf(!hasBinaryFixtures("ffmpeg"))(
-		"leaves neither the target nor a partial file when an encode aborts",
+		"leaves no target file when an encode aborts",
 		async () => {
 			const directory = await temporaryDirectory("write-abort-");
 			const { error, signal } = await renderTo(
@@ -322,7 +323,70 @@ describe("WriteStream output file", () => {
 		20_000,
 	);
 
-	it("replaces an existing target on success and leaves no partial file", async () => {
+	it("leaves no target file when a WAV render aborts", async () => {
+		const directory = await temporaryDirectory("write-abort-wav-");
+		const { error, signal } = await renderTo(write(join(directory, "out.wav"), { bitDepth: "16" }), {
+			abortAfterMs: 300,
+		});
+
+		expect(isAbortReason(error, signal)).toBe(true);
+		expect(await readdir(directory)).toEqual([]);
+	});
+
+	it("removes the target when an encode fails", async () => {
+		const directory = await temporaryDirectory("write-fail-");
+
+		// A stand-in encoder that writes part of its output, then exits 3 after its first chunk.
+		standIn(
+			`process.stdin.once("data", () => { require("fs").writeFileSync(process.argv.at(-1), "partial"); process.exit(3); })`,
+		);
+
+		const { error } = await renderTo(
+			write(join(directory, "out.flac"), { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "flac" } }),
+			{ maxBlocks: 2 },
+		);
+
+		expect((error as Error).message).toBe("ffmpeg exited 3");
+		expect(await readdir(directory)).toEqual([]);
+	}, 20_000);
+
+	it("leaves an existing encoded target unchanged when the encoder fails before it opens the target", async () => {
+		const directory = await temporaryDirectory("write-fail-unopened-");
+		const path = join(directory, "out.flac");
+
+		await writeFile(path, "old");
+
+		// A stand-in encoder that exits 3 after its first chunk without opening its output path.
+		standIn(`process.stdin.once("data", () => process.exit(3))`);
+
+		const { error } = await renderTo(
+			write(path, { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "flac" } }),
+			{ maxBlocks: 2 },
+		);
+
+		expect((error as Error).message).toBe("ffmpeg exited 3");
+		expect(await readFile(path, "utf8")).toBe("old");
+	}, 20_000);
+
+	it("leaves an existing encoded target unchanged when the render aborts before its first block", async () => {
+		const directory = await temporaryDirectory("write-abort-early-");
+		const path = join(directory, "out.flac");
+
+		await writeFile(path, "old");
+
+		const { error, signal, blocks } = await renderDelayed(
+			path,
+			{ bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "flac" } },
+			300,
+		);
+
+		expect(isAbortReason(error, signal)).toBe(true);
+		expect(blocks).toBe(0);
+		expect(vi.mocked(spawn)).not.toHaveBeenCalled();
+		expect(await readFile(path, "utf8")).toBe("old");
+	});
+
+	it("replaces an existing target on success", async () => {
 		const directory = await temporaryDirectory("write-replace-");
 		const path = join(directory, "out.wav");
 
@@ -333,31 +397,8 @@ describe("WriteStream output file", () => {
 
 		expect(error).toBeUndefined();
 		expect(written.subarray(0, 4).toString("ascii")).toBe("RIFF");
-		expect(written.length).toBeGreaterThan(2 * SAMPLE_RATE * 2);
-		expect(await partialFiles(directory)).toEqual([]);
-	});
-
-	it("gives two Write streams to the same path their own temporary files", async () => {
-		const directory = await temporaryDirectory("write-twice-");
-		const render = async (...bitDepths: Array<WavBitDepth>): Promise<void> => {
-			const source = new EndlessSource({ readDelayMs: 20, maxBlocks: 2 });
-
-			for (const bitDepth of bitDepths)
-				source.to(write(join(directory, `${bitDepths.join("-")}.wav`), { bitDepth }));
-
-			await source.createRenderJob().render();
-		};
-
-		// Different bit depths write different bytes at different offsets, so a shared temporary file mixes them.
-		await render("16");
-		await render("24");
-		await render("16", "24");
-
-		const references = await Promise.all(["16.wav", "24.wav"].map((name) => readFile(join(directory, name))));
-		const written = await readFile(join(directory, "16-24.wav"));
-
-		expect(references.some((reference) => reference.equals(written))).toBe(true);
-		expect(await partialFiles(directory)).toEqual([]);
+		expect(written.length).toBe(80 + 2 * SAMPLE_RATE * 2);
+		expect(await readdir(directory)).toEqual(["out.wav"]);
 	});
 
 	it("writes the whole WAV when its file handle writes each buffer in pieces", async () => {
@@ -393,13 +434,12 @@ describe("WriteStream output file", () => {
 		expect(written.equals(expected)).toBe(true);
 	});
 
-	it("rejects an empty path in setup, writing nothing to the working directory", async () => {
+	it("rejects an empty path in setup", async () => {
 		const source = new EndlessSource({ readDelayMs: 20, maxBlocks: 2 });
 
 		source.to(write("", { bitDepth: "16" }));
 
 		await expect(source.createRenderJob().render()).rejects.toThrow("Write needs a file path; path is empty");
-		expect((await readdir(process.cwd())).filter((name) => name.startsWith(".partial-"))).toEqual([]);
 	});
 
 	it("resolves a render with no input to an encoded target, creating no file and leaving an existing one", async () => {
@@ -418,42 +458,10 @@ describe("WriteStream output file", () => {
 		expect(await readdir(directory)).toEqual(["out.flac"]);
 		expect(vi.mocked(spawn)).not.toHaveBeenCalled();
 	});
-
-	it("leaves neither the target nor a partial file when a WAV render aborts", async () => {
-		const directory = await temporaryDirectory("write-abort-wav-");
-		const { error, signal } = await renderTo(write(join(directory, "out.wav"), { bitDepth: "16" }), {
-			abortAfterMs: 300,
-		});
-
-		expect(isAbortReason(error, signal)).toBe(true);
-		expect(await readdir(directory)).toEqual([]);
-	});
 });
 
 describe("WriteStream target path", () => {
-	// Renders the delayed source into `path`, returning the error, the time to settle and the blocks the source delivered.
-	async function renderDelayed(
-		path: string,
-		options: Parameters<typeof write>[1] = { bitDepth: "16" },
-	): Promise<{ error: unknown; elapsedMs: number; blocks: number }> {
-		const source = new DelayedSource();
-
-		delayedBlocks = 0;
-		source.to(write(path, options));
-
-		const startedAt = performance.now();
-		const error = await source
-			.createRenderJob()
-			.render()
-			.then(
-				() => undefined,
-				(reason: unknown) => reason,
-			);
-
-		return { error, elapsedMs: performance.now() - startedAt, blocks: delayedBlocks };
-	}
-
-	it("rejects a directory target in setup, before the source delivers a block", async () => {
+	it("rejects a directory WAV target in setup with open's EISDIR, before the source delivers a block", async () => {
 		const parent = await temporaryDirectory("write-directory-");
 		const path = join(parent, "out.wav");
 
@@ -461,10 +469,27 @@ describe("WriteStream target path", () => {
 
 		const { error, elapsedMs, blocks } = await renderDelayed(path);
 
+		expect(error).toMatchObject({ code: "EISDIR" });
+		expect(blocks).toBe(0);
+		expect(elapsedMs).toBeLessThan(1000);
+		expect((await stat(path)).isDirectory()).toBe(true);
+	});
+
+	it("rejects a directory encoded target in setup, before the source delivers a block", async () => {
+		const parent = await temporaryDirectory("write-directory-encoded-");
+		const path = join(parent, "out.flac");
+
+		await mkdir(path);
+
+		const { error, elapsedMs, blocks } = await renderDelayed(path, {
+			bitDepth: "32f",
+			ffmpegPath: "ffmpeg",
+			encoding: { format: "flac" },
+		});
+
 		expect((error as Error).message).toBe(`Write needs a file path; "${path}" is a directory`);
 		expect(blocks).toBe(0);
 		expect(elapsedMs).toBeLessThan(1000);
-		expect(await readdir(parent)).toEqual(["out.wav"]);
 		expect((await stat(path)).isDirectory()).toBe(true);
 	});
 
@@ -482,126 +507,21 @@ describe("WriteStream target path", () => {
 		}
 	});
 
-	it.each([
-		["WAV", { bitDepth: "16" }],
-		["an encoder", { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "flac" } }],
-	] as const)(
-		"rejects a target in a missing folder in setup with ENOENT naming the target, for %s",
-		async (_, options) => {
-			const parent = await temporaryDirectory("write-missing-folder-");
-			const path = join(parent, "missing", "out.flac");
-			const { error, elapsedMs, blocks } = await renderDelayed(path, options);
+	it("rejects a WAV target in a missing folder in setup with ENOENT naming the target", async () => {
+		const parent = await temporaryDirectory("write-missing-folder-");
+		const path = join(parent, "missing", "out.wav");
+		const { error, elapsedMs, blocks } = await renderDelayed(path);
 
-			expect(error).toMatchObject({ code: "ENOENT" });
-			expect((error as Error).message).toContain(path);
-			expect((error as Error).message).not.toContain(".partial-");
-			expect(blocks).toBe(0);
-			expect(elapsedMs).toBeLessThan(1000);
-			expect(await readdir(parent)).toEqual([]);
-		},
-	);
-
-	it.skipIf(IS_WINDOWS)("keeps the mode of the existing file it replaces", async () => {
-		const directory = await temporaryDirectory("write-mode-");
-		const path = join(directory, "out.wav");
-
-		await writeFile(path, "old");
-		await chmod(path, 0o640);
-
-		const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
-
-		expect(error).toBeUndefined();
-		expect((await stat(path)).mode & 0o7777).toBe(0o640);
-		expect((await readFile(path)).subarray(0, 4).toString("ascii")).toBe("RIFF");
+		expect(error).toMatchObject({ code: "ENOENT" });
+		expect((error as Error).message).toContain(path);
+		expect(blocks).toBe(0);
+		expect(elapsedMs).toBeLessThan(1000);
+		expect(await readdir(parent)).toEqual([]);
 	});
 
-	it.skipIf(IS_WINDOWS)(
-		"writes into a FIFO target and leaves it a FIFO",
-		async () => {
-			const directory = await temporaryDirectory("write-fifo-");
-			const path = join(directory, "out.mp3");
-			const made = spawnSync("mkfifo", [path]);
-
-			if (made.status !== 0) throw new Error(`mkfifo failed: ${made.stderr.toString()}`);
-
-			// The FIFO's reader, started before the render so the encoder's open of the FIFO does not block.
-			const reader = actualSpawn("cat", [path], { stdio: ["ignore", "pipe", "ignore"] });
-			const received: Array<Buffer> = [];
-
-			reader.stdout.on("data", (chunk: Buffer) => received.push(chunk));
-
-			const readerClosed = new Promise<boolean>((resolve) => reader.once("close", () => resolve(true)));
-
-			try {
-				// A stand-in encoder that copies its input to its output path, as ffmpeg's `-y <path>` writes it.
-				standIn(
-					`const out = require("fs").createWriteStream(process.argv.at(-1)); process.stdin.pipe(out); out.on("finish", () => process.exit(0));`,
-				);
-
-				const { error } = await renderTo(
-					write(path, { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "mp3" } }),
-					{
-						maxBlocks: 2,
-					},
-				);
-
-				expect(error).toBeUndefined();
-				expect(await Promise.race([readerClosed, delay(5000, false)])).toBe(true);
-				expect(Buffer.concat(received).length).toBe(2 * SAMPLE_RATE * 4);
-				expect((await lstat(path)).isFIFO()).toBe(true);
-				expect(await partialFiles(directory)).toEqual([]);
-			} finally {
-				reader.kill("SIGKILL");
-			}
-		},
-		20_000,
-	);
-
-	// Skipped as root, where a regression would replace the system's /dev/null with a regular file.
-	it.skipIf(IS_WINDOWS || IS_ROOT)("writes a WAV straight to /dev/null and leaves it a character device", async () => {
-		const { error } = await renderTo(write("/dev/null", { bitDepth: "16" }), { maxBlocks: 2 });
-
-		expect(error).toBeUndefined();
-		expect((await stat("/dev/null")).isCharacterDevice()).toBe(true);
-	});
-
-	// Skipped as root, like the test above, since a regression could replace /dev/null through the symlink.
-	it.skipIf(IS_WINDOWS || IS_ROOT)("follows a symlink to a character device and leaves both in place", async () => {
-		const directory = await temporaryDirectory("write-symlink-");
-		const path = join(directory, "out.wav");
-
-		await symlink("/dev/null", path);
-
-		const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
-
-		expect(error).toBeUndefined();
-		expect((await lstat(path)).isSymbolicLink()).toBe(true);
-		expect((await stat(path)).isCharacterDevice()).toBe(true);
-		expect(await readdir(directory)).toEqual(["out.wav"]);
-	});
-
-	// Skipped as root for the same reason.
+	// Skipped as root, so a regression in the cleanup can never reach a file outside the test's own directory.
 	it.skipIf(IS_WINDOWS || IS_ROOT)(
-		"writes straight through a chain of symlinks to a device, as /dev/stdout is",
-		async () => {
-			const directory = await temporaryDirectory("write-symlink-chain-");
-			const inner = join(directory, "fd");
-			const path = join(directory, "stdout");
-
-			await symlink("/dev/null", inner);
-			await symlink(inner, path);
-
-			const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
-
-			expect(error).toBeUndefined();
-			expect((await lstat(path)).isSymbolicLink()).toBe(true);
-			expect((await lstat(inner)).isSymbolicLink()).toBe(true);
-			expect((await readdir(directory)).sort()).toEqual(["fd", "stdout"]);
-		},
-	);
-
-	it.skipIf(IS_WINDOWS)(
-		"writes through a symlink to a regular file in another directory and leaves it a symlink",
+		"truncates the file a symlink names when a WAV render aborts, and keeps the symlink",
 		async () => {
 			const directory = await temporaryDirectory("write-symlink-file-");
 			const real = join(directory, "real");
@@ -614,213 +534,46 @@ describe("WriteStream target path", () => {
 			await writeFile(target, "old");
 			await symlink(target, path);
 
-			const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
+			const { error, signal } = await renderTo(write(path, { bitDepth: "16" }), { abortAfterMs: 300 });
 
-			expect(error).toBeUndefined();
+			expect(isAbortReason(error, signal)).toBe(true);
 			expect((await lstat(path)).isSymbolicLink()).toBe(true);
-			expect((await readFile(target)).subarray(0, 4).toString("ascii")).toBe("RIFF");
+			expect((await stat(target)).size).toBe(0);
 			expect(await readdir(links)).toEqual(["out.wav"]);
 			expect(await readdir(real)).toEqual(["out.wav"]);
 		},
 	);
 
+	// Skipped as root, like the test above.
 	it.skipIf(IS_WINDOWS || IS_ROOT)(
-		"writes through a chain of dangling symlinks to the missing file it names and leaves the symlinks in place",
+		"leaves a FIFO target in place when an encode into it aborts",
 		async () => {
-			const directory = await temporaryDirectory("write-dangling-");
-			const links = join(directory, "links");
-			const middle = join(directory, "middle");
-			const store = join(directory, "store");
+			const directory = await temporaryDirectory("write-fifo-");
+			const path = join(directory, "out.mp3");
+			const made = spawnSync("mkfifo", [path]);
 
-			await Promise.all([links, middle, store].map((folder) => mkdir(folder)));
-			await symlink(join("..", "middle", "out.wav"), join(links, "out.wav"));
-			await symlink(join("..", "store", "out.wav"), join(middle, "out.wav"));
+			if (made.status !== 0) throw new Error(`mkfifo failed: ${made.stderr.toString()}`);
 
-			const { error } = await renderTo(write(join(links, "out.wav"), { bitDepth: "16" }), { maxBlocks: 2 });
-
-			expect(error).toBeUndefined();
-
-			const written = await readFile(join(store, "out.wav"));
-
-			expect(written.subarray(0, 4).toString("ascii")).toBe("RIFF");
-			expect(written.length).toBe(80 + 2 * SAMPLE_RATE * 2);
-			expect((await lstat(join(links, "out.wav"))).isSymbolicLink()).toBe(true);
-			expect((await lstat(join(middle, "out.wav"))).isSymbolicLink()).toBe(true);
-
-			for (const folder of [links, middle, store]) expect(await readdir(folder)).toEqual(["out.wav"]);
-		},
-	);
-
-	// Skipped as root, whom file permissions do not stop.
-	it.skipIf(IS_ROOT)("rejects a read-only existing target in setup and leaves it unchanged", async () => {
-		const parent = await temporaryDirectory("write-read-only-");
-		const path = join(parent, "out.wav");
-
-		await writeFile(path, "old");
-		await chmod(path, 0o444);
-
-		try {
-			const { error, elapsedMs, blocks } = await renderDelayed(path);
-
-			expect(error).toMatchObject({ code: IS_WINDOWS ? "EPERM" : "EACCES" });
-			expect(blocks).toBe(0);
-			expect(elapsedMs).toBeLessThan(1000);
-			expect(await readFile(path, "utf8")).toBe("old");
-			expect(await readdir(parent)).toEqual(["out.wav"]);
-		} finally {
-			await chmod(path, 0o644);
-		}
-	});
-
-	it.each(IS_WINDOWS ? ["EXDEV"] : ["EXDEV", "EBUSY"])(
-		"copies onto the target and removes the temporary file when the rename fails with %s",
-		async (code) => {
-			const directory = await temporaryDirectory("write-copy-");
-			const path = join(directory, "out.wav");
-
-			await writeFile(path, "old");
-
-			// A rename onto a mount point fails with EBUSY, and one across filesystems with EXDEV.
-			vi.mocked(rename).mockRejectedValueOnce(Object.assign(new Error(`${code}: rename failed`), { code }));
-
-			const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
-			const written = await readFile(path);
-
-			expect(error).toBeUndefined();
-			expect(written.subarray(0, 4).toString("ascii")).toBe("RIFF");
-			expect(written.length).toBe(80 + 2 * SAMPLE_RATE * 2);
-			expect(await readdir(directory)).toEqual(["out.wav"]);
-		},
-	);
-
-	it.skipIf(!IS_WINDOWS)(
-		"writes a reserved name with an extension as an ordinary file, and a bare reserved name to its device",
-		async () => {
-			const directory = await temporaryDirectory("write-reserved-");
-
-			for (const name of ["nul.wav", "aux.wav"]) {
-				const { error } = await renderTo(write(join(directory, name), { bitDepth: "16" }), { maxBlocks: 2 });
-
-				expect(error).toBeUndefined();
-
-				const written = await readFile(join(directory, name));
-
-				expect(written.subarray(0, 4).toString("ascii")).toBe("RIFF");
-				expect(written.length).toBe(80 + 2 * SAMPLE_RATE * 2);
-			}
-
-			// A stand-in encoder that copies its input to its output path, as ffmpeg's `-y <path>` writes it.
-			standIn(
-				`const out = require("fs").createWriteStream(process.argv.at(-1)); process.stdin.pipe(out); out.on("finish", () => process.exit(0));`,
-			);
-
-			const encoded = await renderTo(
-				write(join(directory, "aux.flac"), { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "flac" } }),
-				{ maxBlocks: 2 },
-			);
-
-			expect(encoded.error).toBeUndefined();
-			expect(String(vi.mocked(spawn).mock.calls.at(-1)?.[1]?.at(-1))).toMatch(/aux\.partial-\d+-[0-9a-f]{8}\.flac$/);
-			expect((await readFile(join(directory, "aux.flac"))).length).toBe(2 * SAMPLE_RATE * 4);
-
-			const bare = await renderTo(write(join(directory, "NUL"), { bitDepth: "16" }), { maxBlocks: 2 });
-
-			expect(bare.error).toBeUndefined();
-			expect((await readdir(directory)).sort()).toEqual(["aux.flac", "aux.wav", "nul.wav"]);
-		},
-		20_000,
-	);
-
-	it.skipIf(!IS_WINDOWS)(
-		"rejects with the abort at once and leaves the target unchanged when aborted while a held target's rename retries",
-		async () => {
-			const directory = await temporaryDirectory("write-held-");
-			const path = join(directory, "out.wav");
-
-			await writeFile(path, "old");
-
-			// Another process holding the target open makes every rename onto it fail with EPERM on Windows.
-			const holder = actualSpawn(
-				process.execPath,
-				[
-					"-e",
-					"require('fs').openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1000)",
-					path,
-				],
-				{ stdio: ["ignore", "pipe", "ignore"] },
-			);
-			const holderExited = new Promise((resolve) => holder.once("exit", resolve));
+			// The FIFO's reader, started before the render so the encoder's open of the FIFO does not block.
+			const reader = actualSpawn("cat", [path], { stdio: ["ignore", "ignore", "ignore"] });
 
 			try {
-				await new Promise((resolve) => holder.stdout.once("data", resolve));
+				// A stand-in encoder that copies its input to its output path, as ffmpeg's `-y <path>` writes it.
+				standIn(`process.stdin.pipe(require("fs").createWriteStream(process.argv.at(-1)));`);
 
-				const source = new EndlessSource({ readDelayMs: 20, maxBlocks: 2 });
-				const controller = new AbortController();
+				const { error, signal } = await renderTo(
+					write(path, { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "mp3" } }),
+					{ abortAfterMs: 500 },
+				);
 
-				source.to(write(path, { bitDepth: "16" }));
-
-				const rendering = source
-					.createRenderJob({ signal: controller.signal })
-					.render()
-					.then(
-						() => undefined,
-						(reason: unknown) => reason,
-					);
-				const deadline = performance.now() + 5000;
-
-				while (vi.mocked(rename).mock.calls.length === 0 && performance.now() < deadline) await delay(5);
-
-				expect(vi.mocked(rename).mock.calls.length).toBeGreaterThan(0);
-
-				// The first rename has failed and the retry is waiting for its next attempt.
-				await delay(100);
-
-				const abortedAt = performance.now();
-
-				controller.abort();
-
-				const error = await rendering;
-
-				expect(error).toBe(controller.signal.reason);
-				expect(performance.now() - abortedAt).toBeLessThan(300);
-				expect(await readFile(path, "utf8")).toBe("old");
-				expect(await partialFiles(directory)).toEqual([]);
+				expect(isAbortReason(error, signal)).toBe(true);
+				expect(vi.mocked(spawn)).toHaveBeenCalledTimes(1);
+				expect((await lstat(path)).isFIFO()).toBe(true);
+				expect(await readdir(directory)).toEqual(["out.mp3"]);
 			} finally {
-				holder.kill();
-				await holderExited;
+				reader.kill("SIGKILL");
 			}
 		},
 		20_000,
-	);
-
-	it.skipIf(!IS_WINDOWS)(
-		"fails at once, without the rename retry, when a directory takes the target's place",
-		async () => {
-			const directory = await temporaryDirectory("write-replaced-");
-			const path = join(directory, "out.wav");
-			const source = new EndlessSource({ readDelayMs: 300, maxBlocks: 2 });
-
-			source.to(write(path, { bitDepth: "16" }));
-
-			const startedAt = performance.now();
-			const rendering = source
-				.createRenderJob()
-				.render()
-				.then(
-					() => undefined,
-					(reason: unknown) => reason,
-				);
-
-			// Setup has passed by now, so only the rename meets the directory.
-			await delay(150);
-			await mkdir(path);
-
-			const error = await rendering;
-
-			expect((error as Error).message).toMatch(/^Cannot move ".*" onto ".*out\.wav": EPERM/);
-			expect(vi.mocked(rename).mock.calls.length).toBe(1);
-			expect(performance.now() - startedAt).toBeLessThan(1500);
-			expect(await partialFiles(directory)).toEqual([]);
-		},
 	);
 });

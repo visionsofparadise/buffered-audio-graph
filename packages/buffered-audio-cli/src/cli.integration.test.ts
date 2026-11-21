@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -228,8 +228,8 @@ function writeSignalBag(
 /**
  * A local package with two nodes that each take 3 s to tear down. "Slow Teardown" is a Gain at 0 dB, so a render
  * aborted by a first signal is still tearing down when a second one arrives. "Slow Write" is a Write target whose
- * teardown starts after it has renamed its output into place, so a successful render is still settling when its
- * output exists. The nodes bundle their own copy of core, and a render job checks streams against its source's copy,
+ * teardown starts after it has closed its finished output, so a successful render is still settling when its output
+ * is complete. The nodes bundle their own copy of core, and a render job checks streams against its source's copy,
  * so each node extends the nodes' own class, imported by the URL the CLI's `--resolve` import uses.
  */
 function writeSlowTeardownPackage(directory: string): string {
@@ -297,8 +297,13 @@ function isRunning(pattern: string): boolean {
 	return spawnSync("pgrep", ["-f", pattern]).status === 0;
 }
 
-function partialFiles(directory: string): Array<string> {
-	return readdirSync(directory).filter((name) => name.includes(".partial-"));
+/** Whether the WAV at `path` holds audio under its final header, whose RIFF size counts every byte after it. */
+function isFinishedWav(path: string): boolean {
+	if (!existsSync(path)) return false;
+
+	const bytes = readFileSync(path);
+
+	return bytes.length > 80 && bytes.readUInt32LE(4) === bytes.length - 8;
 }
 
 async function waitFor(condition: () => boolean, timeoutMs: number): Promise<boolean> {
@@ -414,7 +419,7 @@ describe.skipIf(process.platform === "win32" || !hasBinaryFixtures || !hasPgrep)
 		const run = spawnDetachedCli(args);
 
 		try {
-			const started = await waitFor(() => isRunning(marker) && partialFiles(outputDir).length > 0, 20_000);
+			const started = await waitFor(() => isRunning(marker) && existsSync(outputPath), 20_000);
 
 			if (!started)
 				throw new Error(`The render never reached its echo child and encoder. stderr: ${run.output.stderr}`);
@@ -459,7 +464,7 @@ describe.skipIf(process.platform === "win32" || !hasBinaryFixtures || !hasPgrep)
 		expect.soft(result.echoRunning).toBe(false);
 		expect.soft(result.encoderRunning).toBe(false);
 		expect.soft(existsSync(result.outputPath)).toBe(false);
-		expect.soft(partialFiles(result.outputDir)).toEqual([]);
+		expect.soft(readdirSync(result.outputDir)).toEqual([]);
 	}
 
 	it("tears down and exits 130 on SIGINT, leaving no output and no process", async () => {
@@ -617,9 +622,9 @@ describe.skipIf(process.platform === "win32")("bag render signals after the rend
 		]);
 
 		try {
-			// The Slow Write target renames its output into place when it closes and then tears down for 3 s, so the
-			// output existing means the render has done its work and has not yet settled.
-			const written = await waitFor(() => existsSync(outputPath), 20_000);
+			// The Slow Write target writes its final header when it closes and then tears down for 3 s, so a finished
+			// output means the render has done its work and has not yet settled.
+			const written = await waitFor(() => isFinishedWav(outputPath), 20_000);
 
 			if (!written) throw new Error(`The render never wrote its output. stderr: ${run.output.stderr}`);
 
