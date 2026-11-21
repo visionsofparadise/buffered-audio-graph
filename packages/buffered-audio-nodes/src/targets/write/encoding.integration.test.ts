@@ -19,8 +19,11 @@ import { join, sep } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
 	BufferedSourceStream,
+	BufferedTargetStream,
 	isAbortReason,
 	SourceNode,
+	TargetNode,
+	type StreamIdentity,
 	type Block,
 	type SourceMetadata,
 	type SourceNodeProperties,
@@ -187,7 +190,7 @@ async function temporaryDirectory(prefix: string): Promise<string> {
 
 async function renderTo(
 	node: ReturnType<typeof write>,
-	options: { readonly maxBlocks?: number; readonly abortAfterMs?: number },
+	options: { readonly maxBlocks?: number; readonly abortAfterMs?: number; readonly abortWhen?: Promise<unknown> },
 ): Promise<{ error: unknown; signal: AbortSignal }> {
 	const source = new EndlessSource({ readDelayMs: 20, maxBlocks: options.maxBlocks });
 	const controller = new AbortController();
@@ -196,6 +199,8 @@ async function renderTo(
 
 	const abortTimer =
 		options.abortAfterMs === undefined ? undefined : setTimeout(() => controller.abort(), options.abortAfterMs);
+
+	void options.abortWhen?.then(() => controller.abort());
 
 	try {
 		const error = await source
@@ -511,6 +516,33 @@ describe("WriteStream output file", () => {
 		expect(written.equals(expected)).toBe(true);
 	});
 
+	it("fails the render and removes the WAV when its file handle writes no bytes", async () => {
+		const directory = await temporaryDirectory("write-zero-");
+
+		// A file handle that writes the header and then takes no bytes of audio.
+		vi.mocked(open).mockImplementationOnce((async (...args: Parameters<typeof open>) => {
+			const handle = await actualOpen(...args);
+			const writeAll = handle.write.bind(handle) as (
+				buffer: Buffer,
+				offset: number,
+				length: number,
+				position: number,
+			) => Promise<{ bytesWritten: number; buffer: Buffer }>;
+
+			Object.assign(handle, {
+				write: async (buffer: Buffer, offset: number, length: number, position: number) =>
+					position === 0 ? writeAll(buffer, offset, length, position) : { bytesWritten: 0, buffer },
+			});
+
+			return handle;
+		}) as typeof open);
+
+		const { error } = await renderTo(write(join(directory, "out.wav"), { bitDepth: "16" }), { maxBlocks: 2 });
+
+		expect((error as Error).message).toBe("Write wrote no bytes at offset 80");
+		expect(await readdir(directory)).toEqual([]);
+	});
+
 	it("rejects an empty path in setup", async () => {
 		const source = new EndlessSource({ readDelayMs: 20, maxBlocks: 2 });
 
@@ -534,6 +566,129 @@ describe("WriteStream output file", () => {
 		expect(await readFile(path, "utf8")).toBe("old");
 		expect(await readdir(directory)).toEqual(["out.flac"]);
 		expect(vi.mocked(spawn)).not.toHaveBeenCalled();
+	});
+});
+
+let releaseSibling = (): void => undefined;
+
+// A target that fails in its close once the test releases it.
+class FailingSiblingStream extends BufferedTargetStream<FailingSibling> {
+	override _write(): void {
+		return;
+	}
+
+	override async _close(): Promise<void> {
+		await new Promise<void>((resolve) => {
+			releaseSibling = resolve;
+		});
+
+		throw new Error("sibling failed");
+	}
+}
+
+class FailingSibling extends TargetNode {
+	static override readonly packageName = "test";
+	static override readonly nodeName = "failing-sibling";
+	static override readonly schema = z.object({});
+	static override readonly Stream = FailingSiblingStream;
+}
+
+async function fileAppears(path: string): Promise<void> {
+	for (let attempt = 0; attempt < 250; attempt++) {
+		if (
+			await stat(path).then(
+				() => true,
+				() => false,
+			)
+		)
+			return;
+
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	}
+
+	throw new Error(`${path} did not appear within 5 s`);
+}
+
+describe("WriteStream cleanup during close", () => {
+	it("removes an encoded output when the render aborts while the encoder finishes", async () => {
+		const directory = await temporaryDirectory("write-close-abort-encode-");
+		const path = join(directory, "out.flac");
+
+		// A stand-in encoder that writes its output once its input ends, then never exits, so the close waits for it.
+		standIn(
+			`process.stdin.resume(); process.stdin.on("end", () => { ${WRITE_OUTPUT}; setInterval(() => {}, 1000); })`,
+		);
+
+		const { error, signal } = await renderTo(
+			write(path, { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "flac" } }),
+			{ maxBlocks: 2, abortWhen: fileAppears(path) },
+		);
+
+		expect(isAbortReason(error, signal)).toBe(true);
+		expect(await readdir(directory)).toEqual([]);
+	}, 20_000);
+
+	it("resolves and keeps a WAV output whose close finishes after the render aborts during it", async () => {
+		const directory = await temporaryDirectory("write-close-abort-wav-");
+		const path = join(directory, "out.wav");
+		let closing = (): void => undefined;
+		const closeStarted = new Promise<void>((resolve) => {
+			closing = resolve;
+		});
+
+		// A file handle whose close takes 200 ms, so the abort lands inside the stream's close.
+		vi.mocked(open).mockImplementationOnce((async (...args: Parameters<typeof open>) => {
+			const handle = await actualOpen(...args);
+			const closeHandle = handle.close.bind(handle);
+
+			Object.assign(handle, {
+				close: async () => {
+					closing();
+					await new Promise((resolve) => setTimeout(resolve, 200));
+
+					return closeHandle();
+				},
+			});
+
+			return handle;
+		}) as typeof open);
+
+		const { error, signal } = await renderTo(write(path, { bitDepth: "16" }), {
+			maxBlocks: 2,
+			abortWhen: closeStarted,
+		});
+		const written = await readFile(path);
+
+		expect(signal.aborted).toBe(true);
+		expect(error).toBeUndefined();
+		expect(written.subarray(0, 4).toString("ascii")).toBe("RIFF");
+		expect(written.readUInt32LE(4)).toBe(written.length - 8);
+		expect(written.length).toBe(80 + 2 * SAMPLE_RATE * 2);
+	});
+
+	it("keeps the output of a Write target that finished before a sibling target failed", async () => {
+		const directory = await temporaryDirectory("write-close-sibling-");
+		const path = join(directory, "out.wav");
+		const source = new EndlessSource({ readDelayMs: 20, maxBlocks: 2 });
+
+		source.to(write(path, { bitDepth: "16" }));
+		source.to(new FailingSibling());
+
+		const job = source.createRenderJob();
+
+		job.events.on("finished", (stream: StreamIdentity) => {
+			if (stream.nodeName === "Write") releaseSibling();
+		});
+
+		const error = await job.render().then(
+			() => undefined,
+			(reason: unknown) => reason,
+		);
+		const written = await readFile(path);
+
+		expect((error as Error).message).toBe("sibling failed");
+		expect(written.readUInt32LE(4)).toBe(written.length - 8);
+		expect(written.length).toBe(80 + 2 * SAMPLE_RATE * 2);
 	});
 });
 
