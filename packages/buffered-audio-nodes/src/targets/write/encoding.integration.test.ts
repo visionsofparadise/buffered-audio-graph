@@ -549,6 +549,33 @@ describe("WriteStream target path", () => {
 		},
 	);
 
+	it.skipIf(IS_WINDOWS || IS_ROOT)(
+		"writes through a chain of dangling symlinks to the missing file it names and leaves the symlinks in place",
+		async () => {
+			const directory = await temporaryDirectory("write-dangling-");
+			const links = join(directory, "links");
+			const middle = join(directory, "middle");
+			const store = join(directory, "store");
+
+			await Promise.all([links, middle, store].map((folder) => mkdir(folder)));
+			await symlink(join("..", "middle", "out.wav"), join(links, "out.wav"));
+			await symlink(join("..", "store", "out.wav"), join(middle, "out.wav"));
+
+			const { error } = await renderTo(write(join(links, "out.wav"), { bitDepth: "16" }), { maxBlocks: 2 });
+
+			expect(error).toBeUndefined();
+
+			const written = await readFile(join(store, "out.wav"));
+
+			expect(written.subarray(0, 4).toString("ascii")).toBe("RIFF");
+			expect(written.length).toBe(80 + 2 * SAMPLE_RATE * 2);
+			expect((await lstat(join(links, "out.wav"))).isSymbolicLink()).toBe(true);
+			expect((await lstat(join(middle, "out.wav"))).isSymbolicLink()).toBe(true);
+
+			for (const folder of [links, middle, store]) expect(await readdir(folder)).toEqual(["out.wav"]);
+		},
+	);
+
 	// Skipped as root, whom file permissions do not stop.
 	it.skipIf(IS_ROOT)("rejects a read-only existing target in setup and leaves it unchanged", async () => {
 		const parent = await temporaryDirectory("write-read-only-");

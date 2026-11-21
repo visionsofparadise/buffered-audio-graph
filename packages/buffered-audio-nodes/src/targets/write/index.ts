@@ -1,7 +1,19 @@
 import { randomBytes } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { access, chmod, constants, lstat, open, realpath, rename, rm, stat, type FileHandle } from "node:fs/promises";
-import { basename, dirname, join, parse, sep } from "node:path";
+import {
+	access,
+	chmod,
+	constants,
+	lstat,
+	open,
+	readlink,
+	realpath,
+	rename,
+	rm,
+	stat,
+	type FileHandle,
+} from "node:fs/promises";
+import { basename, dirname, join, parse, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -112,13 +124,43 @@ async function statTarget(path: string): Promise<Stats | undefined> {
 	}
 }
 
+const MAX_SYMLINK_HOPS = 40;
+
+function errorCode(error: unknown): string | undefined {
+	return (error as NodeJS.ErrnoException).code;
+}
+
+async function danglingSymlinkTarget(path: string): Promise<string | undefined> {
+	let current = path;
+
+	for (let hop = 0; hop < MAX_SYMLINK_HOPS; hop++) {
+		const stats = await lstat(current).catch((error: unknown) => {
+			if (errorCode(error) === "ENOENT" || errorCode(error) === "ENOTDIR") return undefined;
+
+			throw error;
+		});
+
+		if (!stats?.isSymbolicLink()) return hop === 0 ? undefined : current;
+
+		current = resolve(dirname(current), await readlink(current));
+	}
+
+	throw Object.assign(new Error(`ELOOP: too many symbolic links encountered, open '${path}'`), {
+		code: "ELOOP",
+		syscall: "open",
+		path,
+	});
+}
+
 async function resolveDestination(path: string, target: Stats | undefined): Promise<string> {
 	if (target) return (await lstat(path)).isSymbolicLink() ? realpath(path) : path;
 
+	const named = (await danglingSymlinkTarget(path)) ?? path;
+
 	try {
-		return join(await realpath(dirname(path)), basename(path));
+		return join(await realpath(dirname(named)), basename(named));
 	} catch {
-		return path;
+		return named;
 	}
 }
 
