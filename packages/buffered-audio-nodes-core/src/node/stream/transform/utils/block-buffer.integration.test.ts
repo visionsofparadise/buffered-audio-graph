@@ -235,6 +235,31 @@ describe("BlockBuffer", () => {
 		}
 	});
 
+	it("resolves a write waiting for drain when a concurrent flushWrites finishes the stream", async () => {
+		const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-flushed-"));
+		// A file stream that finishes each write after 10 ms, so the first write waits for drain while the flush ends it.
+		const slow = new Writable({
+			highWaterMark: 16,
+			write(_chunk, _encoding, callback) {
+				setTimeout(() => callback(), 10);
+			},
+		});
+
+		vi.mocked(createWriteStream).mockReturnValueOnce(slow as WriteStream);
+
+		const buffer = new BlockBuffer(temporaryDirectory);
+
+		try {
+			const write = settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 1000);
+
+			await expect(settleWithin(buffer.flushWrites(), 1000)).resolves.toBeUndefined();
+			await expect(write).resolves.toBeUndefined();
+		} finally {
+			await settleWithin(buffer.close(), 1000).catch(() => undefined);
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		}
+	});
+
 	describe("after its file stream fails", () => {
 		const diskFull = new Error("ENOSPC: no space left on device, write");
 

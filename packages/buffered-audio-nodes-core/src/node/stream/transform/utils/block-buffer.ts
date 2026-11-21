@@ -41,7 +41,7 @@ function drainOrError(ws: WriteStream): Promise<void> {
 		};
 		const onDrain = (): void => settle();
 		const onError = (error: Error): void => settle(error);
-		const onClose = (): void => settle(ws.errored ?? closedStreamError());
+		const onClose = (): void => settle(ws.errored ?? (ws.writableFinished ? undefined : closedStreamError()));
 
 		ws.once("drain", onDrain);
 		ws.once("error", onError);
