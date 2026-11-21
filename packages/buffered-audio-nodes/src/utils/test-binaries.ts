@@ -19,7 +19,6 @@ export const binaries = {
 	faustAddon: resolve(binariesDir, "faust_addon.node"),
 	model1: resolve(binariesDir, "model_1.onnx"),
 	model2: resolve(binariesDir, "model_2.onnx"),
-	kimVocal2: resolve(binariesDir, "Kim_Vocal_2.onnx"),
 	htdemucs: resolve(binariesDir, "htdemucs.onnx"),
 	htdemucsData: resolve(binariesDir, "htdemucs.onnx.data"),
 	dfn3: resolve(binariesDir, "dfn3.onnx"),

@@ -72,13 +72,6 @@
 			"source": "https://github.com/visionsofparadise/vst-demon-cli/releases/download/v0.2.2/vst-demon-cli-win32-x64.zip"
 		},
 		{
-			"key": "Kim_Vocal_2",
-			"platform": "all",
-			"arch": "all",
-			"filename": "Kim_Vocal_2.onnx",
-			"source": "https://huggingface.co/seanghay/uvr_models"
-		},
-		{
 			"key": "dfn3",
 			"platform": "all",
 			"arch": "all",

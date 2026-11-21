@@ -2,7 +2,6 @@ import { describe, it } from "vitest";
 import { runBenchmark, type BenchmarkResult } from "./test-benchmark";
 import { audio, binaries } from "./test-binaries";
 import { dtln } from "../transforms/dtln";
-import { kimVocal2 } from "../transforms/kim-vocal-2";
 import { htdemucs } from "../transforms/htdemucs";
 import { ExecutionProvider } from "@buffered-audio/core";
 
@@ -69,18 +68,6 @@ describe("ONNX models", () => {
 			});
 			const r = await runBenchmark(`dtln`, t, testVoice, { executionProviders: providers });
 			record("onnx", "dtln", label, r);
-		}, 240_000);
-	}
-
-	for (const { label, providers } of onnxConfigs) {
-		it(`kim-vocal-2 [${label}]`, async () => {
-			const t = kimVocal2({
-				modelPath: binaries.kimVocal2,
-				ffmpegPath: binaries.ffmpeg,
-				onnxAddonPath: binaries.onnxAddon,
-			});
-			const r = await runBenchmark(`kim-vocal-2`, t, testVoice, { executionProviders: providers });
-			record("onnx", "kim-vocal-2", label, r);
 		}, 240_000);
 	}
 

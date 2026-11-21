@@ -196,20 +196,6 @@ Rebalance stem volumes using HTDemucs source separation
 | `highPass`      | number (0 to 500, step 10)    | `0`     | High Pass                                                                                                                                      |
 | `lowPass`       | number (0 to 22050, step 100) | `0`     | Low Pass                                                                                                                                       |
 
-### Kim Vocal 2 (Stem Separator)
-
-Isolate dialogue from background using MDX-Net vocal separation
-
-[Source](./src/transforms/kim-vocal-2/index.ts)
-
-| Parameter       | Type                             | Default | Description                                                                                               |
-| --------------- | -------------------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
-| `modelPath`     | string                           | `""`    | MDX-Net vocal isolation model (.onnx) Download: [Kim_Vocal_2](https://huggingface.co/seanghay/uvr_models) |
-| `ffmpegPath`    | string                           | `""`    | FFmpeg — audio/video processing tool Download: [ffmpeg](https://ffmpeg.org/download.html)                 |
-| `onnxAddonPath` | string                           | `""`    | ONNX Runtime native addon Download: [onnx-addon](https://github.com/visionsofparadise/onnx-runtime-addon) |
-| `highPass`      | number (20 to 500, step 10)      | `80`    | High Pass                                                                                                 |
-| `lowPass`       | number (1000 to 22050, step 100) | `20000` | Low Pass                                                                                                  |
-
 ### Loudness Normalize
 
 Measure integrated loudness (BS.1770) and apply a single linear gain to hit a target LUFS — no limiting, no dynamics
@@ -556,7 +542,6 @@ Models are not bundled with the package. Each node's parameter table links to th
 | -------------- | ---------------------------------- | ------------------------------------------------------------- |
 | dtln           | model_1.onnx, model_2.onnx         | [DTLN](https://github.com/breizhn/DTLN)                       |
 | deepFilterNet3 | dfn3.onnx                          | [SpeechDenoiser](https://github.com/yuyun2000/SpeechDenoiser) |
-| kimVocal2      | Kim_Vocal_2.onnx                   | [uvr_models](https://huggingface.co/seanghay/uvr_models)      |
 | htdemucs       | htdemucs.onnx + htdemucs.onnx.data | [demucs](https://github.com/facebookresearch/demucs)          |
 | sileroVad      | silero-vad.onnx                    | [silero-vad](https://github.com/snakers4/silero-vad)          |
 
