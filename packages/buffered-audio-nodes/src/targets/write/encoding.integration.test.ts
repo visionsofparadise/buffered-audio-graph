@@ -658,23 +658,41 @@ describe("WriteStream target path", () => {
 	);
 
 	it.skipIf(!IS_WINDOWS)(
-		"writes a reserved device name in place, creating no file in the working directory",
+		"writes a reserved name with an extension as an ordinary file, and a bare reserved name to its device",
 		async () => {
-			const created = async (): Promise<Array<string>> =>
-				(await readdir(process.cwd())).filter((name) => /^nul(?:\.|$)/i.test(name));
+			const directory = await temporaryDirectory("write-reserved-");
 
-			try {
-				for (const path of ["NUL", "nul.wav"]) {
-					const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
+			for (const name of ["nul.wav", "aux.wav"]) {
+				const { error } = await renderTo(write(join(directory, name), { bitDepth: "16" }), { maxBlocks: 2 });
 
-					expect(error).toBeUndefined();
-					expect(await created()).toEqual([]);
-				}
-			} finally {
-				// A regression creates real files named after the device here, which only a namespaced path removes.
-				for (const name of await created()) await rm(join(process.cwd(), name), { force: true });
+				expect(error).toBeUndefined();
+
+				const written = await readFile(join(directory, name));
+
+				expect(written.subarray(0, 4).toString("ascii")).toBe("RIFF");
+				expect(written.length).toBe(80 + 2 * SAMPLE_RATE * 2);
 			}
+
+			// A stand-in encoder that copies its input to its output path, as ffmpeg's `-y <path>` writes it.
+			standIn(
+				`const out = require("fs").createWriteStream(process.argv.at(-1)); process.stdin.pipe(out); out.on("finish", () => process.exit(0));`,
+			);
+
+			const encoded = await renderTo(
+				write(join(directory, "aux.flac"), { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "flac" } }),
+				{ maxBlocks: 2 },
+			);
+
+			expect(encoded.error).toBeUndefined();
+			expect(String(vi.mocked(spawn).mock.calls.at(-1)?.[1]?.at(-1))).toMatch(/aux\.partial-\d+-[0-9a-f]{8}\.flac$/);
+			expect((await readFile(join(directory, "aux.flac"))).length).toBe(2 * SAMPLE_RATE * 4);
+
+			const bare = await renderTo(write(join(directory, "NUL"), { bitDepth: "16" }), { maxBlocks: 2 });
+
+			expect(bare.error).toBeUndefined();
+			expect((await readdir(directory)).sort()).toEqual(["aux.flac", "aux.wav", "nul.wav"]);
 		},
+		20_000,
 	);
 
 	it.skipIf(!IS_WINDOWS)(

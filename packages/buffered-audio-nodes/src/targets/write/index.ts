@@ -109,9 +109,9 @@ function windowsDevicePath(path: string): string | undefined {
 
 	if (path.startsWith("\\\\.\\") || path.startsWith("//./")) return path;
 
-	const stem = (basename(path).split(".")[0] ?? "").trimEnd();
+	const name = basename(path);
 
-	return WINDOWS_DEVICE_NAME.test(stem) ? `\\\\.\\${stem.toUpperCase()}` : undefined;
+	return WINDOWS_DEVICE_NAME.test(name) ? `\\\\.\\${name.toUpperCase()}` : undefined;
 }
 
 async function statTarget(path: string): Promise<Stats | undefined> {

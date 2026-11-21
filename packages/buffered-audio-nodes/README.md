@@ -425,7 +425,7 @@ Write audio to a file
 
 The Write target writes to a temporary file beside its output, named `<stem>.partial-<pid>-<hex><ext>`, and renames it onto the output path once the render succeeds. An aborted or failed render leaves the output path untouched and removes the temporary file, and an encoder is killed before it can finalize.
 
-- **Devices and FIFOs.** A device, FIFO or socket, or a symlink to one, is written directly with no temporary file. So is a reserved device name on Windows, such as `NUL` or `COM1.wav`, and any `\\.\` path.
+- **Devices and FIFOs.** A device, FIFO or socket, or a symlink to one, is written directly with no temporary file. So is any `\\.\` path on Windows, and a path whose last part is exactly a reserved device name with no extension, such as `NUL` or `COM1`. A reserved name with an extension, such as `nul.wav`, is an ordinary file.
 - **Symlinks.** A symlink to a regular file is written through: the file it points to is replaced and the symlink stays. A dangling symlink is written through too, so the missing file it names is created and the symlink stays.
 - **Rejected in setup.** An empty path, a path ending in a path separator, a directory, an existing file the process cannot write, and a path in a folder that does not exist each reject before any audio is read. A missing folder rejects with ENOENT naming the output path.
 - **What a replaced file keeps.** On POSIX the new file keeps the old one's permission bits, but not its owner, its hard links or its ACLs. The temporary file needs write access to the output's directory.
