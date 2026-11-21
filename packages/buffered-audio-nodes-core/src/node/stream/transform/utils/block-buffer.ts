@@ -13,12 +13,16 @@ const HIGH_WATER_MARK = 10 * 1024 * 1024;
 
 const reportedFailures = new WeakSet<WriteStream>();
 
-const failedBuffers = new WeakSet<BlockBuffer>();
+const failedBuffers = new WeakMap<BlockBuffer, { readonly error: unknown }>();
+
+function closedStreamError(): Error {
+	return new Error("BlockBuffer: its file stream was closed before the write");
+}
 
 function streamFailure(ws: WriteStream): Error | undefined {
 	if (ws.errored) return ws.errored;
 
-	return ws.destroyed ? new Error("BlockBuffer: its file stream was closed before the write") : undefined;
+	return ws.destroyed ? closedStreamError() : undefined;
 }
 
 function drainOrError(ws: WriteStream): Promise<void> {
@@ -27,17 +31,21 @@ function drainOrError(ws: WriteStream): Promise<void> {
 	if (failure) return Promise.reject(failure);
 
 	return new Promise<void>((resolve, reject) => {
-		const onDrain = (): void => {
-			ws.removeListener("error", onError);
-			resolve();
-		};
-		const onError = (error: Error): void => {
+		const settle = (error?: Error): void => {
 			ws.removeListener("drain", onDrain);
-			reject(error);
+			ws.removeListener("error", onError);
+			ws.removeListener("close", onClose);
+
+			if (error) reject(error);
+			else resolve();
 		};
+		const onDrain = (): void => settle();
+		const onError = (error: Error): void => settle(error);
+		const onClose = (): void => settle(ws.errored ?? closedStreamError());
 
 		ws.once("drain", onDrain);
 		ws.once("error", onError);
+		ws.once("close", onClose);
 	});
 }
 
@@ -87,6 +95,10 @@ export class BlockBuffer {
 	}
 
 	async write(samples: Array<Float32Array>, sampleRate?: number, bitDepth?: number): Promise<void> {
+		const recorded = failedBuffers.get(this);
+
+		if (recorded) throw recorded.error;
+
 		const duration = samples[0]?.length ?? 0;
 
 		if (duration === 0) return;
@@ -116,7 +128,7 @@ export class BlockBuffer {
 			if (!ws.write(writeBuffer)) await drainOrError(ws);
 		} catch (error) {
 			reportedFailures.add(ws);
-			failedBuffers.add(this);
+			failedBuffers.set(this, { error });
 
 			throw error;
 		}

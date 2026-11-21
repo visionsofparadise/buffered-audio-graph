@@ -327,6 +327,47 @@ describe("BlockBuffer", () => {
 				await rm(temporaryDirectory, { recursive: true, force: true });
 			}
 		});
+
+		it("rejects a write after flushWrites with the recorded failure, opening no new file stream", async () => {
+			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-failed-"));
+			const buffer = new BlockBuffer(temporaryDirectory);
+
+			failNextFileStream(16);
+
+			try {
+				await expect(settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 2000)).rejects.toBe(diskFull);
+				await buffer.flushWrites();
+
+				const streamsBefore = vi.mocked(createWriteStream).mock.calls.length;
+
+				await expect(settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 100)).rejects.toBe(diskFull);
+				expect(vi.mocked(createWriteStream).mock.calls.length).toBe(streamsBefore);
+			} finally {
+				await buffer.close().catch(() => undefined);
+				await rm(temporaryDirectory, { recursive: true, force: true });
+			}
+		});
+
+		it("rejects a write waiting for drain when its file stream closes without an error", async () => {
+			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-closed-"));
+			// A file stream that never finishes a write, so the first write waits for drain until the stream closes.
+			const stalled = new Writable({ highWaterMark: 16, write() {} });
+
+			vi.mocked(createWriteStream).mockReturnValueOnce(stalled as WriteStream);
+
+			const buffer = new BlockBuffer(temporaryDirectory);
+
+			try {
+				const write = settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 1000);
+
+				setTimeout(() => stalled.destroy(), 20);
+
+				await expect(write).rejects.toThrow("BlockBuffer: its file stream was closed before the write");
+			} finally {
+				await settleWithin(buffer.close(), 1000).catch(() => undefined);
+				await rm(temporaryDirectory, { recursive: true, force: true });
+			}
+		});
 	});
 
 	it("iterate over an empty buffer yields nothing", async () => {
