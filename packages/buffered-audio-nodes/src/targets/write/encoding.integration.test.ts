@@ -39,6 +39,7 @@ vi.mock("node:fs/promises", { spy: true });
 
 const SAMPLE_RATE = 44100;
 const IS_WINDOWS = process.platform === "win32";
+const IS_ROOT = process.getuid?.() === 0;
 const WRITE_OUTPUT = `require("fs").writeFileSync(process.argv.at(-1), "")`;
 
 interface EndlessSourceProperties extends SourceNodeProperties {
@@ -481,7 +482,8 @@ describe("WriteStream target path", () => {
 		20_000,
 	);
 
-	it.skipIf(IS_WINDOWS)("writes a WAV straight to /dev/null and leaves it a character device", async () => {
+	// Skipped as root, where a regression would replace the system's /dev/null with a regular file.
+	it.skipIf(IS_WINDOWS || IS_ROOT)("writes a WAV straight to /dev/null and leaves it a character device", async () => {
 		const { error } = await renderTo(write("/dev/null", { bitDepth: "16" }), { maxBlocks: 2 });
 
 		expect(error).toBeUndefined();
