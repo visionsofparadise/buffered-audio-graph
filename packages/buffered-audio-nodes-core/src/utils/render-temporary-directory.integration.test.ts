@@ -1,6 +1,6 @@
 import { access, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRenderTemporaryDirectory, scavengeRenderTemporaryDirectories } from "./render-temporary-directory";
 
@@ -35,6 +35,20 @@ describe("render temporary directories", () => {
 		expect(basename(second)).toMatch(new RegExp(`^render-${process.pid}-.+$`));
 		await expectExists(first);
 		await expectExists(second);
+	});
+
+	it("creates the default root under the temp directory, named per user on POSIX", async () => {
+		const directory = await createRenderTemporaryDirectory();
+
+		try {
+			const uid = process.getuid?.();
+
+			expect(dirname(directory)).toBe(
+				join(tmpdir(), uid === undefined ? "buffered-audio" : `buffered-audio-${uid}`),
+			);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	it("tolerates a missing root", async () => {

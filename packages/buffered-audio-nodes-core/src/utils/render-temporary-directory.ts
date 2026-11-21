@@ -7,7 +7,8 @@ export interface RenderTemporaryDirectoryOptions {
 	readonly processIsAbsent?: (pid: number) => boolean;
 }
 
-const defaultRootDirectory = join(tmpdir(), "buffered-audio");
+const uid = process.getuid?.();
+const defaultRootDirectory = join(tmpdir(), uid === undefined ? "buffered-audio" : `buffered-audio-${uid}`);
 
 function processIsAbsent(pid: number): boolean {
 	try {

@@ -127,7 +127,8 @@ async function waitForProcessAbsence(pid: number, milliseconds = 5_000): Promise
 }
 
 async function currentProcessRenderDirectories(): Promise<Set<string>> {
-	const root = join(tmpdir(), "buffered-audio");
+	const uid = process.getuid?.();
+	const root = join(tmpdir(), uid === undefined ? "buffered-audio" : `buffered-audio-${uid}`);
 
 	try {
 		const entries = await readdir(root, { withFileTypes: true });
