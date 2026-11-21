@@ -423,9 +423,9 @@ Write audio to a file
 
 ## Writing Files
 
-The Write target writes its output in place, as nodes 0.25.0 did. A WAV output is created or emptied when the render starts, and an encoded output once the first block of audio reaches the encoder. A render that succeeds leaves the same file as 0.25.0.
+The Write target writes its output in place. A WAV output is created or emptied when the render starts, and an encoded output once the first block of audio reaches the encoder.
 
-- **Aborted or failed renders.** The encoder is killed before it can finalize, and the output the render wrote is removed. Output reached through a symlink is emptied instead, and the symlink stays. Output that cannot be removed, such as a file another program holds open on Windows or one in a read-only folder, is emptied too, and the render reports the removal error only when emptying fails as well. A device, a FIFO or a socket stays as it is, and so does an existing encoded output that the encoder had not yet opened.
+- **Aborted or failed renders.** Each Write target removes its own output when the render aborts or fails before that target has finished closing, and kills its encoder before it can finalize. A target that has finished closing keeps its output, so in a render with several targets, the ones that finished first keep theirs. Output reached through a symlink is emptied rather than removed, and the symlink stays. Output that cannot be removed, such as a file another program holds open on Windows or one in a read-only folder, is emptied too, and the render reports the removal error only when emptying fails as well. A device, a FIFO or a socket stays as it is, and so does an existing encoded output that the encoder had not yet opened.
 - **Rejected in setup.** An empty path and a path ending in a path separator reject before any audio is read, and so does a directory as an encoded output. A WAV output rejects in setup with the error from opening it, such as EISDIR for a directory or ENOENT for a missing folder.
 - **No audio.** A render that delivers no audio writes a WAV output with only its header, and leaves an encoded output alone: no file is created, and an existing one stays as it was.
 
@@ -437,7 +437,7 @@ The CLI, FFmpeg, Loudness Tool and VST3 nodes, the Read FFmpeg source, the Write
 - **Aborts.** An abort kills each child at once, except the VST3 node's `vst-host`, which gets SIGTERM and up to 2 s to exit before it is killed.
 - **Background processes.** When a tool exits while a background process it started still holds its output open, the CLI, FFmpeg and Loudness Tool nodes and the Read FFmpeg source fail 2 s after the exit.
 - **Early exit.** When the tool of the CLI, FFmpeg or Loudness Tool node exits 0 before its input has ended, the node drops the rest of its input and ends its output with what the tool wrote, without an error.
-- **Unfinished output.** An aborted or failed render removes the output the Write target wrote, as [Writing Files](#writing-files) describes.
+- **Unfinished output.** A Write target that has not finished closing when the render aborts or fails removes its output, as [Writing Files](#writing-files) describes.
 
 ## Creating Nodes
 

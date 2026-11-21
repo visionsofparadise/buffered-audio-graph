@@ -44,7 +44,7 @@ The first SIGINT or SIGTERM aborts every render the bag runs. The CLI waits for 
 
 A repeat of either signal within 500 ms of the first counts as the same interrupt, because one Ctrl+C through `npm run` or `npx` can deliver two. A signal after that window forces the exit: the CLI prints `Forced exit by SIGINT` or `Forced exit by SIGTERM` and exits at once with that signal's code, without waiting for teardown.
 
-The Write target of `@buffered-audio/nodes` 0.26.0 and later removes the output of an interrupted render during the teardown, so a render interrupted this way leaves no output file. A forced exit skips the teardown, so it can leave a partial output file, which an encoder may have finalized, for you to delete.
+The Write target of `@buffered-audio/nodes` 0.26.0 and later removes its output during the teardown when the interrupt reaches it before it has finished, so that target leaves no output file. In a bag with several targets, an interrupted render keeps the output of any target that had already finished. A forced exit skips the teardown, so it can leave a partial output file, which an encoder may have finalized, for you to delete.
 
 ## License
 
