@@ -13,6 +13,8 @@ const HIGH_WATER_MARK = 10 * 1024 * 1024;
 
 const reportedFailures = new WeakSet<WriteStream>();
 
+const failedBuffers = new WeakSet<BlockBuffer>();
+
 function streamFailure(ws: WriteStream): Error | undefined {
 	if (ws.errored) return ws.errored;
 
@@ -114,6 +116,7 @@ export class BlockBuffer {
 			if (!ws.write(writeBuffer)) await drainOrError(ws);
 		} catch (error) {
 			reportedFailures.add(ws);
+			failedBuffers.add(this);
 
 			throw error;
 		}
@@ -183,7 +186,7 @@ export class BlockBuffer {
 	}
 
 	async reset(): Promise<void> {
-		if (this.writeStream && reportedFailures.has(this.writeStream)) {
+		if (failedBuffers.has(this)) {
 			await this.clear();
 
 			return;
@@ -213,6 +216,7 @@ export class BlockBuffer {
 		this.tempFileExists = false;
 		this.writePositionByte = 0;
 		this._frames = 0;
+		failedBuffers.delete(this);
 
 		if (writeFailure) throw writeFailure.error;
 	}

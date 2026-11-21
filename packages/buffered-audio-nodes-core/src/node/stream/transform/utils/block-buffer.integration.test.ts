@@ -308,6 +308,25 @@ describe("BlockBuffer", () => {
 				await rm(temporaryDirectory, { recursive: true, force: true });
 			}
 		});
+
+		it("empties the buffer on reset when flushWrites ran after a rejected write", async () => {
+			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-failed-"));
+			const buffer = new BlockBuffer(temporaryDirectory);
+
+			failNextFileStream(16);
+
+			try {
+				await expect(settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 2000)).rejects.toBe(diskFull);
+				await buffer.flushWrites();
+				await buffer.reset();
+
+				expect(buffer.frames).toBe(0);
+				expect(await readdir(temporaryDirectory)).toEqual([]);
+			} finally {
+				await buffer.close().catch(() => undefined);
+				await rm(temporaryDirectory, { recursive: true, force: true });
+			}
+		});
 	});
 
 	it("iterate over an empty buffer yields nothing", async () => {
