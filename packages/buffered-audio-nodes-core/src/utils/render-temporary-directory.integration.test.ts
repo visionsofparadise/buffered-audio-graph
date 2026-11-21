@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -49,6 +49,66 @@ describe("render temporary directories", () => {
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
+	});
+
+	describe.skipIf(process.platform === "win32" || process.getuid?.() === 0)("the root on POSIX", () => {
+		// Creates a writable render directory from `root` and checks that it added nothing to `untouched`.
+		async function createOutside(root: string, untouched: string): Promise<void> {
+			const before = await readdir(untouched);
+			const directory = await createRenderTemporaryDirectory({ rootDirectory: root });
+
+			try {
+				await writeFile(join(directory, "probe"), "writable");
+				expect(await readdir(untouched)).toEqual(before);
+			} finally {
+				await rm(directory, { recursive: true, force: true });
+			}
+		}
+
+		it("creates a fresh root with mode 0700", async () => {
+			const root = join(rootDirectory, "fresh");
+
+			await createRenderTemporaryDirectory({ rootDirectory: root });
+
+			expect((await stat(root)).mode & 0o777).toBe(0o700);
+		});
+
+		it("narrows an existing root of its own to mode 0700", async () => {
+			const root = join(rootDirectory, "existing");
+
+			await mkdir(root, { mode: 0o755 });
+			await chmod(root, 0o755);
+			await createRenderTemporaryDirectory({ rootDirectory: root });
+
+			expect((await stat(root)).mode & 0o777).toBe(0o700);
+		});
+
+		it("falls back to a private directory when the root is a symlink, and scavenging leaves it alone", async () => {
+			const elsewhere = join(rootDirectory, "elsewhere");
+			const dead = join(elsewhere, "render-1001-dead");
+			const root = join(rootDirectory, "linked");
+
+			await mkdir(dead, { recursive: true });
+			await symlink(elsewhere, root);
+			await createOutside(root, elsewhere);
+			await scavengeRenderTemporaryDirectories({ rootDirectory: root, processIsAbsent: () => true });
+
+			await expectExists(dead);
+			expect(await readdir(elsewhere)).toEqual(["render-1001-dead"]);
+		});
+
+		it("falls back to a private directory when the root cannot be created", async () => {
+			const locked = join(rootDirectory, "locked");
+
+			await mkdir(locked);
+			await chmod(locked, 0o500);
+
+			try {
+				await createOutside(join(locked, "root"), locked);
+			} finally {
+				await chmod(locked, 0o700);
+			}
+		});
 	});
 
 	it("tolerates a missing root", async () => {
