@@ -396,11 +396,14 @@ describe("WriteStream output file", () => {
 
 describe("WriteStream target path", () => {
 	// Renders the delayed source into `path`, returning the error, the time to settle and the blocks the source delivered.
-	async function renderDelayed(path: string): Promise<{ error: unknown; elapsedMs: number; blocks: number }> {
+	async function renderDelayed(
+		path: string,
+		options: Parameters<typeof write>[1] = { bitDepth: "16" },
+	): Promise<{ error: unknown; elapsedMs: number; blocks: number }> {
 		const source = new DelayedSource();
 
 		delayedBlocks = 0;
-		source.to(write(path, { bitDepth: "16" }));
+		source.to(write(path, options));
 
 		const startedAt = performance.now();
 		const error = await source
@@ -442,6 +445,25 @@ describe("WriteStream target path", () => {
 			expect(await readdir(parent)).toEqual([]);
 		}
 	});
+
+	it.each([
+		["WAV", { bitDepth: "16" }],
+		["an encoder", { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "flac" } }],
+	] as const)(
+		"rejects a target in a missing folder in setup with ENOENT naming the target, for %s",
+		async (_, options) => {
+			const parent = await temporaryDirectory("write-missing-folder-");
+			const path = join(parent, "missing", "out.flac");
+			const { error, elapsedMs, blocks } = await renderDelayed(path, options);
+
+			expect(error).toMatchObject({ code: "ENOENT" });
+			expect((error as Error).message).toContain(path);
+			expect((error as Error).message).not.toContain(".partial-");
+			expect(blocks).toBe(0);
+			expect(elapsedMs).toBeLessThan(1000);
+			expect(await readdir(parent)).toEqual([]);
+		},
+	);
 
 	it.skipIf(IS_WINDOWS)("keeps the mode of the existing file it replaces", async () => {
 		const directory = await temporaryDirectory("write-mode-");

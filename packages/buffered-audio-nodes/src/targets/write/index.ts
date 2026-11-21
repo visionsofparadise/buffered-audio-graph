@@ -164,6 +164,20 @@ async function resolveDestination(path: string, target: Stats | undefined): Prom
 	}
 }
 
+async function assertFolderExists(path: string, destination: string): Promise<void> {
+	try {
+		await stat(dirname(destination));
+	} catch (error) {
+		if (errorCode(error) !== "ENOENT") throw error;
+
+		throw Object.assign(new Error(`ENOENT: no such file or directory, open '${path}'`), {
+			code: "ENOENT",
+			syscall: "open",
+			path,
+		});
+	}
+}
+
 async function copyModeOfTarget(temporaryPath: string, path: string): Promise<void> {
 	if (process.platform === "win32") return;
 
@@ -258,6 +272,8 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 			device !== undefined || (target && !target.isFile()) ? undefined : await resolveDestination(path, target);
 
 		if (target && this.destination !== undefined) await access(this.destination, constants.W_OK);
+
+		if (!target && this.destination !== undefined) await assertFolderExists(path, this.destination);
 
 		this.temporaryPath = this.destination === undefined ? undefined : partialPath(this.destination);
 
