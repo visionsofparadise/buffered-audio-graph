@@ -92,6 +92,18 @@ export interface WriteProperties extends TargetNodeProperties {
 const WAV_HEADER_SIZE = 80;
 const UINT32_MAX = 0xffffffff;
 
+async function writeFully(fileHandle: FileHandle, bytes: Buffer, position: number): Promise<void> {
+	let done = 0;
+
+	while (done < bytes.length) {
+		const { bytesWritten } = await fileHandle.write(bytes, done, bytes.length - done, position + done);
+
+		if (bytesWritten === 0) throw new Error(`Write wrote no bytes at offset ${String(position + done)}`);
+
+		done += bytesWritten;
+	}
+}
+
 function partialPath(path: string): string {
 	const { dir, name, ext } = parse(path);
 
@@ -295,7 +307,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		} else if (this.fileHandle) {
 			const header = buildWavHeader(0, this.sampleRate, this.channels, this.properties.bitDepth);
 
-			await this.fileHandle.write(header, 0, WAV_HEADER_SIZE, 0);
+			await writeFully(this.fileHandle, header, 0);
 		}
 	}
 
@@ -321,7 +333,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		if (this.useEncoding && this.handle) {
 			await writeChildInput(this.handle, bytes, this.streamSignal);
 		} else if (this.fileHandle) {
-			await this.fileHandle.write(bytes, 0, bytes.length, WAV_HEADER_SIZE + this.bytesWritten);
+			await writeFully(this.fileHandle, bytes, WAV_HEADER_SIZE + this.bytesWritten);
 		}
 
 		this.bytesWritten += bytes.length;
@@ -342,7 +354,7 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 					? buildRf64Header(this.bytesWritten, this.sampleRate, this.channels, this.properties.bitDepth)
 					: buildWavHeader(this.bytesWritten, this.sampleRate, this.channels, this.properties.bitDepth);
 
-			await this.fileHandle.write(header, 0, WAV_HEADER_SIZE, 0);
+			await writeFully(this.fileHandle, header, 0);
 			await this.fileHandle.close();
 			this.fileHandle = undefined;
 		}

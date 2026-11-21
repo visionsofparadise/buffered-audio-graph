@@ -5,6 +5,7 @@ import {
 	lstat,
 	mkdir,
 	mkdtemp,
+	open,
 	readdir,
 	readFile,
 	rename,
@@ -123,9 +124,11 @@ class DelayedSource extends SourceNode {
 }
 
 let actualSpawn: typeof spawn;
+let actualOpen: typeof open;
 
 beforeAll(async () => {
 	actualSpawn = (await vi.importActual<typeof import("node:child_process")>("node:child_process")).spawn;
+	actualOpen = (await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises")).open;
 });
 
 // Redirects the next spawn to a node stand-in that receives the encoder's output path as its last argument.
@@ -355,6 +358,39 @@ describe("WriteStream output file", () => {
 
 		expect(references.some((reference) => reference.equals(written))).toBe(true);
 		expect(await partialFiles(directory)).toEqual([]);
+	});
+
+	it("writes the whole WAV when its file handle writes each buffer in pieces", async () => {
+		const directory = await temporaryDirectory("write-short-");
+		const whole = join(directory, "whole.wav");
+		const pieces = join(directory, "pieces.wav");
+
+		expect((await renderTo(write(whole, { bitDepth: "16" }), { maxBlocks: 2 })).error).toBeUndefined();
+
+		// A file handle that writes at most half of each request, as a write to a full disk or an interrupted write can.
+		vi.mocked(open).mockImplementationOnce((async (...args: Parameters<typeof open>) => {
+			const handle = await actualOpen(...args);
+			const writeAll = handle.write.bind(handle) as (
+				buffer: Buffer,
+				offset: number,
+				length: number,
+				position: number,
+			) => Promise<{ bytesWritten: number; buffer: Buffer }>;
+
+			Object.assign(handle, {
+				write: (buffer: Buffer, offset: number, length: number, position: number) =>
+					writeAll(buffer, offset, Math.max(1, Math.floor(length / 2)), position),
+			});
+
+			return handle;
+		}) as typeof open);
+
+		expect((await renderTo(write(pieces, { bitDepth: "16" }), { maxBlocks: 2 })).error).toBeUndefined();
+
+		const [written, expected] = await Promise.all([readFile(pieces), readFile(whole)]);
+
+		expect(written.length).toBe(expected.length);
+		expect(written.equals(expected)).toBe(true);
 	});
 
 	it("rejects an empty path in setup, writing nothing to the working directory", async () => {
