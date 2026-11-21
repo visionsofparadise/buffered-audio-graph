@@ -366,6 +366,23 @@ describe("WriteStream output file", () => {
 		expect((await readdir(process.cwd())).filter((name) => name.startsWith(".partial-"))).toEqual([]);
 	});
 
+	it("resolves a render with no input to an encoded target, creating no file and leaving an existing one", async () => {
+		const directory = await temporaryDirectory("write-empty-");
+		const path = join(directory, "out.flac");
+		const node = (): ReturnType<typeof write> =>
+			write(path, { bitDepth: "32f", ffmpegPath: "ffmpeg", encoding: { format: "flac" } });
+
+		expect((await renderTo(node(), { maxBlocks: 0 })).error).toBeUndefined();
+		expect(await readdir(directory)).toEqual([]);
+
+		await writeFile(path, "old");
+
+		expect((await renderTo(node(), { maxBlocks: 0 })).error).toBeUndefined();
+		expect(await readFile(path, "utf8")).toBe("old");
+		expect(await readdir(directory)).toEqual(["out.flac"]);
+		expect(vi.mocked(spawn)).not.toHaveBeenCalled();
+	});
+
 	it("leaves neither the target nor a partial file when a WAV render aborts", async () => {
 		const directory = await temporaryDirectory("write-abort-wav-");
 		const { error, signal } = await renderTo(write(join(directory, "out.wav"), { bitDepth: "16" }), {

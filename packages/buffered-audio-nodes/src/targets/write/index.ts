@@ -313,7 +313,13 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 
 	override async _close(): Promise<void> {
 		if (this.useEncoding) {
-			if (this.handle) await this.finishEncoder(this.handle);
+			if (!this.handle) {
+				this.closed = true;
+
+				return;
+			}
+
+			await this.finishEncoder(this.handle);
 		} else if (this.fileHandle) {
 			const header =
 				this.bytesWritten > UINT32_MAX
