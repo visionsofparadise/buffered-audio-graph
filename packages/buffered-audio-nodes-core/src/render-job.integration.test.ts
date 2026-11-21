@@ -1346,6 +1346,7 @@ describe("RenderJob aborts and the metadata signal", () => {
 interface CompositeLog {
 	readonly entries: Array<string>;
 	readonly innerDestroyFails?: string;
+	onSetup?: () => void;
 }
 
 class InnerStream extends UnbufferedTransformStream {
@@ -1398,6 +1399,7 @@ function setUpInnerPair(
 	down._setup(context);
 	context.adoptStream?.(down);
 	context.adoptStream?.(up);
+	compositeLog.onSetup?.();
 
 	return { up, down };
 }
@@ -1515,6 +1517,7 @@ class LateAdoptingStream extends UnbufferedTransformStream<LateAdoptingNode> {
 
 	override _setup(context: StreamSetupContext): void {
 		this.setupContext = context;
+		this.properties.compositeLog.onSetup?.();
 	}
 
 	override async *_transform(block: Block): AsyncGenerator<Block> {
@@ -1593,7 +1596,9 @@ async function renderComposite(
 
 	const job = source.createRenderJob({ highWaterMark: 1 });
 
-	if (testCase.abortAfterMs !== undefined) setTimeout(() => job.abort(), testCase.abortAfterMs);
+	const { abortAfterMs } = testCase;
+
+	if (abortAfterMs !== undefined) compositeLog.onSetup = () => setTimeout(() => job.abort(), abortAfterMs);
 
 	const outcome = await job.render().then(
 		() => ({ fulfilled: true }),
@@ -1647,7 +1652,7 @@ describe("RenderJob composite inner streams", () => {
 
 		const job = source.createRenderJob({ highWaterMark: 1 });
 
-		setTimeout(() => job.abort(), 30);
+		compositeLog.onSetup = () => setTimeout(() => job.abort(), 30);
 		await job.render().catch(() => undefined);
 		compositeLog.entries.push("render settled");
 
