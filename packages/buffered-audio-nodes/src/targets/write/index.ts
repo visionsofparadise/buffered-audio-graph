@@ -121,11 +121,17 @@ function isSameFile(before: BigIntStats, after: BigIntStats): boolean {
 	);
 }
 
+async function emptyOutput(path: string, removalError: unknown): Promise<void> {
+	await truncate(path, 0).catch(() => {
+		throw removalError;
+	});
+}
+
 async function removeOutput(path: string): Promise<void> {
 	const entry = await lstat(path).catch(ignoreMissing);
 
 	if (entry?.isFile()) {
-		await unlink(path);
+		await unlink(path).catch(async (error: unknown) => emptyOutput(path, error));
 	} else if (entry?.isSymbolicLink() && (await stat(path).catch(ignoreMissing))?.isFile()) {
 		await truncate(path, 0);
 	}

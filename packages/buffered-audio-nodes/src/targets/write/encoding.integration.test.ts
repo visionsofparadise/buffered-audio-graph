@@ -1,6 +1,19 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { lstat, mkdir, mkdtemp, open, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+	lstat,
+	mkdir,
+	mkdtemp,
+	open,
+	readdir,
+	readFile,
+	rm,
+	stat,
+	symlink,
+	truncate,
+	unlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -111,11 +124,42 @@ class DelayedSource extends SourceNode {
 
 let actualSpawn: typeof spawn;
 let actualOpen: typeof open;
+let actualUnlink: typeof unlink;
+let actualTruncate: typeof truncate;
 
 beforeAll(async () => {
+	const actualFs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+
 	actualSpawn = (await vi.importActual<typeof import("node:child_process")>("node:child_process")).spawn;
-	actualOpen = (await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises")).open;
+	actualOpen = actualFs.open;
+	actualUnlink = actualFs.unlink;
+	actualTruncate = actualFs.truncate;
 });
+
+function permissionError(syscall: string, path: string): NodeJS.ErrnoException {
+	return Object.assign(new Error(`EPERM: operation not permitted, ${syscall} '${path}'`), {
+		code: "EPERM",
+		syscall,
+		path,
+	});
+}
+
+// Fails unlink, and truncate too when `alsoTruncate` is set, for `path` alone, as for a file another program holds open.
+function failRemoval(path: string, alsoTruncate: boolean): void {
+	vi.mocked(unlink).mockImplementation(async (target) => {
+		if (target === path) throw permissionError("unlink", path);
+
+		return actualUnlink(target);
+	});
+
+	if (!alsoTruncate) return;
+
+	vi.mocked(truncate).mockImplementation(async (target, length) => {
+		if (target === path) throw permissionError("open", path);
+
+		return actualTruncate(target, length);
+	});
+}
 
 // Redirects the next spawn to a node stand-in that receives the encoder's output path as its last argument.
 function standIn(script: string): void {
@@ -194,6 +238,8 @@ afterEach(async () => {
 	process.off("unhandledRejection", onUnhandled);
 	unhandled.length = 0;
 	vi.mocked(spawn).mockClear();
+	vi.mocked(unlink).mockImplementation(actualUnlink);
+	vi.mocked(truncate).mockImplementation(actualTruncate);
 	await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -349,6 +395,37 @@ describe("WriteStream output file", () => {
 		expect((error as Error).message).toBe("ffmpeg exited 3");
 		expect(await readdir(directory)).toEqual([]);
 	}, 20_000);
+
+	it("empties the output when an aborted render cannot remove it", async () => {
+		const directory = await temporaryDirectory("write-unlink-fails-");
+		const path = join(directory, "out.wav");
+
+		failRemoval(path, false);
+
+		const { error, signal } = await renderTo(write(path, { bitDepth: "16" }), { abortAfterMs: 300 });
+
+		expect(isAbortReason(error, signal)).toBe(true);
+		expect(await readdir(directory)).toEqual(["out.wav"]);
+		expect((await stat(path)).size).toBe(0);
+	});
+
+	it("reports the removal error when an aborted render can neither remove nor empty the output", async () => {
+		const directory = await temporaryDirectory("write-unlink-truncate-fail-");
+		const path = join(directory, "out.wav");
+
+		failRemoval(path, true);
+
+		const { error, signal } = await renderTo(write(path, { bitDepth: "16" }), { abortAfterMs: 300 });
+
+		expect(error).toBeInstanceOf(AggregateError);
+		expect((error as AggregateError).message).toBe("Render and cleanup failed");
+
+		const [abort, removal] = (error as AggregateError).errors;
+
+		expect(isAbortReason(abort, signal)).toBe(true);
+		expect(removal).toMatchObject({ code: "EPERM", syscall: "unlink", path });
+		expect((await stat(path)).size).toBeGreaterThan(0);
+	});
 
 	it("leaves an existing encoded target unchanged when the encoder fails before it opens the target", async () => {
 		const directory = await temporaryDirectory("write-fail-unopened-");

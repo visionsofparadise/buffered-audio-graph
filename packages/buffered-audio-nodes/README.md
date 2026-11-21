@@ -425,7 +425,7 @@ Write audio to a file
 
 The Write target writes its output in place, as nodes 0.25.0 did. A WAV output is created or emptied when the render starts, and an encoded output once the first block of audio reaches the encoder. A render that succeeds leaves the same file as 0.25.0.
 
-- **Aborted or failed renders.** The encoder is killed before it can finalize, and the output the render wrote is removed. Output reached through a symlink is emptied instead, and the symlink stays. A device, a FIFO or a socket stays as it is, and so does an existing encoded output that the encoder had not yet opened.
+- **Aborted or failed renders.** The encoder is killed before it can finalize, and the output the render wrote is removed. Output reached through a symlink is emptied instead, and the symlink stays. Output that cannot be removed, such as a file another program holds open on Windows or one in a read-only folder, is emptied too, and the render reports the removal error only when emptying fails as well. A device, a FIFO or a socket stays as it is, and so does an existing encoded output that the encoder had not yet opened.
 - **Rejected in setup.** An empty path and a path ending in a path separator reject before any audio is read, and so does a directory as an encoded output. A WAV output rejects in setup with the error from opening it, such as EISDIR for a directory or ENOENT for a missing folder.
 - **No audio.** A render that delivers no audio writes a WAV output with only its header, and leaves an encoded output alone: no file is created, and an existing one stays as it was.
 
