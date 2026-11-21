@@ -316,7 +316,13 @@ export class BlockBuffer {
 
 		ws.end();
 
-		await finished;
+		try {
+			await finished;
+		} catch (error) {
+			failedBuffers.set(this, { error });
+
+			throw error;
+		}
 	}
 
 	private ensureReadStream(): ReadStream {

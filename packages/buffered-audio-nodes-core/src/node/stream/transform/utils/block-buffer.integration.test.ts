@@ -9,6 +9,15 @@ import { BlockBuffer } from "./block-buffer";
 
 vi.mock("node:fs", { spy: true });
 
+function settleWithin<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	const hung = new Promise<never>((_resolve, reject) => {
+		timeout = setTimeout(() => reject(new Error(`did not settle within ${String(milliseconds)}ms`)), milliseconds);
+	});
+
+	return Promise.race([promise, hung]).finally(() => clearTimeout(timeout));
+}
+
 describe("BlockBuffer", () => {
 	it("uses its injected directory and unlinks block-buffer files on clear and close", async () => {
 		const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-test-"));
@@ -248,18 +257,6 @@ describe("BlockBuffer", () => {
 			return failing;
 		}
 
-		function settleWithin<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
-			let timeout: ReturnType<typeof setTimeout> | undefined;
-			const hung = new Promise<never>((_resolve, reject) => {
-				timeout = setTimeout(
-					() => reject(new Error(`did not settle within ${String(milliseconds)}ms`)),
-					milliseconds,
-				);
-			});
-
-			return Promise.race([promise, hung]).finally(() => clearTimeout(timeout));
-		}
-
 		it("rejects the next write within 100 ms when the stream failed between writes, and close removes the temp file", async () => {
 			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-failed-"));
 			const failing = failNextFileStream();
@@ -342,6 +339,23 @@ describe("BlockBuffer", () => {
 
 				await expect(settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 100)).rejects.toBe(diskFull);
 				expect(vi.mocked(createWriteStream).mock.calls.length).toBe(streamsBefore);
+			} finally {
+				await buffer.close().catch(() => undefined);
+				await rm(temporaryDirectory, { recursive: true, force: true });
+			}
+		});
+
+		it("rejects the next write with the failure when flushWrites rejects after the write resolved", async () => {
+			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-failed-"));
+			const buffer = new BlockBuffer(temporaryDirectory);
+
+			// The default high-water mark takes the write without a drain wait, so only the flush meets the failure.
+			failNextFileStream();
+
+			try {
+				await buffer.write([new Float32Array(1024)], 44100, 32);
+				await expect(settleWithin(buffer.flushWrites(), 1000)).rejects.toBe(diskFull);
+				await expect(settleWithin(buffer.write([new Float32Array(1024)], 44100, 32), 100)).rejects.toBe(diskFull);
 			} finally {
 				await buffer.close().catch(() => undefined);
 				await rm(temporaryDirectory, { recursive: true, force: true });
