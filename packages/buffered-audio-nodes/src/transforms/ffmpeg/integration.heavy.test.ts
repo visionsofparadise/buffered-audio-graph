@@ -7,7 +7,7 @@ import type { StreamIdentity, ProgressPayload, FinishedPayload, StreamPhase } fr
 import { runTransform } from "../../utils/test-pipeline";
 import { notSilent, expectedDuration, notAnomalous } from "../../utils/test-audio";
 import { audio, binaries, hasBinaryFixtures } from "../../utils/test-binaries";
-import { readToBuffer } from "../../utils/read-to-buffer";
+import { readWavSamples } from "../../utils/read-to-buffer";
 import { read } from "../../sources/read";
 import { write } from "../../targets/write";
 import { chain } from "../../composites/chain";
@@ -54,8 +54,7 @@ describeIfFfmpegFixture("FFmpeg", () => {
 	}, 240_000);
 
 	it("emits quantum-bounded progress events per phase, not one per chunk", async () => {
-		const { context } = await readToBuffer(testVoice);
-		const inputFrames = context.durationFrames ?? 0;
+		const { durationFrames: inputFrames } = await readWavSamples(testVoice);
 
 		const tempPath = join(tmpdir(), `ban-test-${randomBytes(8).toString("hex")}.wav`);
 
@@ -117,9 +116,7 @@ describeIfFfmpegFixture("FFmpeg", () => {
 	}, 240_000);
 
 	it("resample roundtrip preserves length within ±2 frames", async () => {
-		const { context: inputContext } = await readToBuffer(testVoice);
-		const origRate = inputContext.sampleRate;
-		const inputFrames = inputContext.durationFrames ?? 0;
+		const { sampleRate: origRate, durationFrames: inputFrames } = await readWavSamples(testVoice);
 		const tempPath = join(tmpdir(), `ban-test-${randomBytes(8).toString("hex")}.wav`);
 
 		try {
@@ -134,8 +131,7 @@ describeIfFfmpegFixture("FFmpeg", () => {
 
 			await source.createRenderJob().render();
 
-			const { context: outputContext } = await readToBuffer(tempPath);
-			const outputFrames = outputContext.durationFrames ?? 0;
+			const { durationFrames: outputFrames } = await readWavSamples(tempPath);
 
 			// Resampling rounds at each stage; allow ±2 frames slack.
 			expect(Math.abs(outputFrames - inputFrames)).toBeLessThanOrEqual(2);
