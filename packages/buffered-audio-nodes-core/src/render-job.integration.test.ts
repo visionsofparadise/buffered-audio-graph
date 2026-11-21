@@ -1303,6 +1303,8 @@ describe("RenderJob aborts and the metadata signal", () => {
 	});
 
 	it("passes the render signal to getMetadata, so an abort during it rejects the render", async () => {
+		const reason = new Error("aborted during getMetadata");
+		const controller = new AbortController();
 		let received: AbortSignal | undefined;
 
 		class SignalMetadataSourceStream extends MockSourceStream {
@@ -1319,6 +1321,7 @@ describe("RenderJob aborts and the metadata signal", () => {
 					}
 
 					signal.addEventListener("abort", () => reject(signal.reason as Error), { once: true });
+					setTimeout(() => controller.abort(reason), 20);
 				});
 			}
 		}
@@ -1327,15 +1330,11 @@ describe("RenderJob aborts and the metadata signal", () => {
 			static override readonly Stream = SignalMetadataSourceStream;
 		}
 
-		const reason = new Error("aborted during getMetadata");
-		const controller = new AbortController();
 		const source = new SignalMetadataSource([createBlock(1, 0, 100)]);
 
 		source.to(new MockTarget());
 
 		const render = source.createRenderJob({ signal: controller.signal }).render();
-
-		setTimeout(() => controller.abort(reason), 20);
 
 		await expect(render).rejects.toBe(reason);
 		expect(received).toBeInstanceOf(AbortSignal);
