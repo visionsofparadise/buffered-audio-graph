@@ -421,6 +421,29 @@ Write audio to a file
 | `encoding.vbr`        | number (0 to 9), optional         | —       |                                                                                           |
 | `encoding.sampleRate` | number (min 0), optional          | —       | Output sample rate (Hz). When set, ffmpeg resamples on encode.                            |
 
+## Writing Files
+
+The Write target writes to a temporary file beside its output, named `<stem>.partial-<pid>-<hex><ext>`, and renames it onto the output path once the render succeeds. An aborted or failed render leaves the output path untouched and removes the temporary file, and an encoder is killed before it can finalize.
+
+- **Devices and FIFOs.** A device, FIFO or socket, or a symlink to one, is written directly with no temporary file. So is a reserved device name on Windows, such as `NUL` or `COM1.wav`, and any `\\.\` path.
+- **Symlinks.** A symlink to a regular file is written through: the file it points to is replaced and the symlink stays.
+- **Rejected in setup.** An empty path, a path ending in a path separator, a directory, and an existing file the process cannot write each reject before any audio is read.
+- **What a replaced file keeps.** On POSIX the new file keeps the old one's permission bits, but not its owner, its hard links or its ACLs. The temporary file needs write access to the output's directory.
+- **Mount points.** When the output is a mount point, or the rename would cross filesystems, the finished file is copied into the output in place instead. That copy runs to the end even if the render is aborted meanwhile, so the output is never left truncated.
+
+## Child Processes
+
+Every child process a node runs goes through the child-process layer of `@buffered-audio/core`, which spawns it with `windowsHide` true, drains its stderr and bounds its teardown. That covers the CLI base's child, which serves the CLI, FFmpeg and Loudness Tool nodes and the FFmpeg resamplers of the ONNX nodes, the Read FFmpeg source's `ffmpeg` and `ffprobe`, the Write target's encoder and the VST3 node's `vst-host`. The VST3 node's liveness sampler sits outside the layer: the `pidtree` and `pidusage` packages it uses run `ps`, or PowerShell on Windows, as children of their own.
+
+The Write target and the VST3 node write their child's input through the layer's `writeChildInput`. The CLI base writes its child's input itself and waits on a full pipe through `waitForChildWritable`. When its tool exits 0 before the input has ended, it stops writing, drops the rest of the input and ends its output with what the tool wrote, without an error.
+
+Each node picks the first signal that ends its child:
+
+- **CLI base:** SIGKILL when its stream is aborted, cancelled or torn down by a failure elsewhere in the render, and SIGTERM with the 2 s grace only when its own child or decoding failed.
+- **Read FFmpeg:** SIGKILL.
+- **Write:** SIGKILL unless its close completed, and SIGTERM after it.
+- **VST3:** SIGTERM and the grace for `vst-host`, on an abort as on every other path.
+
 ## Creating Nodes
 
 Each node has two parts: a **Node** (inert descriptor) and a **Stream** (stateful runtime instance). The node is pure static declaration — `nodeName`, `description`, `schema`, `Stream`, plus `packageName` — and carries no per-render state. The executor constructs one stream per node per render.
