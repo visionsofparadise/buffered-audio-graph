@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { access, chmod, lstat, open, realpath, rename, rm, stat, type FileHandle } from "node:fs/promises";
+import { access, chmod, constants, lstat, open, realpath, rename, rm, stat, type FileHandle } from "node:fs/promises";
 import { basename, dirname, join, parse, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -185,6 +185,9 @@ export class WriteStream extends BufferedTargetStream<WriteNode> {
 		this.useEncoding = encoding !== undefined && encoding.format !== "wav" && !!this.properties.ffmpegPath;
 
 		this.destination = target && !target.isFile() ? undefined : await resolveDestination(path, target);
+
+		if (target && this.destination !== undefined) await access(this.destination, constants.W_OK);
+
 		this.temporaryPath = this.destination === undefined ? undefined : partialPath(this.destination);
 
 		if (!this.useEncoding) this.fileHandle = await open(this.temporaryPath ?? path, "w");

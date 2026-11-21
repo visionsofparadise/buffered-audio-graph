@@ -544,6 +544,27 @@ describe("WriteStream target path", () => {
 		},
 	);
 
+	// Skipped as root, whom file permissions do not stop.
+	it.skipIf(IS_ROOT)("rejects a read-only existing target in setup and leaves it unchanged", async () => {
+		const parent = await temporaryDirectory("write-read-only-");
+		const path = join(parent, "out.wav");
+
+		await writeFile(path, "old");
+		await chmod(path, 0o444);
+
+		try {
+			const { error, elapsedMs, blocks } = await renderDelayed(path);
+
+			expect(error).toMatchObject({ code: IS_WINDOWS ? "EPERM" : "EACCES" });
+			expect(blocks).toBe(0);
+			expect(elapsedMs).toBeLessThan(1000);
+			expect(await readFile(path, "utf8")).toBe("old");
+			expect(await readdir(parent)).toEqual(["out.wav"]);
+		} finally {
+			await chmod(path, 0o644);
+		}
+	});
+
 	it.skipIf(!IS_WINDOWS)(
 		"rejects with the abort at once and leaves the target unchanged when aborted while a held target's rename retries",
 		async () => {
