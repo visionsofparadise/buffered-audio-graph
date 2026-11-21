@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
+import { createReadStream, createWriteStream } from "node:fs";
 import { access, chmod, constants, lstat, open, realpath, rename, rm, stat, type FileHandle } from "node:fs/promises";
 import { basename, dirname, join, parse, sep } from "node:path";
+import { pipeline } from "node:stream/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import {
 	BufferedTargetStream,
@@ -129,6 +131,12 @@ async function isRetryableRename(error: unknown, to: string, deadline: number): 
 	return !target?.isDirectory();
 }
 
+function needsCopy(error: unknown): boolean {
+	const code = (error as NodeJS.ErrnoException).code;
+
+	return code === "EXDEV" || (code === "EBUSY" && process.platform !== "win32");
+}
+
 async function renameOnto(from: string, to: string, signal: AbortSignal): Promise<void> {
 	const deadline = performance.now() + RENAME_RETRY_MS;
 
@@ -140,6 +148,13 @@ async function renameOnto(from: string, to: string, signal: AbortSignal): Promis
 
 			return;
 		} catch (error) {
+			if (needsCopy(error)) {
+				await pipeline(createReadStream(from), createWriteStream(to));
+				await rm(from, { force: true });
+
+				return;
+			}
+
 			if (!(await isRetryableRename(error, to, deadline))) throw error;
 
 			signal.throwIfAborted();

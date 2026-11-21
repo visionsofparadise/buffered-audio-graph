@@ -565,6 +565,27 @@ describe("WriteStream target path", () => {
 		}
 	});
 
+	it.each(IS_WINDOWS ? ["EXDEV"] : ["EXDEV", "EBUSY"])(
+		"copies onto the target and removes the temporary file when the rename fails with %s",
+		async (code) => {
+			const directory = await temporaryDirectory("write-copy-");
+			const path = join(directory, "out.wav");
+
+			await writeFile(path, "old");
+
+			// A rename onto a mount point fails with EBUSY, and one across filesystems with EXDEV.
+			vi.mocked(rename).mockRejectedValueOnce(Object.assign(new Error(`${code}: rename failed`), { code }));
+
+			const { error } = await renderTo(write(path, { bitDepth: "16" }), { maxBlocks: 2 });
+			const written = await readFile(path);
+
+			expect(error).toBeUndefined();
+			expect(written.subarray(0, 4).toString("ascii")).toBe("RIFF");
+			expect(written.length).toBe(80 + 2 * SAMPLE_RATE * 2);
+			expect(await readdir(directory)).toEqual(["out.wav"]);
+		},
+	);
+
 	it.skipIf(!IS_WINDOWS)(
 		"rejects with the abort at once and leaves the target unchanged when aborted while a held target's rename retries",
 		async () => {
