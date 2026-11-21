@@ -260,6 +260,66 @@ describe("BlockBuffer", () => {
 		}
 	});
 
+	describe("with a write waiting for drain", () => {
+		// 12 MiB of ones, above the file stream's 10 MiB high-water mark, so the write waits for drain; then twos.
+		const big = new Float32Array(3 * 1024 * 1024).fill(1);
+		const small = new Float32Array(1024).fill(2);
+
+		async function readAll(buffer: BlockBuffer): Promise<Float32Array> {
+			const block = await buffer.read(buffer.frames);
+
+			return block.samples[0] ?? new Float32Array(0);
+		}
+
+		it("keeps its data and frames when a flushWrites it raced is followed by another write", async () => {
+			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-flush-race-"));
+			const buffer = new BlockBuffer(temporaryDirectory);
+
+			try {
+				const waiting = buffer.write([big], 44100, 32);
+
+				await buffer.flushWrites();
+				await buffer.write([small], 44100, 32);
+				await waiting;
+				await buffer.flushWrites();
+
+				const samples = await readAll(buffer);
+
+				expect(buffer.frames).toBe(big.length + small.length);
+				expect(samples.length).toBe(big.length + small.length);
+				expect(samples.subarray(0, big.length).every((sample) => sample === 1)).toBe(true);
+				expect(samples.subarray(big.length).every((sample) => sample === 2)).toBe(true);
+			} finally {
+				await buffer.close();
+				await rm(temporaryDirectory, { recursive: true, force: true });
+			}
+		});
+
+		it("rewinds the writer past its data when a reset it raced is followed by another write", async () => {
+			const temporaryDirectory = await mkdtemp(join(tmpdir(), "block-buffer-reset-race-"));
+			const buffer = new BlockBuffer(temporaryDirectory);
+
+			try {
+				const waiting = buffer.write([big], 44100, 32);
+
+				await buffer.reset();
+				await buffer.write([small], 44100, 32);
+				await waiting;
+				await buffer.reset();
+
+				const samples = await readAll(buffer);
+
+				expect(buffer.frames).toBe(big.length);
+				expect(samples.length).toBe(big.length);
+				expect(samples.subarray(0, small.length).every((sample) => sample === 2)).toBe(true);
+				expect(samples.subarray(small.length).every((sample) => sample === 1)).toBe(true);
+			} finally {
+				await buffer.close();
+				await rm(temporaryDirectory, { recursive: true, force: true });
+			}
+		});
+	});
+
 	describe("after its file stream fails", () => {
 		const diskFull = new Error("ENOSPC: no space left on device, write");
 

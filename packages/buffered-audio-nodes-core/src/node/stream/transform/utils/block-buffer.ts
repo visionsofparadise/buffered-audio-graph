@@ -15,6 +15,25 @@ const reportedFailures = new WeakSet<WriteStream>();
 
 const failedBuffers = new WeakMap<BlockBuffer, { readonly error: unknown }>();
 
+const pendingWrites = new WeakMap<BlockBuffer, Set<Promise<void>>>();
+
+function pendingWritesOf(buffer: BlockBuffer): Set<Promise<void>> {
+	let pending = pendingWrites.get(buffer);
+
+	if (!pending) {
+		pending = new Set();
+		pendingWrites.set(buffer, pending);
+	}
+
+	return pending;
+}
+
+async function settlePendingWrites(buffer: BlockBuffer): Promise<void> {
+	const pending = pendingWrites.get(buffer);
+
+	while (pending && pending.size > 0) await Promise.all([...pending]);
+}
+
 function closedStreamError(): Error {
 	return new Error("BlockBuffer: its file stream was closed before the write");
 }
@@ -119,6 +138,13 @@ export class BlockBuffer {
 
 		const writeBuffer = Buffer.from(interleaved.buffer, interleaved.byteOffset, interleaved.byteLength);
 		const ws = this.ensureWriteStream();
+		const pending = pendingWritesOf(this);
+		let settle = (): void => undefined;
+		const settled = new Promise<void>((resolve) => {
+			settle = resolve;
+		});
+
+		pending.add(settled);
 
 		try {
 			const failure = streamFailure(ws);
@@ -126,18 +152,21 @@ export class BlockBuffer {
 			if (failure) throw failure;
 
 			if (!ws.write(writeBuffer)) await drainOrError(ws);
+
+			this.writePositionByte += writeBuffer.length;
+
+			const writtenFrames = Math.floor(this.writePositionByte / (this._channels * 4));
+
+			if (writtenFrames > this._frames) this._frames = writtenFrames;
 		} catch (error) {
 			reportedFailures.add(ws);
 			failedBuffers.set(this, { error });
 
 			throw error;
+		} finally {
+			pending.delete(settled);
+			settle();
 		}
-
-		this.writePositionByte += writeBuffer.length;
-
-		const writtenFrames = Math.floor(this.writePositionByte / (this._channels * 4));
-
-		if (writtenFrames > this._frames) this._frames = writtenFrames;
 	}
 
 	async flushWrites(): Promise<void> {
@@ -299,6 +328,8 @@ export class BlockBuffer {
 	}
 
 	private async endWriteStream(): Promise<void> {
+		await settlePendingWrites(this);
+
 		const ws = this.writeStream;
 		const finished = this.writeStreamFinished;
 
